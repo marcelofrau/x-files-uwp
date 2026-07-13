@@ -26,3 +26,9 @@ inspiration, reimplemented natively in C#/XAML.
 `../dosbox-pure-uwp` — some infra patterns (gamepad input abstraction, P/Invoke directory
 scanning, manifest capabilities) were used as reference/inspiration. No shared code
 (different language/stack).
+
+## License
+
+[GPL-3.0](LICENSE) — free software; you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software Foundation,
+either version 3 of the License, or (at your option) any later version.

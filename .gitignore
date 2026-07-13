@@ -20,6 +20,19 @@ AppPackages/
 # Certificates (never commit signing keys)
 *.pfx
 
+# NuGet
+packages/
+*.nupkg
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# ReSharper / Rider
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+.idea/
+
 # OS
 .DS_Store
 Thumbs.db
