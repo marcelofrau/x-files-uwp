@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap mp rescap">
+
+  <Identity
+    Name="XFiles.Xbox"
+    Publisher="CN=ChangeMe"
+    Version="0.1.0.0" />
+
+  <mp:PhoneIdentity PhoneProductId="00000000-0000-0000-0000-000000000000" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
+
+  <Properties>
+    <DisplayName>X-Files</DisplayName>
+    <PublisherDisplayName>ChangeMe</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <!--
+    Xbox target family. See docs/DEPLOY-XBOX.md — MinVersion/MaxVersionTested must be
+    adjusted to the actual installed SDK version once opened in Visual Studio.
+  -->
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Xbox" MinVersion="10.0.0.0" MaxVersionTested="10.0.0.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="x-generate"/>
+  </Resources>
+
+  <Applications>
+    <Application Id="App"
+      Executable="$targetnametoken$.exe"
+      EntryPoint="XFiles.App">
+      <uap:VisualElements
+        DisplayName="X-Files"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png"
+        Description="Gamepad-first file browser for Xbox"
+        BackgroundColor="transparent">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
+        <uap:SplashScreen Image="Assets\SplashScreen.png" />
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+
+  <!--
+    Required for FindFirstFileExFromAppW/GetLogicalDrives to work outside the app sandbox
+    on Xbox Developer Mode. See docs/FILEBROWSER.md and docs/DEPLOY-XBOX.md.
+  -->
+  <Capabilities>
+    <rescap:Capability Name="broadFileSystemAccess" />
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+
+</Package>

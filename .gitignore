@@ -1,0 +1,25 @@
+# Build outputs
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+ARM/
+ARM64/
+BundleArtifacts/
+AppPackages/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Certificates (never commit signing keys)
+*.pfx
+
+# OS
+.DS_Store
+Thumbs.db

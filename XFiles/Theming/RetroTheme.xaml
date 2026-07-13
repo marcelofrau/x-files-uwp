@@ -1,0 +1,31 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        Custom theme resources for X-Files.
+        See docs/UI-THEMING.md for the full convention and docs/DECISIONS.md (ADR-002)
+        for why no default Fluent Design chrome is used anywhere in this app.
+
+        This file currently only contains scaffold placeholders (default-ish colors).
+        Phase 8 (docs/ROADMAP.md) replaces these with the final custom
+        ControlTemplate/Style set and wires up JSON-based runtime theming via
+        Theming/AppTheme.cs.
+    -->
+
+    <!-- Brushes -->
+    <SolidColorBrush x:Key="XFilesBackgroundBrush" Color="#0D0D0D" />
+    <SolidColorBrush x:Key="XFilesForegroundBrush" Color="#E0E0E0" />
+    <SolidColorBrush x:Key="XFilesAccentBrush" Color="#33AA55" />
+    <SolidColorBrush x:Key="XFilesSelectedBackgroundBrush" Color="#1F3D2B" />
+    <SolidColorBrush x:Key="XFilesBorderBrush" Color="#333333" />
+
+    <!-- Typography -->
+    <FontFamily x:Key="XFilesMonoFontFamily">Consolas</FontFamily>
+
+    <!--
+        TODO (Phase 8): ColumnItemStyle, ColumnHeaderStyle, ContextMenuItemStyle,
+        StatusBarStyle — see docs/UI-THEMING.md for the target structure.
+    -->
+
+</ResourceDictionary>
