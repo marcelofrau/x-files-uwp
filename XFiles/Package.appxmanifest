@@ -9,7 +9,7 @@
   <Identity
     Name="XFiles.Xbox"
     Publisher="CN=ChangeMe"
-    Version="0.1.0.0" />
+    Version="0.1.0.28" />
 
   <mp:PhoneIdentity PhoneProductId="00000000-0000-0000-0000-000000000000" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
@@ -24,7 +24,7 @@
     adjusted to the actual installed SDK version once opened in Visual Studio.
   -->
   <Dependencies>
-    <TargetDeviceFamily Name="Windows.Xbox" MinVersion="10.0.0.0" MaxVersionTested="10.0.0.0" />
+    <TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
   </Dependencies>
 
   <Resources>

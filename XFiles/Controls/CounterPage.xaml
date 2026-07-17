@@ -1,0 +1,48 @@
+<Page
+    x:Class="XFiles.Controls.CounterPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="#0D0D0D">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <TextBlock Grid.Row="0"
+            Text="Phase 2 — Input Test"
+            Foreground="#33AA55"
+            FontSize="24"
+            Margin="20,20,0,0" />
+
+        <!-- Counter display -->
+        <StackPanel Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <TextBlock x:Name="CounterText"
+                Text="0"
+                Foreground="#E0E0E0"
+                FontSize="96"
+                HorizontalAlignment="Center" />
+            <TextBlock x:Name="LastInputText"
+                Text="Waiting for input..."
+                Foreground="#666666"
+                FontSize="18"
+                HorizontalAlignment="Center"
+                Margin="0,10,0,0" />
+        </StackPanel>
+
+        <!-- Footer hint bar -->
+        <Grid Grid.Row="2" Background="#1A1A1A" Padding="20,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="D-Pad/Stick/Arrows: navigate" Foreground="#666666" FontSize="14" />
+            <TextBlock Grid.Column="1" Text="A/Enter/LClick | B/Esc/RClick | Y/MClick" Foreground="#666666" FontSize="14" HorizontalAlignment="Center" />
+            <TextBlock Grid.Column="2" Text="LB/RB = PgUp/PgDn" Foreground="#666666" FontSize="14" HorizontalAlignment="Right" />
+        </Grid>
+    </Grid>
+</Page>

@@ -4,6 +4,7 @@
     <MinimumVisualStudioVersion>14.0</MinimumVisualStudioVersion>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">x64</Platform>
+    <PlatformTarget>x64</PlatformTarget>
     <ProjectGuid>{6C2F6A6E-8B9F-4D9B-8F6C-0D2A6B6E1A11}</ProjectGuid>
     <OutputType>AppContainerExe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
@@ -11,19 +12,27 @@
     <AssemblyName>XFiles</AssemblyName>
     <DefaultLanguage>en-US</DefaultLanguage>
     <TargetPlatformIdentifier>UAP</TargetPlatformIdentifier>
-    <!-- Adjust these to match the installed Xbox/UWP SDK once opened in Visual Studio.
-         See docs/DEPLOY-XBOX.md. -->
     <TargetPlatformVersion>10.0.19041.0</TargetPlatformVersion>
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <MinimumVisualStudioVersion>14</MinimumVisualStudioVersion>
     <EnableDotNetNativeCompatibleProfile>true</EnableDotNetNativeCompatibleProfile>
     <ProjectTypeGuids>{A5A43C5B-DE2A-4C0C-9213-0A381AF9435A};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
-    <PackageCertificateKeyFile>XFiles_TemporaryKey.pfx</PackageCertificateKeyFile>
+    <PackageCertificateKeyFile>..\certs\xfiles.pfx</PackageCertificateKeyFile>
+    <PackageCertificatePassword>dev</PackageCertificatePassword>
+    <PackageCertificateThumbprint>A2BF47E451A7B2A2148AB498F36DCC1EA22D3683</PackageCertificateThumbprint>
+    <ResolveNuGetPackages>true</ResolveNuGetPackages>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <GenerateAppxPackageOnBuild>true</GenerateAppxPackageOnBuild>
+    <AppxBundle>Never</AppxBundle>
+    <AppxBundlePlatforms>x64</AppxBundlePlatforms>
+    <AppxPackageDir>$(ProjectDir)..\AppPackages\</AppxPackageDir>
+    <RuntimeIdentifiers>win10;win10-x64;win10-x64-aot;win10-aot</RuntimeIdentifiers>
+    <UseDotNetNativeToolchain Condition=" '$(Configuration)' == 'Release' ">false</UseDotNetNativeToolchain>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
     <DebugSymbols>true</DebugSymbols>
     <OutputPath>bin\x64\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_UWP</DefineConstants>
+    <DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_UWP;XRAY_ENABLED</DefineConstants>
     <NoWarn>;2008</NoWarn>
     <DebugType>full</DebugType>
     <PlatformTarget>x64</PlatformTarget>
@@ -46,6 +55,27 @@
     <!-- SharpCompress: zip/7z/rar support. See docs/ARCHIVES.md (added when Phase 6 starts;
          listed here now so the dependency intent is documented from day one). -->
     <!-- <PackageReference Include="SharpCompress" Version="0.34.2" /> -->
+    <PackageReference Include="Microsoft.NETCore.UniversalWindowsPlatform">
+      <Version>6.2.14</Version>
+    </PackageReference>
+    <PackageReference Include="Serilog">
+      <Version>4.2.0</Version>
+    </PackageReference>
+    <PackageReference Include="Serilog.Sinks.File">
+      <Version>7.0.0</Version>
+    </PackageReference>
+    <PackageReference Include="Serilog.Sinks.Debug">
+      <Version>3.0.0</Version>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\XrayLib\XrayLib\XrayLib.csproj">
+      <Project>{8A3C3E6E-5B9D-4F7A-B2C1-D4E8F6A9B0C2}</Project>
+      <Name>XrayLib</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <SDKReference Include="WindowsMobile, Version=$(TargetPlatformVersion)" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="App.xaml.cs">
@@ -55,6 +85,24 @@
       <DependentUpon>MainPage.xaml</DependentUpon>
     </Compile>
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Navigation\INavigable.cs" />
+    <Compile Include="Navigation\GamepadInputService.cs" />
+    <Compile Include="FileSystem\FileEntry.cs" />
+    <Compile Include="FileSystem\DirectoryScanner.cs" />
+    <Compile Include="Log.cs" />
+    <Compile Include="ScreenLogger.cs" />
+    <Compile Include="Controls\CounterPage.xaml.cs">
+      <DependentUpon>CounterPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\DirectoryTestPage.xaml.cs">
+      <DependentUpon>DirectoryTestPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\ColumnListView.xaml.cs">
+      <DependentUpon>ColumnListView.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\DebugOverlay.xaml.cs">
+      <DependentUpon>DebugOverlay.xaml</DependentUpon>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
     <ApplicationDefinition Include="App.xaml">
@@ -66,6 +114,22 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Theming\RetroTheme.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\CounterPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\DirectoryTestPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\ColumnListView.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\DebugOverlay.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
@@ -82,7 +146,30 @@
     <None Include="ContextMenu\README.md" />
     <None Include="Theming\README.md" />
     <None Include="Assets\README.md" />
+    <None Include="..\docs\ASSETS-GUIDE.md" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="Assets\StoreLogo.png" />
+    <Content Include="Assets\Square44x44Logo.png" />
+    <Content Include="Assets\Square71x71Logo.png" />
+    <Content Include="Assets\Square150x150Logo.png" />
+    <Content Include="Assets\Wide310x150Logo.png" />
+    <Content Include="Assets\SplashScreen.png" />
+    <Content Include="Assets\FileTypes\folder-blue-24.png" />
+    <Content Include="Assets\FileTypes\folder-yellow-24.png" />
+    <Content Include="Assets\FileTypes\folder-deeporange-24.png" />
+    <Content Include="Assets\FileTypes\folder-green-24.png" />
+    <Content Include="Assets\FileTypes\folder-indigo-24.png" />
+    <Content Include="Assets\FileTypes\folder-magenta-24.png" />
+    <Content Include="Assets\FileTypes\folder-yaru-24.png" />
+    <Content Include="Assets\FileTypes\folder-darkcyan-24.png" />
+    <Content Include="Assets\FileTypes\folder-orange-24.png" />
+    <Content Include="Assets\FileTypes\file-archive-24.png" />
+    <Content Include="Assets\FileTypes\file-generic-24.png" />
+  </ItemGroup>
+  <PropertyGroup>
+    <PreBuildEvent>powershell -ExecutionPolicy Bypass -NoProfile -File "$(SolutionDir)tools\increment-version.ps1"</PreBuildEvent>
+  </PropertyGroup>
   <PropertyGroup Condition=" '$(VisualStudioVersion)' == '' or '$(VisualStudioVersion)' &lt; '14.0' ">
     <VisualStudioVersion>14.0</VisualStudioVersion>
   </PropertyGroup>

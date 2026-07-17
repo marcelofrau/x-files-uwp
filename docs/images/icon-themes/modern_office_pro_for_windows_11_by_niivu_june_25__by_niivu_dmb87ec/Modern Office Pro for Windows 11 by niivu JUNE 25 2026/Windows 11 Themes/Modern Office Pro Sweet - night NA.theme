@@ -1,0 +1,74 @@
+; Copyright © NIIVU DESIGNS 2026.
+
+[Theme]
+; Windows - IDS_THEME_DISPLAYNAME_Modern Office Pro Sweet - night NA
+DisplayName=Modern Office Pro Sweet - night NA
+SetLogonBackground=0
+
+; Computer - SHIDI_SERVER
+[CLSID\{20D04FE0-3AEA-1069-A2D8-08002B30309D}\DefaultIcon]
+DefaultValue=%SystemRoot%\Resources\Themes\Modern Office Pro\Icons\This PC.ico
+
+; UsersFiles - SHIDI_USERFILES
+[CLSID\{59031A47-3F72-44A7-89C5-5595FE6B30EE}\DefaultIcon]
+DefaultValue=%SystemRoot%\System32\imageres.dll,-123
+
+; Network - SHIDI_MYNETWORK
+[CLSID\{F02C1A0D-BE21-4350-88B0-7367FC96EF3C}\DefaultIcon]
+DefaultValue=%SystemRoot%\System32\imageres.dll,-25
+
+; Recycle Bin - SHIDI_RECYCLERFULL SHIDI_RECYCLER
+[CLSID\{645FF040-5081-101B-9F08-00AA002F954E}\DefaultIcon]
+Full=%SystemRoot%\System32\imageres.dll,-54
+Empty=%SystemRoot%\System32\imageres.dll,-55
+
+[Control Panel\Cursors]
+AppStarting=%SystemRoot%\Resources\Themes\Modern Office Pro\Cursors\aero_working.ani
+Arrow=%SystemRoot%\Resources\Themes\Modern Office Pro\Cursors\aero_arrow.cur
+Crosshair=%SystemRoot%\Resources\Themes\Modern Office Pro\Cursors\aero_cross.cur
+Hand=%SystemRoot%\Resources\Themes\Modern Office Pro\Cursors\aero_link.cur
+Help=%SystemRoot%\Resources\Themes\Modern Office Pro\Cursors\aero_helpsel.cur
+IBeam=%SystemRoot%\Resources\Themes\Modern Office Pro\Cursors\aero_text.cur
+No=%SystemRoot%\Resources\Themes\Modern Office Pro\Cursors\aero_unavail.cur
+NWPen=%SystemRoot%\Resources\Themes\Modern Office Pro\Cursors\aero_pen.cur
+Person=%SystemRoot%\Resources\Themes\Modern Office Pro\Cursors\aero_person.cur
+Pin=%SystemRoot%\Resources\Themes\Modern Office Pro\Cursors\aero_pin.cur
+SizeAll=%SystemRoot%\Resources\Themes\Modern Office Pro\Cursors\aero_move.cur
+SizeNESW=%SystemRoot%\Resources\Themes\Modern Office Pro\Cursors\aero_nesw.cur
+SizeNS=%SystemRoot%\Resources\Themes\Modern Office Pro\Cursors\aero_ns.cur
+SizeNWSE=%SystemRoot%\Resources\Themes\Modern Office Pro\Cursors\aero_nwse.cur
+SizeWE=%SystemRoot%\Resources\Themes\Modern Office Pro\Cursors\aero_ew.cur
+UpArrow=%SystemRoot%\Resources\Themes\Modern Office Pro\Cursors\aero_up.cur
+Wait=%SystemRoot%\Resources\Themes\Modern Office Pro\Cursors\aero_busy.ani
+DefaultValue=Windows Default
+DefaultValue.MUI=@main.cpl,-1020
+
+[Control Panel\Desktop]
+Wallpaper=%SystemRoot%\Resources\Themes\Modern Office Pro\Previews\Modern Office Pro Sweet - dark NA.png
+TileWallpaper=0
+WallpaperStyle=10
+Pattern=
+
+[VisualStyles]
+Path=%ResourceDir%\Themes\Modern Office Pro\Modern Office Pro Sweet - night NA.msstyles
+ColorStyle=NormalColor
+Size=NormalSize
+AutoColorization=0
+ColorizationColor=0XC40078D4
+SystemMode=dark
+AppMode=dark
+
+[boot]
+SCRNSAVE.EXE=
+
+[MasterThemeSelector]
+MTSM=RJSPBS
+
+[Sounds]
+; IDS_SCHEME_DEFAULT
+SchemeName=@%SystemRoot%\System32\mmres.dll,-800
+
+[Slideshow]
+Interval=1000000
+Shuffle=1
+ImagesRootPath=%SystemRoot%\Resources\Themes\Modern Office Pro\Wallpapers\dark

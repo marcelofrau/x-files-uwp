@@ -24,12 +24,12 @@ mesmo que não tenha sido buildado ainda (build real só é possível em Windows
 
 ## Fase 1 — Esqueleto + Deploy Xbox validado
 
-- [ ] Abrir o projeto em uma máquina Windows com Visual Studio, resolver eventuais ajustes
+- [x] Abrir o projeto em uma máquina Windows com Visual Studio, resolver eventuais ajustes
       de `csproj`/versões de SDK que não deu para validar em ambiente Linux.
-- [ ] Build local (desktop) funcional — `MainPage` mostra um placeholder simples (ex: texto
+- [x] Build local (desktop) funcional — `MainPage` mostra um placeholder simples (ex: texto
       "X-Files" centralizado).
-- [ ] Ativar Developer Mode no Xbox (ver `docs/DEPLOY-XBOX.md`).
-- [ ] Deploy do "hello world" no Xbox via Visual Studio (Remote Machine) ou Device Portal.
+- [x] Ativar Developer Mode no Xbox (ver `docs/DEPLOY-XBOX.md`).
+- [x] Deploy do "hello world" no Xbox via Visual Studio (Remote Machine) ou Device Portal.
 
 **Critério de conclusão**: app abre no Xbox real, tela aparece, sem crash. Nenhuma feature
 ainda — só validação de pipeline de build/deploy.
@@ -38,15 +38,19 @@ ainda — só validação de pipeline de build/deploy.
 
 ## Fase 2 — GamepadInputService + contrato INavigable
 
-- [ ] Implementar `GamepadInputService` (polling, edge-detection, dpad-repeat).
-- [ ] Implementar `INavigable` (interface) + uma implementação "mock" (ex: um contador
+- [x] Implementar `GamepadInputService` (polling, edge-detection, dpad-repeat).
+- [x] Implementar `INavigable` (interface) + uma implementação "mock" (ex: um contador
       simples na tela reagindo a D-pad/A/B) para validar o pipeline de input sem UI real de
       arquivos ainda.
-- [ ] Testes unitários (ou manuais documentados) para: edge-detection (JustPressed correto
+- [x] Testes unitários (ou manuais documentados) para: edge-detection (JustPressed correto
       mesmo segurando botão), wrap-around, deadzone do analógico.
+      `docs/PHASE2-TESTS.md` — 8 cenários documentados (edge, hold-repeat, direction
+      change, stick deadzone, buttons, phantom inputs, disconnect/reconnect, simultâneo).
 
 **Critério de conclusão**: no Xbox real, mover D-pad/analógico incrementa/decrementa um
 contador na tela, com repeat funcionando ao segurar o botão, sem input fantasma.
+**Status**: código implementado + testes manuais documentados. Validação em hardware
+pendente ( executar `docs/PHASE2-TESTS.md` no Xbox).
 
 ---
 
@@ -137,6 +141,21 @@ necessidade de teclado/mouse, incluindo escolha de pasta destino.
 
 **Critério de conclusão**: critérios de "pronto" do MVP em `docs/SPEC.md` totalmente
 atendidos.
+
+---
+
+## Assets & Ícones
+
+Processo de assets documentado em `docs/ASSETS-GUIDE.md`. Skill disponível em
+`.opencode/skills/assets-icons/SKILL.md`. Resumo:
+
+- Ícones PNG sempre, source: `F:\workspace\icons8-personal-set`
+- Naming: `{viewname}-{descriptor}-{size}.png` (lowercase, hifens)
+- Organização: `XFiles/Assets/Views/{ViewName}/` por view
+- Referência XAML: `ms-appx:///Assets/Views/{ViewName}/{filename}`
+- Registro obrigatório no `XFiles.csproj` como `<Content>`
+
+Cada fase que introduce nova view deve incluir seus ícones nessa fase.
 
 ---
 

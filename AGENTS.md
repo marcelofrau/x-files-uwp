@@ -36,6 +36,11 @@ plan. Do not skip ahead to later phases without completing/documenting earlier o
 - **Read `docs/DECISIONS.md` before proposing architecture changes** — several trade-offs
   (XAML vs Win2D, SharpCompress vs native 7z libs, no network browsing in MVP) were already
   debated and decided; don't re-litigate without new information.
+- **Log everything. Every operation, every action, every exception must be logged.** Use
+  the central `Log` static class (Serilog). Default level is `Verbose`/`Trace`. Never
+  swallow exceptions — always log them. Log directory scans, input events, navigation,
+  file operations, app lifecycle. Logs rotate daily, keeping last 5 files, stored in
+  `ApplicationData.Current.LocalFolder/logs/`. See `docs/LOGGING.md`.
 
 ## Architecture at a Glance
 See `docs/ARCHITECTURE.md` for the full picture. Layers (top → bottom):
@@ -55,6 +60,7 @@ XAML Views → ViewModels → Navigation (`INavigable`, `ColumnNavigator`) →
 | `docs/UI-THEMING.md` | ControlTemplate conventions, theme JSON schema |
 | `docs/DEPLOY-XBOX.md` | Developer Mode, Device Portal, sideload steps |
 | `docs/ROADMAP.md` | Phased implementation plan with done criteria per phase |
+| `docs/ASSETS-GUIDE.md` | Asset naming, directory structure, personal icon set workflow |
 | `docs/DECISIONS.md` | ADRs — why XAML, why not yazi-core, why SharpCompress, etc. |
 
 ## Planned Key Files (not all exist yet — see ROADMAP phases)

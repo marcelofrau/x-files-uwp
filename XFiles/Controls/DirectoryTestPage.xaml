@@ -1,0 +1,69 @@
+<Page
+    x:Class="XFiles.Controls.DirectoryTestPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="#0D0D0D"
+    IsTabStop="True">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <TextBlock Grid.Row="0"
+            Text="Phase 3 — DirectoryScanner Test"
+            Foreground="#33AA55"
+            FontSize="32"
+            Margin="20,20,0,0" />
+
+        <!-- Current path -->
+        <TextBlock Grid.Row="1"
+            x:Name="PathText"
+            Text="\\"
+            Foreground="#E0E0E0"
+            FontSize="22"
+            Margin="20,12,0,0" />
+
+        <!-- Entry list -->
+        <ListView Grid.Row="2"
+            x:Name="EntryList"
+            Margin="20,10,20,10"
+            Background="Transparent"
+            SelectionChanged="EntryList_SelectionChanged">
+            <ListView.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel Orientation="Horizontal" Margin="0,8">
+                        <Image Source="{Binding Icon}"
+                               Width="24" Height="24"
+                               Margin="0,0,8,0"
+                               VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding Name}"
+                                   Foreground="#E0E0E0"
+                                   FontSize="20"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding SizeDisplay}"
+                                   Foreground="#666666"
+                                   FontSize="16"
+                                   HorizontalAlignment="Right"
+                                   Margin="20,0,0,0"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+
+        <!-- Footer hints -->
+        <Grid Grid.Row="3" Background="#1A1A1A" Padding="20,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="Enter/Double-click: open | Backspace/Right-click: back" Foreground="#666666" FontSize="16" />
+            <TextBlock Grid.Column="1" Text="{Binding StatusText}" Foreground="#666666" FontSize="16" HorizontalAlignment="Right" />
+        </Grid>
+    </Grid>
+</Page>

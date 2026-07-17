@@ -1,0 +1,88 @@
+<UserControl
+    x:Class="XFiles.Controls.ColumnListView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="#0D0D0D">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Header: current path -->
+        <TextBlock Grid.Row="0"
+            x:Name="HeaderText"
+            Text=""
+            Foreground="#33AA55"
+            FontFamily="Consolas"
+            FontSize="20"
+            Padding="12,10,12,6"
+            TextTrimming="CharacterEllipsis" />
+
+        <!-- Entry list -->
+        <ListView Grid.Row="1"
+            x:Name="EntryList"
+            Background="Transparent"
+            BorderThickness="0"
+            Padding="0"
+            SelectionChanged="EntryList_SelectionChanged"
+            IsItemClickEnabled="True"
+            ItemClick="EntryList_ItemClick">
+            <ListView.ItemContainerStyle>
+                <Style TargetType="ListViewItem">
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    <Setter Property="Padding" Value="0" />
+                    <Setter Property="Margin" Value="0" />
+                    <Setter Property="MinHeight" Value="0" />
+                </Style>
+            </ListView.ItemContainerStyle>
+            <ListView.ItemTemplate>
+                <DataTemplate>
+                    <Grid Padding="12,8,12,8" Background="Transparent">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="28" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Icon -->
+                        <Image Grid.Column="0"
+                            Source="{Binding Icon}"
+                            Width="24" Height="24"
+                            VerticalAlignment="Center" />
+
+                        <!-- Name -->
+                        <TextBlock Grid.Column="1"
+                            Text="{Binding Name}"
+                            Foreground="#E0E0E0"
+                            FontFamily="Consolas"
+                            FontSize="17"
+                            Margin="8,0,0,0"
+                            VerticalAlignment="Center"
+                            TextTrimming="CharacterEllipsis" />
+
+                        <!-- Size (only for files) -->
+                        <TextBlock Grid.Column="2"
+                            Text="{Binding SizeDisplay}"
+                            Foreground="#666666"
+                            FontFamily="Consolas"
+                            FontSize="15"
+                            VerticalAlignment="Center"
+                            Margin="12,0,0,0" />
+                    </Grid>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+
+        <!-- Footer: item count -->
+        <TextBlock Grid.Row="2"
+            x:Name="StatusTextBlock"
+            Text=""
+            Foreground="#666666"
+            FontFamily="Consolas"
+            FontSize="15"
+            Padding="12,6,12,8" />
+    </Grid>
+</UserControl>
