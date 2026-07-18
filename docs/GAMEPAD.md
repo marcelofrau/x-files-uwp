@@ -1,84 +1,84 @@
-# Gamepad — Mapeamento e Contrato de Navegação
+# Gamepad — Mapping and Navigation Contract
 
-## Fonte de input
+## Input Source
 
-`Windows.Gaming.Input.Gamepad` (API nativa UWP, sem SDL — diferente do `dosbox-pure-uwp`,
-que usa SDL_GameController + fallback UWP porque também roda em plataformas não-UWP via o
-core libretro compartilhado). Aqui não há esse requisito multiplataforma, então usamos
-direto a API nativa, mais simples:
+`Windows.Gaming.Input.Gamepad` (native UWP API, no SDL — unlike `dosbox-pure-uwp`,
+which uses SDL_GameController + UWP fallback because it also runs on non-UWP platforms via
+the shared libretro core). Here we don't have that cross-platform requirement, so we use
+the native API directly, which is simpler:
 
 ```csharp
 var gamepads = Gamepad.Gamepads;        // IReadOnlyList<Gamepad>
 var reading = gamepad.GetCurrentReading(); // GamepadReading { Buttons, LeftThumbstickX/Y, ... }
 ```
 
-Eventos `Gamepad.GamepadAdded` / `Gamepad.GamepadRemoved` tratam hotplug (controle
-conectado/desconectado em runtime).
+`Gamepad.GamepadAdded` / `Gamepad.GamepadRemoved` events handle hotplug (controller
+connected/disconnected at runtime).
 
-## GamepadInputService — responsabilidades
+## GamepadInputService — Responsibilities
 
-1. Poll a cada frame/tick (via `CompositionTarget.Rendering` ou `DispatcherTimer` de ~16ms).
-2. Comparar `GamepadButtons` atual vs anterior (bitwise) → detectar "JustPressed" (borda de
-   subida) e "JustReleased".
-3. D-pad: repeat-enquanto-segurado, com delay inicial (ex: 400ms) e depois repeat rápido
-   (ex: 100ms) — mesma lógica de `dosbox_uwpMain.cpp` do projeto irmão.
-4. Left Thumbstick: mapeado para os mesmos eventos de D-pad quando além de um deadzone
-   (~0.5), permitindo navegar com o analógico também.
-5. Traduzir estado bruto em eventos semânticos e repassar para o `INavigable` ativo (o
-   `ColumnNavigator`, ver `ARCHITECTURE.md`).
+1. Poll every frame/tick (via `CompositionTarget.Rendering` or `DispatcherTimer` at ~16ms).
+2. Compare current vs previous `GamepadButtons` (bitwise) → detect "JustPressed" (rising
+   edge) and "JustReleased".
+3. D-pad: repeat-while-held, with initial delay (e.g. 400ms) then fast repeat
+   (e.g. 100ms) — same logic as `dosbox_uwpMain.cpp` from the sibling project.
+4. Left Thumbstick: mapped to the same events as D-pad when beyond a deadzone
+   (~0.5), allowing navigation with the analog stick as well.
+5. Translate raw state into semantic events and pass to the active `INavigable` (the
+   `ColumnNavigator`, see `ARCHITECTURE.md`).
 
-## Contrato `INavigable`
+## `INavigable` Contract
 
 ```csharp
 public interface INavigable
 {
-    void OnDPad(bool up);       // true = up/left (anterior), false = down/right (próximo)
-    void OnDPadLeft();          // sobe nível (equivalente a Back)
-    void OnDPadRight();         // desce nível (equivalente a Confirm em pasta)
-    void OnConfirm();           // botão A
-    void OnBack();              // botão B
-    void OnContextMenu();       // botão Y
+    void OnDPad(bool up);       // true = up/left (previous), false = down/right (next)
+    void OnDPadLeft();          // go up a level (equivalent to Back)
+    void OnDPadRight();         // go down a level (equivalent to Confirm on folder)
+    void OnConfirm();           // A button
+    void OnBack();              // B button
+    void OnContextMenu();       // Y button
     void OnPageUp();            // LB
     void OnPageDown();          // RB
 }
 ```
 
-Mesma "forma" usada por `FrontendMenu`/`FileBrowser` no `dosbox-pure-uwp` (ver relatório de
-exploração em `docs/frontend`/`docs/filebrowser` daquele repo) — decisão intencional de
-manter o padrão testado.
+Same "shape" used by `FrontendMenu`/`FileBrowser` in `dosbox-pure-uwp` (see exploration
+report in `docs/frontend`/`docs/filebrowser` in that repo) — intentional decision to
+keep the proven pattern.
 
-## Tabela de botões (MVP)
+## Button Table (MVP)
 
-| Botão físico | Evento semântico | Ação no X-Files |
+| Physical Button | Semantic Event | X-Files Action |
 |---|---|---|
-| D-pad Up / Left Stick Up | `OnDPad(up: true)` | mover seleção para cima na coluna Current (wrap-around) |
-| D-pad Down / Left Stick Down | `OnDPad(up: false)` | mover seleção para baixo na coluna Current (wrap-around) |
-| D-pad Left / Left Stick Left | `OnDPadLeft()` | subir um nível (equivalente a B) |
-| D-pad Right / Left Stick Right | `OnDPadRight()` | entrar na pasta selecionada (equivalente a A em pasta) |
-| A | `OnConfirm()` | pasta → drill-in; arquivo → ação padrão contextual (ex: abrir com app associado) |
-| B | `OnBack()` | subir um nível; se já na raiz, sem efeito (ou sai do app, a definir) |
-| Y | `OnContextMenu()` | abre `FileActionSheet` sobre item selecionado |
-| X | (reservado) | alternar modo de preview (ex: forçar hex) — pós-MVP |
-| LB | `OnPageUp()` | rolar uma página para cima na coluna Current |
-| RB | `OnPageDown()` | rolar uma página para baixo na coluna Current |
-| Start/Menu | (reservado) | abrir configurações/tema — pós-MVP |
+| D-pad Up / Left Stick Up | `OnDPad(up: true)` | move selection up in Current column (wrap-around) |
+| D-pad Down / Left Stick Down | `OnDPad(up: false)` | move selection down in Current column (wrap-around) |
+| D-pad Left / Left Stick Left | `OnDPadLeft()` | go up a level (equivalent to B) |
+| D-pad Right / Left Stick Right | `OnDPadRight()` | enter selected folder (equivalent to A on folder) |
+| A | `OnConfirm()` | folder → drill-in; file → contextual default action (e.g. open with associated app) |
+| B | `OnBack()` | go up a level; if already at root, no effect (or exit app, to be defined) |
+| Y | `OnContextMenu()` | opens `FileActionSheet` over selected item |
+| X | (reserved) | toggle preview mode (e.g. force hex) — post-MVP |
+| LB | `OnPageUp()` | scroll one page up in Current column |
+| RB | `OnPageDown()` | scroll one page down in Current column |
+| Start/Menu | (reserved) | open settings/theme — post-MVP |
 
-## Regras de navegação (portadas do FileBrowser.cpp do dosbox-pure-uwp)
+## Navigation Rules (ported from dosbox-pure-uwp FileBrowser.cpp)
 
-- **Wrap-around**: mover para baixo no último item volta para o primeiro; mover para cima
-  no primeiro item vai para o último.
-- **Scroll-follow-seleção**: se o índice selecionado sair da janela visível (para cima ou
-  para baixo), a lista rola automaticamente para mantê-lo visível, com uma margem de
-  "olhar à frente" (ex: 2-3 itens antes de rolar no limite).
-- **Skip de entradas vazias/separadoras**: se no futuro existirem separadores visuais na
-  lista (ex: cabeçalho "Pastas" / "Arquivos"), a navegação deve pulá-los automaticamente
-  (mesma lógica do `do { } while` visto em `FileBrowser.cpp:706-733`).
+- **Wrap-around**: moving down on the last item returns to the first; moving up on
+  the first item goes to the last.
+- **Scroll-follows-selection**: if the selected index goes outside the visible window (up or
+  down), the list scrolls automatically to keep it visible, with a "look ahead" margin
+  (e.g. 2-3 items before scrolling at the limit).
+- **Empty/separator entry skipping**: if visual separators exist in the
+  list in the future (e.g. "Folders" / "Files" headers), navigation must automatically skip
+  them (same `do { } while` logic seen in `FileBrowser.cpp:706-733`).
 
-## Edge cases de input
+## Input Edge Cases
 
-- Sem controle conectado: exibir mensagem de estado vazio ("Conecte um controle") em vez de
-  crashar — `GamepadInputService` deve expor `IsControllerConnected` observável.
-- Múltiplos controles conectados: MVP usa apenas `Gamepad.Gamepads[0]` (o primeiro
-  detectado). Suporte a múltiplos usuários fica no backlog.
-- Debounce: threshold de deadzone do analógico (0.5) evita "chattering" de navegação
-  indesejada por drift do stick.
+- No controller connected: display empty-state message ("Connect a controller") instead of
+  crashing — `GamepadInputService` must expose observable `IsControllerConnected`.
+- Multiple controllers connected: MVP uses only `Gamepad.Gamepads[0]` (first
+  detected). Multi-user support is in the backlog.
+- Debounce: analog stick deadzone threshold (0.5) prevents unwanted navigation
+  "chattering" from stick drift.

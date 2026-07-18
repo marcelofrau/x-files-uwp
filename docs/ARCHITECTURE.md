@@ -1,99 +1,99 @@
-# Arquitetura — X-Files
+# Architecture — X-Files
 
-## Visão geral
+## Overview
 
-X-Files é um file browser UWP orientado a gamepad, inspirado na UX de colunas Miller do
-`yazi` (preview ao vivo, 3 colunas), mas implementado nativamente em C#/XAML para rodar bem
-no Xbox (foco de gamepad nativo do UWP), sem reaproveitar nenhum código do yazi (ver
-`DECISIONS.md`, ADR-003).
+X-Files is a gamepad-oriented UWP file browser, inspired by yazi's Miller column UX
+(live preview, 3 columns), but implemented natively in C#/XAML to run well on Xbox
+(native UWP gamepad focus), without reusing any code from yazi (see `DECISIONS.md`,
+ADR-003).
 
-## Camadas
+## Layers
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  XAML Views (MainPage, Controls/ColumnListView, PreviewPane) │  ← binding, templates, foco visual
+│  XAML Views (MainPage, Controls/ColumnListView, PreviewPane) │  ← binding, templates, visual focus
 ├─────────────────────────────────────────────────────────────┤
-│  ViewModels (ColumnViewModel, PreviewViewModel)               │  ← estado observável, comandos
+│  ViewModels (ColumnViewModel, PreviewViewModel)               │  ← observable state, commands
 ├─────────────────────────────────────────────────────────────┤
-│  Navigation (INavigable, ColumnNavigator)                     │  ← lógica de navegação pura, sem UI
+│  Navigation (INavigable, ColumnNavigator)                     │  ← pure navigation logic, no UI
 ├─────────────────────────────────────────────────────────────┤
 │  Input (GamepadInputService)                                  │  ← polling Windows.Gaming.Input, edge-detect
 ├─────────────────────────────────────────────────────────────┤
-│  FileSystem (DirectoryScanner, ArchiveBrowser, FileOperations) │  ← acesso a disco, P/Invoke, SharpCompress
+│  FileSystem (DirectoryScanner, ArchiveBrowser, FileOperations) │  ← disk access, P/Invoke, SharpCompress
 └─────────────────────────────────────────────────────────────┘
 ```
 
-Cada camada só conhece a camada imediatamente abaixo. `Navigation` não sabe nada de XAML;
-`FileSystem` não sabe nada de gamepad. Isso permite testar `ColumnNavigator` e
-`DirectoryScanner` sem UI (unit tests puros).
+Each layer only knows the layer directly below it. `Navigation` knows nothing about XAML;
+`FileSystem` knows nothing about gamepad. This allows testing `ColumnNavigator` and
+`DirectoryScanner` without UI (pure unit tests).
 
-## Fluxo de input → tela
+## Input → Screen Flow
 
 ```
 Windows.Gaming.Input.Gamepad.GetCurrentReading()
-        │  (a cada tick / CompositionTarget.Rendering ou DispatcherTimer)
+        │  (every tick / CompositionTarget.Rendering or DispatcherTimer)
         ▼
 GamepadInputService
-  - compara bitmask atual vs anterior → detecta "JustPressed"
-  - dpad held → repeat-after-delay (como no dosbox-pure-uwp)
-        │  eventos semânticos: DPadUp, DPadDown, Confirm, Back, ContextMenu, PageUp, PageDown
+  - compares current bitmask vs previous → detects "JustPressed"
+  - dpad held → repeat-after-delay (same as dosbox-pure-uwp)
+        │  semantic events: DPadUp, DPadDown, Confirm, Back, ContextMenu, PageUp, PageDown
         ▼
-INavigable (implementado por ColumnNavigator)
+INavigable (implemented by ColumnNavigator)
   - OnDPad(bool up)
   - OnConfirm()
   - OnBack()
   - OnContextMenu()
   - OnPageUp() / OnPageDown()
-        │  atualiza estado (índice selecionado, pilha de colunas)
+        │  updates state (selected index, column stack)
         ▼
 ColumnViewModel / PreviewViewModel (INotifyPropertyChanged)
         │  data binding (x:Bind)
         ▼
-XAML re-renderiza (ItemsControl com ControlTemplate customizado)
+XAML re-renders (ItemsControl with custom ControlTemplate)
 ```
 
-## Modelo de colunas Miller
+## Miller Column Model
 
-3 `ItemsControl` lado a lado em um `Grid` de 3 colunas:
+3 `ItemsControl` side by side in a 3-column `Grid`:
 
-| Coluna | Conteúdo | Largura |
+| Column | Content | Width |
 |---|---|---|
-| Parent | listagem do diretório pai, com o item "atual" destacado | ~20% |
-| Current | listagem do diretório atual, com seleção ativa (foco do gamepad) | ~35% |
-| Preview | conteúdo do item selecionado na coluna Current | ~45% |
+| Parent | parent directory listing, with "current" item highlighted | ~20% |
+| Current | current directory listing, with active selection (gamepad focus) | ~35% |
+| Preview | content of the selected item in the Current column | ~45% |
 
-Ao apertar **A** sobre uma pasta:
-1. `Current` vira `Parent` (desliza visualmente para a esquerda — pode ser uma
-   `Storyboard` simples de translação, ou apenas troca de conteúdo sem animação no MVP).
-2. `Preview` vira `Current`.
-3. Nova coluna `Preview` é carregada com o conteúdo do item agora selecionado no novo
+When pressing **A** on a folder:
+1. `Current` becomes `Parent` (visually slides left — can be a simple
+   `Storyboard` translation, or just content swap without animation in the MVP).
+2. `Preview` becomes `Current`.
+3. New `Preview` column is loaded with the content of the item now selected in the new
    `Current`.
 
-Ao apertar **B** (ou D-pad esquerda): processo inverso.
+When pressing **B** (or D-pad left): reverse process.
 
-## Preview ao vivo (sem ação explícita)
+## Live Preview (no explicit action)
 
-Mover a seleção na coluna `Current` dispara imediatamente:
-- Pasta → lista os filhos (mesmo componente de listagem, sem interação)
-- Arquivo texto → primeiras N linhas / KB (truncado, com indicador "..." se maior)
-- Imagem → thumbnail via `BitmapImage` (decodificação assíncrona, cache simples em memória)
-- `.zip`/`.7z`/`.rar` → listagem das entradas internas via `ArchiveBrowser` (mesma UI de
-  listagem, tratada como "pasta virtual")
-- Binário desconhecido → mensagem "sem preview disponível" (sem tentar hex dump no MVP —
-  fica em backlog, ver `ROADMAP.md`)
+Moving the selection in the `Current` column immediately triggers:
+- Folder → lists its children (same listing component, no interaction)
+- Text file → first N lines / KB (truncated, with "..." indicator if larger)
+- Image → thumbnail via `BitmapImage` (async decode, simple in-memory cache)
+- `.zip`/`.7z`/`.rar` → internal entry listing via `ArchiveBrowser` (same listing UI,
+  treated as "virtual folder")
+- Unknown binary → "no preview available" message (no hex dump in MVP —
+  in backlog, see `ROADMAP.md`)
 
-## Por que não D2D (recapitulando ADR-002)
+## Why Not D2D (recapping ADR-002)
 
-Foco de gamepad (`XYFocusUp/Down/Left/Right`, `IsFocusEngaged`) é nativo do XAML/UWP.
-Implementar em D2D significaria recriar manualmente: hit-test, scroll-follow-seleção,
-wrap-around, marquee de texto longo — tudo que o `dosbox-pure-uwp` teve que fazer à mão
-(ver `Content/FileBrowser.cpp`, ~900 linhas, naquele repo). Com XAML + `ControlTemplate`
-customizado, temos o mesmo visual "sem cara de Windows padrão" com uma fração do código.
+Gamepad focus (`XYFocusUp/Down/Left/Right`, `IsFocusEngaged`) is native to XAML/UWP.
+Implementing in D2D would mean manually recreating: hit-test, scroll-follow-selection,
+wrap-around, long-text marquee — everything that `dosbox-pure-uwp` had to build by hand
+(see `Content/FileBrowser.cpp`, ~900 lines, in that repo). With XAML + custom
+`ControlTemplate`, we get the same "not-stock-Windows" look with a fraction of the code.
 
-## Persistência de tema/config
+## Theme/Config Persistence
 
-`Theming/AppTheme.cs` carrega um JSON editável (`x-files-theme.json`, salvo em
-`ApplicationData.Current.LocalFolder`) via `System.Text.Json` com
-`JsonCommentHandling.Skip` (permite comentários `//` no JSON, mesma convenção do
-`dosbox-pure-uwp`, mas sem precisar de strip manual). O JSON popula um `ResourceDictionary`
-em runtime (brushes/fontes usados pelos `ControlTemplate`).
+`Theming/AppTheme.cs` loads an editable JSON (`x-files-theme.json`, saved in
+`ApplicationData.Current.LocalFolder`) via `System.Text.Json` with
+`JsonCommentHandling.Skip` (allows `//` comments in JSON, same convention as
+`dosbox-pure-uwp`, but without needing manual stripping). The JSON populates a
+`ResourceDictionary` at runtime (brushes/fonts used by `ControlTemplate`).

@@ -1,28 +1,28 @@
-# File Browser — Modelo de Dados e Acesso ao Disco
+# File Browser — Data Model and Disk Access
 
-Referência: `dosbox-pure-uwp` (`Content/FileBrowser.cpp`, `vfs_implementation_uwp.cpp`,
-`dosbox_uwpMain.cpp`). Patterns C++ validados no Xbox real, adaptados para C#/XAML.
+Reference: `dosbox-pure-uwp` (`Content/FileBrowser.cpp`, `vfs_implementation_uwp.cpp`,
+`dosbox_uwpMain.cpp`). C++ patterns validated on real Xbox, adapted to C#/XAML.
 
 ---
 
-## Manifest — Capabilities obrigatórias
+## Manifest — Required Capabilities
 
 ```xml
 <rescap:Capability Name="broadFileSystemAccess" />
 <rescap:Capability Name="runFullTrust" />
 ```
 
-Ambas são `rescap:` (restricted) — precisam estar no `Package.appxmanifest`. Sem essas
-duas, APIs `*FromApp` falham silenciosamente no Xbox. Não usar `musicLibrary`,
-`picturesLibrary`, etc. — `broadFileSystemAccess` cobre tudo.
+Both are `rescap:` (restricted) — must be in `Package.appxmanifest`. Without these
+two, `*FromApp` APIs fail silently on Xbox. Do not use `musicLibrary`,
+`picturesLibrary`, etc. — `broadFileSystemAccess` covers everything.
 
 ---
 
-## Regra de ouro: APIs Win32 devem usar variantes `*FromApp`
+## Golden Rule: Win32 APIs Must Use `*FromApp` Variants
 
-No Xbox UWP, mesmo com `broadFileSystemAccess`, as APIs CRT padrão são **bloqueadas**:
+On Xbox UWP, even with `broadFileSystemAccess`, standard CRT APIs are **blocked**:
 
-| CRT/Win32 padrão (BLOQUEADA) | Variante UWP (USAR) |
+| Standard CRT/Win32 (BLOCKED) | UWP Variant (USE) |
 |---|---|
 | `FindFirstFile` / `FindNextFile` | `FindFirstFileExFromAppW` / `FindNextFileW` |
 | `_wfopen` / `fopen` | `CreateFile2FromAppW` |
@@ -32,13 +32,13 @@ No Xbox UWP, mesmo com `broadFileSystemAccess`, as APIs CRT padrão são **bloqu
 | `MoveFileW` | `MoveFileFromAppW` |
 | `CreateDirectoryW` | `CreateDirectoryFromAppW` |
 
-Header necessário: `#include <fileapifromapp.h>` (C++). Em C#, declarar via P/Invoke
-com `[DllImport("kernel32.dll", CharSet = CharSet.Unicode)]` apontando pra versão
-`FromApp`.
+Required header: `#include <fileapifromapp.h>` (C++). In C#, declare via P/Invoke
+with `[DllImport("kernel32.dll", CharSet = CharSet.Unicode)]` pointing to the
+`FromApp` version.
 
 ---
 
-## P/Invoke — Declarações C# necessárias
+## P/Invoke — Required C# Declarations
 
 ```csharp
 using System.Runtime.InteropServices;
@@ -48,9 +48,9 @@ using System.Runtime.InteropServices.ComTypes;
 public struct WIN32_FIND_DATA
 {
     public uint dwFileAttributes;
-    public System.Runtime.InteropServices.ComTypes.FILETIME ftCreationTime;
-    public System.Runtime.InteropServices.ComTypes.FILETIME ftLastAccessTime;
-    public System.Runtime.InteropServices.Comtras.FILETIME ftLastWriteTime;
+    public FILETIME ftCreationTime;
+    public FILETIME ftLastAccessTime;
+    public FILETIME ftLastWriteTime;
     public uint nFileSizeHigh;
     public uint nFileSizeLow;
     public uint dwReserved0;
@@ -89,7 +89,7 @@ public enum FINDEX_SEARCH_OPS { FindExSearchNameMatch = 0 }
 
 ---
 
-## `FileEntry` (modelo base)
+## `FileEntry` (Base Model)
 
 ```csharp
 public class FileEntry
@@ -97,27 +97,27 @@ public class FileEntry
     public string Name { get; set; }
     public string FullPath { get; set; }
     public bool IsDirectory { get; set; }
-    public bool IsArchive { get; set; }      // .zip/.7z/.rar — tratado como "pasta virtual"
-    public long SizeBytes { get; set; }      // 0 para diretórios
+    public bool IsArchive { get; set; }      // .zip/.7z/.rar — treated as "virtual folder"
+    public long SizeBytes { get; set; }      // 0 for directories
     public DateTimeOffset? LastModified { get; set; }
 
-    // Presente apenas quando o entry vive DENTRO de um arquivo compactado:
-    public string ArchiveRootPath { get; set; }     // caminho do .zip/.7z/.rar no disco real
-    public string ArchiveInternalPath { get; set; } // caminho relativo dentro do arquivo
+    // Only present when the entry lives INSIDE a compressed file:
+    public string ArchiveRootPath { get; set; }     // path to the .zip/.7z/.rar on real disk
+    public string ArchiveInternalPath { get; set; } // relative path inside the archive
 }
 ```
 
-`IsArchive` é derivado da extensão (`.zip`, `.7z`, `.rar`) e faz o item se comportar como
-pasta na navegação (drill-in com A/D-pad direita), mesmo sendo fisicamente um arquivo.
+`IsArchive` is derived from the extension (`.zip`, `.7z`, `.rar`) and makes the item behave like
+a folder in navigation (drill-in with A/D-pad right), even though it's physically a file.
 
 ---
 
 ## `DirectoryScanner`
 
-Responsável por listar o conteúdo de um caminho **real** (fora de arquivos compactados —
-esse caso é do `ArchiveBrowser`, ver `ARCHIVES.md`).
+Responsible for listing the contents of a **real** path (outside compressed files —
+that case is handled by `ArchiveBrowser`, see `ARCHIVES.md`).
 
-### Nível raiz (`path == null`/vazio)
+### Root Level (`path == null`/empty)
 
 ```csharp
 uint drives = GetLogicalDrives(); // bitmask: bit 0 = A:, bit 1 = B:, etc.
@@ -131,18 +131,18 @@ for (int i = 0; i < 26; i++)
 }
 ```
 
-- Entrada sintética `[App Data]` apontando para
-  `ApplicationData.Current.LocalFolder.Path` (sandbox da própria app, sempre acessível
-  mesmo sem `broadFileSystemAccess`).
-- Não há detecção específica de USB — todos os drives são listados idênticos.
+- Synthetic `[App Data]` entry pointing to
+  `ApplicationData.Current.LocalFolder.Path` (the app's own sandbox, always accessible
+  even without `broadFileSystemAccess`).
+- No specific USB detection — all drives are listed identically.
 
-### Nível não-raiz — Scan de diretório
+### Non-Root Level — Directory Scan
 
-**NÃO usar `StorageFolder.GetFoldersAsync()`/`GetFilesAsync()`** como método primário —
-essas APIs exigem que o caminho esteja na `FutureAccessList` ou dentro de pastas
-declaradas, o que não cobre "qualquer drive USB conectado ao Xbox".
+**Do NOT use `StorageFolder.GetFoldersAsync()`/`GetFilesAsync()`** as the primary method —
+these APIs require the path to be in the `FutureAccessList` or inside declared
+folders, which doesn't cover "any USB drive connected to Xbox".
 
-Padrão validado em `FileBrowser.cpp:207-271`:
+Pattern validated in `FileBrowser.cpp:207-271`:
 
 ```csharp
 string searchPath = Path.Combine(path, "*");
@@ -156,7 +156,7 @@ IntPtr hFind = FindFirstFileExFromAppW(
 
 if (hFind == new IntPtr(INVALID_HANDLE_VALUE))
 {
-    // Falha (AccessDenied, etc.) — adiciona ".." pra usuário poder voltar
+    // Failed (AccessDenied, etc.) — add ".." so user can go back
     entries.Add(new FileEntry { Name = "..", IsDirectory = true });
     return;
 }
@@ -189,61 +189,61 @@ while (FindNextFileW(hFind, out findData));
 FindClose(hFind);
 ```
 
-### Ordenação
-1. `..` (voltar) sempre primeiro, quando aplicável.
-2. Diretórios em ordem alfabética (case-insensitive).
-3. Arquivos em ordem alfabética (case-insensitive).
-4. Arquivos compactados (`IsArchive == true`) ficam misturados com os arquivos normais na
-   ordenação alfabética (não em grupo separado) — mantém a lista previsível.
+### Sorting
+1. `..` (go back) always first, when applicable.
+2. Directories in alphabetical order (case-insensitive).
+3. Files in alphabetical order (case-insensitive).
+4. Compressed archives (`IsArchive == true`) are mixed with normal files in
+   alphabetical sorting (not in a separate group) — keeps the list predictable.
 
 ---
 
-## Error handling — padrão do dosbox-pure-uwp
+## Error Handling — dosbox-pure-uwp Pattern
 
-O precedente mostra tratamento graceful/degradado:
+Precedent shows graceful/degraded handling:
 
-- **Scan falhou** (`INVALID_HANDLE_VALUE`): adiciona `".."` sem lançar exceção → usuário
-  pode voltar. Não mostra dialog de erro.
-- **`ApplicationData.Current.LocalFolder`** falha: try/catch, log warning,continua sem
-  entrada `[App Data]`.
-- **`CreateFile2FromAppW` falha** (`INVALID_HANDLE_VALUE`): retorna null/erro sem crash.
-- **Drive sem permissão**: scan retorna `".."` apenas, lista fica quase vazia.
+- **Scan failed** (`INVALID_HANDLE_VALUE`): adds `".."` without throwing exception → user
+  can go back. No error dialog shown.
+- **`ApplicationData.Current.LocalFolder`** fails: try/catch, log warning, continues without
+  `[App Data]` entry.
+- **`CreateFile2FromAppW` fails** (`INVALID_HANDLE_VALUE`): returns null/error without crashing.
+- **Drive without permission**: scan returns only `".."`, list stays nearly empty.
 
-Filosofia: **nunca crashar** — sempre ter saída de navegação disponível.
-
----
-
-## USB drive spin-up latency
-
-Drives USB externos no Xbox podem entrar em sleep/spin-down após período de inatividade.
-Primeiro acesso ao drive pode levar 5-15 segundos enquanto disco mecânico acorda ou
-USB power management responde. Navegações subsequentes são normais (drive já ativo).
-
-**Comportamento esperado:** loading indicator visível durante spin-up, scan retorna normalmente
-depois que drive responde. Não é bug — é latência natural de hardware.
-
-**Futuro (pós-MVP):** considerar warm-up em background ao detectar drive via `GetLogicalDrives()`,
-ou pré-carregar listing do drive mais recente.
+Philosophy: **never crash** — always have a navigation exit available.
 
 ---
 
-## ACL — Permissão pós-move
+## USB Drive Spin-Up Latency
 
-Arquivos movidos com `MoveFileFromAppW` **perdem herança de ACL** no UWP. Precisam de
-`SetSecurityInfo` pra conceder acesso a `S-1-15-2-1` (ALL_APPLICATION_PACKAGES):
+External USB drives on Xbox may enter sleep/spin-down after a period of inactivity.
+First access to the drive can take 5-15 seconds while the mechanical disk wakes up or
+USB power management responds. Subsequent navigations are normal (drive already active).
+
+**Expected behavior:** visible loading indicator during spin-up, scan returns normally
+after drive responds. Not a bug — natural hardware latency.
+
+**Future (post-MVP):** consider background warm-up when detecting drive via `GetLogicalDrives()`,
+or pre-loading listing from most recently accessed drive.
+
+---
+
+## ACL — Post-Move Permission
+
+Files moved with `MoveFileFromAppW` **lose ACL inheritance** in UWP. They need
+`SetSecurityInfo` to grant access to `S-1-15-2-1` (ALL_APPLICATION_PACKAGES):
 
 ```csharp
-// Só necessário após MoveFileFromAppW. DeleteFileFromAppW não precisa.
-// Detalhes em vfs_implementation_uwp.cpp:909-972 (função uwp_set_acl).
+// Only needed after MoveFileFromAppW. DeleteFileFromAppW doesn't need this.
+// Details in vfs_implementation_uwp.cpp:909-972 (function uwp_set_acl).
 ```
 
-Na prática: `Copy + Delete` pode evitar esse problema (ou tratar no `FileOperations`).
+In practice: `Copy + Delete` can avoid this problem (or handle it in `FileOperations`).
 
 ---
 
-## Path normalization
+## Path Normalization
 
-UWP é sensível a forward slashes. Normalizar sempre pra backslash:
+UWP is sensitive to forward slashes. Always normalize to backslash:
 
 ```csharp
 path = path.Replace('/', '\\');
@@ -251,41 +251,41 @@ path = path.Replace('/', '\\');
 
 ---
 
-## `System.IO` vs `StorageFile` — quando usar cada
+## `System.IO` vs `StorageFile` — When to Use Each
 
-| Contexto | Usar |
+| Context | Use |
 |---|---|
-| Listar diretório (DirectoryScanner) | P/Invoke `FindFirstFileExFromAppW` |
-| Abrir arquivo pra leitura/escrita | `CreateFile2FromAppW` ou `System.IO.FileStream` |
-| Copiar/Mover/Deletar | `System.IO.File.Copy/Move/Delete` (funciona com broadFileSystemAccess) |
-| Obter LocalFolder da app | `ApplicationData.Current.LocalFolder` (API UWP normal) |
-| Ler conteúdo de arquivo pra preview | `System.IO.StreamReader` / `StorageFile` (ambos funcionam) |
+| List directory (DirectoryScanner) | P/Invoke `FindFirstFileExFromAppW` |
+| Open file for reading/writing | `CreateFile2FromAppW` or `System.IO.FileStream` |
+| Copy/Move/Delete | `System.IO.File.Copy/Move/Delete` (works with broadFileSystemAccess) |
+| Get app's LocalFolder | `ApplicationData.Current.LocalFolder` (standard UWP API) |
+| Read file content for preview | `System.IO.StreamReader` / `StorageFile` (both work) |
 
 ---
 
-## Ações de arquivo (`FileOperations`)
+## File Actions (`FileOperations`)
 
-Implementadas como operações assíncronas simples sobre caminhos reais (fora de arquivo
-compactado — dentro de compactado, só leitura/extração faz sentido):
+Implemented as simple async operations on real paths (outside compressed files —
+inside compressed files, only read/extract makes sense):
 
 ```csharp
 Task CopyAsync(string sourcePath, string destDir, IProgress<double> progress);
 Task MoveAsync(string sourcePath, string destDir);
 Task RenameAsync(string path, string newName);
-Task DeleteAsync(string path); // confirmação obrigatória via diálogo antes de chamar
+Task DeleteAsync(string path); // mandatory confirmation via dialog before calling
 ```
 
-- Usa `System.IO` diretamente (não `StorageFile`) pelo mesmo motivo do `DirectoryScanner`:
-  cobertura de caminhos fora do sandbox declarado, com `broadFileSystemAccess`.
-- Operações de "Copiar/Mover" precisam de um segundo momento de navegação (escolher pasta
-  destino) — reaproveita o mesmo componente de coluna `Current`, em um "modo de seleção de
-  destino" (flag na ViewModel, não uma tela nova).
+- Uses `System.IO` directly (not `StorageFile`) for the same reason as `DirectoryScanner`:
+  coverage of paths outside the declared sandbox, with `broadFileSystemAccess`.
+- "Copy/Move" operations require a second navigation step (choose destination
+  folder) — reuses the same `Current` column component, in a "destination selection
+  mode" (flag on the ViewModel, not a new screen).
 
 ---
 
-## Extensões whitelisted vs mostrar tudo
+## Whitelisted Extensions vs Show All
 
-Diferente do `dosbox-pure-uwp` (que filtra por extensão porque só interessam formatos que o
-emulador consegue carregar), o X-Files é um file browser genérico: **mostra todos os
-arquivos**, sem whitelist de extensão. `IsArchive` apenas habilita comportamento extra
-(drill-in), não filtra visibilidade.
+Unlike `dosbox-pure-uwp` (which filters by extension because only formats the
+emulator can load are relevant), X-Files is a generic file browser: **shows all
+files**, no extension whitelist. `IsArchive` just enables extra behavior
+(drill-in), doesn't filter visibility.

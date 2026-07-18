@@ -1,69 +1,69 @@
-# Especificação Funcional — X-Files
+# Functional Specification — X-Files
 
-## Objetivo
+## Goal
 
-File browser para Xbox (UWP), 100% operável via gamepad, com navegação por colunas Miller
-(estilo yazi) e preview ao vivo, incluindo navegação dentro de arquivos compactados
-(zip/7z/rar) sem precisar extrair antes.
+File browser for Xbox (UWP), fully operable via gamepad, with Miller column navigation
+(yazi-style) and live preview, including navigation inside compressed archives
+(zip/7z/rar) without needing to extract first.
 
-## Escopo do MVP
+## MVP Scope
 
-### Incluído
-1. Navegação de diretórios locais e drives conectados (USB, drives do Xbox visíveis via
+### Included
+1. Local directory and connected drive navigation (USB, Xbox-visible drives via
    `GetLogicalDrives`).
-2. Listagem em 3 colunas (Parent | Current | Preview), com preview ao vivo ao mover seleção.
-3. Preview de:
-   - Texto (truncado)
-   - Imagem (thumbnail)
-   - Pastas (listagem)
-   - Arquivos `.zip`, `.7z`, `.rar` (listagem interna, tratados como pasta virtual)
-4. Navegação **para dentro** de arquivos compactados (drill-in como se fosse pasta),
-   incluindo múltiplos níveis (zip dentro de zip, se existir — melhor esforço).
-5. Menu de contexto (botão Y) com ações:
-   - Abrir com app associado (`Launcher.LaunchFileAsync`)
-   - Extrair (arquivo compactado → pasta de destino escolhida)
-   - Copiar / Mover / Renomear / Deletar
-6. 100% navegável por gamepad (`Windows.Gaming.Input.Gamepad`), sem depender de mouse/teclado
-   (mas sem quebrá-los — devem funcionar como bônus, não como requisito).
-7. Tema visual customizado (não usa chrome padrão do Fluent Design), configurável via JSON.
-8. Deploy funcional no Xbox via Developer Mode + Device Portal (sideload `.appx`/`.msix`).
+2. 3-column listing (Parent | Current | Preview), with live preview when moving selection.
+3. Preview of:
+   - Text (truncated)
+   - Images (thumbnail)
+   - Folders (listing)
+   - `.zip`, `.7z`, `.rar` files (internal listing, treated as virtual folders)
+4. Navigation **into** compressed archives (drill-in as if it were a folder),
+   including multiple levels (zip inside zip, if it exists — best effort).
+5. Context menu (Y button) with actions:
+   - Open with associated app (`Launcher.LaunchFileAsync`)
+   - Extract (compressed archive → chosen destination folder)
+   - Copy / Move / Rename / Delete
+6. 100% navigable via gamepad (`Windows.Gaming.Input.Gamepad`), without relying on mouse/keyboard
+   (but without breaking them — they should work as bonus, not as a requirement).
+7. Custom visual theme (no default Fluent Design chrome), configurable via JSON.
+8. Functional deploy on Xbox via Developer Mode + Device Portal (sideload `.appx`/`.msix`).
 
-### Fora de escopo (MVP) — backlog documentado em ROADMAP.md
-- Navegação de rede (SMB/UNC, `\\servidor\share`)
-- Preview de binário/hex dump
-- Edição de arquivos de texto
-- Múltiplas abas/painéis simultâneos
-- Compressão (criar novos zips) — só leitura/extração
-- Suporte a `.rar` com senha ou multi-volume complexo (aceita o que `SharpCompress` suportar
-  nativamente, sem features extras)
-- Sincronização em nuvem (OneDrive, etc.)
+### Out of scope (MVP) — documented backlog in ROADMAP.md
+- Network browsing (SMB/UNC, `\\server\share`)
+- Binary/hex dump preview
+- Text file editing
+- Multiple tabs/simultaneous panes
+- Compression (creating new zips) — read/extract only
+- Password-protected `.rar` or complex multi-volume support (accept whatever `SharpCompress`
+  supports natively, no extra features)
+- Cloud sync (OneDrive, etc.)
 
-## Requisitos não funcionais
+## Non-functional Requirements
 
-- **Responsividade**: navegação (mover seleção, trocar coluna) deve responder em < 100ms
-  percebido, mesmo com preview de imagem/arquivo grande carregando em background
-  (async, não bloqueia o input thread).
-- **Robustez de I/O**: diretórios sem permissão, drives desconectados durante navegação,
-  arquivos corrompidos — devem falhar com mensagem visível na coluna Preview, nunca crashar
-  o app.
-- **Compatibilidade Xbox**: `TargetDeviceFamily Name="Windows.Xbox"`, testado via Developer
-  Mode real (não apenas emulador/desktop).
-- **Sem dependência de mouse/teclado**: todo fluxo (incluindo diálogos de confirmação,
-  seleção de pasta destino em "Mover/Copiar") deve ter alternativa 100% gamepad.
+- **Responsiveness**: navigation (moving selection, switching column) must respond in < 100ms
+  perceived, even with image/large file preview loading in background
+  (async, does not block the input thread).
+- **I/O Robustness**: directories without permission, drives disconnected during navigation,
+  corrupted files — must fail with visible message in the Preview column, never crash
+  the app.
+- **Xbox Compatibility**: `TargetDeviceFamily Name="Windows.Xbox"`, tested via real
+  Developer Mode (not just emulator/desktop).
+- **No mouse/keyboard dependency**: every flow (including confirmation dialogs,
+  destination folder selection in "Move/Copy") must have a 100% gamepad alternative.
 
-## Personas / uso esperado
+## Personas / Expected Use
 
-Usuário final: dono de Xbox com Developer Mode ativo, quer navegar pendrive/HD externo ou
-pasta local do app para organizar ROMs, ISOs, backups de save, etc., sem precisar de
-teclado/mouse conectado — controle apenas.
+End user: Xbox owner with Developer Mode active, wants to browse USB flash drives/external HDDs or
+local app folders to organize ROMs, ISOs, save backups, etc., without needing a
+connected keyboard/mouse — gamepad only.
 
-## Critério de "pronto" do MVP
+## MVP "Done" Criteria
 
-- [ ] Roda no Xbox real via sideload, sem input de teclado/mouse necessário em nenhum
-      fluxo.
-- [ ] Navega para dentro de pelo menos um arquivo de cada formato (zip/7z/rar) e mostra
-      listagem correta.
-- [ ] Copiar, mover, renomear, deletar e extrair funcionam sem erros em cenários normais.
-- [ ] Preview de texto e imagem funcionam para os formatos mais comuns
+- [ ] Runs on real Xbox via sideload, with no keyboard/mouse input required in any
+      flow.
+- [ ] Navigates into at least one file of each format (zip/7z/rar) and shows
+      correct listing.
+- [ ] Copy, move, rename, delete, and extract work without errors in normal scenarios.
+- [ ] Text and image preview work for the most common formats
       (`.txt`/`.log`/`.md`, `.png`/`.jpg`/`.bmp`).
-- [ ] Tema pode ser trocado editando o JSON, sem recompilar.
+- [ ] Theme can be changed by editing the JSON, without recompiling.

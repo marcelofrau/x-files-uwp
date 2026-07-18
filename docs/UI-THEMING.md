@@ -1,75 +1,74 @@
-# UI e Theming — XAML com ControlTemplate customizado
+# UI and Theming — XAML with Custom ControlTemplate
 
-Ver `DECISIONS.md` (ADR-002) para o porquê de XAML em vez de Win2D.
+See `DECISIONS.md` (ADR-002) for why XAML instead of Win2D.
 
-## Princípio geral
+## General Principle
 
-Nenhum controle usa a aparência padrão do Fluent Design (`ListView`/`GridView` "de
-fábrica"). Todo controle interativo (linha de arquivo, botão do menu de contexto, etc.) tem
-`Style`/`ControlTemplate` próprio, definido em `Theming/RetroTheme.xaml` (um
-`ResourceDictionary` mesclado no `App.xaml`).
+No control uses the default Fluent Design appearance (`ListView`/`GridView` "out of
+the box"). Every interactive control (file row, context menu button, etc.) has its own
+`Style`/`ControlTemplate`, defined in `Theming/RetroTheme.xaml` (a `ResourceDictionary`
+merged in `App.xaml`).
 
-## Foco de gamepad (nativo do UWP — não reimplementar)
+## Gamepad Focus (UWP Native — Do Not Reimplement)
 
-- `IsTabStop="True"` + `UseSystemFocusVisuals="False"` (para trocar o retângulo azul padrão
-  por indicador visual próprio via `FocusVisualStyle` ou `VisualStateManager` no estado
-  `Focused`/`PointerFocused`).
-- `XYFocusUp`/`XYFocusDown`/`XYFocusLeft`/`XYFocusRight` usados para amarrar a navegação
-  entre as 3 colunas quando necessário (ex: transição de foco entre `Current` e `Preview`
-  ao trocar de "modo" — normalmente cada coluna gerencia seu próprio foco internamente via
-  `INavigable`, e `XYFocus` cobre casos onde o usuário usa D-pad físico do Xbox em vez do
-  fluxo lógico do `GamepadInputService`. Definir explicitamente para não depender de
-  heurística automática do sistema, que pode escolher elemento errado em layouts
-  assimétricos).
-- `IsFocusEngaged` não usado no MVP (reservado para um modo futuro de "travar foco" dentro
-  de um diálogo modal, ex: `FileActionSheet`).
+- `IsTabStop="True"` + `UseSystemFocusVisuals="False"` (to replace the default blue
+  rectangle with a custom visual indicator via `FocusVisualStyle` or `VisualStateManager`
+  in the `Focused`/`PointerFocused` state).
+- `XYFocusUp`/`XYFocusDown`/`XYFocusLeft`/`XYFocusRight` used to bind navigation
+  between the 3 columns when needed (e.g. focus transition between `Current` and `Preview`
+  when switching "modes" — normally each column manages its own focus internally via
+  `INavigable`, and `XYFocus` covers cases where the user uses the physical Xbox D-pad
+  instead of the `GamepadInputService` logical flow. Define explicitly to avoid relying on
+  system auto-heuristics, which may pick the wrong element in asymmetric layouts).
+- `IsFocusEngaged` not used in MVP (reserved for a future "lock focus" mode inside
+  a modal dialog, e.g. `FileActionSheet`).
 
-## Estrutura do ResourceDictionary
+## ResourceDictionary Structure
 
 ```
 Theming/RetroTheme.xaml
 ├── Brushes                     (Background, Foreground, Selected, Accent, Border, ...)
-├── Typography                  (FontFamily monoespaçada, tamanhos por papel: Title/Item/Meta)
+├── Typography                  (FontFamily monospace, sizes by role: Title/Item/Meta)
 ├── Styles
-│   ├── ColumnItemStyle         (linha de arquivo/pasta — Normal/PointerOver/Focused/Selected)
-│   ├── ColumnHeaderStyle       (cabeçalho de coluna, ex: caminho atual)
-│   ├── ContextMenuItemStyle    (linha do FileActionSheet)
-│   └── StatusBarStyle          (rodapé com dica de botões — "A: Abrir  B: Voltar  Y: Menu")
+│   ├── ColumnItemStyle         (file/folder row — Normal/PointerOver/Focused/Selected)
+│   ├── ColumnHeaderStyle       (column header, e.g. current path)
+│   ├── ContextMenuItemStyle    (FileActionSheet row)
+│   └── StatusBarStyle          (footer with button hints — "A: Open  B: Back  Y: Menu")
 ```
 
-## Tema editável em runtime (JSON)
+## Runtime-Editable Theme (JSON)
 
 `Theming/AppTheme.cs`:
-1. Lê `x-files-theme.json` de `ApplicationData.Current.LocalFolder` (cria com defaults se
-   não existir, na primeira execução).
-2. Parse via `System.Text.Json` com `JsonCommentHandling.Skip` (aceita comentários `//` no
-   JSON, sem precisar de strip manual como o `dosbox-pure-uwp` faz com nlohmann/json).
-3. Popula os `Brush`/`FontFamily` do `ResourceDictionary` em runtime (via
-   `Application.Current.Resources["NomeDoBrush"] = new SolidColorBrush(...)`).
+1. Reads `x-files-theme.json` from `ApplicationData.Current.LocalFolder` (creates with
+   defaults if it doesn't exist, on first run).
+2. Parses via `System.Text.Json` with `JsonCommentHandling.Skip` (allows `//` comments in
+   JSON, without needing manual stripping like `dosbox-pure-uwp` does with nlohmann/json).
+3. Populates `Brush`/`FontFamily` in the `ResourceDictionary` at runtime (via
+   `Application.Current.Resources["BrushName"] = new SolidColorBrush(...)`).
 
-Exemplo do schema JSON (mesma filosofia do `PUREMENU-THEMING.md` do dosbox-pure-uwp,
-adaptado):
+JSON schema example (same philosophy as `PUREMENU-THEMING.md` from dosbox-pure-uwp,
+adapted):
 
 ```jsonc
 {
-  // Cores em formato #AARRGGBB ou #RRGGBB
+  // Colors in #AARRGGBB or #RRGGBB format
   "background": "#0D0D0D",
   "foreground": "#E0E0E0",
   "accent": "#33AA55",
   "selectedBackground": "#1F3D2B",
   "border": "#333333",
-  "fontFamily": "Consolas" // trocar por fonte customizada embutida em Assets/Fonts se desejado
+  "fontFamily": "Consolas" // swap for custom font embedded in Assets/Fonts if desired
 }
 ```
 
-## Fonte customizada (opcional, pós-MVP)
+## Custom Font (Optional, Post-MVP)
 
-Se quisermos uma identidade visual "retro terminal" como o `dosbox-pure-uwp` (fonte VCR OSD
-Mono), embutir `.ttf` em `Assets/Fonts/` e referenciar via
-`FontFamily="/Assets/Fonts/NomeDaFonte.ttf#Nome Da Fonte"`. Não faz parte do scaffold
-inicial — usar `Consolas`/`Cascadia Mono` (já disponíveis no Windows) como default.
+If we want a "retro terminal" visual identity like `dosbox-pure-uwp` (VCR OSD Mono font),
+embed `.ttf` in `Assets/Fonts/` and reference via
+`FontFamily="/Assets/Fonts/FontName.ttf#Font Name"`. Not part of initial scaffold —
+use `Consolas`/`Cascadia Mono` (already available on Windows) as default.
 
-## Layout base (3 colunas)
+## Base Layout (3 Columns)
 
 ```xml
 <Grid>
@@ -81,5 +80,5 @@ inicial — usar `Consolas`/`Cascadia Mono` (já disponíveis no Windows) como d
   <!-- Controls/ColumnListView x3 (Parent, Current) + Controls/PreviewPane (Preview) -->
 </Grid>
 ```
-Proporções ajustáveis; valores acima são ponto de partida razoável (yazi usa algo
-parecido — pai menor, atual médio, preview maior).
+Proportions adjustable; values above are a reasonable starting point (yazi uses something
+similar — parent smaller, current medium, preview larger).

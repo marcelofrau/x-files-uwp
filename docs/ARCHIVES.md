@@ -1,65 +1,64 @@
-# Arquivos Compactados — zip / 7z / rar
+# Compressed Archives — zip / 7z / rar
 
-## Biblioteca
+## Library
 
-**SharpCompress** (NuGet), única dependência para os 3 formatos. Ver `DECISIONS.md`
-(ADR-004) para justificativa.
+**SharpCompress** (NuGet), single dependency for all 3 formats. See `DECISIONS.md`
+(ADR-004) for rationale.
 
-Fallback opcional: `System.IO.Compression.ZipFile` (nativo .NET) para zip puro, caso
-`SharpCompress` tenha overhead perceptível em arquivos zip grandes — decisão de
-performance a validar na Fase 6 do roadmap, não bloqueante para o MVP.
+Optional fallback: `System.IO.Compression.ZipFile` (.NET native) for pure zip, if
+`SharpCompress` has noticeable overhead on large zip files — performance decision to
+validate in Phase 6 of the roadmap, not blocking for the MVP.
 
-## `ArchiveBrowser` — arquivo como pasta virtual
+## `ArchiveBrowser` — Archive as Virtual Folder
 
-Interface conceitual (mesmo contrato de listagem que `DirectoryScanner`, para reuso de UI):
+Conceptual interface (same listing contract as `DirectoryScanner`, for UI reuse):
 
 ```csharp
 public interface IArchiveBrowser
 {
-    // Lista entradas no "diretório" internalPath dentro do arquivo em archivePath.
-    // internalPath == "" lista a raiz do arquivo.
+    // Lists entries in the "directory" at internalPath inside the archive at archivePath.
+    // internalPath == "" lists the archive root.
     IReadOnlyList<FileEntry> ListEntries(string archivePath, string internalPath);
 
-    // Abre um stream de leitura para uma entrada específica (usado por Preview/Extração).
+    // Opens a read stream for a specific entry (used by Preview/Extraction).
     Stream OpenEntryStream(string archivePath, string internalEntryPath);
 }
 ```
 
-- Detecção de formato por assinatura de arquivo (magic bytes) além da extensão, para evitar
-  falso-negativo em arquivos renomeados — `SharpCompress.Common.ArchiveFactory` já faz essa
-  detecção automaticamente ao abrir (`ArchiveFactory.Open(stream)`), preferir essa API a
-  `ZipArchive`/`SevenZipArchive` diretos quando possível.
-- Entradas listadas viram `FileEntry` com `ArchiveRootPath` + `ArchiveInternalPath`
-  preenchidos, e `IsDirectory` derivado da própria estrutura de pastas dentro do arquivo
-  (SharpCompress expõe `IsDirectory` por entry).
-- Navegação para dentro de um `.zip` dentro de outro `.zip` (aninhado): melhor esforço —
-  abre o stream da entrada interna em um `MemoryStream` temporário e repete o processo.
-  Puxar para o backlog se performance/memória for problema em arquivos grandes (documentar
-  limite prático, ex: só aninha se o zip interno for < 50MB).
+- Format detection by file signature (magic bytes) in addition to extension, to avoid
+  false negatives on renamed files — `SharpCompress.Common.ArchiveFactory` already does this
+  detection automatically when opening (`ArchiveFactory.Open(stream)`), prefer this API over
+  direct `ZipArchive`/`SevenZipArchive` when possible.
+- Listed entries become `FileEntry` with `ArchiveRootPath` + `ArchiveInternalPath`
+  populated, and `IsDirectory` derived from the archive's own folder structure
+  (SharpCompress exposes `IsDirectory` per entry).
+- Navigation into a `.zip` inside another `.zip` (nested): best effort —
+  open the internal entry stream into a temporary `MemoryStream` and repeat the process.
+  Defer to backlog if performance/memory becomes an issue with large files (document
+  practical limit, e.g. only nest if inner zip is < 50MB).
 
-## Extração
+## Extraction
 
-Ação explícita via `FileActionSheet` → "Extrair":
-1. Usuário escolhe pasta destino (reaproveitando navegação em "modo seleção de destino",
-   ver `FILEBROWSER.md`).
-2. `SharpCompress` extrai todas as entradas (ou apenas a entrada/pasta selecionada, se o
-   usuário estiver navegando dentro do arquivo no momento da ação — extração parcial é
-   suportada por entry).
-3. Progresso reportado via `IProgress<double>`, exibido na UI (barra simples, sem bloquear
-   navegação de outras colunas).
+Explicit action via `FileActionSheet` → "Extract":
+1. User chooses destination folder (reusing navigation in "destination selection mode",
+   see `FILEBROWSER.md`).
+2. `SharpCompress` extracts all entries (or only the selected entry/folder, if the
+   user is browsing inside the archive at the time of the action — partial extraction is
+   supported per entry).
+3. Progress reported via `IProgress<double>`, displayed in UI (simple bar, without blocking
+   navigation of other columns).
 
-## Preview de conteúdo dentro de arquivo compactado
+## Content Preview Inside Compressed Archives
 
-Mesma lógica de preview de arquivo normal (`ARCHITECTURE.md` → "Preview ao vivo"), mas a
-leitura do conteúdo passa por `IArchiveBrowser.OpenEntryStream` em vez de `File.OpenRead`.
-Texto/imagem dentro de zip/7z/rar deve funcionar sem extrair para disco primeiro.
+Same preview logic as a normal file (`ARCHITECTURE.md` → "Live Preview"), but reading
+the content goes through `IArchiveBrowser.OpenEntryStream` instead of `File.OpenRead`.
+Text/images inside zip/7z/rar should work without extracting to disk first.
 
-## Limitações conhecidas (documentadas, não bugs)
+## Known Limitations (documented, not bugs)
 
-- `.rar`: leitura apenas (SharpCompress não escreve rar) — extração funciona, criação não é
-  objetivo do app.
-- Arquivos protegidos por senha: fora do MVP; se detectado (`SharpCompress` lança exceção
-  ao tentar ler entry), exibir mensagem clara na coluna Preview ("Arquivo protegido por
-  senha — não suportado"), nunca crashar.
-- Arquivos multi-volume (`.7z.001`, `.part1.rar`): fora do MVP, mesmo tratamento de erro
-  amigável.
+- `.rar`: read-only (SharpCompress doesn't write rar) — extraction works, creation is not
+  an app goal.
+- Password-protected files: out of MVP; if detected (`SharpCompress` throws exception
+  when trying to read entry), display clear message in Preview column ("Password-protected
+  file — not supported"), never crash.
+- Multi-volume files (`.7z.001`, `.part1.rar`): out of MVP, same friendly error handling.

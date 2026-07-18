@@ -1,179 +1,175 @@
-# Roadmap — Fases de Implementação
+# Roadmap — Implementation Phases
 
-Cada fase tem um entregável testável e critérios explícitos de conclusão. Não avançar para
-a próxima fase sem fechar os critérios da atual (ou documentar explicitamente por que foi
-adiado, em `DECISIONS.md`).
+Each phase has a testable deliverable and explicit completion criteria. Do not advance to
+the next phase without closing the current phase's criteria (or explicitly documenting why
+it was deferred, in `DECISIONS.md`).
 
 ---
 
-## Fase 0 — Scaffold (ESTE COMMIT)
+## Phase 0 — Scaffold (THIS COMMIT)
 
-- [x] Estrutura de pastas criada (`Controls/`, `Navigation/`, `FileSystem/`,
+- [x] Folder structure created (`Controls/`, `Navigation/`, `FileSystem/`,
       `ContextMenu/`, `Theming/`, `Assets/`).
-- [x] Documentação completa em `docs/`.
-- [x] `AGENTS.md` na raiz do projeto.
-- [x] Projeto UWP C# "cru" (App.xaml, MainPage.xaml placeholder, csproj, manifest com
-      capabilities e TargetDeviceFamily corretos) — sem lógica de negócio.
-      **Não buildado/validado** (feito em ambiente Linux) — validação real de build/SDK
-      acontece na Fase 1, na primeira abertura em máquina Windows.
+- [x] Complete documentation in `docs/`.
+- [x] `AGENTS.md` at project root.
+- [x] "Bare" UWP C# project (App.xaml, MainPage.xaml placeholder, csproj, manifest with
+      correct capabilities and TargetDeviceFamily) — no business logic.
+      **Not built/validated** (done in Linux environment) — real build/SDK validation
+      happens in Phase 1, on first opening in a Windows machine.
 
-**Critério de conclusão**: projeto abre no Visual Studio (Windows) sem erros de estrutura,
-mesmo que não tenha sido buildado ainda (build real só é possível em Windows).
-
----
-
-## Fase 1 — Esqueleto + Deploy Xbox validado
-
-- [x] Abrir o projeto em uma máquina Windows com Visual Studio, resolver eventuais ajustes
-      de `csproj`/versões de SDK que não deu para validar em ambiente Linux.
-- [x] Build local (desktop) funcional — `MainPage` mostra um placeholder simples (ex: texto
-      "X-Files" centralizado).
-- [x] Ativar Developer Mode no Xbox (ver `docs/DEPLOY-XBOX.md`).
-- [x] Deploy do "hello world" no Xbox via Visual Studio (Remote Machine) ou Device Portal.
-
-**Critério de conclusão**: app abre no Xbox real, tela aparece, sem crash. Nenhuma feature
-ainda — só validação de pipeline de build/deploy.
+**Completion criteria**: project opens in Visual Studio (Windows) without structural errors,
+even if not yet built (real build is only possible on Windows).
 
 ---
 
-## Fase 2 — GamepadInputService + contrato INavigable
+## Phase 1 — Skeleton + Xbox Deploy Validated
 
-- [x] Implementar `GamepadInputService` (polling, edge-detection, dpad-repeat).
-- [x] Implementar `INavigable` (interface) + uma implementação "mock" (ex: um contador
-      simples na tela reagindo a D-pad/A/B) para validar o pipeline de input sem UI real de
-      arquivos ainda.
-- [x] Testes unitários (ou manuais documentados) para: edge-detection (JustPressed correto
-      mesmo segurando botão), wrap-around, deadzone do analógico.
-      `docs/PHASE2-TESTS.md` — 8 cenários documentados (edge, hold-repeat, direction
-      change, stick deadzone, buttons, phantom inputs, disconnect/reconnect, simultâneo).
+- [x] Open the project on a Windows machine with Visual Studio, resolve any
+      `csproj`/SDK version adjustments that couldn't be validated in Linux.
+- [x] Local build (desktop) working — `MainPage` shows a simple placeholder (e.g. centered
+      "X-Files" text).
+- [x] Enable Developer Mode on Xbox (see `docs/DEPLOY-XBOX.md`).
+- [x] Deploy "hello world" to Xbox via Visual Studio (Remote Machine) or Device Portal.
 
-**Critério de conclusão**: no Xbox real, mover D-pad/analógico incrementa/decrementa um
-contador na tela, com repeat funcionando ao segurar o botão, sem input fantasma.
-**Status**: código implementado + testes manuais documentados. Validação em hardware
-pendente ( executar `docs/PHASE2-TESTS.md` no Xbox).
+**Completion criteria**: app opens on real Xbox, screen appears, no crash. No features
+yet — just build/deploy pipeline validation.
 
 ---
 
-## Fase 3 — DirectoryScanner + coluna única funcional
+## Phase 2 — GamepadInputService + INavigable Contract
+
+- [x] Implement `GamepadInputService` (polling, edge-detection, dpad-repeat).
+- [x] Implement `INavigable` (interface) + a "mock" implementation (e.g. a simple
+      counter on screen reacting to D-pad/A/B) to validate the input pipeline without
+      real file UI yet.
+- [x] Unit tests (or documented manual tests) for: edge-detection (correct JustPressed
+      even while holding button), wrap-around, analog deadzone.
+      `docs/PHASE2-TESTS.md` — 8 scenarios documented (edge, hold-repeat, direction
+      change, stick deadzone, buttons, phantom inputs, disconnect/reconnect, simultaneous).
+
+**Completion criteria**: on real Xbox, D-pad/analog increments/decrements a counter on
+screen, with repeat working when holding a button, no phantom input.
+**Status**: code implemented + manual tests documented. Hardware validation
+pending (run `docs/PHASE2-TESTS.md` on Xbox).
+
+---
+
+## Phase 3 — DirectoryScanner + Single Functional Column
 
 - [x] `FileEntry` model.
-- [x] `DirectoryScanner` com P/Invoke (`FindFirstFileExFromAppW` + `GetLogicalDrives`).
-- [x] Uma única coluna (`Controls/ColumnListView`) navegável por gamepad, listando drives
-      na raiz e navegando para dentro de pastas reais (sem preview, sem colunas
-      parent/preview ainda).
-- [x] Ordenação (pastas antes de arquivos, alfabética) implementada e visualmente
-      confirmada.
+- [x] `DirectoryScanner` with P/Invoke (`FindFirstFileExFromAppW` + `GetLogicalDrives`).
+- [x] Single navigable column (`Controls/ColumnListView`) listing drives at root and
+      navigating into real folders (no preview, no parent/preview columns yet).
+- [x] Sorting (folders before files, alphabetical) implemented and visually
+      confirmed.
 
-**Critério de conclusão**: no Xbox real, navega por qualquer pasta de um drive USB
-conectado, entra/sai de subpastas com D-pad/A/B, sem crash em pastas vazias ou sem
-permissão.
-**Status**: implementado e validado no Xbox real. Loading indicator adicionado para
-latência de USB spin-up. XrayLib adaptada para UWP (removido Console sink).
+**Completion criteria**: on real Xbox, navigates any folder on a connected USB drive,
+enters/exits subfolders with D-pad/A/B, no crash in empty or permission-denied folders.
+**Status**: implemented and validated on real Xbox. Loading indicator added for
+USB spin-up latency. XrayLib adapted for UWP (Console sink removed).
 
 ---
 
-## Fase 4 — 3 colunas Miller + transições
+## Phase 4 — 3 Miller Columns + Transitions
 
-- [x] `ColumnNavigator` implementando `INavigable`, controlando estado de 3 colunas
-      (Parent/Current/Preview como conceito — Preview ainda mostra apenas listagem de
-      pasta nesta fase, sem texto/imagem).
-- [x] Layout XAML com 3 `Grid.ColumnDefinition` e binding reativo.
-- [x] Transição ao entrar/sair de pasta (troca de conteúdo das 3 colunas, com ou sem
-      animação simples).
-- [x] GamepadInputService simplificado: D-pad Up/Down gerenciado nativamente pelo
-      ListView; GamepadInputService só gerencia botões de ação (A/B/Y/LB/RB/LT/RT)
-      e left stick.
+- [x] `ColumnNavigator` implementing `INavigable`, controlling 3-column state
+      (Parent/Current/Preview as concept — Preview still shows only folder listing
+      in this phase, no text/image).
+- [x] XAML layout with 3 `Grid.ColumnDefinition` and reactive binding.
+- [x] Transition when entering/exiting folders (content swap of 3 columns, with or without
+      simple animation).
+- [x] Simplified GamepadInputService: D-pad Up/Down managed natively by
+      ListView; GamepadInputService only manages action buttons (A/B/Y/LB/RB/LT/RT)
+      and left stick.
 
-**Critério de conclusão**: navegação completa por pastas reais usando as 3 colunas, preview
-da coluna à direita sempre mostra o conteúdo da pasta/arquivo selecionado na coluna do
-meio, sem esperar confirmação.
-**Status**: implementado e validado no Xbox real. Double-fire bug resolvido delegando
-navegação Up/Down ao ListView nativo. RetroListView sobrescreve OnKeyDown para bloquear
-PageUp/PageDown nativos.
-
----
-
-## Fase 5 — PreviewPane (texto e imagem)
-
-- [ ] `DataTemplateSelector` para escolher entre `FolderPreviewTemplate` (já existe da Fase
-      4), `TextPreviewTemplate`, `ImagePreviewTemplate`, `UnsupportedPreviewTemplate`.
-- [ ] Leitura truncada de arquivos texto (limite de KB configurável).
-- [ ] Carregamento assíncrono de imagem (não bloquear navegação enquanto carrega).
-- [ ] Estado de erro amigável para arquivos ilegíveis/permissão negada.
-
-**Critério de conclusão**: navegar sobre um `.txt` mostra conteúdo truncado; navegar sobre
-uma imagem comum mostra thumbnail; navegar rapidamente entre vários arquivos não trava a
-UI nem gera exceções não tratadas.
+**Completion criteria**: complete folder navigation using 3 columns, preview in the right
+column always shows the content of the item selected in the middle column,
+without waiting for confirmation.
+**Status**: implemented and validated on real Xbox. Double-fire bug resolved by
+delegating Up/Down navigation to native ListView. RetroListView overrides OnKeyDown
+to block native PageUp/PageDown.
 
 ---
 
-## Fase 6 — ArchiveBrowser (zip/7z/rar)
+## Phase 5 — PreviewPane (text and image)
 
-- [ ] Integrar `SharpCompress`.
-- [ ] `IArchiveBrowser` implementado, detecção de `IsArchive` no `DirectoryScanner`.
-- [ ] Drill-in em arquivo compactado tratado como pasta (reaproveitando `ColumnNavigator`).
-- [ ] Preview de entradas texto/imagem dentro do arquivo (via `OpenEntryStream`).
-- [ ] Validar performance em arquivos grandes (> 100MB) — decidir se cache/streaming
-      precisa de ajuste (documentar decisão em `DECISIONS.md` se motor precisar trocar).
+- [ ] `DataTemplateSelector` to choose between `FolderPreviewTemplate` (already exists from
+      Phase 4), `TextPreviewTemplate`, `ImagePreviewTemplate`, `UnsupportedPreviewTemplate`.
+- [ ] Truncated reading of text files (configurable KB limit).
+- [ ] Async image loading (don't block navigation while loading).
+- [ ] Friendly error state for unreadable/permission-denied files.
 
-**Critério de conclusão**: abrir um `.zip`, `.7z` e `.rar` de teste, navegar pelas entradas
-internas, preview funcionando para pelo menos um arquivo texto e uma imagem dentro de cada
-formato.
+**Completion criteria**: navigating over a `.txt` shows truncated content; navigating over
+a common image shows thumbnail; rapidly navigating between multiple files doesn't freeze the
+UI or produce unhandled exceptions.
 
 ---
 
-## Fase 7 — FileActionSheet + FileOperations
+## Phase 6 — ArchiveBrowser (zip/7z/rar)
 
-- [ ] `FileActionSheet` (menu de contexto acionado por Y), estilizado conforme
+- [ ] Integrate `SharpCompress`.
+- [ ] `IArchiveBrowser` implemented, `IsArchive` detection in `DirectoryScanner`.
+- [ ] Drill-in on compressed archive treated as folder (reusing `ColumnNavigator`).
+- [ ] Preview of text/image entries inside archive (via `OpenEntryStream`).
+- [ ] Validate performance on large files (> 100MB) — decide if cache/streaming
+      needs adjustment (document decision in `DECISIONS.md` if engine needs to change).
+
+**Completion criteria**: open a test `.zip`, `.7z` and `.rar`, navigate through internal
+entries, preview working for at least one text file and one image inside each format.
+
+---
+
+## Phase 7 — FileActionSheet + FileOperations
+
+- [ ] `FileActionSheet` (context menu triggered by Y), styled per
       `docs/UI-THEMING.md`.
-- [ ] Ações: Abrir com (`Launcher.LaunchFileAsync`), Copiar, Mover, Renomear, Deletar,
-      Extrair.
-- [ ] Fluxo de "escolher pasta destino" para Copiar/Mover/Extrair reaproveitando navegação
-      de coluna (modo especial, ver `FILEBROWSER.md`).
-- [ ] Confirmação obrigatória antes de Deletar (diálogo navegável por gamepad).
+- [ ] Actions: Open with (`Launcher.LaunchFileAsync`), Copy, Move, Rename, Delete,
+      Extract.
+- [ ] "Choose destination folder" flow for Copy/Move/Extract reusing column navigation
+      (special mode, see `FILEBROWSER.md`).
+- [ ] Mandatory confirmation before Delete (gamepad-navigable dialog).
 
-**Critério de conclusão**: todas as ações funcionam de ponta a ponta no Xbox real, sem
-necessidade de teclado/mouse, incluindo escolha de pasta destino.
-
----
-
-## Fase 8 — Tema/Polish
-
-- [ ] `Theming/AppTheme.cs` lendo/gravando `x-files-theme.json`.
-- [ ] `RetroTheme.xaml` com todos os `Style`/`ControlTemplate` finalizados (sem chrome
-      padrão do Windows visível em nenhum lugar).
-- [ ] Estado vazio (sem controle conectado, pasta vazia, etc.) com mensagens/visual
-      tratados.
-- [ ] Passada de UX: animações leves de transição de coluna, feedback visual de
-      loading/erro consistente.
-
-**Critério de conclusão**: critérios de "pronto" do MVP em `docs/SPEC.md` totalmente
-atendidos.
+**Completion criteria**: all actions work end-to-end on real Xbox, with no
+keyboard/mouse needed, including destination folder selection.
 
 ---
 
-## Assets & Ícones
+## Phase 8 — Theme/Polish
 
-Processo de assets documentado em `docs/ASSETS-GUIDE.md`. Skill disponível em
-`.opencode/skills/assets-icons/SKILL.md`. Resumo:
+- [ ] `Theming/AppTheme.cs` reading/writing `x-files-theme.json`.
+- [ ] `RetroTheme.xaml` with all `Style`/`ControlTemplate` finalized (no default
+      Windows chrome visible anywhere).
+- [ ] Empty states (no controller connected, empty folder, etc.) with handled
+      messages/visuals.
+- [ ] UX pass: light column transition animations, consistent loading/error
+      visual feedback.
 
-- Ícones PNG sempre, source: `F:\workspace\icons8-personal-set`
-- Naming: `{viewname}-{descriptor}-{size}.png` (lowercase, hifens)
-- Organização: `XFiles/Assets/Views/{ViewName}/` por view
-- Referência XAML: `ms-appx:///Assets/Views/{ViewName}/{filename}`
-- Registro obrigatório no `XFiles.csproj` como `<Content>`
-
-Cada fase que introduce nova view deve incluir seus ícones nessa fase.
+**Completion criteria**: "done" criteria from `docs/SPEC.md` fully met.
 
 ---
 
-## Backlog pós-MVP (não planejado em fases ainda)
+## Assets & Icons
 
-- Navegação de rede (SMB/UNC).
-- Preview de hex dump para binários.
-- Edição de texto simples.
-- Múltiplos usuários/gamepads simultâneos.
-- Zips aninhados profundos com streaming real (sem `MemoryStream` intermediário).
-- Suporte a arquivos protegidos por senha.
-- Localização (i18n) — hoje docs/specs em português, mas UI pode nascer em inglês ou
-  suportar ambos — decisão a tomar quando chegar a hora.
+Asset process documented in `docs/ASSETS-GUIDE.md`. Skill available at
+`.opencode/skills/assets-icons/SKILL.md`. Summary:
+
+- Always PNG icons, source: `F:\workspace\icons8-personal-set`
+- Naming: `{viewname}-{descriptor}-{size}.png` (lowercase, hyphens)
+- Organization: `XFiles/Assets/Views/{ViewName}/` per view
+- XAML reference: `ms-appx:///Assets/Views/{ViewName}/{filename}`
+- Mandatory registration in `XFiles.csproj` as `<Content>`
+
+Each phase that introduces a new view should include its icons in that phase.
+
+---
+
+## Post-MVP Backlog (not yet phased)
+
+- Network browsing (SMB/UNC).
+- Hex dump preview for binaries.
+- Simple text editing.
+- Multiple simultaneous users/gamepads.
+- Deep nested zips with real streaming (no intermediate `MemoryStream`).
+- Password-protected file support.
+- Localization (i18n) — currently docs/specs in Portuguese, but UI may start in English or
+  support both — decision to make when the time comes.

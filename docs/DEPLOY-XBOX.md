@@ -1,53 +1,53 @@
-# Deploy no Xbox — Guia de Referência
+# Xbox Deploy — Reference Guide
 
-Baseado no mesmo fluxo usado/documentado no projeto irmão `dosbox-pure-uwp` (ver
-`README.md` e `AGENTS.md` daquele repo para detalhes específicos já validados).
+Based on the same flow used/documented in the sibling project `dosbox-pure-uwp` (see
+`README.md` and `AGENTS.md` in that repo for specific details already validated).
 
-## 1. Pré-requisitos
+## 1. Prerequisites
 
-- Console Xbox com **Developer Mode** ativado (via app "Dev Home" da Microsoft Store,
-  requer conta de desenvolvedor registrada).
-- Máquina Windows com Visual Studio 2022 (workload "Universal Windows Platform
-  development") — **este projeto não builda em Linux/WSL**, apenas a estrutura/docs são
-  criadas aqui; a compilação e o deploy real precisam ser feitos em uma máquina Windows.
-- Xbox e máquina de desenvolvimento na mesma rede local.
+- Xbox console with **Developer Mode** enabled (via Microsoft Store "Dev Home" app,
+  requires a registered developer account).
+- Windows machine with Visual Studio 2022 ("Universal Windows Platform development"
+  workload) — **this project does not build on Linux/WSL**, only the structure/docs are
+  created here; compilation and real deploy must be done on a Windows machine.
+- Xbox and development machine on the same local network.
 
-## 2. Habilitar Developer Mode no console
+## 2. Enable Developer Mode on Console
 
-1. Instalar o app "Dev Home" (Microsoft Store) no Xbox em modo Retail normal.
-2. Seguir o fluxo de registro (requer conta de desenvolvedor Microsoft — gratuita ou paga
-   dependendo do momento/região).
-3. Console reinicia em Developer Mode; um app "Dev Home" mostra o **endereço IP** e um
-   **código de emparelhamento** para o Device Portal.
+1. Install the "Dev Home" app (Microsoft Store) on Xbox in normal Retail mode.
+2. Follow the registration flow (requires Microsoft developer account — free or paid
+   depending on timing/region).
+3. Console restarts in Developer Mode; "Dev Home" app shows the **IP address** and a
+   **pairing code** for Device Portal.
 
 ## 3. Device Portal
 
-1. No navegador da máquina Windows: `https://<IP-DO-XBOX>:11443`.
-2. Autenticar com o código de emparelhamento mostrado no "Dev Home".
-3. Menu **Apps** → permite instalar pacotes `.appx`/`.msix` (ou `.appxbundle`) diretamente
-   pela interface web, ou via Visual Studio (mais prático durante desenvolvimento).
+1. In browser on Windows machine: `https://<XBOX-IP>:11443`.
+2. Authenticate with the pairing code shown in "Dev Home".
+3. **Apps** menu → allows installing `.appx`/`.msix` (or `.appxbundle`) packages directly
+   via the web interface, or via Visual Studio (more practical during development).
 
-## 4. Deploy via Visual Studio (recomendado durante desenvolvimento)
+## 4. Deploy via Visual Studio (Recommended During Development)
 
-1. Abrir `XFiles.sln` no Visual Studio (Windows).
-2. Selecionar plataforma `x64` (ou `ARM`/`ARM64` dependendo do console-alvo — Xbox usa
-   arquitetura interna específica; consultar a documentação atual do Xbox Developer Mode
-   para o valor correto no momento do build, isso muda entre gerações de console).
-3. No dropdown de dispositivo de deploy, escolher **Remote Machine**, inserir IP do Xbox
-   (Developer Mode expõe uma porta de depuração remota separada da porta do Device Portal).
-4. F5 (Debug) ou Ctrl+F5 (Run sem debug) — Visual Studio empacota, copia e instala
-   automaticamente.
+1. Open `XFiles.sln` in Visual Studio (Windows).
+2. Select `x64` platform (or `ARM`/`ARM64` depending on target console — Xbox uses a
+   specific internal architecture; consult the current Xbox Developer Mode documentation
+   for the correct value at build time, as this changes between console generations).
+3. In the deploy device dropdown, choose **Remote Machine**, enter Xbox IP
+   (Developer Mode exposes a separate debugging port from the Device Portal port).
+4. F5 (Debug) or Ctrl+F5 (Run without debug) — Visual Studio packages, copies and installs
+   automatically.
 
-## 5. Deploy via Device Portal (para builds "release", sem Visual Studio)
+## 5. Deploy via Device Portal (For "Release" Builds, Without Visual Studio)
 
-1. Gerar pacote via **Project → Publish → Create App Packages** no Visual Studio,
-   selecionando "Sideloading" (não "Microsoft Store").
-2. No Device Portal do Xbox → Apps → **Add** → selecionar o `.appxbundle`/`.msix` gerado +
-   arquivo de certificado (`.cer`) se necessário.
-3. Instalar e executar a partir da lista de apps do Device Portal ou do próprio dashboard
-   do Xbox (Developer Mode expõe um menu separado "Dev Mode Home" com os apps sideloaded).
+1. Generate package via **Project → Publish → Create App Packages** in Visual Studio,
+   selecting "Sideloading" (not "Microsoft Store").
+2. In Xbox Device Portal → Apps → **Add** → select the generated `.appxbundle`/`.msix` +
+   certificate file (`.cer`) if needed.
+3. Install and run from the Device Portal app list or the Xbox dashboard itself
+   (Developer Mode exposes a separate "Dev Mode Home" menu with sideloaded apps).
 
-## 6. Capabilities obrigatórias no manifest
+## 6. Required Capabilities in Manifest
 
 ```xml
 <Capabilities>
@@ -56,11 +56,11 @@ Baseado no mesmo fluxo usado/documentado no projeto irmão `dosbox-pure-uwp` (ve
 </Capabilities>
 ```
 
-Sem essas duas, `FindFirstFileExFromAppW`/`GetLogicalDrives` (ver `FILEBROWSER.md`) falham
-silenciosamente ou retornam acesso negado para qualquer caminho fora do sandbox da app.
-Precisam do namespace `rescap` declarado no `Package.appxmanifest`
+Without these two, `FindFirstFileExFromAppW`/`GetLogicalDrives` (see `FILEBROWSER.md`)
+fail silently or return access denied for any path outside the app sandbox.
+Requires the `rescap` namespace declared in `Package.appxmanifest`
 (`xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"`)
-e da declaração correspondente em `<Dependencies>`/`TargetDeviceFamily`.
+and the corresponding declaration in `<Dependencies>`/`TargetDeviceFamily`.
 
 ## 7. `TargetDeviceFamily`
 
@@ -70,20 +70,19 @@ e da declaração correspondente em `<Dependencies>`/`TargetDeviceFamily`.
 </Dependencies>
 ```
 
-Ajustar `MinVersion`/`MaxVersionTested` para os valores reais do SDK instalado no momento
-do build (Visual Studio preenche automaticamente ao trocar o `TargetDeviceFamily` no
-projeto).
+Adjust `MinVersion`/`MaxVersionTested` to the real values of the SDK installed at build
+time (Visual Studio auto-fills these when changing `TargetDeviceFamily` in the project).
 
-## 8. Checklist de troubleshooting comum
+## 8. Common Troubleshooting Checklist
 
-- [ ] App não aparece no Device Portal → verificar se o certificado de assinatura do
-      pacote é confiável no dispositivo (self-signed precisa ser instalado manualmente via
-      Device Portal → Certificates antes do primeiro deploy).
-- [ ] `Access Denied` ao listar drives → confirmar as duas capabilities acima e que o
-      Developer Mode realmente está ativo (não apenas "Retail com sideload", que tem
-      restrições diferentes).
-- [ ] Gamepad não detectado → confirmar que o app está em primeiro plano (Xbox só entrega
-      input de gamepad para o app com foco) e que `Gamepad.GamepadAdded` foi assinado antes
-      da enumeração inicial (race condition comum: controle já conectado antes do app
-      iniciar não dispara `GamepadAdded` — precisa também iterar `Gamepad.Gamepads` no
+- [ ] App doesn't appear in Device Portal → verify the package signing certificate is
+      trusted on the device (self-signed must be manually installed via Device Portal →
+      Certificates before first deploy).
+- [ ] `Access Denied` when listing drives → confirm both capabilities above and that
+      Developer Mode is actually active (not just "Retail with sideload", which has
+      different restrictions).
+- [ ] Gamepad not detected → confirm the app is in the foreground (Xbox only delivers
+      gamepad input to the focused app) and that `Gamepad.GamepadAdded` was subscribed
+      before initial enumeration (common race condition: controller already connected before
+      app start doesn't fire `GamepadAdded` — must also iterate `Gamepad.Gamepads` at
       startup).

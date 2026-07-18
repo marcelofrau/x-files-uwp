@@ -1,111 +1,112 @@
-# Decisões de Arquitetura (ADRs curtos)
+# Architecture Decisions (short ADRs)
 
-Registro das decisões tomadas antes de qualquer linha de código, para não precisarmos
-re-discutir os mesmos trade-offs no futuro.
-
----
-
-## ADR-001: C# + UWP, não C++/CX
-
-**Contexto**: o projeto irmão `dosbox-pure-uwp` é C++/CX porque hospeda um core libretro em C
-legado e precisa de compatibilidade binária estreita com DirectX. O X-Files não tem esse
-requisito — é um app novo, sem core nativo a integrar.
-
-**Decisão**: C# + UWP puro (sem CX, sem C++/WinRT).
-
-**Motivo**: acesso direto a `System.IO.Compression`, `SharpCompress`, LINQ, async/await,
-produtividade muito maior para CRUD de arquivos e para UI. Não há motivo técnico para pagar o
-custo de C++ aqui.
+Record of decisions made before any line of code, so we don't have to
+re-discuss the same trade-offs in the future.
 
 ---
 
-## ADR-002: XAML com `ControlTemplate` customizado, não Win2D/D2D
+## ADR-001: C# + UWP, not C++/CX
 
-**Contexto**: o `dosbox-pure-uwp` implementa toda a UI (menu, file browser, diálogos) em
-Direct2D imperativo porque é C++/CX e precisa evitar XAML por razões de compatibilidade com
-código C legado. Cogitamos replicar essa abordagem para ter visual 100% customizado
-(estilo "terminal retro", como o `FileBrowser.cpp` daquele projeto).
+**Context**: the sibling project `dosbox-pure-uwp` uses C++/CX because it hosts a legacy C
+libretro core and needs tight binary compatibility with DirectX. X-Files has no such
+requirement — it's a new app, with no native core to integrate.
 
-**Decisão**: XAML nativo, com `ControlTemplate`/`ItemContainerStyle`/`VisualStateManager`
-totalmente redesenhados (sem chrome padrão do Fluent Design).
+**Decision**: C# + pure UWP (no CX, no C++/WinRT).
 
-**Motivo**:
-- UWP dá foco de gamepad **de graça** via `XYFocusUp/Down/Left/Right` e `IsFocusEngaged`.
-  Replicar isso em D2D significa reimplementar hit-test, foco, scroll e wrap-around à mão
-  (o `FileBrowser.cpp` do dosbox-pure-uwp tem ~900 linhas só para isso).
-- Um `ControlTemplate` customizado consegue visual idêntico ao D2D (cores, fontes
-  monoespaçadas, sem bordas/chrome do Windows) sem abrir mão do foco nativo.
-- Menos código = menos superfície de bugs num app cujo valor está na navegação e não no
-  motor de renderização.
-
-**Trade-off aceito**: perdemos controle pixel-perfect de baixo nível (ex: efeitos de partícula,
-shaders customizados) que o D2D daria. Não é necessário para um file browser.
+**Reason**: direct access to `System.IO.Compression`, `SharpCompress`, LINQ, async/await,
+much higher productivity for file CRUD and UI. No technical reason to pay the
+cost of C++ here.
 
 ---
 
-## ADR-003: Inspiração em UX do `yazi`, sem reaproveitar código/core dele
+## ADR-002: XAML with custom `ControlTemplate`, not Win2D/D2D
 
-**Contexto**: o usuário queria uma experiência parecida com o `yazi` (file manager em Rust,
-terminal, colunas Miller, preview ao vivo).
+**Context**: `dosbox-pure-uwp` implements all UI (menu, file browser, dialogs) in
+imperative Direct2D because it's C++/CX and needs to avoid XAML for compatibility with
+legacy C code. We considered replicating this approach for 100% custom visuals
+("retro terminal" style, like the `FileBrowser.cpp` from that project).
 
-**Decisão**: reimplementar o **conceito** de colunas Miller (Parent | Current | Preview) e
-preview ao vivo em C#/XAML, sem qualquer dependência do código-fonte do yazi (que é Rust,
-orientado a terminal, com sistema de plugins Lua — tecnologia incompatível com UWP/Xbox).
+**Decision**: native XAML, with fully redesigned `ControlTemplate`/`ItemContainerStyle`/
+`VisualStateManager` (no default Fluent Design chrome).
 
-**Motivo do nome do projeto**: descartamos nomes como "yazi-uwp" ou similares para não criar
-expectativa de ser um port real. O nome escolhido é **X-Files** (repo: `x-files-uwp`) —
-referência geek à série, sem vínculo com nenhuma lib/nome existente.
+**Reason**:
+- UWP gives gamepad focus **for free** via `XYFocusUp/Down/Left/Right` and
+  `IsFocusEngaged`. Replicating this in D2D means reimplementing hit-test, focus,
+  scroll and wrap-around by hand (the `FileBrowser.cpp` from dosbox-pure-uwp has
+  ~900 lines just for that).
+- A custom `ControlTemplate` achieves visuals identical to D2D (colors, monospaced
+  fonts, no Windows borders/chrome) without giving up native focus.
+- Less code = less bug surface in an app whose value is in navigation and not in
+  the rendering engine.
 
----
-
-## ADR-004: SharpCompress para zip/7z/rar
-
-**Contexto**: precisamos navegar (listar entradas, "entrar" como se fosse pasta) dentro de
-arquivos `.zip`, `.7z` e `.rar` sem necessariamente extrair tudo.
-
-**Decisão**: usar `SharpCompress` (NuGet) como biblioteca única para os 3 formatos, com
-fallback opcional para `System.IO.Compression.ZipFile` (nativo do .NET) em zip puro, se
-performance for um problema.
-
-**Motivo**: uma única API cobre os 3 formatos, evitando P/Invoke nativo extra (ex:
-`7z.dll`/`SevenZipSharp`, que dependem de binário nativo por plataforma — problemático em
-UWP/Xbox por causa do sandbox e da arquitetura ARM/x64).
-
-**Risco conhecido**: `SharpCompress` tem suporte a `.rar` **somente leitura** (não cria/edita
-rar) — aceitável, já que o app é um *browser*, não um compactador.
+**Accepted trade-off**: we lose low-level pixel-perfect control (e.g. particle effects,
+custom shaders) that D2D would provide. Not needed for a file browser.
 
 ---
 
-## ADR-005: Sem navegação de rede (SMB/UNC) no MVP
+## ADR-003: Inspired by `yazi` UX, not reusing its code/core
 
-**Contexto**: o `dosbox-pure-uwp` não implementa isso; depende apenas de drives mapeados
-aparecerem via `GetLogicalDrives()`.
+**Context**: the user wanted an experience similar to `yazi` (file manager in Rust,
+terminal, Miller columns, live preview).
 
-**Decisão**: MVP cobre apenas drives locais/USB conectados ao Xbox e o sandbox
-`LocalFolder`/`broadFileSystemAccess`. Navegação explícita de `\\servidor\share` (com
-descoberta, autenticação, etc.) fica fora de escopo, documentada como trabalho futuro em
+**Decision**: reimplement the **concept** of Miller columns (Parent | Current | Preview)
+and live preview in C#/XAML, without any dependency on yazi's source code (which is Rust,
+terminal-oriented, with a Lua plugin system — technology incompatible with UWP/Xbox).
+
+**Project name rationale**: we discarded names like "yazi-uwp" or similar to avoid creating
+the expectation of being a real port. The chosen name is **X-Files** (repo: `x-files-uwp`) —
+geek reference to the TV series, with no ties to any existing lib/name.
+
+---
+
+## ADR-004: SharpCompress for zip/7z/rar
+
+**Context**: we need to navigate (list entries, "enter" as if it were a folder) inside
+`.zip`, `.7z` and `.rar` files without necessarily extracting everything.
+
+**Decision**: use `SharpCompress` (NuGet) as the single library for all 3 formats, with
+optional fallback to `System.IO.Compression.ZipFile` (.NET native) for pure zip, if
+performance becomes an issue.
+
+**Reason**: a single API covers all 3 formats, avoiding extra native P/Invoke (e.g.
+`7z.dll`/`SevenZipSharp`, which depend on per-platform native binaries — problematic in
+UWP/Xbox due to sandbox and ARM/x64 architecture).
+
+**Known risk**: `SharpCompress` has **read-only** `.rar` support (doesn't create/edit
+rar) — acceptable, since the app is a *browser*, not an archiver.
+
+---
+
+## ADR-005: No network browsing (SMB/UNC) in MVP
+
+**Context**: `dosbox-pure-uwp` doesn't implement this; it relies only on mapped drives
+appearing via `GetLogicalDrives()`.
+
+**Decision**: MVP covers only local/USB drives connected to Xbox and the `LocalFolder`/
+`broadFileSystemAccess` sandbox. Explicit `\\server\share` browsing (with
+discovery, authentication, etc.) is out of scope, documented as future work in
 `ROADMAP.md`.
 
-**Motivo**: escopo de MVP enxuto; SMB no UWP sandbox do Xbox tem restrições adicionais (sem
-`Windows.Networking.Sockets` de baixo nível fácil, precisa de `capabilities` extras) que
-merecem investigação própria antes de comprometer prazo.
+**Reason**: lean MVP scope; SMB in the UWP Xbox sandbox has additional restrictions (no
+easy low-level `Windows.Networking.Sockets`, requires extra `capabilities`) that
+deserve dedicated investigation before committing to a timeline.
 
 ---
 
-## ADR-006: Ação do botão A é contextual, preview é ao vivo (sem esperar confirmação)
+## ADR-006: A button action is contextual, preview is live (no confirmation needed)
 
-**Contexto**: no `yazi`, mover a seleção já atualiza a preview automaticamente. Queríamos
-manter essa fluidez, mas também precisávamos de um menu de ações (copiar, mover, extrair,
-abrir com).
+**Context**: in `yazi`, moving the selection already updates the preview automatically. We
+wanted to keep that fluidity, but also needed an action menu (copy, move, extract,
+open with).
 
-**Decisão**:
-- Mover seleção (D-pad/stick) **sempre** atualiza a coluna de preview automaticamente —
-  nenhuma confirmação necessária.
-- **A** em uma pasta = entra nela (drill-in, shift de colunas).
-- **A** em um arquivo = ação padrão contextual (definida por tipo de arquivo — abrir com app
-  associado, por exemplo), configurável futuramente.
-- **Y** abre explicitamente o `FileActionSheet` (menu de contexto: abrir com, extrair, copiar,
-  mover, renomear, deletar) — usuário não precisa "confirmar" para só *ver* o preview.
+**Decision**:
+- Moving selection (D-pad/stick) **always** updates the preview column automatically —
+  no confirmation needed.
+- **A** on a folder = enter it (drill-in, column shift).
+- **A** on a file = contextual default action (defined by file type — open with associated
+  app, for example), configurable in the future.
+- **Y** explicitly opens the `FileActionSheet` (context menu: open with, extract, copy,
+  move, rename, delete) — the user doesn't need to "confirm" just to *see* the preview.
 
-**Motivo**: separa claramente "olhar" (preview automático, sem custo) de "agir" (menu de
-contexto explícito), evitando ações destrutivas acidentais com o botão mais usado (A).
+**Reason**: clearly separates "looking" (automatic preview, no cost) from "acting" (explicit
+context menu), preventing accidental destructive actions with the most-used button (A).
