@@ -20,42 +20,42 @@
         <!-- A: Confirm -->
         <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="0,0,20,0">
             <Image x:Name="IconA" Width="32" Height="32" VerticalAlignment="Center" />
-            <TextBlock Text="Confirm" Foreground="#999999" FontFamily="Consolas" FontSize="14"
+            <TextBlock Text="Confirm" Foreground="#999999" FontFamily="ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata" FontSize="14"
                        VerticalAlignment="Center" Margin="6,0,0,0" />
         </StackPanel>
 
         <!-- B: Back -->
         <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,0,20,0">
             <Image x:Name="IconB" Width="32" Height="32" VerticalAlignment="Center" />
-            <TextBlock Text="Back" Foreground="#999999" FontFamily="Consolas" FontSize="14"
+            <TextBlock Text="Back" Foreground="#999999" FontFamily="ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata" FontSize="14"
                        VerticalAlignment="Center" Margin="6,0,0,0" />
         </StackPanel>
 
         <!-- X: Secondary -->
         <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="0,0,20,0">
             <Image x:Name="IconX" Width="32" Height="32" VerticalAlignment="Center" />
-            <TextBlock x:Name="LabelX" Text="Actions" Foreground="#999999" FontFamily="Consolas" FontSize="14"
+            <TextBlock x:Name="LabelX" Text="Actions" Foreground="#999999" FontFamily="ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata" FontSize="14"
                        VerticalAlignment="Center" Margin="6,0,0,0" />
         </StackPanel>
 
         <!-- Y: Context -->
         <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="0,0,20,0">
             <Image x:Name="IconY" Width="32" Height="32" VerticalAlignment="Center" />
-            <TextBlock x:Name="LabelY" Text="Context" Foreground="#999999" FontFamily="Consolas" FontSize="14"
+            <TextBlock x:Name="LabelY" Text="Context" Foreground="#999999" FontFamily="ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata" FontSize="14"
                        VerticalAlignment="Center" Margin="6,0,0,0" />
         </StackPanel>
 
         <!-- LB -->
         <StackPanel Grid.Column="4" Orientation="Horizontal" Margin="0,0,20,0">
             <Image x:Name="IconLB" Width="32" Height="32" VerticalAlignment="Center" />
-            <TextBlock x:Name="LabelLB" Text="" Foreground="#999999" FontFamily="Consolas" FontSize="14"
+            <TextBlock x:Name="LabelLB" Text="" Foreground="#999999" FontFamily="ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata" FontSize="14"
                        VerticalAlignment="Center" Margin="6,0,0,0" />
         </StackPanel>
 
         <!-- RB -->
         <StackPanel Grid.Column="5" Orientation="Horizontal" Margin="0,0,20,0">
             <Image x:Name="IconRB" Width="32" Height="32" VerticalAlignment="Center" />
-            <TextBlock x:Name="LabelRB" Text="" Foreground="#999999" FontFamily="Consolas" FontSize="14"
+            <TextBlock x:Name="LabelRB" Text="" Foreground="#999999" FontFamily="ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata" FontSize="14"
                        VerticalAlignment="Center" Margin="6,0,0,0" />
         </StackPanel>
 
@@ -63,7 +63,7 @@
         <StackPanel Grid.Column="6" Orientation="Horizontal" Margin="0,0,20,0"
                     x:Name="DpadPanel" Visibility="Collapsed">
             <Image x:Name="IconDpad" Width="32" Height="32" VerticalAlignment="Center" />
-            <TextBlock Text="Navigate" Foreground="#999999" FontFamily="Consolas" FontSize="14"
+            <TextBlock Text="Navigate" Foreground="#999999" FontFamily="ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata" FontSize="14"
                        VerticalAlignment="Center" Margin="6,0,0,0" />
         </StackPanel>
     </Grid>

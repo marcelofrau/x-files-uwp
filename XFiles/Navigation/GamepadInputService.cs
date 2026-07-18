@@ -193,6 +193,9 @@ namespace XFiles.Navigation
             // Left thumbstick → map to D-pad when beyond deadzone
             HandleLeftStick(reading.LeftThumbstickX, reading.LeftThumbstickY, nav);
 
+            // Right thumbstick → scroll preview content
+            HandleRightStick(reading.RightThumbstickX, reading.RightThumbstickY, nav);
+
             _prevReading = reading;
             _prevButtons = pressed;
         }
@@ -234,6 +237,25 @@ namespace XFiles.Navigation
                     nav.OnDPadRight();
                 }
                 _stickCooldown = 100;
+            }
+        }
+
+        private void HandleRightStick(double x, double y, INavigable nav)
+        {
+            const double ScrollDeadzone = 0.15;
+            const double ScrollSpeed = 40.0;
+
+            if (Math.Abs(y) > ScrollDeadzone)
+            {
+                double delta = -y * ScrollSpeed;
+                Log.Verbose("Input: RightStick Vertical (y={Y:F2}, delta={Delta:F1})", y, delta);
+                nav.OnScrollVertical(delta);
+            }
+            if (Math.Abs(x) > ScrollDeadzone)
+            {
+                double delta = x * ScrollSpeed;
+                Log.Verbose("Input: RightStick Horizontal (x={X:F2}, delta={Delta:F1})", x, delta);
+                nav.OnScrollHorizontal(delta);
             }
         }
     }

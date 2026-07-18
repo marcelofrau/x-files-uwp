@@ -30,6 +30,8 @@ namespace XFiles.FileSystem
         public string FileType { get; set; }
         public long FileSizeBytes { get; set; }
         public bool IsTruncated { get; set; }
+        public int PixelWidth { get; set; }
+        public int PixelHeight { get; set; }
     }
 
     public static class FilePreviewService
@@ -114,7 +116,7 @@ namespace XFiles.FileSystem
                 ".editorconfig", ".prettierrc", ".eslintrc",
                 ".babelrc", ".stylelintrc",
                 // Misc
-                ".svg", ".webp",
+                ".webp",
                 ".out", ".err",
                 ".inf", ".dif",
                 ".wxs", ".wxi", ".wixproj",
@@ -140,6 +142,11 @@ namespace XFiles.FileSystem
         public static bool IsImageFile(string extension)
         {
             return !string.IsNullOrEmpty(extension) && ImageExtensions.Contains(extension);
+        }
+
+        public static bool IsSvgFile(string extension)
+        {
+            return string.Equals(extension, ".svg", StringComparison.OrdinalIgnoreCase);
         }
 
         public static async Task<FilePreviewResult> GetPreviewAsync(string filePath)
@@ -172,6 +179,10 @@ namespace XFiles.FileSystem
                 if (IsImageFile(ext))
                 {
                     await LoadImagePreview(filePath, result);
+                }
+                else if (IsSvgFile(ext))
+                {
+                    await LoadSvgPreview(filePath, result);
                 }
                 else if (IsTextFile(ext))
                 {
@@ -278,6 +289,8 @@ namespace XFiles.FileSystem
                         await bitmap.SetSourceAsync(memStream);
                     }
                     result.ImageSource = bitmap;
+                    result.PixelWidth = bitmap.PixelWidth;
+                    result.PixelHeight = bitmap.PixelHeight;
                     tcs.SetResult(true);
                 }
                 catch (Exception ex)
@@ -289,6 +302,22 @@ namespace XFiles.FileSystem
             });
 
             await tcs.Task;
+        }
+
+        private static async Task LoadSvgPreview(string filePath, FilePreviewResult result)
+        {
+            result.Type = FilePreviewType.Text;
+
+            byte[] svgBytes = await Task.Run(() => ReadFileWin32(filePath, 0));
+            if (svgBytes == null)
+            {
+                result.Type = FilePreviewType.Error;
+                result.ErrorMessage = "Failed to read SVG file";
+                return;
+            }
+
+            result.TextContent = System.Text.Encoding.UTF8.GetString(svgBytes);
+            result.IsTruncated = false;
         }
 
         /// <summary>

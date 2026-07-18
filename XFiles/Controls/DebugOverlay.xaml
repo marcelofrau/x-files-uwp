@@ -14,7 +14,7 @@
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled">
             <TextBlock x:Name="LogText"
-                       FontFamily="Consolas"
+                       FontFamily="ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata"
                        FontSize="12"
                        Foreground="#80FF80"
                        TextWrapping="Wrap"

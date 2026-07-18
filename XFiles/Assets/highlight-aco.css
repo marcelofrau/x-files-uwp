@@ -1,0 +1,147 @@
+/*
+ * Aco Theme for highlight.js
+ * Based on lean-hackerman/aco-theme (VS Code)
+ * Background: #111111, Foreground: #B4E1FD
+ * Adapted to match X-Files dark theme
+ */
+
+.hljs {
+  display: block;
+  overflow-x: auto;
+  padding: 1em;
+  background: #111111;
+  color: #B4E1FD;
+  font-family: 'Inconsolata', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.hljs-comment,
+.hljs-quote,
+.hljs-doctag,
+.hljs-formula {
+  color: #5a5a5a;
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-built_in,
+.hljs-title,
+.hljs-section,
+.hljs-name {
+  color: #FF0883;
+  font-weight: bold;
+}
+
+.hljs-string,
+.hljs-template-tag,
+.hljs-template-variable,
+.hljs-addition,
+.hljs-regexp,
+.hljs-literal,
+.hljs-bullet,
+.hljs-link {
+  color: #83FF08;
+}
+
+.hljs-number,
+.hljs-symbol,
+.hljs-variable.constant_ {
+  color: #FF8308;
+}
+
+.hljs-type,
+.hljs-class .hljs-title,
+.hljs-meta .hljs-keyword,
+.hljs-attr {
+  color: #0883FF;
+}
+
+.hljs-function .hljs-title,
+.hljs-title.function_ {
+  color: #8EFF1E;
+}
+
+.hljs-params {
+  color: #FF8E1E;
+  font-style: italic;
+}
+
+.hljs-meta,
+.hljs-meta .hljs-keyword {
+  color: #8308FF;
+}
+
+.hljs-variable,
+.hljs-deletion {
+  color: #B4E1FD;
+}
+
+.hljs-attribute {
+  color: #08FF83;
+}
+
+.hljs-selector-attr,
+.hljs-selector-pseudo {
+  color: #1EFF8E;
+}
+
+.hljs-literal {
+  color: #FF8308;
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: bold;
+}
+
+.hljs-link {
+  text-decoration: underline;
+}
+
+.hljs-section,
+.hljs-selector-tag {
+  color: #FF0883;
+  font-weight: bold;
+}
+
+.hljs-params,
+.hljs-selector-class {
+  color: #B4E1FD;
+}
+
+.hljs-property {
+  color: #0883FF;
+}
+
+.hljs-tag {
+  color: #FF0883;
+}
+
+.hljs-name {
+  color: #FF0883;
+}
+
+.hljs-selector-id {
+  color: #8EFF1E;
+}
+
+.hljs-selector-class {
+  color: #1E8EFF;
+}
+
+.hljs-atom,
+.hljs-number {
+  color: #FF8308;
+}
+
+.hljs-deletion {
+  color: #FF0883;
+}

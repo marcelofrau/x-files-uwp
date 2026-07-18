@@ -147,6 +147,8 @@ namespace XFiles.Navigation
                 _preview.PreviewFileType = previewResult.FileType;
                 _preview.PreviewFileSize = previewResult.FileSizeBytes;
                 _preview.PreviewIsTruncated = previewResult.IsTruncated;
+                _preview.PreviewPixelWidth = previewResult.PixelWidth;
+                _preview.PreviewPixelHeight = previewResult.PixelHeight;
             }
         }
 
@@ -193,6 +195,8 @@ namespace XFiles.Navigation
         public string PreviewFileType { get; set; }
         public long PreviewFileSize { get; set; }
         public bool PreviewIsTruncated { get; set; }
+        public int PreviewPixelWidth { get; set; }
+        public int PreviewPixelHeight { get; set; }
 
         public string ParentPath
         {

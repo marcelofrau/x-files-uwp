@@ -7,10 +7,10 @@
     IsTabStop="True">
 
     <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="25*" />
-            <ColumnDefinition Width="35*" />
-            <ColumnDefinition Width="40*" />
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="20*" />
+                <ColumnDefinition Width="35*" />
+                <ColumnDefinition Width="45*" />
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
@@ -173,10 +173,11 @@
                 x:Name="PreviewTextScroll"
                 Visibility="Collapsed"
                 VerticalScrollBarVisibility="Auto"
+                HorizontalScrollBarVisibility="Auto"
                 Padding="12,8">
                 <TextBlock x:Name="PreviewTextBlock"
-                    FontFamily="Consolas"
-                    FontSize="14"
+                    FontFamily="ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata"
+                    FontSize="12"
                     Foreground="#CCCCCC"
                     TextWrapping="Wrap"
                     IsTextSelectionEnabled="True" />
@@ -185,6 +186,7 @@
             <!-- Preview content: source code (syntax highlighted) -->
             <WebView Grid.Row="1"
                 x:Name="PreviewCodeView"
+                DefaultBackgroundColor="#111111"
                 Visibility="Collapsed" />
 
             <!-- Preview content: image file -->

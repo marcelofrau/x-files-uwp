@@ -15,5 +15,7 @@ namespace XFiles.Navigation
         void OnContextMenu();
         void OnPageUp();
         void OnPageDown();
+        void OnScrollHorizontal(double delta);
+        void OnScrollVertical(double delta);
     }
 }

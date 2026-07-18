@@ -233,6 +233,10 @@ namespace XFiles.Controls
             EntryList.SelectedIndex = Math.Min(_entries.Count - 1, EntryList.SelectedIndex + 10);
             Log.Verbose("ColumnListView.OnPageDown: index={Index}", EntryList.SelectedIndex);
         }
+
+        public void OnScrollHorizontal(double delta) { }
+
+        public void OnScrollVertical(double delta) { }
     }
 
     /// <summary>

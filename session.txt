@@ -1,3 +1,4 @@
 opencode -s ses_0a39825a0ffe2Ucp4P4z1RLx82
 opencode -s ses_09edd594dffexFAA8XXEvzy6s6
 opencode -s ses_09edd594dffexFAA8XXEvzy6s6
+opencode -s ses_08bcdf3f4ffe3pvXgrRp4xWGWI

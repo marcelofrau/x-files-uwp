@@ -91,17 +91,30 @@ to block native PageUp/PageDown.
 
 ---
 
-## Phase 5 — PreviewPane (text and image)
+## Phase 5 — PreviewPane (text, image, syntax highlighting)
 
-- [ ] `DataTemplateSelector` to choose between `FolderPreviewTemplate` (already exists from
-      Phase 4), `TextPreviewTemplate`, `ImagePreviewTemplate`, `UnsupportedPreviewTemplate`.
-- [ ] Truncated reading of text files (configurable KB limit).
-- [ ] Async image loading (don't block navigation while loading).
-- [ ] Friendly error state for unreadable/permission-denied files.
+- [x] `FilePreviewService` using Win32 P/Invoke (`CreateFileFromAppW` + `ReadFile`).
+- [x] Text preview: 256KB limit, plain text (.txt/.log/.out/.err) in TextBlock.
+- [x] Image preview: Win32 read bytes → TaskCompletionSource → UI thread BitmapImage.
+- [x] Small image cap: images < 256px get max 4x upscale (prevents ICO/tiny PNG stretch).
+- [x] Syntax highlighting: highlight.js v9.18.5 (ES5, EdgeHTML compatible) inlined.
+- [x] Aco theme CSS (vibrant: pink keywords, green strings, yellow numbers, blue types).
+- [x] Inconsolata font (103KB) embedded as base64 in WebView CSS.
+- [x] SVG rendering in WebView as `<img src="data:image/svg+xml;base64,...">`.
+- [x] WebView DefaultBackgroundColor=#111111 (no white flash).
+- [x] Right analog stick scrolls preview (vertical + horizontal).
+- [x] ScrollViewer with horizontal scrollbar for plain text.
+- [x] No word wrap in syntax highlighted code (horizontal scroll).
+- [x] Column widths adjusted: 20*:35*:45*.
+- [x] Hidden/system files filtered in DirectoryScanner.
+- [x] Full keyboard nav: Enter/Back/Left/Right/Up/Down/PageUp/PageDown/Home/End.
+- [x] Mac startup chime on app launch (volume 40%).
+- [x] Test images at H:\tests\images\ (41 files: PNG/JPG/BMP/GIF/WebP/SVG, various sizes).
 
 **Completion criteria**: navigating over a `.txt` shows truncated content; navigating over
 a common image shows thumbnail; rapidly navigating between multiple files doesn't freeze the
-UI or produce unhandled exceptions.
+UI or produce unhandled exceptions. Syntax highlighting working for 40+ languages.
+**Status**: implemented. SVG rendering and syntax highlighting validated.
 
 ---
 

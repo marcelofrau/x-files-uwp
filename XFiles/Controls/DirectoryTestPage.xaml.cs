@@ -222,5 +222,9 @@ namespace XFiles.Controls
         {
             EntryList.SelectedIndex = Math.Min(EntryList.Items.Count - 1, EntryList.SelectedIndex + 10);
         }
+
+        public void OnScrollHorizontal(double delta) { }
+
+        public void OnScrollVertical(double delta) { }
     }
 }

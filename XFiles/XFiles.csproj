@@ -194,7 +194,9 @@
     <Content Include="Assets\FileTypes\file-archive-24.png" />
     <Content Include="Assets\FileTypes\file-generic-24.png" />
     <Content Include="Assets\highlight.min.js" />
-    <Content Include="Assets\highlight-vs2015.min.css" />
+    <Content Include="Assets\highlight-aco.css" />
+    <Content Include="Assets\Inconsolata-Regular.ttf" />
+    <Content Include="Assets\mac-startup.mp3" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Assets\GamepadButtons\xbox-dark\a-1.png" />

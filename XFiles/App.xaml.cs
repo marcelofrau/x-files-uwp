@@ -64,7 +64,7 @@ namespace XFiles
 
                 var rootGrid = new Grid();
                 rootGrid.Children.Add(rootFrame);
-                rootGrid.Children.Add(new DebugOverlay(Log.Screen));
+                // rootGrid.Children.Add(new DebugOverlay(Log.Screen)); // disabled for now
                 Window.Current.Content = rootGrid;
                 Window.Current.CoreWindow.PointerCursor = null;
             }
@@ -87,6 +87,9 @@ namespace XFiles
                 Window.Current.Activate();
                 Window.Current.CoreWindow.PointerCursor = null;
 
+                // Play Mac boot chime
+                PlayBootChime();
+
                 // Remove Xbox safe zone (overscan margin) — app fills entire screen
                 var view = ApplicationView.GetForCurrentView();
                 view.SetDesiredBoundsMode(ApplicationViewBoundsMode.UseCoreWindow);
@@ -102,6 +105,26 @@ namespace XFiles
         private void OnRootFrameNavigated(object sender, NavigationEventArgs e)
         {
             Log.Information("Frame navigated to {Page}", e.SourcePageType?.Name ?? "null");
+        }
+
+        private async void PlayBootChime()
+        {
+            try
+            {
+                var file = await Windows.Storage.StorageFile.GetFileFromApplicationUriAsync(
+                    new Uri("ms-appx:///Assets/mac-startup.mp3"));
+                var stream = await file.OpenReadAsync();
+                var source = Windows.Media.Core.MediaSource.CreateFromStream(stream, stream.ContentType);
+                var player = new Windows.Media.Playback.MediaPlayer();
+                player.Volume = 0.4;
+                player.Source = source;
+                player.Play();
+                Log.Information("Boot chime playing");
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("Failed to play boot chime: {Error}", ex.Message);
+            }
         }
 
         void OnNavigationFailed(object sender, NavigationFailedEventArgs e)

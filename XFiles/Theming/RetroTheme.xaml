@@ -21,7 +21,7 @@
     <SolidColorBrush x:Key="XFilesBorderBrush" Color="#333333" />
 
     <!-- Typography -->
-    <FontFamily x:Key="XFilesMonoFontFamily">Consolas</FontFamily>
+    <FontFamily x:Key="XFilesMonoFontFamily">ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata</FontFamily>
 
     <!--
         TODO (Phase 8): ContextMenuItemStyle, StatusBarStyle — see docs/UI-THEMING.md.

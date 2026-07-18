@@ -19,26 +19,13 @@ namespace XFiles.Controls
         private bool _updating;
         private static string _highlightJs;
         private static string _highlightCss;
+        private static string _fontBase64;
 
         // Extensions that are plain text — no syntax highlighting.
         private static readonly HashSet<string> PlainTextExtensions =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
                 ".txt", ".log", ".out", ".err",
-                ".csv", ".tsv",
-                ".md", ".markdown", ".rst",
-                ".ini", ".cfg", ".conf", ".config",
-                ".toml", ".yaml", ".yml",
-                ".json", ".jsonc", ".json5", ".jsonl",
-                ".plist",
-                ".env", ".properties", ".props", ".targets",
-                ".gitignore", ".gitattributes", ".gitmodules",
-                ".editorconfig", ".prettierrc", ".eslintrc",
-                ".babelrc", ".stylelintrc", ".dockerignore",
-                ".srt", ".vtt", ".sub",
-                ".lrc", ".ly",
-                ".tex", ".latex", ".bib",
-                ".pod", ".opml", ".feed",
             };
 
         public MillerColumnsPage()
@@ -52,6 +39,9 @@ namespace XFiles.Controls
             _navigator.ColumnsChanged += OnColumnsChanged;
             _navigator.PreviewChanged += OnPreviewChanged;
             _navigator.Error += OnError;
+
+            PreviewCodeView.NavigationStarting += OnPreviewNavigationStarting;
+            PreviewCodeView.NavigationCompleted += OnPreviewNavigationCompleted;
 
             // Start loading root
             _ = _navigator.LoadRootAsync();
@@ -155,21 +145,49 @@ namespace XFiles.Controls
                             : _navigator.Preview.PreviewFileType;
 
                         string ext = Path.GetExtension(_navigator.Preview.Label ?? "");
-                        if (PlainTextExtensions.Contains(ext))
+                        bool isPlainText = PlainTextExtensions.Contains(ext);
+                        Log.Information("UpdatePreviewColumn: ext={Ext} isPlainText={IsPlainText} contentLen={Len}",
+                            ext, isPlainText, _navigator.Preview.PreviewTextContent?.Length ?? 0);
+
+                        if (isPlainText)
                         {
                             PreviewTextBlock.Text = _navigator.Preview.PreviewTextContent ?? "";
                             PreviewTextScroll.Visibility = Visibility.Visible;
                         }
+                        else if (FilePreviewService.IsSvgFile(ext))
+                        {
+                            string svgHtml = BuildSvgHtml(
+                                _navigator.Preview.PreviewTextContent ?? "");
+                            _ = LoadHighlightHtml(svgHtml);
+                            PreviewCodeView.Visibility = Visibility.Visible;
+                        }
                         else
                         {
-                            PreviewCodeView.NavigateToString(BuildHighlightHtml(
-                                _navigator.Preview.PreviewTextContent ?? "", ext));
+                            string html = BuildHighlightHtml(
+                                _navigator.Preview.PreviewTextContent ?? "", ext);
+                            _ = LoadHighlightHtml(html);
                             PreviewCodeView.Visibility = Visibility.Visible;
                         }
                         break;
 
                     case FilePreviewType.Image:
                         PreviewImage.Source = _navigator.Preview.PreviewImageSource;
+                        // Cap upscale for small images (ICO, small PNGs, etc.)
+                        // Images < 256px on either axis get max 4x scale
+                        int pw = _navigator.Preview.PreviewPixelWidth;
+                        int ph = _navigator.Preview.PreviewPixelHeight;
+                        int smallThreshold = 256;
+                        int maxScale = 4;
+                        if (pw > 0 && ph > 0 && (pw < smallThreshold || ph < smallThreshold))
+                        {
+                            PreviewImage.MaxWidth = Math.Min(pw * maxScale, 1024);
+                            PreviewImage.MaxHeight = Math.Min(ph * maxScale, 1024);
+                        }
+                        else
+                        {
+                            PreviewImage.MaxWidth = double.PositiveInfinity;
+                            PreviewImage.MaxHeight = double.PositiveInfinity;
+                        }
                         PreviewStatus.Text = _navigator.Preview.PreviewFileType;
                         PreviewImagePanel.Visibility = Visibility.Visible;
                         break;
@@ -220,42 +238,95 @@ namespace XFiles.Controls
 
             EnsureHighlightAssetsLoaded();
 
+            Log.Information("BuildHighlightHtml: ext={Ext} lang={Lang} cssLen={CssLen} codeLen={CodeLen} jsLen={JsLen}",
+                extension, lang, _highlightCss?.Length ?? 0, code?.Length ?? 0, _highlightJs?.Length ?? 0);
+
             return $@"<!DOCTYPE html>
 <html>
 <head>
 <meta charset=""utf-8"">
 <style>
-  body {{ margin:0; padding:12px; background:#1e1e1e; }}
-  pre {{ margin:0; white-space:pre-wrap; word-wrap:break-word;
-         font-family:'Consolas','Courier New',monospace; font-size:14px;
-         color:#dcdcdc; line-height:1.4; }}
+  @font-face {{
+    font-family:'Inconsolata';
+    src:url(data:font/truetype;base64,{_fontBase64}) format('truetype');
+    font-weight:normal; font-style:normal;
+  }}
+  html, body {{ margin:0; padding:0; background:#111111; overflow-x:auto; }}
+  pre {{ margin:0; padding:12px; white-space:pre; overflow-x:auto;
+         font-family:'Inconsolata','Consolas','Courier New',monospace;
+         font-size:12px; color:#dcdcdc; line-height:1.4;
+         display:inline-block; min-width:100%; }}
   code {{ font-family:inherit; }}
 </style>
 <style>{_highlightCss}</style>
 </head>
-<body><pre><code class=""hljs {lang}"">{escaped}</code></pre>
+<body>
+<pre><code class=""{lang}"">{escaped}</code></pre>
 <script>{_highlightJs}</script>
-<script>hljs.highlightAll();</script>
+<script>hljs.highlightBlock(document.querySelector('code'));</script>
 </body></html>";
+        }
+
+        private static string BuildSvgHtml(string svgContent)
+        {
+            string b64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(svgContent));
+            return $@"<!DOCTYPE html>
+<html>
+<head>
+<meta charset=""utf-8"">
+<style>
+  body {{ margin:0; padding:12px; background:#111111; display:flex;
+         align-items:center; justify-content:center; min-height:100vh; }}
+  img {{ max-width:100%; max-height:100%; object-fit:contain; }}
+</style>
+</head>
+<body>
+<img src=""data:image/svg+xml;base64,{b64}"" />
+</body></html>";
+        }
+
+        private async Task LoadHighlightHtml(string html)
+        {
+            try
+            {
+                Log.Information("LoadHighlightHtml: NavigateToString ({Len} chars)", html.Length);
+                PreviewCodeView.NavigateToString(html);
+            }
+            catch (Exception ex)
+            {
+                Log.Error("Failed NavigateToString", ex);
+            }
         }
 
         private static void EnsureHighlightAssetsLoaded()
         {
-            if (_highlightJs != null && _highlightCss != null) return;
+            if (_highlightJs != null && _highlightCss != null && _fontBase64 != null) return;
 
             try
             {
+                Log.Information("EnsureHighlightAssetsLoaded: loading JS...");
                 var jsFile = StorageFile.GetFileFromApplicationUriAsync(
                     new Uri("ms-appx:///Assets/highlight.min.js")).GetAwaiter().GetResult();
                 _highlightJs = FileIO.ReadTextAsync(jsFile).GetAwaiter().GetResult();
+                Log.Information("EnsureHighlightAssetsLoaded: JS loaded, {Len} chars", _highlightJs.Length);
 
+                Log.Information("EnsureHighlightAssetsLoaded: loading CSS...");
                 var cssFile = StorageFile.GetFileFromApplicationUriAsync(
-                    new Uri("ms-appx:///Assets/highlight-vs2015.min.css")).GetAwaiter().GetResult();
+                    new Uri("ms-appx:///Assets/highlight-aco.css")).GetAwaiter().GetResult();
                 _highlightCss = FileIO.ReadTextAsync(cssFile).GetAwaiter().GetResult();
+                Log.Information("EnsureHighlightAssetsLoaded: CSS loaded, {Len} chars", _highlightCss.Length);
+
+                Log.Information("EnsureHighlightAssetsLoaded: loading font...");
+                var fontFile = StorageFile.GetFileFromApplicationUriAsync(
+                    new Uri("ms-appx:///Assets/Inconsolata-Regular.ttf")).GetAwaiter().GetResult();
+                var fontBytes = System.IO.File.ReadAllBytes(fontFile.Path);
+                _fontBase64 = Convert.ToBase64String(fontBytes);
+                Log.Information("EnsureHighlightAssetsLoaded: font loaded, {Len} bytes, b64={B64Len}",
+                    fontBytes.Length, _fontBase64.Length);
             }
             catch (Exception ex)
             {
-                Log.Warning("Failed to load highlight.js assets: {Error}", ex.Message);
+                Log.Error("Failed to load highlight.js assets", ex);
                 _highlightJs = "";
                 _highlightCss = "";
             }
@@ -356,8 +427,6 @@ namespace XFiles.Controls
         {
             switch (e.Key)
             {
-                case Windows.System.VirtualKey.PageUp:
-                case Windows.System.VirtualKey.PageDown:
                 case Windows.System.VirtualKey.GamepadLeftTrigger:
                 case Windows.System.VirtualKey.GamepadRightTrigger:
                     e.Handled = true;
@@ -390,10 +459,37 @@ namespace XFiles.Controls
                     e.Handled = true;
                     OnBack();
                     break;
-                // Block ListView native PageUp/PageDown — GamepadInputService handles LB/RB
+                case Windows.System.VirtualKey.Left:
+                    e.Handled = true;
+                    OnBack();
+                    break;
+                case Windows.System.VirtualKey.Right:
+                    e.Handled = true;
+                    OnConfirm();
+                    break;
+                case Windows.System.VirtualKey.Up:
+                    e.Handled = true;
+                    OnDPadUp();
+                    break;
+                case Windows.System.VirtualKey.Down:
+                    e.Handled = true;
+                    OnDPadDown();
+                    break;
                 case Windows.System.VirtualKey.PageUp:
+                    e.Handled = true;
+                    OnPageUp();
+                    break;
                 case Windows.System.VirtualKey.PageDown:
                     e.Handled = true;
+                    OnPageDown();
+                    break;
+                case Windows.System.VirtualKey.Home:
+                    e.Handled = true;
+                    OnHome();
+                    break;
+                case Windows.System.VirtualKey.End:
+                    e.Handled = true;
+                    OnEnd();
                     break;
             }
         }
@@ -406,6 +502,16 @@ namespace XFiles.Controls
                 e.Handled = true;
                 OnBack();
             }
+        }
+
+        private void OnPreviewNavigationStarting(WebView sender, WebViewNavigationStartingEventArgs args)
+        {
+            Log.Information("OnPreviewNavigationStarting: uri={Uri}", args.Uri?.ToString() ?? "(null)");
+        }
+
+        private void OnPreviewNavigationCompleted(WebView sender, WebViewNavigationCompletedEventArgs args)
+        {
+            Log.Information("OnPreviewNavigationCompleted: isSuccess={IsSuccess}", args.IsSuccess);
         }
 
         // --- INavigable ---
@@ -453,14 +559,76 @@ namespace XFiles.Controls
 
         public void OnPageUp()
         {
+            var before = CurrentList.SelectedIndex;
             if (CurrentList.SelectedIndex > 0)
                 CurrentList.SelectedIndex = Math.Max(0, CurrentList.SelectedIndex - 8);
+            Log.Information("OnPageUp: before={Before} after={After}", before, CurrentList.SelectedIndex);
         }
 
         public void OnPageDown()
         {
+            var before = CurrentList.SelectedIndex;
             if (_navigator.Current != null && CurrentList.Items.Count > 0)
                 CurrentList.SelectedIndex = Math.Min(CurrentList.Items.Count - 1, CurrentList.SelectedIndex + 8);
+            Log.Information("OnPageDown: before={Before} after={After}", before, CurrentList.SelectedIndex);
+        }
+
+        public void OnHome()
+        {
+            var before = CurrentList.SelectedIndex;
+            if (CurrentList.Items.Count > 0)
+                CurrentList.SelectedIndex = 0;
+            Log.Information("OnHome: before={Before} after={After}", before, CurrentList.SelectedIndex);
+        }
+
+        public void OnEnd()
+        {
+            var before = CurrentList.SelectedIndex;
+            if (_navigator.Current != null && CurrentList.Items.Count > 0)
+                CurrentList.SelectedIndex = CurrentList.Items.Count - 1;
+            Log.Information("OnEnd: before={Before} after={After}", before, CurrentList.SelectedIndex);
+        }
+
+        public void OnScrollVertical(double delta)
+        {
+            try
+            {
+                if (PreviewTextScroll.Visibility == Visibility.Visible)
+                {
+                    double newOffset = PreviewTextScroll.VerticalOffset + delta;
+                    PreviewTextScroll.ScrollToVerticalOffset(Math.Max(0, newOffset));
+                }
+                else if (PreviewCodeView.Visibility == Visibility.Visible)
+                {
+                    string js = $"window.scrollBy(0, {delta:F1});";
+                    _ = PreviewCodeView.InvokeScriptAsync("eval", new[] { js });
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("OnScrollVertical failed: {Error}", ex.Message);
+            }
+        }
+
+        public void OnScrollHorizontal(double delta)
+        {
+            try
+            {
+                if (PreviewTextScroll.Visibility == Visibility.Visible)
+                {
+                    double newOffset = PreviewTextScroll.HorizontalOffset + delta;
+                    PreviewTextScroll.ScrollToHorizontalOffset(Math.Max(0, newOffset));
+                }
+                else if (PreviewCodeView.Visibility == Visibility.Visible)
+                {
+                    string js = $"window.scrollBy({delta:F1}, 0);";
+                    _ = PreviewCodeView.InvokeScriptAsync("eval", new[] { js });
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("OnScrollHorizontal failed: {Error}", ex.Message);
+            }
         }
 
         public event PropertyChangedEventHandler PropertyChanged;

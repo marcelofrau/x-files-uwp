@@ -133,5 +133,9 @@ namespace XFiles.Controls
             _counter -= 50;
             UpdateDisplay("RB — Page Down (-50)");
         }
+
+        public void OnScrollHorizontal(double delta) { }
+
+        public void OnScrollVertical(double delta) { }
     }
 }
