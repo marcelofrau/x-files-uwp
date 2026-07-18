@@ -127,8 +127,27 @@ namespace XFiles.Navigation
                     reading.RightThumbstickX, reading.RightThumbstickY);
             }
 
-            // D-pad: Up/Down handled by ListView natively, Left/Right by OnKeyDown
-            // GamepadInputService only handles action buttons and left stick
+            // D-pad — just pressed only
+            if ((justPressed & GamepadButtons.DPadUp) != 0)
+            {
+                Log.Verbose("Input: DPadUp (justPressed)");
+                nav.OnDPadUp();
+            }
+            if ((justPressed & GamepadButtons.DPadDown) != 0)
+            {
+                Log.Verbose("Input: DPadDown (justPressed)");
+                nav.OnDPadDown();
+            }
+            if ((justPressed & GamepadButtons.DPadLeft) != 0)
+            {
+                Log.Verbose("Input: DPadLeft (justPressed)");
+                nav.OnDPadLeft();
+            }
+            if ((justPressed & GamepadButtons.DPadRight) != 0)
+            {
+                Log.Verbose("Input: DPadRight (justPressed)");
+                nav.OnDPadRight();
+            }
 
             // A, B, Y — just pressed only
             if ((justPressed & GamepadButtons.A) != 0)
@@ -190,7 +209,7 @@ namespace XFiles.Navigation
 
             if (Math.Abs(y) > Deadzone)
             {
-                if (y < -Deadzone)
+                if (y > Deadzone)
                 {
                     Log.Verbose("Input: LeftStick Up (y={Y:F2})", y);
                     nav.OnDPadUp();

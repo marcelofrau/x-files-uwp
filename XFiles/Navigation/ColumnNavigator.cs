@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Windows.UI.Xaml.Media;
 using XFiles.FileSystem;
 
 namespace XFiles.Navigation
@@ -105,7 +106,7 @@ namespace XFiles.Navigation
         /// <summary>
         /// Update preview column based on current selection.
         /// If selected item is directory -> show its children.
-        /// If selected item is file -> show placeholder (TODO: text/image preview).
+        /// If selected item is file -> load text/image preview via FilePreviewService.
         /// </summary>
         public async Task UpdatePreviewAsync()
         {
@@ -116,20 +117,36 @@ namespace XFiles.Navigation
                 return;
             }
 
-            if (selected.IsDirectory && selected.Name != "..")
+            if (selected.IsDirectory)
             {
+                if (selected.Name == "..")
+                {
+                    // Don't preview ".." — show parent folder info or nothing
+                    _preview = null;
+                    return;
+                }
+
                 _preview = new ColumnState { Path = selected.FullPath, Label = selected.Name };
                 await _preview.LoadAsync(selected.FullPath);
             }
             else
             {
-                // File preview placeholder
+                // File preview — load via FilePreviewService
                 _preview = new ColumnState
                 {
                     Path = selected.FullPath,
                     Label = selected.Name,
                     IsFilePreview = true
                 };
+
+                var previewResult = await FilePreviewService.GetPreviewAsync(selected.FullPath);
+                _preview.PreviewType = previewResult.Type;
+                _preview.PreviewTextContent = previewResult.TextContent;
+                _preview.PreviewImageSource = previewResult.ImageSource;
+                _preview.PreviewErrorMessage = previewResult.ErrorMessage;
+                _preview.PreviewFileType = previewResult.FileType;
+                _preview.PreviewFileSize = previewResult.FileSizeBytes;
+                _preview.PreviewIsTruncated = previewResult.IsTruncated;
             }
         }
 
@@ -147,7 +164,7 @@ namespace XFiles.Navigation
             {
                 await Task.Delay(150, token);
             }
-            catch (TaskCanceledException)
+            catch (OperationCanceledException)
             {
                 return;
             }
@@ -167,6 +184,15 @@ namespace XFiles.Navigation
         public int SelectedIndex { get; set; }
         public List<FileEntry> Entries { get; set; } = new List<FileEntry>();
         public bool IsFilePreview { get; set; }
+
+        // File preview data
+        public FilePreviewType PreviewType { get; set; }
+        public string PreviewTextContent { get; set; }
+        public ImageSource PreviewImageSource { get; set; }
+        public string PreviewErrorMessage { get; set; }
+        public string PreviewFileType { get; set; }
+        public long PreviewFileSize { get; set; }
+        public bool PreviewIsTruncated { get; set; }
 
         public string ParentPath
         {

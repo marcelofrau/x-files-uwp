@@ -1,6 +1,7 @@
 using System;
 using Windows.ApplicationModel;
 using Windows.ApplicationModel.Activation;
+using Windows.UI.ViewManagement;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Navigation;
@@ -65,6 +66,7 @@ namespace XFiles
                 rootGrid.Children.Add(rootFrame);
                 rootGrid.Children.Add(new DebugOverlay(Log.Screen));
                 Window.Current.Content = rootGrid;
+                Window.Current.CoreWindow.PointerCursor = null;
             }
 
             if (e.PrelaunchActivated == false)
@@ -83,6 +85,12 @@ namespace XFiles
                     rootFrame.Navigate(typeof(Controls.MillerColumnsPage));
                 }
                 Window.Current.Activate();
+                Window.Current.CoreWindow.PointerCursor = null;
+
+                // Remove Xbox safe zone (overscan margin) — app fills entire screen
+                var view = ApplicationView.GetForCurrentView();
+                view.SetDesiredBoundsMode(ApplicationViewBoundsMode.UseCoreWindow);
+
                 Log.Information("Window activated");
             }
             else
@@ -136,6 +144,7 @@ namespace XFiles
                 _xrayTimer?.Start();
 #endif
                 GamepadInput?.Start();
+                Window.Current.CoreWindow.PointerCursor = null;
                 Log.Debug("GamepadInputService restarted");
             }
             catch (Exception ex)

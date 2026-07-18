@@ -30,11 +30,11 @@
                 Text=""
                 Foreground="#33AA55"
                 FontSize="20"
-                Padding="12,12,12,8" />
+                Padding="8,8,8,4" />
 
             <ListView Grid.Row="1"
                 x:Name="ParentList"
-                Padding="8"
+                Padding="0"
                 Style="{StaticResource RetroListViewStyle}"
                 ItemContainerStyle="{StaticResource RetroListViewItemStyle}"
                 IsHitTestVisible="False"
@@ -76,11 +76,11 @@
                 Text=""
                 Foreground="#33AA55"
                 FontSize="20"
-                Padding="12,12,12,8" />
+                Padding="8,8,8,4" />
 
             <controls:RetroListView Grid.Row="1"
                 x:Name="CurrentList"
-                Padding="8"
+                Padding="0"
                 Style="{StaticResource RetroListViewStyle}"
                 ItemContainerStyle="{StaticResource RetroListViewItemStyle}"
                 SelectionChanged="CurrentList_SelectionChanged"
@@ -142,12 +142,12 @@
                 Text=""
                 Foreground="#33AA55"
                 FontSize="20"
-                Padding="12,12,12,8" />
+                Padding="8,8,8,4" />
 
-            <!-- Preview content (read-only list) -->
+            <!-- Preview content: folder listing -->
             <ListView Grid.Row="1"
                 x:Name="PreviewList"
-                Padding="8"
+                Padding="0"
                 Style="{StaticResource RetroListViewStyle}"
                 ItemContainerStyle="{StaticResource RetroListViewItemStyle}"
                 IsHitTestVisible="False"
@@ -168,15 +168,65 @@
                 </ListView.ItemTemplate>
             </ListView>
 
-            <!-- File preview placeholder -->
-            <TextBlock Grid.Row="1"
-                x:Name="FilePreviewText"
-                Text=""
-                Foreground="#777777"
-                FontSize="16"
-                Padding="16,16"
-                TextWrapping="Wrap"
+            <!-- Preview content: text file (plain) -->
+            <ScrollViewer Grid.Row="1"
+                x:Name="PreviewTextScroll"
+                Visibility="Collapsed"
+                VerticalScrollBarVisibility="Auto"
+                Padding="12,8">
+                <TextBlock x:Name="PreviewTextBlock"
+                    FontFamily="Consolas"
+                    FontSize="14"
+                    Foreground="#CCCCCC"
+                    TextWrapping="Wrap"
+                    IsTextSelectionEnabled="True" />
+            </ScrollViewer>
+
+            <!-- Preview content: source code (syntax highlighted) -->
+            <WebView Grid.Row="1"
+                x:Name="PreviewCodeView"
                 Visibility="Collapsed" />
+
+            <!-- Preview content: image file -->
+            <Grid Grid.Row="1"
+                x:Name="PreviewImagePanel"
+                Visibility="Collapsed"
+                Background="#111111">
+                <Image x:Name="PreviewImage"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Stretch="Uniform" />
+            </Grid>
+
+            <!-- Preview content: error -->
+            <Grid Grid.Row="1"
+                x:Name="PreviewErrorPanel"
+                Visibility="Collapsed">
+                <TextBlock x:Name="PreviewErrorText"
+                    Foreground="#CC4444"
+                    FontSize="16"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    TextWrapping="Wrap"
+                    Padding="16" />
+            </Grid>
+
+            <!-- Preview content: unsupported file type -->
+            <Grid Grid.Row="1"
+                x:Name="PreviewUnsupportedPanel"
+                Visibility="Collapsed">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock x:Name="PreviewUnsupportedType"
+                        Foreground="#666666"
+                        FontSize="18"
+                        HorizontalAlignment="Center" />
+                    <TextBlock x:Name="PreviewUnsupportedSize"
+                        Foreground="#444444"
+                        FontSize="14"
+                        HorizontalAlignment="Center"
+                        Margin="0,8,0,0" />
+                </StackPanel>
+            </Grid>
 
             <TextBlock Grid.Row="2"
                 x:Name="PreviewStatus"

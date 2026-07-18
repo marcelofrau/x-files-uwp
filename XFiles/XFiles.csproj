@@ -93,6 +93,7 @@
     <Compile Include="Navigation\ColumnNavigator.cs" />
     <Compile Include="FileSystem\FileEntry.cs" />
     <Compile Include="FileSystem\DirectoryScanner.cs" />
+    <Compile Include="FileSystem\FilePreviewService.cs" />
     <Compile Include="Log.cs" />
     <Compile Include="ScreenLogger.cs" />
     <Compile Include="Controls\CounterPage.xaml.cs">
@@ -192,6 +193,8 @@
     <Content Include="Assets\FileTypes\folder-orange-24.png" />
     <Content Include="Assets\FileTypes\file-archive-24.png" />
     <Content Include="Assets\FileTypes\file-generic-24.png" />
+    <Content Include="Assets\highlight.min.js" />
+    <Content Include="Assets\highlight-vs2015.min.css" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Assets\GamepadButtons\xbox-dark\a-1.png" />
