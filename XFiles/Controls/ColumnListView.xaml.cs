@@ -234,4 +234,25 @@ namespace XFiles.Controls
             Log.Verbose("ColumnListView.OnPageDown: index={Index}", EntryList.SelectedIndex);
         }
     }
+
+    /// <summary>
+    /// Custom ListView that blocks built-in PageUp/PageDown scrolling.
+    /// GamepadInputService handles all navigation — ListView should not process keyboard nav events.
+    /// </summary>
+    public class RetroListView : Windows.UI.Xaml.Controls.ListView
+    {
+        protected override void OnKeyDown(Windows.UI.Xaml.Input.KeyRoutedEventArgs e)
+        {
+            switch (e.Key)
+            {
+                case Windows.System.VirtualKey.PageUp:
+                case Windows.System.VirtualKey.PageDown:
+                case Windows.System.VirtualKey.GamepadLeftTrigger:
+                case Windows.System.VirtualKey.GamepadRightTrigger:
+                    e.Handled = true;
+                    return;
+            }
+            base.OnKeyDown(e);
+        }
+    }
 }

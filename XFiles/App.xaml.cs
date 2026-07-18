@@ -38,6 +38,7 @@ namespace XFiles
             {
                 cfg.AppId = "com.xfiles.uwp";
                 cfg.Version = "0.1.0";
+                cfg.Logger = Log.Logger;
             });
             Log.Information("Xray agent started on port {Port}", _xray.BoundPort);
 
@@ -78,8 +79,8 @@ namespace XFiles
                     };
                     GamepadInput.Start();
 
-                    Log.Information("Navigating to DirectoryTestPage");
-                    rootFrame.Navigate(typeof(Controls.DirectoryTestPage));
+                    Log.Information("Navigating to MillerColumnsPage");
+                    rootFrame.Navigate(typeof(Controls.MillerColumnsPage));
                 }
                 Window.Current.Activate();
                 Log.Information("Window activated");

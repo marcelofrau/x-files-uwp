@@ -56,6 +56,20 @@
             </ListView.ItemTemplate>
         </ListView>
 
+        <!-- Loading indicator -->
+        <StackPanel Grid.Row="2"
+            x:Name="LoadingPanel"
+            VerticalAlignment="Center"
+            HorizontalAlignment="Center"
+            Visibility="Collapsed">
+            <ProgressRing IsActive="True" Width="48" Height="48" />
+            <TextBlock Text="Loading..."
+                       Foreground="#666666"
+                       FontSize="18"
+                       Margin="0,12,0,0"
+                       HorizontalAlignment="Center" />
+        </StackPanel>
+
         <!-- Footer hints -->
         <Grid Grid.Row="3" Background="#1A1A1A" Padding="20,12">
             <Grid.ColumnDefinitions>

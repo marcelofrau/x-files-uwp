@@ -213,6 +213,20 @@ Filosofia: **nunca crashar** — sempre ter saída de navegação disponível.
 
 ---
 
+## USB drive spin-up latency
+
+Drives USB externos no Xbox podem entrar em sleep/spin-down após período de inatividade.
+Primeiro acesso ao drive pode levar 5-15 segundos enquanto disco mecânico acorda ou
+USB power management responde. Navegações subsequentes são normais (drive já ativo).
+
+**Comportamento esperado:** loading indicator visível durante spin-up, scan retorna normalmente
+depois que drive responde. Não é bug — é latência natural de hardware.
+
+**Futuro (pós-MVP):** considerar warm-up em background ao detectar drive via `GetLogicalDrives()`,
+ou pré-carregar listing do drive mais recente.
+
+---
+
 ## ACL — Permissão pós-move
 
 Arquivos movidos com `MoveFileFromAppW` **perdem herança de ACL** no UWP. Precisam de

@@ -8,6 +8,17 @@
             <ResourceDictionary.MergedDictionaries>
                 <!-- Custom control templates / theme brushes. See docs/UI-THEMING.md. -->
                 <ResourceDictionary Source="Theming/RetroTheme.xaml" />
+
+                <!-- Override system selection/highlight brushes for dark theme -->
+                <ResourceDictionary>
+                    <!-- Selection background for ListView items -->
+                    <SolidColorBrush x:Key="SystemControlHighlightListAccentLowBrush" Color="#1F3D2B" />
+                    <!-- Pointer-over for ListView items -->
+                    <SolidColorBrush x:Key="SystemControlHighlightListHighBrush" Color="#1A2E22" />
+                    <SolidColorBrush x:Key="SystemControlHighlightListLowBrush" Color="#1A2E22" />
+                    <!-- Text selection -->
+                    <SolidColorBrush x:Key="SystemControlHighlightAccentBrush" Color="#33AA55" />
+                </ResourceDictionary>
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>

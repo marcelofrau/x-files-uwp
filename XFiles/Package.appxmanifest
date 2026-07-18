@@ -9,7 +9,7 @@
   <Identity
     Name="XFiles.Xbox"
     Publisher="CN=ChangeMe"
-    Version="0.1.0.28" />
+    Version="0.1.0.69" />
 
   <mp:PhoneIdentity PhoneProductId="00000000-0000-0000-0000-000000000000" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
@@ -41,8 +41,10 @@
         Square44x44Logo="Assets\Square44x44Logo.png"
         Description="Gamepad-first file browser for Xbox"
         BackgroundColor="transparent">
-        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
-        <uap:SplashScreen Image="Assets\SplashScreen.png" />
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png"
+                         Square71x71Logo="Assets\Square71x71Logo.png"
+                         Square310x310Logo="Assets\Square310x310Logo.png" />
+        <uap:SplashScreen Image="Assets\SplashScreen.png" BackgroundColor="#1a1a1a" />
       </uap:VisualElements>
     </Application>
   </Applications>

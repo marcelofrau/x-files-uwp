@@ -10,6 +10,7 @@ namespace XFiles
     public static class Log
     {
         private static Logger _logger;
+        public static Logger Logger => _logger;
         public static ScreenLogger Screen { get; private set; }
 
         public static void Init()

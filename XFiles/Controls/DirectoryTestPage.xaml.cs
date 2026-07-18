@@ -57,6 +57,11 @@ namespace XFiles.Controls
         private async void LoadEntriesAsync()
         {
             Log.Information("LoadEntriesAsync: path={Path}", _currentPath ?? "(root)");
+
+            // Show loading indicator
+            LoadingPanel.Visibility = Visibility.Visible;
+            EntryList.Visibility = Visibility.Collapsed;
+
             List<FileEntry> entries;
             try
             {
@@ -67,8 +72,13 @@ namespace XFiles.Controls
                 Log.Error("LoadEntriesAsync: scan failed for '{Path}'", ex, _currentPath ?? "(root)");
                 PathText.Text = $"ERROR: {ex.Message}";
                 EntryList.ItemsSource = null;
+                LoadingPanel.Visibility = Visibility.Collapsed;
                 return;
             }
+
+            // Hide loading, show list
+            LoadingPanel.Visibility = Visibility.Collapsed;
+            EntryList.Visibility = Visibility.Visible;
 
             PathText.Text = _currentPath ?? "\\\\ (Drives)";
 

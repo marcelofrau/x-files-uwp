@@ -1,9 +1,6 @@
 using System;
-using System.Collections.Generic;
-using System.Numerics;
 using Windows.Gaming.Input;
 using Windows.UI.Xaml;
-using Windows.UI.Xaml.Media;
 
 namespace XFiles.Navigation
 {
@@ -13,14 +10,6 @@ namespace XFiles.Navigation
         private Gamepad _gamepad;
         private GamepadReading _prevReading;
         private GamepadButtons _prevButtons;
-
-        // Dpad repeat state
-        private bool _dpadHeld;
-        private GamepadButtons _dpadHeldButton;
-        private int _dpadHoldTimeMs;
-        private const int DpadInitialDelayMs = 400;
-        private const int DpadRepeatMs = 100;
-        private bool _dpadRepeatFired;
 
         // Analog stick deadzone
         private const double Deadzone = 0.5;
@@ -34,8 +23,7 @@ namespace XFiles.Navigation
 
         public GamepadInputService()
         {
-            Log.Information("GamepadInputService creating — poll interval=16ms (~60fps), deadzone={Deadzone}, dpad initialDelay={Init}ms, repeat={Repeat}ms",
-                Deadzone, DpadInitialDelayMs, DpadRepeatMs);
+            Log.Information("GamepadInputService creating — poll interval=16ms (~60fps), deadzone={Deadzone}", Deadzone);
 
             _timer = new DispatcherTimer
             {
@@ -139,27 +127,8 @@ namespace XFiles.Navigation
                     reading.RightThumbstickX, reading.RightThumbstickY);
             }
 
-            // D-pad just pressed → fire immediately
-            if ((justPressed & GamepadButtons.DPadUp) != 0)
-            {
-                Log.Verbose("Input: DPadUp (justPressed)");
-                nav.OnDPadUp();
-            }
-            if ((justPressed & GamepadButtons.DPadDown) != 0)
-            {
-                Log.Verbose("Input: DPadDown (justPressed)");
-                nav.OnDPadDown();
-            }
-            if ((justPressed & GamepadButtons.DPadLeft) != 0)
-            {
-                Log.Verbose("Input: DPadLeft (justPressed)");
-                nav.OnDPadLeft();
-            }
-            if ((justPressed & GamepadButtons.DPadRight) != 0)
-            {
-                Log.Verbose("Input: DPadRight (justPressed)");
-                nav.OnDPadRight();
-            }
+            // D-pad: Up/Down handled by ListView natively, Left/Right by OnKeyDown
+            // GamepadInputService only handles action buttons and left stick
 
             // A, B, Y — just pressed only
             if ((justPressed & GamepadButtons.A) != 0)
@@ -190,69 +159,23 @@ namespace XFiles.Navigation
                 nav.OnPageDown();
             }
 
-            // D-pad repeat while held
-            HandleDpadRepeat(pressed, justPressed, justReleased, nav);
+            // LT, RT — analog triggers, detect press via threshold crossing
+            if (reading.LeftTrigger > 0.5 && _prevReading.LeftTrigger <= 0.5)
+            {
+                Log.Verbose("Input: LT (trigger)");
+                nav.OnPageUp();
+            }
+            if (reading.RightTrigger > 0.5 && _prevReading.RightTrigger <= 0.5)
+            {
+                Log.Verbose("Input: RT (trigger)");
+                nav.OnPageDown();
+            }
 
             // Left thumbstick → map to D-pad when beyond deadzone
             HandleLeftStick(reading.LeftThumbstickX, reading.LeftThumbstickY, nav);
 
             _prevReading = reading;
             _prevButtons = pressed;
-        }
-
-        private void HandleDpadRepeat(GamepadButtons pressed, GamepadButtons justPressed,
-            GamepadButtons justReleased, INavigable nav)
-        {
-            var dpadMask = GamepadButtons.DPadUp | GamepadButtons.DPadDown |
-                           GamepadButtons.DPadLeft | GamepadButtons.DPadRight;
-            var currentDpad = pressed & dpadMask;
-
-            if (currentDpad == GamepadButtons.None)
-            {
-                if (_dpadHeld)
-                    Log.Verbose("DpadRepeat: released after {Ms}ms", _dpadHoldTimeMs);
-                _dpadHeld = false;
-                _dpadHoldTimeMs = 0;
-                _dpadRepeatFired = false;
-                return;
-            }
-
-            if (!_dpadHeld || currentDpad != _dpadHeldButton)
-            {
-                Log.Verbose("DpadRepeat: started holding {Button}", currentDpad);
-                _dpadHeld = true;
-                _dpadHeldButton = currentDpad;
-                _dpadHoldTimeMs = 0;
-                _dpadRepeatFired = false;
-                return;
-            }
-
-            _dpadHoldTimeMs += 16;
-
-            if (!_dpadRepeatFired && _dpadHoldTimeMs >= DpadInitialDelayMs)
-            {
-                _dpadRepeatFired = true;
-                _dpadHoldTimeMs = 0;
-                Log.Verbose("DpadRepeat: initial delay elapsed, firing {Button}", currentDpad);
-                FireDpadEvent(currentDpad, nav);
-            }
-            else if (_dpadRepeatFired && _dpadHoldTimeMs >= DpadRepeatMs)
-            {
-                _dpadHoldTimeMs = 0;
-                Log.Verbose("DpadRepeat: repeat firing {Button}", currentDpad);
-                FireDpadEvent(currentDpad, nav);
-            }
-        }
-
-        private void FireDpadEvent(GamepadButtons button, INavigable nav)
-        {
-            switch (button)
-            {
-                case GamepadButtons.DPadUp: nav.OnDPadUp(); break;
-                case GamepadButtons.DPadDown: nav.OnDPadDown(); break;
-                case GamepadButtons.DPadLeft: nav.OnDPadLeft(); break;
-                case GamepadButtons.DPadRight: nav.OnDPadRight(); break;
-            }
         }
 
         private double _stickCooldown;
@@ -277,7 +200,7 @@ namespace XFiles.Navigation
                     Log.Verbose("Input: LeftStick Down (y={Y:F2})", y);
                     nav.OnDPadDown();
                 }
-                _stickCooldown = 200;
+                _stickCooldown = 100;
             }
             else if (Math.Abs(x) > Deadzone)
             {
@@ -291,7 +214,7 @@ namespace XFiles.Navigation
                     Log.Verbose("Input: LeftStick Right (x={X:F2})", x);
                     nav.OnDPadRight();
                 }
-                _stickCooldown = 200;
+                _stickCooldown = 100;
             }
         }
     }

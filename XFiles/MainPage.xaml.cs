@@ -7,7 +7,7 @@ namespace XFiles
         public MainPage()
         {
             this.InitializeComponent();
-            Frame.Navigate(typeof(Controls.DirectoryTestPage));
+            Frame.Navigate(typeof(Controls.MillerColumnsPage));
         }
     }
 }

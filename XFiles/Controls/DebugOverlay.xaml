@@ -6,8 +6,8 @@
     HorizontalAlignment="Right"
     VerticalAlignment="Bottom"
     Margin="0,0,16,16"
-    MaxWidth="780"
-    MaxHeight="360">
+    MaxWidth="520"
+    MaxHeight="220">
 
     <Border Background="#44000000" CornerRadius="4" Padding="8,6">
         <ScrollViewer x:Name="Scroller"

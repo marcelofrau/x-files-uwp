@@ -56,32 +56,40 @@ pendente ( executar `docs/PHASE2-TESTS.md` no Xbox).
 
 ## Fase 3 — DirectoryScanner + coluna única funcional
 
-- [ ] `FileEntry` model.
-- [ ] `DirectoryScanner` com P/Invoke (`FindFirstFileExFromAppW` + `GetLogicalDrives`).
-- [ ] Uma única coluna (`Controls/ColumnListView`) navegável por gamepad, listando drives
+- [x] `FileEntry` model.
+- [x] `DirectoryScanner` com P/Invoke (`FindFirstFileExFromAppW` + `GetLogicalDrives`).
+- [x] Uma única coluna (`Controls/ColumnListView`) navegável por gamepad, listando drives
       na raiz e navegando para dentro de pastas reais (sem preview, sem colunas
       parent/preview ainda).
-- [ ] Ordenação (pastas antes de arquivos, alfabética) implementada e visualmente
+- [x] Ordenação (pastas antes de arquivos, alfabética) implementada e visualmente
       confirmada.
 
 **Critério de conclusão**: no Xbox real, navega por qualquer pasta de um drive USB
 conectado, entra/sai de subpastas com D-pad/A/B, sem crash em pastas vazias ou sem
 permissão.
+**Status**: implementado e validado no Xbox real. Loading indicator adicionado para
+latência de USB spin-up. XrayLib adaptada para UWP (removido Console sink).
 
 ---
 
 ## Fase 4 — 3 colunas Miller + transições
 
-- [ ] `ColumnNavigator` implementando `INavigable`, controlando estado de 3 colunas
+- [x] `ColumnNavigator` implementando `INavigable`, controlando estado de 3 colunas
       (Parent/Current/Preview como conceito — Preview ainda mostra apenas listagem de
       pasta nesta fase, sem texto/imagem).
-- [ ] Layout XAML com 3 `Grid.ColumnDefinition` e binding reativo.
-- [ ] Transição ao entrar/sair de pasta (troca de conteúdo das 3 colunas, com ou sem
+- [x] Layout XAML com 3 `Grid.ColumnDefinition` e binding reativo.
+- [x] Transição ao entrar/sair de pasta (troca de conteúdo das 3 colunas, com ou sem
       animação simples).
+- [x] GamepadInputService simplificado: D-pad Up/Down gerenciado nativamente pelo
+      ListView; GamepadInputService só gerencia botões de ação (A/B/Y/LB/RB/LT/RT)
+      e left stick.
 
 **Critério de conclusão**: navegação completa por pastas reais usando as 3 colunas, preview
 da coluna à direita sempre mostra o conteúdo da pasta/arquivo selecionado na coluna do
 meio, sem esperar confirmação.
+**Status**: implementado e validado no Xbox real. Double-fire bug resolvido delegando
+navegação Up/Down ao ListView nativo. RetroListView sobrescreve OnKeyDown para bloquear
+PageUp/PageDown nativos.
 
 ---
 
