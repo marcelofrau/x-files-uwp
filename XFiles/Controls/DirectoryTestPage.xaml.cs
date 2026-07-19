@@ -90,6 +90,7 @@ namespace XFiles.Controls
                     Name = e.Name,
                     FullPath = e.FullPath,
                     IsDirectory = e.IsDirectory,
+                    IsDrive = e.IsDrive,
                     IsArchive = e.IsArchive,
                     SizeBytes = e.SizeBytes
                 });
@@ -226,5 +227,9 @@ namespace XFiles.Controls
         public void OnScrollHorizontal(double delta) { }
 
         public void OnScrollVertical(double delta) { }
+
+        public void OnRefresh() { }
+
+        public void OnSettings() { }
     }
 }

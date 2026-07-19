@@ -24,6 +24,7 @@ namespace XFiles
         public App()
         {
             this.InitializeComponent();
+            this.RequiresPointerMode = ApplicationRequiresPointerMode.WhenRequested;
             this.Suspending += OnSuspending;
             this.Resuming += OnResuming;
         }

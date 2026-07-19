@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Windows.ApplicationModel;
 using Windows.Storage;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
@@ -21,7 +22,6 @@ namespace XFiles.Controls
         private static string _highlightCss;
         private static string _fontBase64;
 
-        // Extensions that are plain text — no syntax highlighting.
         private static readonly HashSet<string> PlainTextExtensions =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
@@ -43,7 +43,9 @@ namespace XFiles.Controls
             PreviewCodeView.NavigationStarting += OnPreviewNavigationStarting;
             PreviewCodeView.NavigationCompleted += OnPreviewNavigationCompleted;
 
-            // Start loading root
+            var v = Package.Current.Id.Version;
+            VersionText.Text = $"v{v.Major}.{v.Minor}.{v.Build}.{v.Revision}";
+
             _ = _navigator.LoadRootAsync();
         }
 
@@ -101,6 +103,11 @@ namespace XFiles.Controls
                     CurrentStatus.Text = $"{_navigator.Current.Entries.Count} items";
                 }
 
+                // Footer count
+                int totalCount = _navigator.Current?.Entries.Count ?? 0;
+                int selectedIndex = CurrentList.SelectedIndex >= 0 ? CurrentList.SelectedIndex + 1 : 0;
+                FooterItemCount.Text = totalCount > 0 ? $"{selectedIndex}/{totalCount}" : "";
+
                 // Preview column
                 UpdatePreviewColumn();
             }
@@ -129,14 +136,12 @@ namespace XFiles.Controls
 
             if (!_navigator.Preview.IsFilePreview)
             {
-                // Folder listing (existing behavior)
                 BindList(PreviewList, _navigator.Preview);
                 PreviewStatus.Text = $"{_navigator.Preview.Entries.Count} items";
                 PreviewList.Visibility = Visibility.Visible;
             }
             else
             {
-                // File preview — check type
                 switch (_navigator.Preview.PreviewType)
                 {
                     case FilePreviewType.Text:
@@ -172,8 +177,6 @@ namespace XFiles.Controls
 
                     case FilePreviewType.Image:
                         PreviewImage.Source = _navigator.Preview.PreviewImageSource;
-                        // Cap upscale for small images (ICO, small PNGs, etc.)
-                        // Images < 256px on either axis get max 4x scale
                         int pw = _navigator.Preview.PreviewPixelWidth;
                         int ph = _navigator.Preview.PreviewPixelHeight;
                         int smallThreshold = 256;
@@ -206,7 +209,6 @@ namespace XFiles.Controls
                         break;
 
                     default:
-                        // FilePreviewType.None or unexpected — show file info
                         PreviewStatus.Text = _navigator.Preview.PreviewFileType ?? "";
                         break;
                 }
@@ -251,7 +253,7 @@ namespace XFiles.Controls
     src:url(data:font/truetype;base64,{_fontBase64}) format('truetype');
     font-weight:normal; font-style:normal;
   }}
-  html, body {{ margin:0; padding:0; background:#111111; overflow-x:auto; }}
+  html, body {{ margin:0; padding:0; background:#0F1318; overflow-x:auto; }}
   pre {{ margin:0; padding:12px; white-space:pre; overflow-x:auto;
          font-family:'Inconsolata','Consolas','Courier New',monospace;
          font-size:12px; color:#dcdcdc; line-height:1.4;
@@ -275,7 +277,7 @@ namespace XFiles.Controls
 <head>
 <meta charset=""utf-8"">
 <style>
-  body {{ margin:0; padding:12px; background:#111111; display:flex;
+  body {{ margin:0; padding:12px; background:#0F1318; display:flex;
          align-items:center; justify-content:center; min-height:100vh; }}
   img {{ max-width:100%; max-height:100%; object-fit:contain; }}
 </style>
@@ -396,6 +398,7 @@ namespace XFiles.Controls
                 Name = e.Name,
                 FullPath = e.FullPath,
                 IsDirectory = e.IsDirectory,
+                IsDrive = e.IsDrive,
                 IsArchive = e.IsArchive,
                 SizeBytes = e.SizeBytes
             }).ToList();
@@ -410,6 +413,7 @@ namespace XFiles.Controls
                 Name = e.Name,
                 FullPath = e.FullPath,
                 IsDirectory = e.IsDirectory,
+                IsDrive = e.IsDrive,
                 IsArchive = e.IsArchive,
                 SizeBytes = e.SizeBytes
             }).ToList();
@@ -443,6 +447,11 @@ namespace XFiles.Controls
                 _navigator.Current.SelectedIndex = CurrentList.SelectedIndex;
                 _ = _navigator.OnSelectionChangedAsync();
             }
+
+            // Update footer count
+            int totalCount = _navigator.Current?.Entries.Count ?? 0;
+            int selectedIndex = CurrentList.SelectedIndex >= 0 ? CurrentList.SelectedIndex + 1 : 0;
+            FooterItemCount.Text = totalCount > 0 ? $"{selectedIndex}/{totalCount}" : "";
         }
 
         // --- Input handling ---
@@ -544,7 +553,24 @@ namespace XFiles.Controls
 
         public void OnConfirm()
         {
-            _ = _navigator.DrillInAsync();
+            if (_navigator.Current == null) return;
+
+            var selected = CurrentList.SelectedItem as EntryViewModel;
+            if (selected == null)
+            {
+                _ = _navigator.DrillInAsync();
+                return;
+            }
+
+            if (selected.IsDirectory || selected.IsArchive)
+            {
+                _ = _navigator.DrillInAsync();
+            }
+            else
+            {
+                Log.Verbose("OnConfirm: file selected — showing FileActionSheet");
+                _ = ShowFileActionSheetAsync();
+            }
         }
 
         public void OnBack()
@@ -554,7 +580,25 @@ namespace XFiles.Controls
 
         public void OnContextMenu()
         {
-            Log.Verbose("MillerColumnsPage.OnContextMenu — not implemented yet");
+            Log.Verbose("MillerColumnsPage.OnContextMenu — showing FileActionSheet");
+            _ = ShowFileActionSheetAsync();
+        }
+
+        public void OnRefresh()
+        {
+            Log.Information("OnRefresh: refreshing current directory");
+            FooterSpinner.IsActive = true;
+            _ = _navigator.RefreshCurrentAsync().ContinueWith(t =>
+            {
+                Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal,
+                    () => FooterSpinner.IsActive = false);
+            });
+        }
+
+        public void OnSettings()
+        {
+            Log.Verbose("MillerColumnsPage.OnSettings — not implemented yet");
+            CurrentStatus.Text = "Settings (not yet implemented)";
         }
 
         public void OnPageUp()
@@ -629,6 +673,134 @@ namespace XFiles.Controls
             {
                 Log.Warning("OnScrollHorizontal failed: {Error}", ex.Message);
             }
+        }
+
+        // --- File Action Sheet ---
+
+        private async Task ShowFileActionSheetAsync()
+        {
+            var selected = CurrentList.SelectedItem as EntryViewModel;
+            if (selected == null) return;
+
+            var entry = new FileEntry
+            {
+                Name = selected.Name,
+                FullPath = selected.FullPath,
+                IsDirectory = selected.IsDirectory,
+                IsArchive = selected.IsArchive,
+                SizeBytes = selected.SizeBytes
+            };
+
+            Log.Information("ShowFileActionSheetAsync: file={File}, isDir={IsDir}, isArchive={IsArchive}",
+                entry.Name, entry.IsDirectory, entry.IsArchive);
+
+            var action = await FileActionSheetControl.ShowAsync(entry);
+            if (action == null)
+            {
+                Log.Verbose("ShowFileActionSheetAsync: cancelled");
+                return;
+            }
+
+            Log.Information("ShowFileActionSheetAsync: action={Action}", action);
+
+            switch (action)
+            {
+                case FileAction.Copy:
+                    await HandleCopyAsync(entry);
+                    break;
+                case FileAction.Move:
+                    await HandleMoveAsync(entry);
+                    break;
+                case FileAction.Rename:
+                    await HandleRenameAsync(entry);
+                    break;
+                case FileAction.Delete:
+                    await HandleDeleteAsync(entry);
+                    break;
+                case FileAction.Extract:
+                    await HandleExtractAsync(entry);
+                    break;
+            }
+        }
+
+        private async Task HandleCopyAsync(FileEntry entry)
+        {
+            Log.Information("HandleCopyAsync: {File}", entry.FullPath);
+            CurrentStatus.Text = $"Copy: {entry.Name} (not yet implemented)";
+        }
+
+        private async Task HandleMoveAsync(FileEntry entry)
+        {
+            Log.Information("HandleMoveAsync: {File}", entry.FullPath);
+            CurrentStatus.Text = $"Move: {entry.Name} (not yet implemented)";
+        }
+
+        private async Task HandleRenameAsync(FileEntry entry)
+        {
+            Log.Information("HandleRenameAsync: {File}", entry.FullPath);
+            var newName = await InputDialogControl.ShowAsync("Rename", entry.Name);
+            if (string.IsNullOrEmpty(newName) || newName == entry.Name)
+            {
+                Log.Verbose("HandleRenameAsync: cancelled or unchanged");
+                return;
+            }
+
+            var confirmed = await ConfirmDialogControl.ShowAsync($"Rename '{entry.Name}' to '{newName}'?");
+            if (!confirmed)
+            {
+                Log.Verbose("HandleRenameAsync: confirmation cancelled");
+                return;
+            }
+
+            var result = await FileOperations.RenameAsync(entry.FullPath, newName);
+            if (result == FileOperations.OperationResult.Success)
+            {
+                Log.Information("HandleRenameAsync: success — refreshing");
+                await _navigator.RefreshCurrentAsync();
+            }
+            else
+            {
+                Log.Warning("HandleRenameAsync: failed");
+                CurrentStatus.Text = $"Rename failed: {entry.Name}";
+            }
+        }
+
+        private async Task HandleDeleteAsync(FileEntry entry)
+        {
+            Log.Information("HandleDeleteAsync: {File}", entry.FullPath);
+            var confirmed = await ConfirmDialogControl.ShowAsync($"Delete '{entry.Name}'?");
+            if (!confirmed)
+            {
+                Log.Verbose("HandleDeleteAsync: confirmation cancelled");
+                return;
+            }
+
+            FileOperations.OperationResult result;
+            if (entry.IsDirectory)
+            {
+                result = await FileOperations.DeleteDirectoryAsync(entry.FullPath);
+            }
+            else
+            {
+                result = await FileOperations.DeleteAsync(entry.FullPath);
+            }
+
+            if (result == FileOperations.OperationResult.Success)
+            {
+                Log.Information("HandleDeleteAsync: success — refreshing");
+                await _navigator.RefreshCurrentAsync();
+            }
+            else
+            {
+                Log.Warning("HandleDeleteAsync: failed");
+                CurrentStatus.Text = $"Delete failed: {entry.Name}";
+            }
+        }
+
+        private async Task HandleExtractAsync(FileEntry entry)
+        {
+            Log.Information("HandleExtractAsync: {File}", entry.FullPath);
+            CurrentStatus.Text = $"Extract: {entry.Name} (not yet implemented)";
         }
 
         public event PropertyChangedEventHandler PropertyChanged;

@@ -12,12 +12,12 @@
                 <!-- Override system selection/highlight brushes for dark theme -->
                 <ResourceDictionary>
                     <!-- Selection background for ListView items -->
-                    <SolidColorBrush x:Key="SystemControlHighlightListAccentLowBrush" Color="#1F3D2B" />
+                    <SolidColorBrush x:Key="SystemControlHighlightListAccentLowBrush" Color="#2A1F10" />
                     <!-- Pointer-over for ListView items -->
-                    <SolidColorBrush x:Key="SystemControlHighlightListHighBrush" Color="#1A2E22" />
-                    <SolidColorBrush x:Key="SystemControlHighlightListLowBrush" Color="#1A2E22" />
+                    <SolidColorBrush x:Key="SystemControlHighlightListHighBrush" Color="#1E1A12" />
+                    <SolidColorBrush x:Key="SystemControlHighlightListLowBrush" Color="#1E1A12" />
                     <!-- Text selection -->
-                    <SolidColorBrush x:Key="SystemControlHighlightAccentBrush" Color="#33AA55" />
+                    <SolidColorBrush x:Key="SystemControlHighlightAccentBrush" Color="#E8851A" />
                 </ResourceDictionary>
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>

@@ -2,7 +2,7 @@
     x:Class="XFiles.Controls.ColumnListView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Background="#0D0D0D">
+    Background="#0D1117">
 
     <Grid>
         <Grid.RowDefinitions>
@@ -15,10 +15,10 @@
         <TextBlock Grid.Row="0"
             x:Name="HeaderText"
             Text=""
-            Foreground="#33AA55"
-            FontFamily="ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata"
-            FontSize="20"
-            Padding="12,10,12,6"
+            Foreground="{StaticResource XFilesAccentBrush}"
+            FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+            FontSize="14"
+            Padding="12,8,12,4"
             TextTrimming="CharacterEllipsis" />
 
         <!-- Entry list -->
@@ -56,9 +56,9 @@
                         <!-- Name -->
                         <TextBlock Grid.Column="1"
                             Text="{Binding Name}"
-                            Foreground="#E0E0E0"
-                            FontFamily="ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata"
-                            FontSize="17"
+                            Foreground="{StaticResource XFilesForegroundBrush}"
+                            FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                            FontSize="15"
                             Margin="8,0,0,0"
                             VerticalAlignment="Center"
                             TextTrimming="CharacterEllipsis" />
@@ -66,9 +66,9 @@
                         <!-- Size (only for files) -->
                         <TextBlock Grid.Column="2"
                             Text="{Binding SizeDisplay}"
-                            Foreground="#666666"
-                            FontFamily="ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata"
-                            FontSize="15"
+                            Foreground="{StaticResource XFilesTextDimBrush}"
+                            FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                            FontSize="12"
                             VerticalAlignment="Center"
                             Margin="12,0,0,0" />
                     </Grid>
@@ -80,9 +80,9 @@
         <TextBlock Grid.Row="2"
             x:Name="StatusTextBlock"
             Text=""
-            Foreground="#666666"
-            FontFamily="ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata"
-            FontSize="15"
+            Foreground="{StaticResource XFilesTextDimBrush}"
+            FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+            FontSize="12"
             Padding="12,6,12,8" />
     </Grid>
 </UserControl>

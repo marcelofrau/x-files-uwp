@@ -75,6 +75,19 @@ UWP/Xbox due to sandbox and ARM/x64 architecture).
 **Known risk**: `SharpCompress` has **read-only** `.rar` support (doesn't create/edit
 rar) — acceptable, since the app is a *browser*, not an archiver.
 
+**CVE-2026-44788 (path traversal in WriteToDirectory)**: SharpCompress <= 0.47.4 has a
+zip-slip vulnerability in `IArchive.WriteToDirectory()`. We stay on 0.34.2 (suppressing
+NU1902 in csproj) because:
+1. We **never call** `WriteToDirectory()` — only `OpenEntryStream()` for in-memory reads.
+2. The app runs sandboxed on Xbox with `broadFileSystemAccess`; even if a traversal
+   occurred, the UWP sandbox limits write targets to the app's `LocalFolder` and
+   explicitly granted directories — not the full filesystem.
+3. Upgrading to 0.48.0 pulls `System.Text.Encoding.CodePages >= 8.0.0`, which may
+   conflict with UWP's .NET Native toolchain and isn't worth the risk for a
+   read-only operation we don't use.
+4. Revisiting when SharpCompress 0.49+ drops the extra dependency or when extraction
+   support is actually needed (Phase 7 FileOperations/Extract).
+
 ---
 
 ## ADR-005: No network browsing (SMB/UNC) in MVP

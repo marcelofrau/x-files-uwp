@@ -166,6 +166,25 @@ namespace XFiles.Navigation
                 nav.OnContextMenu();
             }
 
+            // X — refresh
+            if ((justPressed & GamepadButtons.X) != 0)
+            {
+                Log.Verbose("Input: X (justPressed) — refresh");
+                nav.OnRefresh();
+            }
+
+            // Start/Select — settings
+            if ((justPressed & GamepadButtons.Menu) != 0)
+            {
+                Log.Verbose("Input: Menu/Start (justPressed) — settings");
+                nav.OnSettings();
+            }
+            if ((justPressed & GamepadButtons.View) != 0)
+            {
+                Log.Verbose("Input: View/Select (justPressed) — settings");
+                nav.OnSettings();
+            }
+
             // LB, RB — just pressed only
             if ((justPressed & GamepadButtons.LeftShoulder) != 0)
             {

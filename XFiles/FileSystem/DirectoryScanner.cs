@@ -87,7 +87,8 @@ namespace XFiles.FileSystem
                     {
                         Name = driveLetter,
                         FullPath = driveLetter,
-                        IsDirectory = true
+                        IsDirectory = true,
+                        IsDrive = true
                     });
                     Log.Verbose("  Drive found: {Drive}", driveLetter);
                 }

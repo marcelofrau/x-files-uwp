@@ -19,7 +19,7 @@ namespace XFiles.Controls
         public bool IsArchive { get; set; }
         public long SizeBytes { get; set; }
 
-        private static string _folderColor = "blue";
+        private static string _folderColor = "orange";
 
         public static string FolderColor
         {
@@ -27,10 +27,14 @@ namespace XFiles.Controls
             set => _folderColor = value;
         }
 
-        public string Icon => IsDirectory
-            ? $"ms-appx:///Assets/FileTypes/folder-{_folderColor}-24.png"
-            : (IsArchive ? "ms-appx:///Assets/FileTypes/file-archive-24.png"
-                          : "ms-appx:///Assets/FileTypes/file-generic-24.png");
+        public bool IsDrive { get; set; }
+
+        public string Icon => IsDrive
+            ? "ms-appx:///Assets/FileTypes/drive-harddisk-24.png"
+            : IsDirectory
+                ? $"ms-appx:///Assets/FileTypes/folder-{_folderColor}-24.png"
+                : (IsArchive ? "ms-appx:///Assets/FileTypes/file-archive-24.png"
+                              : "ms-appx:///Assets/FileTypes/file-generic-24.png");
 
         public string SizeDisplay => IsDirectory ? "" : FormatSize(SizeBytes);
 
@@ -130,6 +134,7 @@ namespace XFiles.Controls
                     Name = e.Name,
                     FullPath = e.FullPath,
                     IsDirectory = e.IsDirectory,
+                    IsDrive = e.IsDrive,
                     IsArchive = e.IsArchive,
                     SizeBytes = e.SizeBytes
                 })
@@ -221,6 +226,10 @@ namespace XFiles.Controls
         }
 
         public void OnContextMenu() { }
+
+        public void OnRefresh() { }
+
+        public void OnSettings() { }
 
         public void OnPageUp()
         {

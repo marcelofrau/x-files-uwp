@@ -1,7 +1,7 @@
 /*
  * Aco Theme for highlight.js
  * Based on lean-hackerman/aco-theme (VS Code)
- * Background: #111111, Foreground: #B4E1FD
+ * Background: #0F1318, Foreground: #B4E1FD
  * Adapted to match X-Files dark theme
  */
 
@@ -9,7 +9,7 @@
   display: block;
   overflow-x: auto;
   padding: 1em;
-  background: #111111;
+  background: #0F1318;
   color: #B4E1FD;
   font-family: 'Inconsolata', monospace;
   font-size: 12px;

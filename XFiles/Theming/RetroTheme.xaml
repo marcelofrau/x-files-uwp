@@ -3,37 +3,60 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!--
-        Custom theme resources for X-Files.
-        See docs/UI-THEMING.md for the full convention and docs/DECISIONS.md (ADR-002)
-        for why no default Fluent Design chrome is used anywhere in this app.
-
-        This file currently only contains scaffold placeholders (default-ish colors).
-        Phase 8 (docs/ROADMAP.md) replaces these with the final custom
-        ControlTemplate/Style set and wires up JSON-based runtime theming via
-        Theming/AppTheme.cs.
+        X-Files Theme — adapted from xb-vault Blades (Xbox 360 Blades palette).
+        Orange accent variant.
     -->
 
-    <!-- Brushes -->
-    <SolidColorBrush x:Key="XFilesBackgroundBrush" Color="#0D0D0D" />
-    <SolidColorBrush x:Key="XFilesForegroundBrush" Color="#E0E0E0" />
-    <SolidColorBrush x:Key="XFilesAccentBrush" Color="#33AA55" />
-    <SolidColorBrush x:Key="XFilesSelectedBackgroundBrush" Color="#1F3D2B" />
-    <SolidColorBrush x:Key="XFilesBorderBrush" Color="#333333" />
+    <!-- ═══ Brushes ═══ -->
+    <!-- Backgrounds -->
+    <SolidColorBrush x:Key="XFilesBackgroundBrush" Color="#0D1117" />
+    <SolidColorBrush x:Key="XFilesSurfaceBrush" Color="#1A1D23" />
+    <SolidColorBrush x:Key="XFilesSurfaceAltBrush" Color="#252830" />
+    <SolidColorBrush x:Key="XFilesSurfaceHoverBrush" Color="#2F333A" />
+    <SolidColorBrush x:Key="XFilesCardBgBrush" Color="#1E2128" />
+    <SolidColorBrush x:Key="XFilesSidebarBgBrush" Color="#0F1A0F" />
+    <SolidColorBrush x:Key="XFilesInputBgBrush" Color="#0F1A0F" />
 
-    <!-- Typography -->
+    <!-- Accent (orange) -->
+    <SolidColorBrush x:Key="XFilesAccentBrush" Color="#E8851A" />
+    <SolidColorBrush x:Key="XFilesAccentDimBrush" Color="#B86A14" />
+    <SolidColorBrush x:Key="XFilesAccentGlowBrush" Color="#FFAA33" />
+    <SolidColorBrush x:Key="XFilesAccentHoverDarkBrush" Color="#7A4A0E" />
+
+    <!-- Text -->
+    <SolidColorBrush x:Key="XFilesForegroundBrush" Color="#F0F0F0" />
+    <SolidColorBrush x:Key="XFilesTextMutedBrush" Color="#8B8D91" />
+    <SolidColorBrush x:Key="XFilesTextDimBrush" Color="#5A5C60" />
+
+    <!-- Semantic -->
+    <SolidColorBrush x:Key="XFilesSelectedBackgroundBrush" Color="#2A1F10" />
+    <SolidColorBrush x:Key="XFilesSelectedUnfocusedBrush" Color="#1E1A12" />
+    <SolidColorBrush x:Key="XFilesBorderBrush" Color="#2A2D33" />
+    <SolidColorBrush x:Key="XFilesDangerBrush" Color="#E74C3C" />
+    <SolidColorBrush x:Key="XFilesSuccessBrush" Color="#2ECC71" />
+    <SolidColorBrush x:Key="XFilesWarningBrush" Color="#F39C12" />
+    <SolidColorBrush x:Key="XFilesInputBorderBrush" Color="#7A4A0E" />
+    <SolidColorBrush x:Key="XFilesInputBorderHoverBrush" Color="#B86A14" />
+
+    <!-- Title gradient (orange) -->
+    <LinearGradientBrush x:Key="XFilesTitleGradient" StartPoint="0%,0%" EndPoint="100%,0%">
+        <GradientStop Color="#B86A14" Offset="0" />
+        <GradientStop Color="#E8851A" Offset="1" />
+    </LinearGradientBrush>
+
+    <!-- ═══ Typography ═══ -->
+    <FontFamily x:Key="XFilesTitleFont">ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium</FontFamily>
+    <FontFamily x:Key="XFilesBodyFont">ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium</FontFamily>
     <FontFamily x:Key="XFilesMonoFontFamily">ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata</FontFamily>
 
-    <!--
-        TODO (Phase 8): ContextMenuItemStyle, StatusBarStyle — see docs/UI-THEMING.md.
-    -->
-
-    <!-- ListView: stripped of Fluent chrome (hover/press/transitions) -->
+    <!-- ═══ ListView ═══ -->
     <Style x:Key="RetroListViewStyle" TargetType="ListView">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Padding" Value="0" />
         <Setter Property="SelectionMode" Value="Single" />
         <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+        <Setter Property="FontFamily" Value="{StaticResource XFilesBodyFont}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ListView">
@@ -52,23 +75,92 @@
         </Setter>
     </Style>
 
-    <!-- ListViewItem: flat, no hover/press chrome, explicit selection color -->
+    <!-- ═══ ListViewItem ═══ -->
     <Style x:Key="RetroListViewItemStyle" TargetType="ListViewItem">
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="Padding" Value="0" />
         <Setter Property="Margin" Value="0" />
         <Setter Property="MinHeight" Value="0" />
+        <Setter Property="FontFamily" Value="{StaticResource XFilesBodyFont}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ListViewItem">
                     <Border x:Name="Root"
                             Background="Transparent"
-                            Padding="{TemplateBinding Padding}">
+                            Padding="{TemplateBinding Padding}"
+                            BorderThickness="0,0,0,1"
+                            BorderBrush="#1A1D23">
                         <ContentPresenter x:Name="ContentPresenter"
                                           Content="{TemplateBinding Content}"
                                           ContentTemplate="{TemplateBinding ContentTemplate}"
                                           HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" />
                     </Border>
+                    <VisualStateManager.VisualStateGroups>
+                        <VisualStateGroup x:Name="SelectionStates">
+                            <VisualState x:Name="Unselected" />
+                            <VisualState x:Name="Selected">
+                                <VisualState.Setters>
+                                    <Setter Target="Root.Background" Value="#2A1F10" />
+                                    <Setter Target="Root.BorderBrush" Value="#3A2A15" />
+                                </VisualState.Setters>
+                            </VisualState>
+                            <VisualState x:Name="SelectedUnfocused">
+                                <VisualState.Setters>
+                                    <Setter Target="Root.Background" Value="#1E1A12" />
+                                </VisualState.Setters>
+                            </VisualState>
+                        </VisualStateGroup>
+                    </VisualStateManager.VisualStateGroups>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ═══ Button (dialog/overlay) ═══ -->
+    <Style x:Key="ConfirmDialogButton" TargetType="Button">
+        <Setter Property="Background" Value="{StaticResource XFilesSurfaceAltBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource XFilesForegroundBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource XFilesBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="FontFamily" Value="{StaticResource XFilesBodyFont}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Padding" Value="16,8" />
+        <Setter Property="MinWidth" Value="80" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Root"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="4"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}" />
+                    </Border>
+                    <VisualStateManager.VisualStateGroups>
+                        <VisualStateGroup x:Name="CommonStates">
+                            <VisualState x:Name="Normal" />
+                            <VisualState x:Name="PointerOver">
+                                <VisualState.Setters>
+                                    <Setter Target="Root.Background" Value="{StaticResource XFilesAccentHoverDarkBrush}" />
+                                    <Setter Target="Root.BorderBrush" Value="{StaticResource XFilesAccentDimBrush}" />
+                                </VisualState.Setters>
+                            </VisualState>
+                            <VisualState x:Name="Pressed">
+                                <VisualState.Setters>
+                                    <Setter Target="Root.Background" Value="{StaticResource XFilesAccentBrush}" />
+                                </VisualState.Setters>
+                            </VisualState>
+                            <VisualState x:Name="Disabled">
+                                <VisualState.Setters>
+                                    <Setter Target="Root.Opacity" Value="0.4" />
+                                </VisualState.Setters>
+                            </VisualState>
+                        </VisualStateGroup>
+                    </VisualStateManager.VisualStateGroups>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>

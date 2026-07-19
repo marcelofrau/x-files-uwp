@@ -28,6 +28,7 @@
     <AppxPackageDir>$(ProjectDir)..\AppPackages\</AppxPackageDir>
     <RuntimeIdentifiers>win10;win10-x64;win10-x64-aot;win10-aot</RuntimeIdentifiers>
     <UseDotNetNativeToolchain Condition=" '$(Configuration)' == 'Release' ">false</UseDotNetNativeToolchain>
+    <NoWarn>NU1902</NoWarn>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
     <DebugSymbols>true</DebugSymbols>
@@ -52,9 +53,8 @@
     <Prefer32Bit>true</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
-    <!-- SharpCompress: zip/7z/rar support. See docs/ARCHIVES.md (added when Phase 6 starts;
-         listed here now so the dependency intent is documented from day one). -->
-    <!-- <PackageReference Include="SharpCompress" Version="0.34.2" /> -->
+    <!-- SharpCompress: zip/7z/rar support. See docs/ARCHIVES.md -->
+    <PackageReference Include="SharpCompress" Version="0.34.2" />
     <PackageReference Include="Microsoft.NETCore.UniversalWindowsPlatform">
       <Version>6.2.14</Version>
     </PackageReference>
@@ -94,6 +94,9 @@
     <Compile Include="FileSystem\FileEntry.cs" />
     <Compile Include="FileSystem\DirectoryScanner.cs" />
     <Compile Include="FileSystem\FilePreviewService.cs" />
+    <Compile Include="FileSystem\ArchiveBrowser.cs" />
+    <Compile Include="FileSystem\Win32FileStream.cs" />
+    <Compile Include="FileSystem\FileOperations.cs" />
     <Compile Include="Log.cs" />
     <Compile Include="ScreenLogger.cs" />
     <Compile Include="Controls\CounterPage.xaml.cs">
@@ -113,6 +116,15 @@
     </Compile>
     <Compile Include="Controls\MillerColumnsPage.xaml.cs">
       <DependentUpon>MillerColumnsPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\FileActionSheet.xaml.cs">
+      <DependentUpon>FileActionSheet.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\ConfirmDialog.xaml.cs">
+      <DependentUpon>ConfirmDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\InputDialog.xaml.cs">
+      <DependentUpon>InputDialog.xaml</DependentUpon>
     </Compile>
   </ItemGroup>
   <ItemGroup>
@@ -152,6 +164,18 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="Controls\FileActionSheet.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\ConfirmDialog.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\InputDialog.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
   </ItemGroup>
   <ItemGroup>
     <AppxManifest Include="Package.appxmanifest">
@@ -169,6 +193,7 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="Assets\StoreLogo.png" />
+    <Content Include="Assets\logo.png" />
     <Content Include="Assets\Square44x44Logo.png" />
     <Content Include="Assets\Square44x44Logo.scale-200.png" />
     <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
@@ -193,6 +218,7 @@
     <Content Include="Assets\FileTypes\folder-orange-24.png" />
     <Content Include="Assets\FileTypes\file-archive-24.png" />
     <Content Include="Assets\FileTypes\file-generic-24.png" />
+    <Content Include="Assets\FileTypes\drive-harddisk-24.png" />
     <Content Include="Assets\highlight.min.js" />
     <Content Include="Assets\highlight-aco.css" />
     <Content Include="Assets\Inconsolata-Regular.ttf" />

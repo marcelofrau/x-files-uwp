@@ -13,6 +13,8 @@ namespace XFiles.Navigation
         void OnConfirm();
         void OnBack();
         void OnContextMenu();
+        void OnRefresh();
+        void OnSettings();
         void OnPageUp();
         void OnPageDown();
         void OnScrollHorizontal(double delta);

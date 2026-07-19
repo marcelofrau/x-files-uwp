@@ -9,6 +9,7 @@ using Windows.Storage.Streams;
 using Windows.UI.Core;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Media.Imaging;
+using XFiles.FileSystem;
 
 namespace XFiles.FileSystem
 {
@@ -203,6 +204,141 @@ namespace XFiles.FileSystem
             return result;
         }
 
+        public static async Task<FilePreviewResult> GetPreviewFromArchiveAsync(
+            ArchiveBrowser archiveBrowser, string archivePath, string internalPath)
+        {
+            var result = new FilePreviewResult { FileType = "" };
+
+            try
+            {
+                string ext = Path.GetExtension(internalPath);
+                result.FileType = GetFileTypeLabel(ext);
+                result.FileSizeBytes = 0;
+
+                using (var stream = archiveBrowser.OpenEntryStream(archivePath, internalPath))
+                {
+                    if (stream == null)
+                    {
+                        result.Type = FilePreviewType.Error;
+                        result.ErrorMessage = "Failed to open entry in archive";
+                        return result;
+                    }
+
+                    if (IsImageFile(ext))
+                    {
+                        await LoadImagePreviewFromStream(stream, result);
+                    }
+                    else if (IsSvgFile(ext))
+                    {
+                        await LoadSvgPreviewFromStream(stream, result);
+                    }
+                    else if (IsTextFile(ext))
+                    {
+                        await LoadTextPreviewFromStream(stream, result);
+                    }
+                    else
+                    {
+                        result.Type = FilePreviewType.Unsupported;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                result.Type = FilePreviewType.Error;
+                result.ErrorMessage = $"Cannot load preview: {ex.Message}";
+                Log.Warning("FilePreviewService: error previewing archive entry '{Archive}|{Internal}': {Error}",
+                    archivePath, internalPath, ex.Message);
+            }
+
+            return result;
+        }
+
+        private static async Task LoadTextPreviewFromStream(Stream stream, FilePreviewResult result)
+        {
+            result.Type = FilePreviewType.Text;
+
+            byte[] buffer = new byte[MaxTextBytes];
+            int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
+
+            result.IsTruncated = bytesRead == MaxTextBytes;
+
+            if (bytesRead < buffer.Length)
+            {
+                byte[] trimmed = new byte[bytesRead];
+                Array.Copy(buffer, trimmed, bytesRead);
+                buffer = trimmed;
+            }
+
+            result.TextContent = Encoding.UTF8.GetString(buffer);
+        }
+
+        private static async Task LoadImagePreviewFromStream(Stream stream, FilePreviewResult result)
+        {
+            result.Type = FilePreviewType.Image;
+
+            byte[] imageBytes;
+            using (var ms = new MemoryStream())
+            {
+                await stream.CopyToAsync(ms);
+                imageBytes = ms.ToArray();
+            }
+
+            result.FileSizeBytes = imageBytes.Length;
+
+            var dispatcher = CoreApplication.MainView.CoreWindow?.Dispatcher;
+            if (dispatcher == null)
+            {
+                result.Type = FilePreviewType.Error;
+                result.ErrorMessage = "Cannot access UI dispatcher for image preview";
+                return;
+            }
+
+            var tcs = new TaskCompletionSource<bool>();
+
+            await dispatcher.RunAsync(CoreDispatcherPriority.Normal, async () =>
+            {
+                try
+                {
+                    var bitmap = new BitmapImage();
+                    using (var memStream = new InMemoryRandomAccessStream())
+                    {
+                        using (var writer = new DataWriter(memStream.GetOutputStreamAt(0)))
+                        {
+                            writer.WriteBytes(imageBytes);
+                            await writer.StoreAsync();
+                            await writer.FlushAsync();
+                        }
+                        memStream.Seek(0);
+                        await bitmap.SetSourceAsync(memStream);
+                    }
+                    result.ImageSource = bitmap;
+                    result.PixelWidth = bitmap.PixelWidth;
+                    result.PixelHeight = bitmap.PixelHeight;
+                    tcs.SetResult(true);
+                }
+                catch (Exception ex)
+                {
+                    result.Type = FilePreviewType.Error;
+                    result.ErrorMessage = $"Cannot load image: {ex.Message}";
+                    tcs.SetResult(false);
+                }
+            });
+
+            await tcs.Task;
+        }
+
+        private static async Task LoadSvgPreviewFromStream(Stream stream, FilePreviewResult result)
+        {
+            result.Type = FilePreviewType.Text;
+
+            using (var sr = new StreamReader(stream, Encoding.UTF8))
+            {
+                result.TextContent = await sr.ReadToEndAsync();
+            }
+
+            result.IsTruncated = false;
+        }
+
         private static bool GetFileSizeWin32(string filePath, out long size)
         {
             size = 0;
@@ -377,7 +513,7 @@ namespace XFiles.FileSystem
             }
         }
 
-        private static readonly Dictionary<string, string> FileTypeLabels =
+            private static readonly Dictionary<string, string> FileTypeLabels =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 { "txt", "Text" },
@@ -420,6 +556,8 @@ namespace XFiles.FileSystem
                 { "tex", "LaTeX" }, { "latex", "LaTeX" }, { "bib", "LaTeX" },
                 { "srt", "Subtitles" }, { "vtt", "Subtitles" }, { "sub", "Subtitles" },
                 { "svg", "SVG" },
+                { "zip", "ZIP Archive" }, { "7z", "7-Zip Archive" }, { "rar", "RAR Archive" },
+                { "tar", "Tar Archive" }, { "gz", "Gzip Archive" }, { "bz2", "Bzip2 Archive" },
             };
 
         private static string GetFileTypeLabel(string extension)

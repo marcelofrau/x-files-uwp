@@ -120,12 +120,12 @@ UI or produce unhandled exceptions. Syntax highlighting working for 40+ language
 
 ## Phase 6 — ArchiveBrowser (zip/7z/rar)
 
-- [ ] Integrate `SharpCompress`.
-- [ ] `IArchiveBrowser` implemented, `IsArchive` detection in `DirectoryScanner`.
-- [ ] Drill-in on compressed archive treated as folder (reusing `ColumnNavigator`).
-- [ ] Preview of text/image entries inside archive (via `OpenEntryStream`).
-- [ ] Validate performance on large files (> 100MB) — decide if cache/streaming
-      needs adjustment (document decision in `DECISIONS.md` if engine needs to change).
+- [x] Integrate `SharpCompress`.
+- [x] `ArchiveBrowser` implemented, `IsArchive` detection in `DirectoryScanner`.
+- [x] Drill-in on compressed archive treated as folder (reusing `ColumnNavigator`).
+- [x] Preview of text/image entries inside archive (via `OpenEntryStream`).
+- [ ] Validate performance on large files (> 100MB) — `Win32FileStream` provides
+      streaming access; full-file-in-memory avoided. Awaiting user confirmation.
 
 **Completion criteria**: open a test `.zip`, `.7z` and `.rar`, navigate through internal
 entries, preview working for at least one text file and one image inside each format.
@@ -134,13 +134,16 @@ entries, preview working for at least one text file and one image inside each fo
 
 ## Phase 7 — FileActionSheet + FileOperations
 
-- [ ] `FileActionSheet` (context menu triggered by Y), styled per
+- [x] `FileActionSheet` (context menu triggered by Y), styled per
       `docs/UI-THEMING.md`.
-- [ ] Actions: Open with (`Launcher.LaunchFileAsync`), Copy, Move, Rename, Delete,
-      Extract.
+- [x] `ConfirmDialog` (Delete confirmation, gamepad-navigable).
+- [x] `InputDialog` (Rename text input, gamepad-navigable).
+- [x] `FileOperations` backend (Win32 P/Invoke Copy/Move/Rename/Delete/Extract).
+- [x] Rename + Delete wired end-to-end (with confirmation + refresh).
+- [ ] Actions: Open with (`Launcher.LaunchFileAsync`), Copy, Move, Extract
+      (backend done, UI destination picker pending).
 - [ ] "Choose destination folder" flow for Copy/Move/Extract reusing column navigation
       (special mode, see `FILEBROWSER.md`).
-- [ ] Mandatory confirmation before Delete (gamepad-navigable dialog).
 
 **Completion criteria**: all actions work end-to-end on real Xbox, with no
 keyboard/mouse needed, including destination folder selection.
@@ -149,9 +152,16 @@ keyboard/mouse needed, including destination folder selection.
 
 ## Phase 8 — Theme/Polish
 
+- [x] `RetroTheme.xaml` — Blades-inspired dark theme (xb-vault adapted) with orange accent.
+- [x] Oxanium font (Regular + Bold) imported from xb-vault.
+- [x] MillerColumnsPage layout: header (logo + version), 3 columns, footer (legend + status).
+- [x] Footer legend with gamepad button images (A/B/X/Y/Start).
+- [x] Gamepad buttons in ConfirmDialog and InputDialog (A=confirm, B=cancel).
+- [x] File browser icons using orange folder theme.
+- [x] X = refresh current directory.
+- [x] Start/Select = settings placeholder (logs, not yet functional).
+- [x] A on file = opens FileActionSheet (same as Y).
 - [ ] `Theming/AppTheme.cs` reading/writing `x-files-theme.json`.
-- [ ] `RetroTheme.xaml` with all `Style`/`ControlTemplate` finalized (no default
-      Windows chrome visible anywhere).
 - [ ] Empty states (no controller connected, empty folder, etc.) with handled
       messages/visuals.
 - [ ] UX pass: light column transition animations, consistent loading/error
