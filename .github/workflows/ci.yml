@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup NuGet
+        uses: nuget/setup-nuget@v2
+
+      - name: Restore NuGet packages
+        run: nuget restore XFiles.sln
+
+      - name: Package (build + zip)
+        run: |
+          .\scripts\package.ps1 -Configuration Release -Platform x64
+        shell: pwsh
+
+      - name: Find release zip
+        id: findzip
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem AppPackages -Filter "*.zip" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $zip) { Write-Error "No zip found"; exit 1 }
+          echo "ZIP_PATH=$($zip.FullName)" >> $env:GITHUB_OUTPUT
+          echo "ZIP_NAME=$($zip.Name)" >> $env:GITHUB_OUTPUT
+          $version = (Get-Content version.txt -Raw).Trim()
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.findzip.outputs.ZIP_NAME }}
+          path: ${{ steps.findzip.outputs.ZIP_PATH }}
+          retention-days: 30
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          path: artifact/
+
+      - name: Get version from tag
+        id: tag
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: X-Files v${{ steps.tag.outputs.VERSION }}
+          generate_release_notes: true
+          files: artifact/**/*.zip
