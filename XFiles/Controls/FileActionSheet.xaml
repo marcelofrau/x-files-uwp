@@ -5,49 +5,46 @@
     Visibility="Collapsed">
 
     <Grid x:Name="Overlay" Background="#E60D1117" Tapped="OnOverlayTapped">
-        <Grid Margin="80,60">
+        <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <!-- Left: file info -->
+            <!-- Left: file icon + name (right-aligned, meets center) -->
             <StackPanel Grid.Column="0"
                         VerticalAlignment="Center"
-                        Margin="0,0,60,0">
+                        HorizontalAlignment="Right"
+                        Margin="0,0,20,0">
                 <Image x:Name="FileIconImage"
-                       Width="120" Height="120"
-                       HorizontalAlignment="Left"
-                       Margin="0,0,0,20"
+                       Width="96" Height="96"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,16"
                        Stretch="Uniform" />
                 <TextBlock x:Name="FileNameText"
                            Foreground="#FFE0E0E0"
                            FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
-                           FontSize="26"
+                           FontSize="22"
                            TextWrapping="NoWrap"
                            TextTrimming="CharacterEllipsis"
-                           MaxWidth="500"
-                           Text="" />
-                <TextBlock x:Name="FileMetaText"
-                           Foreground="#66FFFFFF"
-                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                           FontSize="14"
-                           Margin="0,6,0,0"
+                           MaxWidth="360"
+                           HorizontalAlignment="Center"
                            Text="" />
             </StackPanel>
 
-            <!-- Right: actions -->
+            <!-- Right: action list (left-aligned, meets center) -->
             <Border Grid.Column="1"
                     Background="#1A1D23"
                     BorderBrush="#2A2D33"
                     BorderThickness="1"
                     CornerRadius="8"
                     VerticalAlignment="Center"
+                    HorizontalAlignment="Left"
                     Padding="0,12"
-                    MinWidth="320">
+                    MinWidth="280">
 
                 <StackPanel>
-                    <TextBlock Text="context menu"
+                    <TextBlock Text="actions"
                                Foreground="#66FFFFFF"
                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                FontSize="11"
@@ -64,7 +61,7 @@
                             <DataTemplate>
                                 <StackPanel Orientation="Horizontal" Padding="16,12">
                                     <Image Source="{Binding IconPath}"
-                                           Width="28" Height="28"
+                                           Width="24" Height="24"
                                            VerticalAlignment="Center" />
                                     <TextBlock Text="{Binding Label}"
                                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"

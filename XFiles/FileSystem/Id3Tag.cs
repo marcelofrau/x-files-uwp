@@ -66,18 +66,27 @@ namespace XFiles.FileSystem
         {
             byte[] header = ReadFileBytes(filePath, 10);
             if (header == null || header.Length < 10) return null;
-            if (header[0] != 'I' || header[1] != 'D' || header[2] != '3') return null;
+            if (header[0] != 'I' || header[1] != 'D' || header[2] != '3')
+            {
+                Log.Verbose("Id3Tag: no ID3v2 header in {Path}", filePath);
+                return null;
+            }
 
+            int id3Version = header[3]; // 3 = ID3v2.3, 4 = ID3v2.4
             int tagSize = SynchsafeToInt(header, 6);
+            Log.Verbose("Id3Tag: found ID3v2.{Version}, tagSize={Size} in {Path}", id3Version, tagSize, filePath);
             if (tagSize <= 0 || tagSize > MaxTagSize) return null;
 
             byte[] tagData = ReadFileBytes(filePath, tagSize + 10);
             if (tagData == null) return null;
 
-            return ParseTag(tagData, tagSize);
+            var tag = ParseTag(tagData, tagSize, id3Version);
+            Log.Information("Id3Tag: title={Title} artist={Artist} album={Album} art={HasArt} in {Path}",
+                tag?.Title, tag?.Artist, tag?.Album, tag?.AlbumArt != null, filePath);
+            return tag;
         }
 
-        private static Id3Tag ParseTag(byte[] data, int tagSize)
+        private static Id3Tag ParseTag(byte[] data, int tagSize, int id3Version)
         {
             var tag = new Id3Tag();
             int pos = 10;
@@ -88,7 +97,11 @@ namespace XFiles.FileSystem
                 string frameId = Encoding.ASCII.GetString(data, pos, 4);
                 if (data[pos] == 0) break;
 
-                int frameSize = SynchsafeToInt(data, pos + 4);
+                // ID3v2.3: big-endian. ID3v2.4: synchsafe.
+                int frameSize = id3Version >= 4
+                    ? SynchsafeToInt(data, pos + 4)
+                    : (data[pos + 4] << 24) | (data[pos + 5] << 16) | (data[pos + 6] << 8) | data[pos + 7];
+
                 if (frameSize <= 0 || pos + 10 + frameSize > end) break;
 
                 byte[] frameData = new byte[frameSize];
@@ -113,17 +126,39 @@ namespace XFiles.FileSystem
         {
             if (data.Length < 2) return null;
             byte encoding = data[0];
+            int start = 1;
+            int end = data.Length;
+
+            // Find null terminator (single 0x00 for ISO/UTF-8, double 00 00 for UTF-16)
+            if (encoding == 1 || encoding == 2)
+            {
+                for (int i = start; i + 1 < end; i += 2)
+                {
+                    if (data[i] == 0 && data[i + 1] == 0) { end = i; break; }
+                }
+            }
+            else
+            {
+                for (int i = start; i < end; i++)
+                {
+                    if (data[i] == 0) { end = i; break; }
+                }
+            }
+
+            if (end <= start) return null;
+            int len = end - start;
+
             string text;
             if (encoding == 0)
-                text = Encoding.GetEncoding("iso-8859-1").GetString(data, 1, data.Length - 1);
+                text = Encoding.GetEncoding("iso-8859-1").GetString(data, start, len);
             else if (encoding == 1)
-                text = Encoding.Unicode.GetString(data, 1, data.Length - 1);
+                text = Encoding.Unicode.GetString(data, start, len);
             else if (encoding == 2)
-                text = Encoding.BigEndianUnicode.GetString(data, 1, data.Length - 1);
+                text = Encoding.BigEndianUnicode.GetString(data, start, len);
             else
-                text = Encoding.UTF8.GetString(data, 1, data.Length - 1);
+                text = Encoding.UTF8.GetString(data, start, len);
 
-            return text.TrimEnd('\0', '\r', '\n');
+            return text.Trim();
         }
 
         private static void ReadApicFrame(byte[] data, Id3Tag tag)
