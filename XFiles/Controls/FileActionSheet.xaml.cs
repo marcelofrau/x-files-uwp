@@ -186,10 +186,6 @@ namespace XFiles.Controls
             FileIconImage.Source = new Windows.UI.Xaml.Media.Imaging.BitmapImage(
                 new Uri(ResolveContextFileIcon(entry)));
 
-            // Set file metadata
-            string meta = isFolder ? "Folder" : FormatSize(entry.SizeBytes);
-            FileMetaText.Text = meta;
-
             Visibility = Visibility.Visible;
             Overlay.Visibility = Visibility.Visible;
 
