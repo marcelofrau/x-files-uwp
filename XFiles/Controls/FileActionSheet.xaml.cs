@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Windows.System;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Input;
@@ -15,64 +16,132 @@ namespace XFiles.Controls
         Move,
         Rename,
         Delete,
-        Extract
+        Extract,
+        CreateFolder,
+        CreateZip
     }
 
     public class ActionItem
     {
         public FileAction Action { get; set; }
         public string Label { get; set; }
-        public string Icon { get; set; }
-        public SolidColorBrush IconBrush { get; set; }
+        public string IconPath { get; set; }
+        public SolidColorBrush LabelBrush { get; set; }
+        public bool IsEnabled { get; set; } = true;
     }
 
     public sealed partial class FileActionSheet : UserControl
     {
         private TaskCompletionSource<FileAction?> _tcs;
 
+        private static readonly string IconBase = "ms-appx:///Assets/Views/FileActionSheet/";
+
+        private static readonly string ImageIcon = "ctx-image-120.png";
+        private static readonly string VideoIcon = "ctx-video-120.png";
+        private static readonly string AudioIcon = "ctx-audio-120.png";
+        private static readonly string TextIcon  = "ctx-text-120.png";
+        private static readonly string ArchiveIcon = "ctx-archive-120.png";
+        private static readonly string DriveIcon = "ctx-drive-120.png";
+        private static readonly string GenericIcon = "ctx-generic-120.png";
+
+        private static readonly HashSet<string> ImageExts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".png",".jpg",".jpeg",".gif",".bmp",".tiff",".tif",".webp",".svg"
+        };
+
+        private static readonly HashSet<string> VideoExts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".mp4",".mkv",".avi",".wmv",".mov",".webm",".flv",".m4v"
+        };
+
+        private static readonly HashSet<string> AudioExts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".mp3",".flac",".ogg",".wav",".aac",".m4a",".wma"
+        };
+
+        private static readonly HashSet<string> TextExts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".txt",".log",".out",".err",".md",".json",".xml",".cs",".js",".ts",
+            ".py",".c",".cpp",".h",".java",".csproj",".sln",".yaml",".yml",
+            ".ini",".cfg",".conf",".bat",".sh",".ps1",".cmd",".css",".html",".htm"
+        };
+
+        private static readonly HashSet<string> ArchiveExts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".zip",".7z",".rar",".tar",".gz",".bz2",".xz"
+        };
+
+        private static string ResolveContextFileIcon(FileEntry entry)
+        {
+            if (entry.IsDrive) return IconBase + DriveIcon;
+            if (entry.IsDirectory)
+            {
+                var color = EntryViewModel.FolderColor;
+                return IconBase + $"ctx-folder-{color}-120.png";
+            }
+            if (entry.IsArchive) return IconBase + ArchiveIcon;
+
+            var ext = System.IO.Path.GetExtension(entry.Name);
+            if (!string.IsNullOrEmpty(ext))
+            {
+                if (ImageExts.Contains(ext)) return IconBase + ImageIcon;
+                if (VideoExts.Contains(ext)) return IconBase + VideoIcon;
+                if (AudioExts.Contains(ext)) return IconBase + AudioIcon;
+                if (TextExts.Contains(ext))  return IconBase + TextIcon;
+                if (ArchiveExts.Contains(ext)) return IconBase + ArchiveIcon;
+            }
+            return IconBase + GenericIcon;
+        }
+
+        public bool IsOpen => Visibility == Visibility.Visible;
+
         public FileActionSheet()
         {
             this.InitializeComponent();
         }
 
-        public Task<FileAction?> ShowAsync(FileEntry entry)
+        public Task<FileAction?> ShowAsync(FileEntry entry, bool isArchiveRoot = false)
         {
             _tcs = new TaskCompletionSource<FileAction?>();
 
             var actions = new List<ActionItem>();
-            string brush = "#33AA55";
 
-            var accent = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 0xE8, 0x85, 0x1A));
-            var orange = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 0xF3, 0x9C, 0x12));
-            var red = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 0xE7, 0x4C, 0x3C));
+            var accent = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x93, 0xC4, 0x3C));
+            var dim = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x7A, 0xA8, 0x32));
+            var red = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0xE7, 0x4C, 0x3C));
+            var muted = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x5A, 0x5C, 0x60));
 
-            if (entry.IsArchive)
+            bool isInArchive = !string.IsNullOrEmpty(entry.ArchiveRootPath);
+            bool isArchiveFile = entry.IsArchive && !entry.IsDirectory;
+            bool isFolder = entry.IsDirectory;
+
+            if (isArchiveFile)
             {
                 actions.Add(new ActionItem
                 {
                     Action = FileAction.Extract,
                     Label = "Extract",
-                    Icon = "\uE8F5",  // Extract icon placeholder
-                    IconBrush = accent
+                    IconPath = IconBase + "extract-48.png",
+                    LabelBrush = accent
                 });
             }
 
-            if (!entry.IsDirectory)
+            if (!isInArchive)
             {
                 actions.Add(new ActionItem
                 {
                     Action = FileAction.Copy,
                     Label = "Copy",
-                    Icon = "\uE8C8",
-                    IconBrush = accent
+                    IconPath = IconBase + "copy-48.png",
+                    LabelBrush = accent
                 });
 
                 actions.Add(new ActionItem
                 {
                     Action = FileAction.Move,
                     Label = "Move",
-                    Icon = "\uE8B8",
-                    IconBrush = accent
+                    IconPath = IconBase + "move-48.png",
+                    LabelBrush = accent
                 });
             }
 
@@ -80,20 +149,46 @@ namespace XFiles.Controls
             {
                 Action = FileAction.Rename,
                 Label = "Rename",
-                Icon = "\uE8D0",
-                IconBrush = orange
+                    IconPath = IconBase + "rename-48.png",
+                LabelBrush = dim
             });
+
+            actions.Add(new ActionItem
+            {
+                Action = FileAction.CreateFolder,
+                Label = "New Folder",
+                IconPath = IconBase + "createfolder-48.png",
+                LabelBrush = accent
+            });
+
+            if (isFolder && !isInArchive)
+            {
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.CreateZip,
+                    Label = "Create ZIP",
+                    IconPath = IconBase + "createzip-48.png",
+                    LabelBrush = accent
+                });
+            }
 
             actions.Add(new ActionItem
             {
                 Action = FileAction.Delete,
                 Label = "Delete",
-                Icon = "\uE74D",
-                IconBrush = red
+                IconPath = IconBase + "delete-48.png",
+                LabelBrush = red
             });
 
             ActionList.ItemsSource = actions;
             FileNameText.Text = entry.Name;
+
+            FileIconImage.Source = new Windows.UI.Xaml.Media.Imaging.BitmapImage(
+                new Uri(ResolveContextFileIcon(entry)));
+
+            // Set file metadata
+            string meta = isFolder ? "Folder" : FormatSize(entry.SizeBytes);
+            FileMetaText.Text = meta;
 
             Visibility = Visibility.Visible;
             Overlay.Visibility = Visibility.Visible;
@@ -104,24 +199,62 @@ namespace XFiles.Controls
             return _tcs.Task;
         }
 
-        private void OnActionSelectionChanged(object sender, SelectionChangedEventArgs e)
+        private static string FormatSize(long bytes)
         {
-            if (ActionList.SelectedIndex < 0) return;
+            if (bytes < 1024) return $"{bytes} B";
+            if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+            if (bytes < 1024 * 1024 * 1024) return $"{bytes / (1024.0 * 1024):F1} MB";
+            return $"{bytes / (1024.0 * 1024 * 1024):F2} GB";
+        }
 
-            var item = ActionList.SelectedItem as ActionItem;
-            if (item != null)
+        private void OnActionContainerChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
+        {
+            if (args.ItemContainer is ListViewItem container)
             {
-                Close(item.Action);
+                container.Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x99, 0x99, 0x99));
             }
         }
 
-        private void OnActionListKeyDown(object sender, KeyRoutedEventArgs e)
+        private void OnActionSelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            switch (e.Key)
+            UpdateActionSelectionColors();
+        }
+
+        private void UpdateActionSelectionColors()
+        {
+            var gray = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x99, 0x99, 0x99));
+
+            for (int i = 0; i < ActionList.Items.Count; i++)
             {
-                case Windows.System.VirtualKey.Escape:
-                case Windows.System.VirtualKey.GamepadB:
-                    e.Handled = true;
+                var container = ActionList.ContainerFromIndex(i) as ListViewItem;
+                if (container != null)
+                {
+                    var item = ActionList.Items[i] as ActionItem;
+                    container.Foreground = container.IsSelected ? item?.LabelBrush ?? gray : gray;
+                }
+            }
+        }
+
+        public void ForwardDPad(VirtualKey key)
+        {
+            if (!IsOpen) return;
+            switch (key)
+            {
+                case VirtualKey.Up:
+                    if (ActionList.SelectedIndex > 0)
+                        ActionList.SelectedIndex--;
+                    break;
+                case VirtualKey.Down:
+                    if (ActionList.SelectedIndex < ActionList.Items.Count - 1)
+                        ActionList.SelectedIndex++;
+                    break;
+                case VirtualKey.GamepadA:
+                case VirtualKey.Enter:
+                    if (ActionList.SelectedItem is ActionItem item)
+                        Close(item.Action);
+                    break;
+                case VirtualKey.GamepadB:
+                case VirtualKey.Escape:
                     Close(null);
                     break;
             }
