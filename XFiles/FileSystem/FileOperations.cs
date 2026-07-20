@@ -392,5 +392,49 @@ namespace XFiles.FileSystem
                 return 0;
             }
         }
+
+        public static async Task<OperationResult> CreateFolderAsync(string folderPath)
+        {
+            return await Task.Run(() =>
+            {
+                try
+                {
+                    folderPath = GetUniqueDirectoryPath(folderPath);
+                    Log.Information("FileOperations.CreateFolder: {Path}", folderPath);
+                    Directory.CreateDirectory(folderPath);
+                    return OperationResult.Success;
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning("FileOperations.CreateFolder exception: {Error}", ex.Message);
+                    return OperationResult.Failed;
+                }
+            });
+        }
+
+        public static async Task<OperationResult> CreateZipAsync(string sourceFolder, string zipPath)
+        {
+            return await Task.Run(() =>
+            {
+                try
+                {
+                    zipPath = GetUniqueFilePath(zipPath);
+                    Log.Information("FileOperations.CreateZip: {Source} -> {Zip}", sourceFolder, zipPath);
+
+                    using (var archive = SharpCompress.Archives.Zip.ZipArchive.Create())
+                    {
+                        archive.AddAllFromDirectory(sourceFolder);
+                        archive.SaveTo(zipPath, SharpCompress.Common.CompressionType.Deflate);
+                    }
+
+                    return OperationResult.Success;
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning("FileOperations.CreateZip exception: {Error}", ex.Message);
+                    return OperationResult.Failed;
+                }
+            });
+        }
     }
 }

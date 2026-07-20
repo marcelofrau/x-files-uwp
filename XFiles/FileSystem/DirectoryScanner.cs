@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.ComTypes;
+using System.Threading;
 using System.Threading.Tasks;
 using Windows.Storage;
 
@@ -64,12 +65,12 @@ namespace XFiles.FileSystem
 
         #endregion
 
-        public static async Task<List<FileEntry>> ScanAsync(string path)
+        public static async Task<List<FileEntry>> ScanAsync(string path, CancellationToken token = default)
         {
             if (string.IsNullOrEmpty(path))
                 return ScanRoot();
 
-            return await ScanDirectoryAsync(path);
+            return await ScanDirectoryAsync(path, token);
         }
 
         private static List<FileEntry> ScanRoot()
@@ -114,7 +115,7 @@ namespace XFiles.FileSystem
             return entries;
         }
 
-        private static async Task<List<FileEntry>> ScanDirectoryAsync(string path)
+        private static async Task<List<FileEntry>> ScanDirectoryAsync(string path, CancellationToken token)
         {
             Log.Verbose("Scanning directory: {Path}", path);
             var entries = new List<FileEntry>();
@@ -147,12 +148,13 @@ namespace XFiles.FileSystem
                 {
                     do
                     {
+                        token.ThrowIfCancellationRequested();
+
                         string name = findData.cFileName;
                         if (name == "." || name == "..") continue;
 
                         bool isHidden = (findData.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN) != 0;
-                        bool isSystem = (findData.dwFileAttributes & FILE_ATTRIBUTE_SYSTEM) != 0;
-                        if (isHidden || isSystem) continue;
+                        if (isHidden) continue;
 
                         bool isDir = (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
                         long size = isDir ? 0 : ((long)findData.nFileSizeHigh << 32) | findData.nFileSizeLow;

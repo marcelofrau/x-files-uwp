@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using Windows.ApplicationModel.Core;
+using Windows.Graphics.Imaging;
 using Windows.Storage.Streams;
 using Windows.UI.Core;
 using Windows.UI.Xaml.Media;
@@ -18,6 +19,8 @@ namespace XFiles.FileSystem
         None,
         Text,
         Image,
+        Audio,
+        Video,
         Unsupported,
         Error
     }
@@ -132,7 +135,22 @@ namespace XFiles.FileSystem
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
                 ".png", ".jpg", ".jpeg", ".gif", ".bmp",
-                ".tiff", ".tif", ".webp", ".ico"
+                ".tiff", ".tif", ".webp", ".ico", ".svg"
+            };
+
+        private static readonly HashSet<string> AudioExtensions =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ".mp3", ".flac", ".wav", ".ogg", ".m4a",
+                ".aac", ".wma", ".opus", ".mid", ".midi"
+            };
+
+        private static readonly HashSet<string> VideoExtensions =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ".mp4", ".avi", ".mkv", ".webm", ".flv",
+                ".wmv", ".mov", ".mpg", ".mpeg", ".m4v",
+                ".ts", ".vob", ".3gp"
             };
 
         public static bool IsTextFile(string extension)
@@ -143,6 +161,21 @@ namespace XFiles.FileSystem
         public static bool IsImageFile(string extension)
         {
             return !string.IsNullOrEmpty(extension) && ImageExtensions.Contains(extension);
+        }
+
+        public static bool IsAudioFile(string extension)
+        {
+            return !string.IsNullOrEmpty(extension) && AudioExtensions.Contains(extension);
+        }
+
+        public static bool IsVideoFile(string extension)
+        {
+            return !string.IsNullOrEmpty(extension) && VideoExtensions.Contains(extension);
+        }
+
+        public static bool IsMediaFile(string extension)
+        {
+            return IsAudioFile(extension) || IsVideoFile(extension);
         }
 
         public static bool IsSvgFile(string extension)
@@ -166,18 +199,7 @@ namespace XFiles.FileSystem
                 string ext = Path.GetExtension(filePath);
                 result.FileType = GetFileTypeLabel(ext);
 
-                // Read file size via Win32 to verify file exists and get size.
-                long fileSize = 0;
-                if (!GetFileSizeWin32(filePath, out fileSize))
-                {
-                    result.Type = FilePreviewType.Error;
-                    result.ErrorMessage = "File not found or inaccessible";
-                    return result;
-                }
-
-                result.FileSizeBytes = fileSize;
-
-                if (IsImageFile(ext))
+                if (IsImageFile(ext) && !IsSvgFile(ext))
                 {
                     await LoadImagePreview(filePath, result);
                 }
@@ -189,8 +211,25 @@ namespace XFiles.FileSystem
                 {
                     await LoadTextPreview(filePath, result);
                 }
+                else if (IsVideoFile(ext))
+                {
+                    long fileSize = 0;
+                    GetFileSizeWin32(filePath, out fileSize);
+                    result.FileSizeBytes = fileSize;
+                    result.Type = FilePreviewType.Video;
+                }
+                else if (IsAudioFile(ext))
+                {
+                    long fileSize = 0;
+                    GetFileSizeWin32(filePath, out fileSize);
+                    result.FileSizeBytes = fileSize;
+                    result.Type = FilePreviewType.Audio;
+                }
                 else
                 {
+                    long fileSize = 0;
+                    GetFileSizeWin32(filePath, out fileSize);
+                    result.FileSizeBytes = fileSize;
                     result.Type = FilePreviewType.Unsupported;
                 }
             }
@@ -276,6 +315,7 @@ namespace XFiles.FileSystem
         {
             result.Type = FilePreviewType.Image;
 
+            // Copy stream to MemoryStream on whatever thread we're on, then decode on background.
             byte[] imageBytes;
             using (var ms = new MemoryStream())
             {
@@ -285,21 +325,11 @@ namespace XFiles.FileSystem
 
             result.FileSizeBytes = imageBytes.Length;
 
-            var dispatcher = CoreApplication.MainView.CoreWindow?.Dispatcher;
-            if (dispatcher == null)
-            {
-                result.Type = FilePreviewType.Error;
-                result.ErrorMessage = "Cannot access UI dispatcher for image preview";
-                return;
-            }
-
-            var tcs = new TaskCompletionSource<bool>();
-
-            await dispatcher.RunAsync(CoreDispatcherPriority.Normal, async () =>
+            // Decode on background thread using BitmapDecoder
+            var decoded = await Task.Run(async () =>
             {
                 try
                 {
-                    var bitmap = new BitmapImage();
                     using (var memStream = new InMemoryRandomAccessStream())
                     {
                         using (var writer = new DataWriter(memStream.GetOutputStreamAt(0)))
@@ -309,17 +339,55 @@ namespace XFiles.FileSystem
                             await writer.FlushAsync();
                         }
                         memStream.Seek(0);
-                        await bitmap.SetSourceAsync(memStream);
+
+                        var decoder = await BitmapDecoder.CreateAsync(memStream);
+                        var sb = await decoder.GetSoftwareBitmapAsync(
+                            BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
+                        return (sb, (int)decoder.PixelWidth, (int)decoder.PixelHeight, (string)null);
                     }
-                    result.ImageSource = bitmap;
-                    result.PixelWidth = bitmap.PixelWidth;
-                    result.PixelHeight = bitmap.PixelHeight;
+                }
+                catch (Exception ex)
+                {
+                    return ((SoftwareBitmap)null, 0, 0, $"Cannot decode image: {ex.Message}");
+                }
+            });
+
+            if (decoded.Item1 == null)
+            {
+                result.Type = FilePreviewType.Error;
+                result.ErrorMessage = decoded.Item4 ?? "Failed to decode image from archive";
+                return;
+            }
+
+            // Create WriteableBitmap on UI thread
+            var dispatcher = CoreApplication.MainView.CoreWindow?.Dispatcher;
+            if (dispatcher == null)
+            {
+                result.Type = FilePreviewType.Error;
+                result.ErrorMessage = "Cannot access UI dispatcher for image preview";
+                return;
+            }
+
+            var tcs = new TaskCompletionSource<bool>();
+            var softwareBitmap = decoded.Item1;
+            int pw = decoded.Item2;
+            int ph = decoded.Item3;
+
+            await dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
+            {
+                try
+                {
+                    var wb = new WriteableBitmap(pw, ph);
+                    softwareBitmap.CopyToBuffer(wb.PixelBuffer);
+                    result.ImageSource = wb;
+                    result.PixelWidth = pw;
+                    result.PixelHeight = ph;
                     tcs.SetResult(true);
                 }
                 catch (Exception ex)
                 {
                     result.Type = FilePreviewType.Error;
-                    result.ErrorMessage = $"Cannot load image: {ex.Message}";
+                    result.ErrorMessage = $"Cannot create image bitmap: {ex.Message}";
                     tcs.SetResult(false);
                 }
             });
@@ -362,23 +430,29 @@ namespace XFiles.FileSystem
         {
             result.Type = FilePreviewType.Text;
 
-            byte[] fileBytes = await Task.Run(() => ReadFileWin32(filePath, MaxTextBytes));
+            var fileData = await Task.Run(() =>
+            {
+                long fileSize = 0;
+                GetFileSizeWin32(filePath, out fileSize);
+                byte[] bytes = ReadFileWin32(filePath, MaxTextBytes);
+                return (bytes, fileSize);
+            });
 
-            if (fileBytes == null)
+            if (fileData.bytes == null)
             {
                 result.Type = FilePreviewType.Error;
                 result.ErrorMessage = "Failed to read file";
                 return;
             }
 
-            long totalSize = result.FileSizeBytes;
-            result.IsTruncated = totalSize > MaxTextBytes;
+            result.FileSizeBytes = fileData.fileSize;
+            result.IsTruncated = fileData.fileSize > MaxTextBytes;
 
-            result.TextContent = Encoding.UTF8.GetString(fileBytes);
+            result.TextContent = Encoding.UTF8.GetString(fileData.bytes);
 
             if (result.IsTruncated)
             {
-                result.TextContent += $"\n\n... [truncated \u2014 showing {FormatSize(MaxTextBytes)} of {FormatSize(totalSize)}]";
+                result.TextContent += $"\n\n... [truncated \u2014 showing {FormatSize(MaxTextBytes)} of {FormatSize(fileData.fileSize)}]";
             }
         }
 
@@ -386,15 +460,51 @@ namespace XFiles.FileSystem
         {
             result.Type = FilePreviewType.Image;
 
-            byte[] imageBytes = await Task.Run(() => ReadFileWin32(filePath, 0));
+            // ALL heavy work on background thread: file I/O + image decode via BitmapDecoder.
+            // Only WriteableBitmap creation stays on UI thread (it's a UI element).
+            var decoded = await Task.Run(async () =>
+            {
+                byte[] imageBytes = ReadFileWin32(filePath, 0);
+                if (imageBytes == null) return ((SoftwareBitmap)null, 0, 0, "Failed to read image file");
 
-            if (imageBytes == null)
+                try
+                {
+                    using (var stream = new InMemoryRandomAccessStream())
+                    {
+                        using (var writer = new DataWriter(stream.GetOutputStreamAt(0)))
+                        {
+                            writer.WriteBytes(imageBytes);
+                            await writer.StoreAsync();
+                            await writer.FlushAsync();
+                        }
+                        stream.Seek(0);
+
+                        var decoder = await BitmapDecoder.CreateAsync(stream);
+                        var sb = await decoder.GetSoftwareBitmapAsync(
+                            BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
+                        return (sb, (int)decoder.PixelWidth, (int)decoder.PixelHeight, (string)null);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    return ((SoftwareBitmap)null, 0, 0, $"Cannot decode image: {ex.Message}");
+                }
+            });
+
+            if (decoded.Item1 == null)
             {
                 result.Type = FilePreviewType.Error;
-                result.ErrorMessage = "Failed to read image file";
+                result.ErrorMessage = decoded.Item4 ?? "Failed to decode image";
                 return;
             }
 
+            // Get file size (cheap Win32 call, fine on UI thread for non-image types,
+            // but we're already async here so no harm)
+            long fileSize = 0;
+            GetFileSizeWin32(filePath, out fileSize);
+            result.FileSizeBytes = fileSize;
+
+            // Create WriteableBitmap on UI thread — fast (just pixel buffer alloc + copy)
             var dispatcher = CoreApplication.MainView.CoreWindow?.Dispatcher;
             if (dispatcher == null)
             {
@@ -403,36 +513,26 @@ namespace XFiles.FileSystem
                 return;
             }
 
-            // BitmapImage.SetSourceAsync must run on UI thread.
-            // dispatcher.RunAsync is fire-and-forget from background threads,
-            // so we use a TaskCompletionSource to wait for it properly.
             var tcs = new TaskCompletionSource<bool>();
+            var softwareBitmap = decoded.Item1;
+            int pw = decoded.Item2;
+            int ph = decoded.Item3;
 
-            await dispatcher.RunAsync(CoreDispatcherPriority.Normal, async () =>
+            await dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
             {
                 try
                 {
-                    var bitmap = new BitmapImage();
-                    using (var memStream = new InMemoryRandomAccessStream())
-                    {
-                        using (var writer = new DataWriter(memStream.GetOutputStreamAt(0)))
-                        {
-                            writer.WriteBytes(imageBytes);
-                            await writer.StoreAsync();
-                            await writer.FlushAsync();
-                        }
-                        memStream.Seek(0);
-                        await bitmap.SetSourceAsync(memStream);
-                    }
-                    result.ImageSource = bitmap;
-                    result.PixelWidth = bitmap.PixelWidth;
-                    result.PixelHeight = bitmap.PixelHeight;
+                    var wb = new WriteableBitmap(pw, ph);
+                    softwareBitmap.CopyToBuffer(wb.PixelBuffer);
+                    result.ImageSource = wb;
+                    result.PixelWidth = pw;
+                    result.PixelHeight = ph;
                     tcs.SetResult(true);
                 }
                 catch (Exception ex)
                 {
                     result.Type = FilePreviewType.Error;
-                    result.ErrorMessage = $"Cannot load image: {ex.Message}";
+                    result.ErrorMessage = $"Cannot create image bitmap: {ex.Message}";
                     tcs.SetResult(false);
                 }
             });
