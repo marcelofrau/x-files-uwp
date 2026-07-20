@@ -80,6 +80,8 @@ namespace XFiles.Controls
 
         // INavigable implementation
 
+        public bool IsMediaFullscreen => false;
+
         public void OnDPadUp()
         {
             _counter++;
@@ -133,6 +135,13 @@ namespace XFiles.Controls
             _counter -= 50;
             UpdateDisplay("RB — Page Down (-50)");
         }
+
+        public void OnSeekBack() { }
+        public void OnSeekForward() { }
+        public void OnSeekRepeat(int seconds) { }
+        public void OnTriggerHeld(float leftTrigger, float rightTrigger) { }
+        public void OnLeftStickMove(float x, float y) { }
+        public void OnRightStickMove(float x, float y) { }
 
         public void OnScrollHorizontal(double delta) { }
 

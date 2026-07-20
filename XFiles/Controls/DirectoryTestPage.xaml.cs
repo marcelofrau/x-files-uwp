@@ -195,6 +195,8 @@ namespace XFiles.Controls
 
         // --- INavigable ---
 
+        public bool IsMediaFullscreen => false;
+
         public void OnDPadUp()
         {
             if (EntryList.SelectedIndex > 0)
@@ -223,6 +225,13 @@ namespace XFiles.Controls
         {
             EntryList.SelectedIndex = Math.Min(EntryList.Items.Count - 1, EntryList.SelectedIndex + 10);
         }
+
+        public void OnSeekBack() { }
+        public void OnSeekForward() { }
+        public void OnSeekRepeat(int seconds) { }
+        public void OnTriggerHeld(float leftTrigger, float rightTrigger) { }
+        public void OnLeftStickMove(float x, float y) { }
+        public void OnRightStickMove(float x, float y) { }
 
         public void OnScrollHorizontal(double delta) { }
 
