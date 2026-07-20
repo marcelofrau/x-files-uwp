@@ -1,9 +1,12 @@
 using System;
+using System.Threading.Tasks;
 using Windows.ApplicationModel;
 using Windows.ApplicationModel.Activation;
 using Windows.UI.ViewManagement;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
+using Windows.UI.Xaml.Media;
+using Windows.UI.Xaml.Media.Animation;
 using Windows.UI.Xaml.Navigation;
 using XFiles.Controls;
 using XFiles.Navigation;
@@ -27,6 +30,51 @@ namespace XFiles
             this.RequiresPointerMode = ApplicationRequiresPointerMode.WhenRequested;
             this.Suspending += OnSuspending;
             this.Resuming += OnResuming;
+
+            this.UnhandledException += OnAppUnhandledException;
+            TaskScheduler.UnobservedTaskException += OnTaskSchedulerUnobservedException;
+        }
+
+        private void OnAppUnhandledException(object sender, Windows.UI.Xaml.UnhandledExceptionEventArgs e)
+        {
+            e.Handled = true;
+            var ex = e.Exception;
+            var title = ex?.GetType().Name ?? "Unknown Error";
+            var description = ex?.Message ?? "An unexpected error occurred.";
+            var details = ex?.ToString() ?? "(no stack trace)";
+
+            Log.Error("Unhandled exception: {Message}", ex, ex?.Message);
+
+            ShowErrorOverlay(title, description, details);
+        }
+
+        private void OnTaskSchedulerUnobservedException(object sender, UnobservedTaskExceptionEventArgs e)
+        {
+            var ex = e.Exception?.InnerException ?? e.Exception;
+            var title = ex?.GetType().Name ?? "Task Error";
+            var description = ex?.Message ?? "An unobserved task exception occurred.";
+            var details = e.Exception?.ToString() ?? "(no stack trace)";
+
+            Log.Error("Unobserved task exception: {Message}", ex, ex?.Message);
+
+            ShowErrorOverlay(title, description, details);
+        }
+
+        private void ShowErrorOverlay(string title, string description, string details)
+        {
+            try
+            {
+                var rootGrid = Window.Current.Content as Grid;
+                var frame = rootGrid?.Children[0] as Frame;
+                if (frame?.Content is Controls.MillerColumnsPage millerPage)
+                {
+                    millerPage.ShowError(title, description, details);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error("Failed to show error overlay", ex);
+            }
         }
 
         protected override void OnLaunched(LaunchActivatedEventArgs e)
@@ -88,12 +136,21 @@ namespace XFiles
                 Window.Current.Activate();
                 Window.Current.CoreWindow.PointerCursor = null;
 
+                // Custom splash overlay
+                ShowSplashOverlay(Window.Current.Content as Grid);
+
                 // Play Mac boot chime
                 PlayBootChime();
 
                 // Remove Xbox safe zone (overscan margin) — app fills entire screen
                 var view = ApplicationView.GetForCurrentView();
                 view.SetDesiredBoundsMode(ApplicationViewBoundsMode.UseCoreWindow);
+
+                // Prevent system B button from closing the app
+                Windows.UI.Core.SystemNavigationManager.GetForCurrentView().BackRequested += (s, args) =>
+                {
+                    args.Handled = true;
+                };
 
                 Log.Information("Window activated");
             }
@@ -128,6 +185,102 @@ namespace XFiles
             }
         }
 
+        private void ShowSplashOverlay(Grid rootGrid)
+        {
+            var overlay = new Grid
+            {
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x1A, 0x1A, 0x1A)),
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch
+            };
+
+            var image = new Image
+            {
+                Source = new Windows.UI.Xaml.Media.Imaging.BitmapImage(
+                    new Uri("ms-appx:///Assets/SplashScreen.scale-200.png")),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Stretch = Stretch.Uniform,
+                Width = 620,
+                Height = 300
+            };
+
+            var scaleTransform = new ScaleTransform { ScaleX = 1.0, ScaleY = 1.0 };
+            image.RenderTransform = scaleTransform;
+            image.RenderTransformOrigin = new Windows.Foundation.Point(0.5, 0.5);
+
+            overlay.Children.Add(image);
+            rootGrid.Children.Add(overlay);
+
+            // Animate: hold 0.8s, then scale up + fade out over 1s
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };
+            timer.Tick += (s, e) =>
+            {
+                timer.Stop();
+
+                var storyboard = new Storyboard();
+
+                // Image scale X
+                var scaleXAnim = new DoubleAnimation
+                {
+                    From = 1.0,
+                    To = 1.8,
+                    Duration = new Duration(TimeSpan.FromMilliseconds(1000)),
+                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+                };
+                Storyboard.SetTarget(scaleXAnim, image);
+                Storyboard.SetTargetProperty(scaleXAnim, "(UIElement.RenderTransform).(ScaleTransform.ScaleX)");
+                storyboard.Children.Add(scaleXAnim);
+
+                // Image scale Y
+                var scaleYAnim = new DoubleAnimation
+                {
+                    From = 1.0,
+                    To = 1.8,
+                    Duration = new Duration(TimeSpan.FromMilliseconds(1000)),
+                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+                };
+                Storyboard.SetTarget(scaleYAnim, image);
+                Storyboard.SetTargetProperty(scaleYAnim, "(UIElement.RenderTransform).(ScaleTransform.ScaleY)");
+                storyboard.Children.Add(scaleYAnim);
+
+                // Image opacity
+                var imageOpacity = new DoubleAnimation
+                {
+                    From = 1.0,
+                    To = 0.0,
+                    Duration = new Duration(TimeSpan.FromMilliseconds(1000)),
+                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
+                };
+                Storyboard.SetTarget(imageOpacity, image);
+                Storyboard.SetTargetProperty(imageOpacity, "Opacity");
+                storyboard.Children.Add(imageOpacity);
+
+                // Background opacity
+                var bgOpacity = new DoubleAnimation
+                {
+                    From = 1.0,
+                    To = 0.0,
+                    Duration = new Duration(TimeSpan.FromMilliseconds(1000)),
+                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
+                };
+                Storyboard.SetTarget(bgOpacity, overlay);
+                Storyboard.SetTargetProperty(bgOpacity, "Opacity");
+                storyboard.Children.Add(bgOpacity);
+
+                storyboard.Completed += (sender, args) =>
+                {
+                    rootGrid.Children.Remove(overlay);
+                    Log.Information("Splash overlay removed");
+                };
+
+                storyboard.Begin();
+            };
+            timer.Start();
+
+            Log.Information("Splash overlay shown");
+        }
+
         void OnNavigationFailed(object sender, NavigationFailedEventArgs e)
         {
             Log.Error("Navigation FAILED to {Page}: {Error}", e.Exception, e.SourcePageType?.Name);
@@ -140,12 +293,16 @@ namespace XFiles
             var deferral = e.SuspendingOperation.GetDeferral();
             try
             {
-#if XRAY_ENABLED
-                _xrayTimer?.Stop();
-                _xray?.Dispose();
-#endif
                 GamepadInput?.Stop();
                 Log.Debug("GamepadInputService stopped");
+
+                var rootGrid = Windows.UI.Xaml.Window.Current.Content as Windows.UI.Xaml.Controls.Grid;
+                var frame = rootGrid?.Children[0] as Windows.UI.Xaml.Controls.Frame;
+                if (frame?.Content is Controls.MillerColumnsPage millerPage)
+                {
+                    millerPage.StopAllTimers();
+                    Log.Debug("MillerColumnsPage timers stopped");
+                }
             }
             catch (Exception ex)
             {

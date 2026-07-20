@@ -25,15 +25,14 @@ namespace XFiles
 
             _logger = new LoggerConfiguration()
                 .MinimumLevel.Verbose()
-                .Enrich.With<CallerEnricher>()
                 .WriteTo.Sink(Screen)
                 .WriteTo.Debug(
-                    outputTemplate: "[{Timestamp:HH:mm:ss.fff} {Level:u3}] [{Caller}] {Message:lj}{NewLine}{Exception}")
+                    outputTemplate: "[{Timestamp:HH:mm:ss.fff} {Level:u3}] {Message:lj}{NewLine}{Exception}")
                 .WriteTo.File(
                     logPath,
                     rollingInterval: RollingInterval.Day,
                     retainedFileCountLimit: 5,
-                    outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff} {Level:u3}] [{Caller}] {Message:lj}{NewLine}{Exception}",
+                    outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff} {Level:u3}] {Message:lj}{NewLine}{Exception}",
                     shared: true)
                 .CreateLogger();
 
@@ -80,23 +79,6 @@ namespace XFiles
     {
         public void Enrich(LogEvent logEvent, ILogEventPropertyFactory propertyFactory)
         {
-            var st = new System.Diagnostics.StackTrace(true);
-            for (int i = 0; i < st.FrameCount; i++)
-            {
-                var frame = st.GetFrame(i);
-                string typeName = frame?.GetMethod()?.DeclaringType?.Name;
-                if (typeName != null
-                    && typeName != "Log"
-                    && typeName != "CallerEnricher"
-                    && !typeName.StartsWith("Logger")
-                    && !typeName.StartsWith("MessageTemplate")
-                    && !typeName.StartsWith("LogEvent"))
-                {
-                    string caller = $"{typeName}.{frame.GetMethod()?.Name}";
-                    logEvent.AddPropertyIfAbsent(propertyFactory.CreateProperty("Caller", caller));
-                    return;
-                }
-            }
             logEvent.AddPropertyIfAbsent(propertyFactory.CreateProperty("Caller", "Unknown"));
         }
     }
