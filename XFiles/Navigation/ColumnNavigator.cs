@@ -17,8 +17,10 @@ namespace XFiles.Navigation
         private readonly Stack<ColumnState> _history = new Stack<ColumnState>();
         private ColumnState _current;
         private ColumnState _preview;
+        private CancellationTokenSource _loadCts;
 
         private CancellationTokenSource _previewCts;
+        private int _previewGeneration;
         private readonly ArchiveBrowser _archiveBrowser = new ArchiveBrowser();
 
         public ColumnState Parent => _history.Count > 0 ? _history.Peek() : null;
@@ -27,6 +29,7 @@ namespace XFiles.Navigation
 
         public event Action ColumnsChanged;
         public event Action PreviewChanged;
+        public event Action<bool> LoadingChanged;
         public event Action<string> Error;
 
         public ColumnNavigator()
@@ -55,6 +58,7 @@ namespace XFiles.Navigation
         /// </summary>
         public async Task DrillInAsync()
         {
+            ++_previewGeneration;
             var selected = _current.GetSelectedEntry();
             if (selected == null) return;
 
@@ -87,6 +91,11 @@ namespace XFiles.Navigation
                 return;
             }
 
+            // Cancel any in-flight scan
+            _loadCts?.Cancel();
+            _loadCts = new CancellationTokenSource();
+            var token = _loadCts.Token;
+
             // Push current state to history
             _history.Push(new ColumnState
             {
@@ -98,7 +107,21 @@ namespace XFiles.Navigation
 
             // Current becomes the new directory
             _current = new ColumnState { Path = path, Label = selected.Name };
-            await _current.LoadAsync(path);
+
+            LoadingChanged?.Invoke(true);
+            try
+            {
+                await _current.LoadAsync(path, token);
+            }
+            catch (OperationCanceledException)
+            {
+                Log.Information("DrillInAsync: scan cancelled for {Path}", path);
+                return;
+            }
+            finally
+            {
+                LoadingChanged?.Invoke(false);
+            }
 
             // Update preview: show first item of new current
             await UpdatePreviewAsync();
@@ -111,6 +134,7 @@ namespace XFiles.Navigation
         /// </summary>
         private async Task DrillIntoArchiveAsync(FileEntry archiveEntry)
         {
+            ++_previewGeneration;
             Log.Information("ColumnNavigator: drilling into archive {Path}", archiveEntry.FullPath);
 
             // Push current state to history
@@ -146,6 +170,7 @@ namespace XFiles.Navigation
         /// </summary>
         private async Task DrillIntoArchiveSubdirectoryAsync(FileEntry dirEntry)
         {
+            ++_previewGeneration;
             Log.Information("ColumnNavigator: drilling into archive subdirectory {Archive}|{Internal}",
                 dirEntry.ArchiveRootPath, dirEntry.ArchiveInternalPath);
 
@@ -186,6 +211,7 @@ namespace XFiles.Navigation
             if (_history.Count == 0)
                 return;
 
+            ++_previewGeneration;
             var previous = _history.Pop();
             _current = previous;
 
@@ -200,6 +226,7 @@ namespace XFiles.Navigation
         /// </summary>
         public async Task UpdatePreviewAsync()
         {
+            int gen = ++_previewGeneration;
             var selected = _current.GetSelectedEntry();
             if (selected == null)
             {
@@ -211,34 +238,33 @@ namespace XFiles.Navigation
             {
                 if (selected.Name == "..")
                 {
-                    // Don't preview ".." — show parent folder info or nothing
                     _preview = null;
                     return;
                 }
 
-                // Handle directories inside archives
                 if (_current.IsArchive && !string.IsNullOrEmpty(selected.ArchiveInternalPath))
                 {
                     _preview = new ColumnState { Path = selected.FullPath, Label = selected.Name };
                     await _preview.LoadArchiveDirectoryAsync(_archiveBrowser, selected.ArchiveRootPath, selected.ArchiveInternalPath);
+                    if (_previewGeneration != gen) return;
                 }
                 else
                 {
                     _preview = new ColumnState { Path = selected.FullPath, Label = selected.Name };
                     await _preview.LoadAsync(selected.FullPath);
+                    if (_previewGeneration != gen) return;
                 }
             }
             else
             {
-                // Check if file is an archive — show contents listing as preview
                 if (selected.IsArchive)
                 {
                     _preview = new ColumnState { Path = selected.FullPath, Label = selected.Name };
                     await _preview.LoadArchiveDirectoryAsync(_archiveBrowser, selected.FullPath, "");
+                    if (_previewGeneration != gen) return;
                 }
                 else
                 {
-                    // File preview — load via FilePreviewService or ArchiveBrowser
                     _preview = new ColumnState
                     {
                         Path = selected.FullPath,
@@ -248,7 +274,6 @@ namespace XFiles.Navigation
 
                     FilePreviewResult previewResult;
 
-                    // Check if file is inside an archive
                     if (!string.IsNullOrEmpty(selected.ArchiveRootPath))
                     {
                         previewResult = await FilePreviewService.GetPreviewFromArchiveAsync(
@@ -259,6 +284,8 @@ namespace XFiles.Navigation
                         previewResult = await FilePreviewService.GetPreviewAsync(selected.FullPath);
                     }
 
+                    if (_previewGeneration != gen) return;
+
                     _preview.PreviewType = previewResult.Type;
                     _preview.PreviewTextContent = previewResult.TextContent;
                     _preview.PreviewImageSource = previewResult.ImageSource;
@@ -268,6 +295,7 @@ namespace XFiles.Navigation
                     _preview.PreviewIsTruncated = previewResult.IsTruncated;
                     _preview.PreviewPixelWidth = previewResult.PixelWidth;
                     _preview.PreviewPixelHeight = previewResult.PixelHeight;
+                    _preview.PreviewFilePath = selected.FullPath;
                 }
             }
         }
@@ -305,14 +333,32 @@ namespace XFiles.Navigation
             string prevName = _current.GetSelectedEntry()?.Name;
             int prevIndex = _current.SelectedIndex;
 
-            if (_current.IsArchive && _current.ArchiveRootPath != null)
+            // Cancel any in-flight scan
+            _loadCts?.Cancel();
+            _loadCts = new CancellationTokenSource();
+            var token = _loadCts.Token;
+
+            LoadingChanged?.Invoke(true);
+            try
             {
-                await _current.LoadArchiveDirectoryAsync(_archiveBrowser,
-                    _current.ArchiveRootPath, _current.ArchiveInternalPath ?? "");
+                if (_current.IsArchive && _current.ArchiveRootPath != null)
+                {
+                    await _current.LoadArchiveDirectoryAsync(_archiveBrowser,
+                        _current.ArchiveRootPath, _current.ArchiveInternalPath ?? "");
+                }
+                else
+                {
+                    await _current.LoadAsync(_current.Path, token);
+                }
             }
-            else
+            catch (OperationCanceledException)
             {
-                await _current.LoadAsync(_current.Path);
+                Log.Information("RefreshCurrentAsync: scan cancelled");
+                return;
+            }
+            finally
+            {
+                LoadingChanged?.Invoke(false);
             }
 
             // Try to preserve selection
@@ -350,6 +396,7 @@ namespace XFiles.Navigation
         public bool PreviewIsTruncated { get; set; }
         public int PreviewPixelWidth { get; set; }
         public int PreviewPixelHeight { get; set; }
+        public string PreviewFilePath { get; set; }
 
         public string ParentPath
         {
@@ -363,9 +410,9 @@ namespace XFiles.Navigation
             }
         }
 
-        public async Task LoadAsync(string path)
+        public async Task LoadAsync(string path, CancellationToken token = default)
         {
-            Entries = await DirectoryScanner.ScanAsync(path);
+            Entries = await DirectoryScanner.ScanAsync(path, token);
 
             // Ensure ".." is selected if available
             if (SelectedIndex == 0 && Entries.Count > 0 && Entries[0].Name == "..")

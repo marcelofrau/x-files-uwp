@@ -118,9 +118,9 @@ namespace XFiles.Navigation
             var justPressed = (pressed ^ _prevButtons) & pressed;
             var justReleased = (pressed ^ _prevButtons) & _prevButtons;
 
-            // Log raw button state at Verbose every 60 ticks (~1s)
+            // Log raw button state at Verbose every 300 ticks (~5s)
             _tickCount++;
-            if (_tickCount % 60 == 0)
+            if (_tickCount % 300 == 0)
             {
                 Log.Verbose("Tick {Tick}: buttons={Buttons}, LStick=({LX:F2},{LY:F2}), RStick=({RX:F2},{RY:F2})",
                     _tickCount, pressed, reading.LeftThumbstickX, reading.LeftThumbstickY,
@@ -130,89 +130,94 @@ namespace XFiles.Navigation
             // D-pad — just pressed only
             if ((justPressed & GamepadButtons.DPadUp) != 0)
             {
-                Log.Verbose("Input: DPadUp (justPressed)");
                 nav.OnDPadUp();
             }
             if ((justPressed & GamepadButtons.DPadDown) != 0)
             {
-                Log.Verbose("Input: DPadDown (justPressed)");
                 nav.OnDPadDown();
             }
             if ((justPressed & GamepadButtons.DPadLeft) != 0)
             {
-                Log.Verbose("Input: DPadLeft (justPressed)");
                 nav.OnDPadLeft();
             }
             if ((justPressed & GamepadButtons.DPadRight) != 0)
             {
-                Log.Verbose("Input: DPadRight (justPressed)");
                 nav.OnDPadRight();
             }
 
             // A, B, Y — just pressed only
             if ((justPressed & GamepadButtons.A) != 0)
             {
-                Log.Verbose("Input: A (justPressed)");
                 nav.OnConfirm();
             }
             if ((justPressed & GamepadButtons.B) != 0)
             {
-                Log.Verbose("Input: B (justPressed)");
                 nav.OnBack();
             }
             if ((justPressed & GamepadButtons.Y) != 0)
             {
-                Log.Verbose("Input: Y (justPressed)");
                 nav.OnContextMenu();
             }
 
             // X — refresh
             if ((justPressed & GamepadButtons.X) != 0)
             {
-                Log.Verbose("Input: X (justPressed) — refresh");
                 nav.OnRefresh();
             }
 
             // Start/Select — settings
             if ((justPressed & GamepadButtons.Menu) != 0)
             {
-                Log.Verbose("Input: Menu/Start (justPressed) — settings");
                 nav.OnSettings();
             }
             if ((justPressed & GamepadButtons.View) != 0)
             {
-                Log.Verbose("Input: View/Select (justPressed) — settings");
                 nav.OnSettings();
             }
 
-            // LB, RB — just pressed only
+            // LB, RB — continuous seek while held
             if ((justPressed & GamepadButtons.LeftShoulder) != 0)
             {
-                Log.Verbose("Input: LB (justPressed)");
-                nav.OnPageUp();
+                nav.OnSeekBack();
+                _shoulderSeekCooldown = 0;
             }
             if ((justPressed & GamepadButtons.RightShoulder) != 0)
             {
-                Log.Verbose("Input: RB (justPressed)");
-                nav.OnPageDown();
+                nav.OnSeekForward();
+                _shoulderSeekCooldown = 0;
+            }
+            if (_shoulderSeekCooldown > 0) _shoulderSeekCooldown -= 16;
+            if (_shoulderSeekCooldown <= 0)
+            {
+                if ((pressed & GamepadButtons.LeftShoulder) != 0)
+                {
+                    nav.OnSeekRepeat(-5);
+                    _shoulderSeekCooldown = 60;
+                }
+                else if ((pressed & GamepadButtons.RightShoulder) != 0)
+                {
+                    nav.OnSeekRepeat(5);
+                    _shoulderSeekCooldown = 60;
+                }
             }
 
-            // LT, RT — analog triggers, detect press via threshold crossing
+            // LT, RT — continuous for image zoom, threshold for page nav
+            nav.OnTriggerHeld((float)reading.LeftTrigger, (float)reading.RightTrigger);
             if (reading.LeftTrigger > 0.5 && _prevReading.LeftTrigger <= 0.5)
             {
-                Log.Verbose("Input: LT (trigger)");
                 nav.OnPageUp();
             }
             if (reading.RightTrigger > 0.5 && _prevReading.RightTrigger <= 0.5)
             {
-                Log.Verbose("Input: RT (trigger)");
                 nav.OnPageDown();
             }
 
-            // Left thumbstick → map to D-pad when beyond deadzone
+            // Left thumbstick → D-pad or image pan
+            nav.OnLeftStickMove((float)reading.LeftThumbstickX, (float)reading.LeftThumbstickY);
             HandleLeftStick(reading.LeftThumbstickX, reading.LeftThumbstickY, nav);
 
-            // Right thumbstick → scroll preview content
+            // Right thumbstick → scroll preview or image pan
+            nav.OnRightStickMove((float)reading.RightThumbstickX, (float)reading.RightThumbstickY);
             HandleRightStick(reading.RightThumbstickX, reading.RightThumbstickY, nav);
 
             _prevReading = reading;
@@ -220,6 +225,7 @@ namespace XFiles.Navigation
         }
 
         private double _stickCooldown;
+        private double _shoulderSeekCooldown;
 
         private void HandleLeftStick(double x, double y, INavigable nav)
         {
@@ -229,32 +235,22 @@ namespace XFiles.Navigation
                 return;
             }
 
+            if (nav.IsMediaFullscreen) return;
+
             if (Math.Abs(y) > Deadzone)
             {
                 if (y > Deadzone)
-                {
-                    Log.Verbose("Input: LeftStick Up (y={Y:F2})", y);
                     nav.OnDPadUp();
-                }
                 else
-                {
-                    Log.Verbose("Input: LeftStick Down (y={Y:F2})", y);
                     nav.OnDPadDown();
-                }
                 _stickCooldown = 100;
             }
             else if (Math.Abs(x) > Deadzone)
             {
                 if (x < -Deadzone)
-                {
-                    Log.Verbose("Input: LeftStick Left (x={X:F2})", x);
                     nav.OnDPadLeft();
-                }
                 else
-                {
-                    Log.Verbose("Input: LeftStick Right (x={X:F2})", x);
                     nav.OnDPadRight();
-                }
                 _stickCooldown = 100;
             }
         }
@@ -267,13 +263,11 @@ namespace XFiles.Navigation
             if (Math.Abs(y) > ScrollDeadzone)
             {
                 double delta = -y * ScrollSpeed;
-                Log.Verbose("Input: RightStick Vertical (y={Y:F2}, delta={Delta:F1})", y, delta);
                 nav.OnScrollVertical(delta);
             }
             if (Math.Abs(x) > ScrollDeadzone)
             {
                 double delta = x * ScrollSpeed;
-                Log.Verbose("Input: RightStick Horizontal (x={X:F2}, delta={Delta:F1})", x, delta);
                 nav.OnScrollHorizontal(delta);
             }
         }

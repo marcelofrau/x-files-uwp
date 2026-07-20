@@ -6,6 +6,7 @@ namespace XFiles.Navigation
     /// </summary>
     public interface INavigable
     {
+        bool IsMediaFullscreen { get; }
         void OnDPadUp();
         void OnDPadDown();
         void OnDPadLeft();
@@ -17,6 +18,12 @@ namespace XFiles.Navigation
         void OnSettings();
         void OnPageUp();
         void OnPageDown();
+        void OnSeekBack();
+        void OnSeekForward();
+        void OnSeekRepeat(int seconds);
+        void OnTriggerHeld(float leftTrigger, float rightTrigger);
+        void OnLeftStickMove(float x, float y);
+        void OnRightStickMove(float x, float y);
         void OnScrollHorizontal(double delta);
         void OnScrollVertical(double delta);
     }
