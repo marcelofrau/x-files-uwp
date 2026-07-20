@@ -673,7 +673,7 @@ namespace XFiles.Controls
         public void OnDPadUp()
         {
             if (ImageFullScreen.IsOpen) return;
-            if (VideoFullScreenPanel.Visibility == Visibility.Visible) { OnFsVideoInput(); return; }
+            if (VideoFullScreenPanel.Visibility == Visibility.Visible) return;
             if (PlaceholderOverlay.Visibility == Visibility.Visible) return;
             if (StartMenuControl.IsOpen) { StartMenuControl.ForwardDPad(Windows.System.VirtualKey.Up); return; }
             if (FileActionSheetControl.IsOpen) { FileActionSheetControl.ForwardDPad(Windows.System.VirtualKey.Up); return; }
@@ -686,7 +686,7 @@ namespace XFiles.Controls
         public void OnDPadDown()
         {
             if (ImageFullScreen.IsOpen) return;
-            if (VideoFullScreenPanel.Visibility == Visibility.Visible) { OnFsVideoInput(); return; }
+            if (VideoFullScreenPanel.Visibility == Visibility.Visible) return;
             if (PlaceholderOverlay.Visibility == Visibility.Visible) return;
             if (StartMenuControl.IsOpen) { StartMenuControl.ForwardDPad(Windows.System.VirtualKey.Down); return; }
             if (FileActionSheetControl.IsOpen) { FileActionSheetControl.ForwardDPad(Windows.System.VirtualKey.Down); return; }
@@ -703,6 +703,7 @@ namespace XFiles.Controls
             if (PlaceholderOverlay.Visibility == Visibility.Visible) return;
             if (StartMenuControl.IsOpen) return;
             if (FileActionSheetControl.IsOpen) return;
+            if (_isMediaPlayerActive) return;
             _slideFromRight = false;
             _ = _navigator.DrillOutAsync();
         }
@@ -714,6 +715,7 @@ namespace XFiles.Controls
             if (PlaceholderOverlay.Visibility == Visibility.Visible) return;
             if (StartMenuControl.IsOpen) return;
             if (FileActionSheetControl.IsOpen) return;
+            if (_isMediaPlayerActive) return;
             _slideFromRight = true;
             _ = _navigator.DrillInAsync();
         }
@@ -724,16 +726,15 @@ namespace XFiles.Controls
             if (PlaceholderOverlay.Visibility == Visibility.Visible) return;
             if (StartMenuControl.IsOpen) { StartMenuControl.ForwardDPad(Windows.System.VirtualKey.GamepadA); return; }
             if (ImageFullScreen.IsOpen) return;
-            if (VideoFullScreenPanel.Visibility == Visibility.Visible) { OnFsControlsAnyInput(); return; }
+            if (VideoFullScreenPanel.Visibility == Visibility.Visible) { OnFsVideoInput(); return; }
             if (FileActionSheetControl.IsOpen) { FileActionSheetControl.ForwardDPad(Windows.System.VirtualKey.GamepadA); return; }
-            if (_navigator.Current == null) return;
-
             if (_isMediaPlayerActive)
             {
                 MediaPreview.HandleButton(Windows.System.VirtualKey.GamepadA);
                 UpdateMediaPlayerFocusUI();
                 return;
             }
+            if (_navigator.Current == null) return;
 
             var selected = CurrentList.SelectedItem as EntryViewModel;
             if (selected == null)
@@ -786,8 +787,6 @@ namespace XFiles.Controls
                 UpdateMediaPlayerFocusUI();
                 return;
             }
-            _slideFromRight = false;
-            _ = _navigator.DrillOutAsync();
         }
 
         public void OnContextMenu()
@@ -798,6 +797,7 @@ namespace XFiles.Controls
             if (ImageFullScreen.IsOpen) return;
             if (VideoFullScreenPanel.Visibility == Visibility.Visible) { OnFsControlsAnyInput(); return; }
             if (FileActionSheetControl.IsOpen) return;
+            if (_isMediaPlayerActive) return;
             Log.Verbose("MillerColumnsPage.OnContextMenu — showing FileActionSheet");
             _ = ShowFileActionSheetAsync();
         }
@@ -807,11 +807,7 @@ namespace XFiles.Controls
             if (ImageFullScreen.IsOpen) return;
             if (VideoFullScreenPanel.Visibility == Visibility.Visible) { OnFsControlsAnyInput(); return; }
             if (FileActionSheetControl.IsOpen) return;
-            if (_isMediaPlayerActive)
-            {
-                _ = MediaPreview.OpenFullscreen();
-                return;
-            }
+            if (_isMediaPlayerActive) return;
             Log.Information("OnRefresh: refreshing current directory");
             FooterSpinner.IsActive = true;
             _ = _navigator.RefreshCurrentAsync().ContinueWith(t =>

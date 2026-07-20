@@ -385,6 +385,7 @@
     <Content Include="Assets\GamepadButtons\xboxone-dark\view.png" />
     <Content Include="Assets\GamepadButtons\xboxone-dark\menu.png" />
     <Content Include="Assets\GamepadButtons\xboxone-dark\home.png" />
+    <Content Include="Assets\GamepadButtons\xboxone-dark\lstick.png" />
     <Content Include="Assets\GamepadButtons\xboxone-light\a-1.png" />
     <Content Include="Assets\GamepadButtons\xboxone-light\a-2.png" />
     <Content Include="Assets\GamepadButtons\xboxone-light\a-3.png" />

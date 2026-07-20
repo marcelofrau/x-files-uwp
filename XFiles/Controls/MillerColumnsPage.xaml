@@ -501,9 +501,9 @@
                                FontSize="12" Margin="0,2,0,0"
                                Foreground="#99FFFFFF" VerticalAlignment="Center" />
                 </StackPanel>
-                <!-- DPad Up/Down: Play/Pause -->
+                <!-- A: Play/Pause -->
                 <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
-                    <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/dpad-1.png"
+                    <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/a-1.png"
                            Width="16" Height="16" Margin="0,0,4,0"
                            VerticalAlignment="Center" />
                     <TextBlock Text="Play/Pause"
@@ -539,14 +539,9 @@
                 </StackPanel>
                 <!-- L/R Stick: Volume -->
                 <StackPanel Orientation="Horizontal">
-                    <Border Background="#3393C43C" CornerRadius="3"
-                            Padding="4,1" Margin="0,0,4,0">
-                        <TextBlock Text="L Stick"
-                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
-                                   FontSize="11"
-                                   Foreground="{StaticResource XFilesAccentBrush}"
-                                   VerticalAlignment="Center" />
-                    </Border>
+                    <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/lstick.png"
+                           Width="16" Height="16" Margin="0,0,4,0"
+                           VerticalAlignment="Center" />
                     <TextBlock Text="Vol"
                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                FontSize="12" Margin="0,2,0,0"
