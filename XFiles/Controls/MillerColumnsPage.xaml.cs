@@ -3,8 +3,11 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading.Tasks;
 using Windows.ApplicationModel;
+using Windows.Media.Core;
+using Windows.Media.Playback;
 using Windows.Storage;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
@@ -47,7 +50,7 @@ namespace XFiles.Controls
             _navigator.LoadingChanged += OnLoadingChanged;
             _navigator.Error += OnError;
 
-            _fsProgressTimer.Tick += OnFSProgressTimerTick;
+            _fullscreenProgressTimer.Tick += OnFullscreenProgressTick;
             _fsHideTimer.Tick += OnFsHideTimerTick;
 
             _mediaLoadTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
@@ -59,12 +62,15 @@ namespace XFiles.Controls
             MediaPreview.PlayerStateChanged += OnMediaPlayerStateChanged;
 
             var v = Package.Current.Id.Version;
-            VersionText.Text = $"v{v.Major}.{v.Minor}.{v.Build}.{v.Revision}";
+            var version = $"{v.Major}.{v.Minor}.{v.Build}.{v.Revision}";
+            VersionText.Text = $"v{version}";
+            AboutVersionText.Text = $"v{version}";
 
             _ = _navigator.LoadRootAsync();
         }
 
         private bool _isMediaPlayerActive;
+        private int _lastValidSelectedIndex = -1;
 
         private void OnMediaPlayerStateChanged(object sender, EventArgs e)
         {
@@ -145,8 +151,19 @@ namespace XFiles.Controls
             _updating = true;
             try
             {
+                bool atRoot = _navigator.Parent == null;
+
+                // Welcome panel (left) — shown at root
+                WelcomePanel.Visibility = atRoot ? Visibility.Visible : Visibility.Collapsed;
+                ParentHeader.Visibility = atRoot ? Visibility.Collapsed : Visibility.Visible;
+                ParentList.Visibility = atRoot ? Visibility.Collapsed : Visibility.Visible;
+                ParentStatus.Visibility = atRoot ? Visibility.Collapsed : Visibility.Visible;
+
+                // Quick reference panel (right) — shown at root
+                QuickRefPanel.Visibility = atRoot ? Visibility.Visible : Visibility.Collapsed;
+
                 // Parent column
-                if (_navigator.Parent != null)
+                if (!atRoot)
                 {
                     ParentHeader.Text = _navigator.Parent.Label ?? "";
                     BindList(ParentList, _navigator.Parent);
@@ -184,6 +201,14 @@ namespace XFiles.Controls
         private async Task UpdatePreviewColumnAsync()
         {
             HideAllPreviewPanels();
+
+            // At root: QuickRefPanel is visible, skip preview update
+            if (_navigator.Parent == null)
+            {
+                PreviewHeader.Text = "";
+                PreviewStatus.Text = "";
+                return;
+            }
 
             if (_navigator.Preview == null)
             {
@@ -552,8 +577,17 @@ namespace XFiles.Controls
 
         private void CurrentList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            Log.Information("SelectionChanged: index={Index}, updating={Updating}", CurrentList.SelectedIndex, _updating);
+            Log.Information("SelectionChanged: index={Index}, updating={Updating}, mediaActive={MediaActive}",
+                CurrentList.SelectedIndex, _updating, _isMediaPlayerActive);
             if (_updating) return;
+            if (_isMediaPlayerActive)
+            {
+                // Revert selection — ListView's built-in keyboard nav changed it before we could block
+                if (_lastValidSelectedIndex >= 0 && _lastValidSelectedIndex < CurrentList.Items.Count)
+                    CurrentList.SelectedIndex = _lastValidSelectedIndex;
+                return;
+            }
+            _lastValidSelectedIndex = CurrentList.SelectedIndex;
             if (CurrentList.SelectedIndex >= 0 && _navigator.Current != null)
             {
                 _navigator.Current.SelectedIndex = CurrentList.SelectedIndex;
@@ -672,17 +706,20 @@ namespace XFiles.Controls
             Log.Information("OnPreviewNavigationCompleted: isSuccess={IsSuccess}", args.IsSuccess);
         }
 
-        public bool IsMediaFullscreen => VideoFullScreenPanel.Visibility == Visibility.Visible;
+        public bool IsMediaFullscreen => VideoFullScreenPanel.Visibility == Visibility.Visible
+            || AudioFullScreenPanel.Visibility == Visibility.Visible;
+
+        public bool IsMediaPlayerActive => _isMediaPlayerActive;
 
         // --- INavigable ---
 
         public void OnDPadUp()
         {
-            if (ImageFullScreen.IsOpen) return;
-            if (VideoFullScreenPanel.Visibility == Visibility.Visible) return;
-            if (PlaceholderOverlay.Visibility == Visibility.Visible) return;
+            if (IsAnyFullscreen) return;
+            if (IsAnyOverlayVisible) return;
             if (StartMenuControl.IsOpen) { StartMenuControl.ForwardDPad(Windows.System.VirtualKey.Up); return; }
             if (FileActionSheetControl.IsOpen) { FileActionSheetControl.ForwardDPad(Windows.System.VirtualKey.Up); return; }
+            if (_isMediaPlayerActive) return;
             var before = CurrentList.SelectedIndex;
             if (CurrentList.SelectedIndex > 0)
                 CurrentList.SelectedIndex--;
@@ -691,11 +728,11 @@ namespace XFiles.Controls
 
         public void OnDPadDown()
         {
-            if (ImageFullScreen.IsOpen) return;
-            if (VideoFullScreenPanel.Visibility == Visibility.Visible) return;
-            if (PlaceholderOverlay.Visibility == Visibility.Visible) return;
+            if (IsAnyFullscreen) return;
+            if (IsAnyOverlayVisible) return;
             if (StartMenuControl.IsOpen) { StartMenuControl.ForwardDPad(Windows.System.VirtualKey.Down); return; }
             if (FileActionSheetControl.IsOpen) { FileActionSheetControl.ForwardDPad(Windows.System.VirtualKey.Down); return; }
+            if (_isMediaPlayerActive) return;
             var before = CurrentList.SelectedIndex;
             if (CurrentList.SelectedIndex < _navigator.Current?.Entries.Count - 1)
                 CurrentList.SelectedIndex++;
@@ -705,8 +742,9 @@ namespace XFiles.Controls
         public void OnDPadLeft()
         {
             if (ImageFullScreen.IsOpen) return;
+            if (AudioFullScreenPanel.Visibility == Visibility.Visible) return;
             if (VideoFullScreenPanel.Visibility == Visibility.Visible) { HandleContinuousSeek(-5); return; }
-            if (PlaceholderOverlay.Visibility == Visibility.Visible) return;
+            if (IsAnyOverlayVisible) return;
             if (StartMenuControl.IsOpen) return;
             if (FileActionSheetControl.IsOpen) return;
             if (_isMediaPlayerActive) return;
@@ -717,8 +755,9 @@ namespace XFiles.Controls
         public void OnDPadRight()
         {
             if (ImageFullScreen.IsOpen) return;
+            if (AudioFullScreenPanel.Visibility == Visibility.Visible) return;
             if (VideoFullScreenPanel.Visibility == Visibility.Visible) { HandleContinuousSeek(5); return; }
-            if (PlaceholderOverlay.Visibility == Visibility.Visible) return;
+            if (IsAnyOverlayVisible) return;
             if (StartMenuControl.IsOpen) return;
             if (FileActionSheetControl.IsOpen) return;
             if (_isMediaPlayerActive) return;
@@ -729,10 +768,11 @@ namespace XFiles.Controls
         public void OnConfirm()
         {
             if (ErrorOverlay.Visibility == Visibility.Visible) return;
-            if (PlaceholderOverlay.Visibility == Visibility.Visible) return;
+            if (IsAnyOverlayVisible) return;
             if (StartMenuControl.IsOpen) { StartMenuControl.ForwardDPad(Windows.System.VirtualKey.GamepadA); return; }
             if (ImageFullScreen.IsOpen) return;
             if (VideoFullScreenPanel.Visibility == Visibility.Visible) { OnFsVideoInput(); return; }
+            if (AudioFullScreenPanel.Visibility == Visibility.Visible) { ToggleAudioFullscreenPlayPause(); return; }
             if (FileActionSheetControl.IsOpen) { FileActionSheetControl.ForwardDPad(Windows.System.VirtualKey.GamepadA); return; }
             if (_isMediaPlayerActive)
             {
@@ -763,9 +803,17 @@ namespace XFiles.Controls
                     Log.Verbose("OnConfirm: image selected — opening fullscreen");
                     ImageFullScreen.Show(_navigator.Preview?.PreviewImageSource);
                 }
-                else if (FilePreviewService.IsMediaFile(ext))
+                else if (FilePreviewService.IsAudioFile(ext))
                 {
-                    Log.Verbose("OnConfirm: media file — toggling play/pause");
+                    Log.Verbose("OnConfirm: audio file — toggling play/pause");
+                    if (MediaPreview != null && MediaPreview.Visibility == Visibility.Visible)
+                    {
+                        MediaPreview.TogglePlayPause();
+                    }
+                }
+                else if (FilePreviewService.IsVideoFile(ext))
+                {
+                    Log.Verbose("OnConfirm: video file — toggling play/pause");
                     if (MediaPreview != null && MediaPreview.Visibility == Visibility.Visible)
                     {
                         MediaPreview.TogglePlayPause();
@@ -782,10 +830,12 @@ namespace XFiles.Controls
         public void OnBack()
         {
             if (ErrorOverlay.Visibility == Visibility.Visible) { HideError(); return; }
+            if (AboutOverlay.Visibility == Visibility.Visible) { HideAbout(); return; }
             if (PlaceholderOverlay.Visibility == Visibility.Visible) { HidePlaceholder(); return; }
             if (StartMenuControl.IsOpen) { StartMenuControl.ForwardDPad(Windows.System.VirtualKey.GamepadB); return; }
             if (ImageFullScreen.IsOpen) { ImageFullScreen.HandleButton(Windows.System.VirtualKey.GamepadB); UpdateFooterALabelFromSelection(); return; }
             if (VideoFullScreenPanel.Visibility == Visibility.Visible) { CloseVideoFullScreen(); UpdateFooterALabelFromSelection(); return; }
+            if (AudioFullScreenPanel.Visibility == Visibility.Visible) { CloseAudioFullscreen(); UpdateMediaPlayerFocusUI(); return; }
             if (FileActionSheetControl.IsOpen) { FileActionSheetControl.ForwardDPad(Windows.System.VirtualKey.GamepadB); return; }
             if (_isMediaPlayerActive)
             {
@@ -797,11 +847,10 @@ namespace XFiles.Controls
 
         public void OnContextMenu()
         {
+            if (IsAnyFullscreen) return;
             if (ErrorOverlay.Visibility == Visibility.Visible) return;
-            if (PlaceholderOverlay.Visibility == Visibility.Visible) return;
+            if (IsAnyOverlayVisible) return;
             if (StartMenuControl.IsOpen) return;
-            if (ImageFullScreen.IsOpen) return;
-            if (VideoFullScreenPanel.Visibility == Visibility.Visible) { OnFsControlsAnyInput(); return; }
             if (FileActionSheetControl.IsOpen) return;
             if (_isMediaPlayerActive) return;
             Log.Verbose("MillerColumnsPage.OnContextMenu — showing FileActionSheet");
@@ -810,10 +859,26 @@ namespace XFiles.Controls
 
         public void OnRefresh()
         {
-            if (ImageFullScreen.IsOpen) return;
-            if (VideoFullScreenPanel.Visibility == Visibility.Visible) { OnFsControlsAnyInput(); return; }
+            if (IsAnyFullscreen) return;
             if (FileActionSheetControl.IsOpen) return;
-            if (_isMediaPlayerActive) return;
+            if (StartMenuControl.IsOpen) return;
+            if (ErrorOverlay.Visibility == Visibility.Visible) return;
+            if (IsAnyOverlayVisible) return;
+            if (_isMediaPlayerActive)
+            {
+                if (MediaPreview.IsAudioMode)
+                {
+                    var pos = MediaPreview.CurrentPosition;
+                    MediaPreview.StopPlayer();
+                    UpdateMediaPlayerFocusUI();
+                    OpenAudioFullscreen(_navigator.Preview?.PreviewFilePath ?? "", pos);
+                }
+                else
+                {
+                    MediaPreview.OpenFullscreen();
+                }
+                return;
+            }
             Log.Information("OnRefresh: refreshing current directory");
             FooterSpinner.IsActive = true;
             _ = _navigator.RefreshCurrentAsync().ContinueWith(t =>
@@ -826,7 +891,7 @@ namespace XFiles.Controls
         public void OnSettings()
         {
             if (ErrorOverlay.Visibility == Visibility.Visible) return;
-            if (PlaceholderOverlay.Visibility == Visibility.Visible) return;
+            if (IsAnyOverlayVisible) return;
             if (StartMenuControl.IsOpen) { StartMenuControl.ForwardDPad(Windows.System.VirtualKey.GamepadA); return; }
             if (FileActionSheetControl.IsOpen) return;
             if (ImageFullScreen.IsOpen) return;
@@ -857,12 +922,7 @@ namespace XFiles.Controls
                     break;
                 case StartMenuItem.About:
                     Log.Information("Start menu: About selected");
-                    ShowPlaceholder("About X-Files",
-                        "Gamepad-first file explorer for Xbox",
-                        "Version 0.1.0\n\n" +
-                        "A retro-styled Miller-column file browser designed for Xbox, built with C# and UWP XAML.\n\n" +
-                        "Inspired by yazi's keyboard-driven UX, adapted for gamepad control.\n\n" +
-                        "github.com/MarceloLins76/x-files-uwp");
+                    ShowAbout();
                     break;
                 case StartMenuItem.CloseApplication:
                     Log.Information("Start menu: Close Application selected");
@@ -884,8 +944,24 @@ namespace XFiles.Controls
             PlaceholderOverlay.Visibility = Visibility.Collapsed;
         }
 
+        private void ShowAbout()
+        {
+            Log.Information("Showing About overlay");
+            AboutOverlay.Visibility = Visibility.Visible;
+        }
+
+        private void HideAbout()
+        {
+            AboutOverlay.Visibility = Visibility.Collapsed;
+        }
+
+        private bool IsAnyOverlayVisible =>
+            PlaceholderOverlay.Visibility == Visibility.Visible
+            || AboutOverlay.Visibility == Visibility.Visible;
+
         private bool IsAnyFullscreen =>
-            ImageFullScreen.IsOpen || VideoFullScreenPanel.Visibility == Visibility.Visible;
+            ImageFullScreen.IsOpen || VideoFullScreenPanel.Visibility == Visibility.Visible
+            || AudioFullScreenPanel.Visibility == Visibility.Visible;
 
         public void OnPageUp()
         {
@@ -910,6 +986,7 @@ namespace XFiles.Controls
         public void OnSeekBack()
         {
             if (ImageFullScreen.IsOpen) return;
+            if (AudioFullScreenPanel.Visibility == Visibility.Visible) { NavigateAudioTrack(-1); return; }
             if (VideoFullScreenPanel.Visibility == Visibility.Visible) { HandleContinuousSeek(-5); return; }
             if (_isMediaPlayerActive) { MediaPreview.Seek(TimeSpan.FromSeconds(-5)); return; }
             JumpByLetter(-1);
@@ -918,6 +995,7 @@ namespace XFiles.Controls
         public void OnSeekForward()
         {
             if (ImageFullScreen.IsOpen) return;
+            if (AudioFullScreenPanel.Visibility == Visibility.Visible) { NavigateAudioTrack(1); return; }
             if (VideoFullScreenPanel.Visibility == Visibility.Visible) { HandleContinuousSeek(5); return; }
             if (_isMediaPlayerActive) { MediaPreview.Seek(TimeSpan.FromSeconds(5)); return; }
             JumpByLetter(1);
@@ -967,7 +1045,8 @@ namespace XFiles.Controls
 
         public void OnSeekRepeat(int seconds)
         {
-            HandleContinuousSeek(seconds);
+            if (VideoFullScreenPanel.Visibility == Visibility.Visible) { HandleContinuousSeek(seconds); return; }
+            if (_isMediaPlayerActive) { MediaPreview.Seek(TimeSpan.FromSeconds(seconds)); return; }
         }
 
         public void OnTriggerHeld(float leftTrigger, float rightTrigger)
@@ -983,7 +1062,6 @@ namespace XFiles.Controls
             if (!isMedia) { _ltWasDown = false; _rtWasDown = false; return; }
 
             const float Threshold = 0.3f;
-            const float Release = 0.15f;
 
             bool ltDown = leftTrigger > Threshold;
             bool rtDown = rightTrigger > Threshold;
@@ -999,9 +1077,8 @@ namespace XFiles.Controls
                     _seekCooldown = 60;
                 }
             }
-            else if (leftTrigger < Release)
+            else
             {
-                if (_ltWasDown) CommitPendingSeek();
                 _ltWasDown = false;
                 _ltHoldMs = 0;
             }
@@ -1017,9 +1094,8 @@ namespace XFiles.Controls
                     _seekCooldown = 60;
                 }
             }
-            else if (rightTrigger < Release)
+            else
             {
-                if (_rtWasDown) CommitPendingSeek();
                 _rtWasDown = false;
                 _rtHoldMs = 0;
             }
@@ -1027,7 +1103,6 @@ namespace XFiles.Controls
             _ltWasDown = ltDown;
             _rtWasDown = rtDown;
             if (_seekCooldown > 0) _seekCooldown -= 16;
-            if (_seekActualCooldown > 0) _seekActualCooldown -= 16;
         }
 
         private static int ComputeAcceleratedSeek(double holdMs)
@@ -1042,25 +1117,17 @@ namespace XFiles.Controls
             {
                 ShowFsControls();
 
-                // Calculate clamped target position
-                var pos = VideoFullScreenPlayer.Position + TimeSpan.FromSeconds(seconds);
+                var pos = FsVideoSession.Position + TimeSpan.FromSeconds(seconds);
                 if (pos < TimeSpan.Zero) pos = TimeSpan.Zero;
-                if (VideoFullScreenPlayer.NaturalDuration.HasTimeSpan)
+                var total = FsVideoSession.NaturalDuration;
+                if (total.TotalSeconds > 0 && pos > total) pos = total;
+
+                FsVideoSession.Position = pos;
+
+                if (total.TotalSeconds > 0)
                 {
-                    var total = VideoFullScreenPlayer.NaturalDuration.TimeSpan;
-                    if (pos > total) pos = total;
-                }
-
-                _seekPendingPosition = pos;
-
-                // Always update visual bar immediately (smooth feedback, no decoder reload)
-                UpdateSeekVisual(pos);
-
-                // Throttle actual video seek — decoder reload is expensive
-                if (_seekActualCooldown <= 0)
-                {
-                    VideoFullScreenPlayer.Position = pos;
-                    _seekActualCooldown = SeekActualInterval.TotalMilliseconds;
+                    FSProgress.Value = (pos.TotalSeconds / total.TotalSeconds) * 100;
+                    FSTimeText.Text = $"{FormatFsTime(pos)} / {FormatFsTime(total)}";
                 }
 
                 string dir = seconds > 0 ? "\u25B6\u25B6" : "\u25C0\u25C0";
@@ -1069,33 +1136,7 @@ namespace XFiles.Controls
             else if (_isMediaPlayerActive)
             {
                 MediaPreview.Seek(TimeSpan.FromSeconds(seconds));
-            }
-        }
-
-        /// <summary>
-        /// Update progress bar and time text without touching the video decoder.
-        /// </summary>
-        private void UpdateSeekVisual(TimeSpan position)
-        {
-            if (VideoFullScreenPlayer.NaturalDuration.HasTimeSpan)
-            {
-                var total = VideoFullScreenPlayer.NaturalDuration.TimeSpan;
-                if (total.TotalSeconds > 0)
-                {
-                    FSProgress.Value = (position.TotalSeconds / total.TotalSeconds) * 100;
-                    FSTimeText.Text = $"{FormatFsTime(position)} / {FormatFsTime(total)}";
-                }
-            }
-        }
-
-        /// <summary>
-        /// Commit pending seek to video decoder (called on trigger release).
-        /// </summary>
-        private void CommitPendingSeek()
-        {
-            if (VideoFullScreenPanel.Visibility == Visibility.Visible)
-            {
-                VideoFullScreenPlayer.Position = _seekPendingPosition;
+                ShowFsOsd($"{(seconds > 0 ? "+" : "")}{seconds}s", 800);
             }
         }
 
@@ -1106,7 +1147,11 @@ namespace XFiles.Controls
                 ImageFullScreen.HandleRightStick(x, y);
                 return;
             }
-            if (VideoFullScreenPanel.Visibility == Visibility.Visible)
+            if (AudioFullScreenPanel.Visibility == Visibility.Visible)
+            {
+                UpdateFsVolume(y);
+            }
+            else if (VideoFullScreenPanel.Visibility == Visibility.Visible)
             {
                 UpdateFsVolume(y);
             }
@@ -1200,14 +1245,14 @@ namespace XFiles.Controls
         public async Task ShowMediaFullscreenAsync(Uri source, bool isVideo, TimeSpan position)
         {
             if (!isVideo) return;
-            VideoFullScreenPlayer.Source = source;
-            VideoFullScreenPlayer.Position = position;
-            VideoFullScreenPlayer.Volume = _fsVolume;
-            VideoFullScreenPlayer.Play();
+            FsVideoPlayer.Source = Windows.Media.Core.MediaSource.CreateFromUri(source);
+            FsVideoSession.Position = position;
+            FsVideoPlayer.Volume = _fsVolume;
+            FsVideoPlayer.Play();
             _fsVideoPlaying = true;
             FSPlayPauseIcon.Glyph = "\uE769";
             FSVolumeText.Text = $"Vol {(int)(_fsVolume * 100)}%";
-            _fsProgressTimer.Start();
+            _fullscreenProgressTimer.Start();
             VideoFullScreenPanel.Visibility = Visibility.Visible;
             ShowFsControls();
             ShowFsOsd("\u25B6  PLAY");
@@ -1217,30 +1262,41 @@ namespace XFiles.Controls
 
         private void CloseVideoFullScreen()
         {
-            _fsProgressTimer.Stop();
+            _fullscreenProgressTimer.Stop();
             _fsHideTimer.Stop();
             _fsOsdHideTimer.Stop();
-            VideoFullScreenPlayer.Stop();
-            VideoFullScreenPlayer.Source = null;
+            FsVideoPlayer.Pause();
+            FsVideoPlayer.Source = null;
             _fsVideoPlaying = false;
             VideoFullScreenPanel.Visibility = Visibility.Collapsed;
             Log.Information("CloseVideoFullScreen: stopped");
         }
 
-        private void OnFSProgressTimerTick(object sender, object e)
+        private void OnFullscreenProgressTick(object sender, object e)
         {
-            if (VideoFullScreenPlayer.NaturalDuration.HasTimeSpan)
+            // Fullscreen video progress
+            if (VideoFullScreenPanel.Visibility == Visibility.Visible)
             {
-                var current = VideoFullScreenPlayer.Position;
-                var total = VideoFullScreenPlayer.NaturalDuration.TimeSpan;
+                var total = FsVideoSession.NaturalDuration;
                 if (total.TotalSeconds > 0)
                 {
+                    var current = FsVideoSession.Position;
                     FSProgress.Value = (current.TotalSeconds / total.TotalSeconds) * 100;
                     FSTimeText.Text = $"{FormatFsTime(current)} / {FormatFsTime(total)}";
                 }
             }
-            // Decrement seek cooldown so discrete seeks (DPad/LB/RB) can fire again
-            if (_seekActualCooldown > 0) _seekActualCooldown -= 250;
+            // Fullscreen audio progress
+            else if (AudioFullScreenPanel.Visibility == Visibility.Visible)
+            {
+                var total = FsAudioSession.NaturalDuration;
+                if (total.TotalSeconds > 0)
+                {
+                    var current = FsAudioSession.Position;
+                    FsAudioProgress.Value = (current.TotalSeconds / total.TotalSeconds) * 100;
+                    FsCurrentTimeText.Text = FormatFsTime(current);
+                    FsTotalTimeText.Text = FormatFsTime(total);
+                }
+            }
         }
 
         private static string FormatFsTime(TimeSpan ts)
@@ -1334,6 +1390,44 @@ namespace XFiles.Controls
             HideFsOsd();
         }
 
+        private DispatcherTimer _fsAudioOsdHideTimer = new DispatcherTimer();
+
+        private void ShowAudioOsd(string text, double hideDelayMs = 1500)
+        {
+            FsAudioOsdText.Text = text;
+            FsAudioOsdBorder.Visibility = Visibility.Visible;
+            var fadeIn = new Storyboard();
+            var dur = new Duration(TimeSpan.FromMilliseconds(150));
+            var anim = new DoubleAnimation { To = 1.0, Duration = dur, EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+            Storyboard.SetTarget(anim, FsAudioOsdBorder);
+            Storyboard.SetTargetProperty(anim, "Opacity");
+            fadeIn.Children.Add(anim);
+            fadeIn.Begin();
+            _fsAudioOsdHideTimer.Stop();
+            _fsAudioOsdHideTimer.Interval = TimeSpan.FromMilliseconds(hideDelayMs);
+            _fsAudioOsdHideTimer.Tick -= OnFsAudioOsdHideTick;
+            _fsAudioOsdHideTimer.Tick += OnFsAudioOsdHideTick;
+            _fsAudioOsdHideTimer.Start();
+        }
+
+        private void HideAudioOsd()
+        {
+            var fadeOut = new Storyboard();
+            var dur = new Duration(TimeSpan.FromMilliseconds(300));
+            var anim = new DoubleAnimation { To = 0.0, Duration = dur, EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn } };
+            Storyboard.SetTarget(anim, FsAudioOsdBorder);
+            Storyboard.SetTargetProperty(anim, "Opacity");
+            fadeOut.Children.Add(anim);
+            fadeOut.Completed += (s, e) => FsAudioOsdBorder.Visibility = Visibility.Collapsed;
+            fadeOut.Begin();
+        }
+
+        private void OnFsAudioOsdHideTick(object sender, object e)
+        {
+            _fsAudioOsdHideTimer.Stop();
+            HideAudioOsd();
+        }
+
         private void OnFsHideTimerTick(object sender, object e)
         {
             _fsHideTimer.Stop();
@@ -1352,14 +1446,14 @@ namespace XFiles.Controls
             ShowFsControls();
             if (_fsVideoPlaying)
             {
-                VideoFullScreenPlayer.Pause();
+                FsVideoPlayer.Pause();
                 FSPlayPauseIcon.Glyph = "\uE768";
                 _fsVideoPlaying = false;
                 ShowFsOsd("\u275A\u275A  PAUSE");
             }
             else
             {
-                VideoFullScreenPlayer.Play();
+                FsVideoPlayer.Play();
                 FSPlayPauseIcon.Glyph = "\uE769";
                 _fsVideoPlaying = true;
                 ShowFsOsd("\u25B6  PLAY");
@@ -1375,16 +1469,24 @@ namespace XFiles.Controls
             double curved = magnitude * magnitude;
             double direction = stickY > 0 ? 1.0 : -1.0;
             double delta = direction * curved * 0.02;
-            _fsVolume = Math.Max(0.0, Math.Min(1.0, _fsVolume + delta));
-            if (VideoFullScreenPanel.Visibility == Visibility.Visible)
+            if (AudioFullScreenPanel.Visibility == Visibility.Visible)
             {
+                _audioVolume = Math.Max(0.0, Math.Min(1.0, _audioVolume + delta));
+                FsAudioPlayer2.Volume = _audioVolume;
+                FsVolumeText.Text = $"Vol {(int)(_audioVolume * 100)}%";
+                ShowAudioOsd($"Vol {(int)(_audioVolume * 100)}%", 1200);
+            }
+            else if (VideoFullScreenPanel.Visibility == Visibility.Visible)
+            {
+                _fsVolume = Math.Max(0.0, Math.Min(1.0, _fsVolume + delta));
                 ShowFsControls();
-                VideoFullScreenPlayer.Volume = _fsVolume;
+                FsVideoPlayer.Volume = _fsVolume;
                 FSVolumeText.Text = $"Vol {(int)(_fsVolume * 100)}%";
                 ShowFsOsd($"Vol {(int)(_fsVolume * 100)}%", 1200);
             }
             else if (_isMediaPlayerActive)
             {
+                _fsVolume = Math.Max(0.0, Math.Min(1.0, _fsVolume + delta));
                 MediaPreview.SetVolume(_fsVolume);
             }
         }
@@ -1398,14 +1500,8 @@ namespace XFiles.Controls
         private bool _ltWasDown;
         private bool _rtWasDown;
 
-        // Smooth seek: visual bar updates instantly, actual video seek is throttled
-        private double _seekVisualCooldown;
-        private double _seekActualCooldown;
-        private TimeSpan _seekPendingPosition;
-        private static readonly TimeSpan SeekVisualInterval = TimeSpan.FromMilliseconds(60);
-        private static readonly TimeSpan SeekActualInterval = TimeSpan.FromMilliseconds(300);
-
-        private DispatcherTimer _fsProgressTimer = new DispatcherTimer
+        // Single shared timer for all fullscreen progress updates (video + audio)
+        private DispatcherTimer _fullscreenProgressTimer = new DispatcherTimer
         {
             Interval = TimeSpan.FromMilliseconds(500)
         };
@@ -1423,12 +1519,13 @@ namespace XFiles.Controls
 
         public void StopAllTimers()
         {
-            _fsProgressTimer.Stop();
+            _fullscreenProgressTimer.Stop();
             _fsHideTimer.Stop();
             _fsOsdHideTimer.Stop();
             _mediaLoadTimer.Stop();
             ImageFullScreen?.Close();
             MediaPreview?.StopPlayer();
+            if (_isAudioFullscreen) CloseAudioFullscreen();
         }
 
         private void OnMediaLoadTimerTick(object sender, object e)
@@ -1438,6 +1535,158 @@ namespace XFiles.Controls
             {
                 MediaPreview.LoadFile(_pendingMediaPath);
                 _pendingMediaPath = null;
+            }
+        }
+
+        // --- Fullscreen Audio ---
+
+        private bool _isAudioFullscreen;
+        private string _audioFullscreenPath;
+        private double _audioVolume = 0.75;
+
+        // MediaPlayer/Session helpers for fullscreen video + audio (migrated from MediaElement)
+        private Windows.Media.Playback.MediaPlayer FsVideoPlayer => VideoFullScreenPlayer.MediaPlayer;
+        private Windows.Media.Playback.MediaPlaybackSession FsVideoSession => FsVideoPlayer.PlaybackSession;
+        private Windows.Media.Playback.MediaPlayer FsAudioPlayer2 => FsAudioPlayer.MediaPlayer;
+        private Windows.Media.Playback.MediaPlaybackSession FsAudioSession => FsAudioPlayer2.PlaybackSession;
+
+        public async void OpenAudioFullscreen(string filePath, TimeSpan position)
+        {
+            Log.Information("OpenAudioFullscreen: {Path}", filePath);
+            _audioFullscreenPath = filePath;
+            _isAudioFullscreen = true;
+
+            MediaPreview.Stop();
+
+            // Create a fresh MediaPlayerElement for fullscreen
+            FsAudioPlayer2.Source = Windows.Media.Core.MediaSource.CreateFromUri(new Uri(filePath));
+            FsAudioSession.Position = position;
+            FsAudioPlayer2.Volume = _audioVolume;
+            FsAudioPlayer2.Play();
+            FsPlayPauseIcon.Glyph = "\uE769";
+
+            FsVolumeText.Text = $"Vol {(int)(_audioVolume * 100)}%";
+
+            AudioFullScreenPanel.Visibility = Visibility.Visible;
+            UpdateMediaPlayerFocusUI();
+
+            // Start shared fullscreen progress timer (if not already running)
+            if (_fullscreenProgressTimer.IsEnabled == false)
+                _fullscreenProgressTimer.Start();
+
+            // Load metadata async — don't block UI thread
+            await LoadAudioFullscreenMetadataAsync(filePath);
+        }
+
+        private async Task LoadAudioFullscreenMetadataAsync(string filePath)
+        {
+            try
+            {
+                var tag = await Task.Run(() => Id3Tag.ReadFromFile(filePath));
+                bool hasArt = tag?.AlbumArt != null && tag.AlbumArt.Length > 0;
+
+                if (hasArt)
+                {
+                    var bitmap = new Windows.UI.Xaml.Media.Imaging.BitmapImage();
+                    using (var stream = new Windows.Storage.Streams.InMemoryRandomAccessStream())
+                    {
+                        await stream.WriteAsync(tag.AlbumArt.AsBuffer());
+                        stream.Seek(0);
+                        await bitmap.SetSourceAsync(stream);
+                    }
+                    FsAlbumArtBorder.Visibility = Visibility.Visible;
+                    FsDefaultArtPanel.Visibility = Visibility.Collapsed;
+                    FsAlbumArtImage.Source = bitmap;
+                }
+                else
+                {
+                    FsAlbumArtBorder.Visibility = Visibility.Collapsed;
+                    FsDefaultArtPanel.Visibility = Visibility.Visible;
+                }
+
+                FsTitleText.Text = tag?.Title ?? System.IO.Path.GetFileNameWithoutExtension(filePath);
+                FsArtistText.Text = tag?.Artist ?? "";
+                FsArtistText.Visibility = string.IsNullOrEmpty(tag?.Artist) ? Visibility.Collapsed : Visibility.Visible;
+                FsAlbumText.Text = tag?.Album ?? "";
+                FsAlbumText.Visibility = string.IsNullOrEmpty(tag?.Album) ? Visibility.Collapsed : Visibility.Visible;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("Failed to load audio metadata: {Error}", ex.Message);
+                FsAlbumArtBorder.Visibility = Visibility.Collapsed;
+                FsDefaultArtPanel.Visibility = Visibility.Visible;
+                FsTitleText.Text = System.IO.Path.GetFileNameWithoutExtension(filePath);
+                FsArtistText.Visibility = Visibility.Collapsed;
+                FsAlbumText.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        public void CloseAudioFullscreen()
+        {
+            Log.Information("CloseAudioFullscreen");
+            FsAudioPlayer2.Pause();
+            FsAudioPlayer2.Source = null;
+            _isAudioFullscreen = false;
+            _audioFullscreenPath = null;
+            AudioFullScreenPanel.Visibility = Visibility.Collapsed;
+            // Stop shared progress timer only if no video fullscreen is active
+            if (VideoFullScreenPanel.Visibility != Visibility.Visible)
+                _fullscreenProgressTimer.Stop();
+        }
+
+        public void ToggleAudioFullscreenPlayPause()
+        {
+            if (FsAudioSession.PlaybackState == Windows.Media.Playback.MediaPlaybackState.Playing)
+            {
+                FsAudioPlayer2.Pause();
+                FsPlayPauseIcon.Glyph = "\uE768";
+                ShowAudioOsd("\uE768  Pause", 1200);
+            }
+            else
+            {
+                FsAudioPlayer2.Play();
+                FsPlayPauseIcon.Glyph = "\uE769";
+                ShowAudioOsd("\uE769  Play", 1200);
+            }
+        }
+
+        public void NavigateAudioTrack(int direction)
+        {
+            if (string.IsNullOrEmpty(_audioFullscreenPath) || _navigator.Current == null) return;
+
+            var audioFiles = _navigator.Current.Entries
+                .Where(e => !e.IsDirectory && FilePreviewService.IsAudioFile(System.IO.Path.GetExtension(e.Name)))
+                .ToList();
+
+            if (audioFiles.Count == 0) return;
+
+            int currentIdx = audioFiles.FindIndex(e =>
+                string.Equals(e.FullPath, _audioFullscreenPath, StringComparison.OrdinalIgnoreCase));
+
+            int nextIdx = currentIdx + direction;
+            if (nextIdx < 0) nextIdx = audioFiles.Count - 1;
+            if (nextIdx >= audioFiles.Count) nextIdx = 0;
+
+            var nextFile = audioFiles[nextIdx];
+            _audioFullscreenPath = nextFile.FullPath;
+
+            FsAudioPlayer2.Pause();
+            FsAudioPlayer2.Source = Windows.Media.Core.MediaSource.CreateFromUri(new Uri(nextFile.FullPath));
+            FsAudioSession.Position = TimeSpan.Zero;
+            FsAudioPlayer2.Volume = _audioVolume;
+            FsAudioPlayer2.Play();
+            FsPlayPauseIcon.Glyph = "\uE769";
+            ShowAudioOsd(direction > 0 ? "\u23ED  Next" : "\u23EE  Prev", 1200);
+
+            _ = LoadAudioFullscreenMetadataAsync(nextFile.FullPath);
+
+            // Update selection in main list
+            int mainIdx = _navigator.Current.Entries.IndexOf(nextFile);
+            if (mainIdx >= 0)
+            {
+                _updating = true;
+                CurrentList.SelectedIndex = mainIdx;
+                _updating = false;
             }
         }
 
@@ -1695,7 +1944,7 @@ namespace XFiles.Controls
         {
             try
             {
-                var uri = new Uri("https://github.com/MarceloLins76/x-files-uwp/issues/new?template=bug_report.md&title=" +
+                var uri = new Uri("https://github.com/marcelofrau/x-files-uwp/issues/new?template=bug_report.md&title=" +
                     Uri.EscapeDataString("Error: " + ErrorTitleText.Text));
                 await Windows.System.Launcher.LaunchUriAsync(uri);
             }

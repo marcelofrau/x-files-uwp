@@ -23,11 +23,11 @@ namespace XFiles.Navigation
 
         public GamepadInputService()
         {
-            Log.Information("GamepadInputService creating — poll interval=16ms (~60fps), deadzone={Deadzone}", Deadzone);
+            Log.Information("GamepadInputService creating — poll interval=33ms (~30fps), deadzone={Deadzone}", Deadzone);
 
             _timer = new DispatcherTimer
             {
-                Interval = TimeSpan.FromMilliseconds(16)
+                Interval = TimeSpan.FromMilliseconds(33)
             };
             _timer.Tick += OnTick;
 
@@ -154,7 +154,7 @@ namespace XFiles.Navigation
             }
 
             // Repeat while held
-            if (_dpadRepeatCooldown > 0) _dpadRepeatCooldown -= 16;
+            if (_dpadRepeatCooldown > 0) _dpadRepeatCooldown -= 33;
             if (_dpadRepeatCooldown <= 0 && dpadNow != 0)
             {
                 if ((dpadNow & GamepadButtons.DPadUp) != 0) nav.OnDPadUp();
@@ -207,7 +207,7 @@ namespace XFiles.Navigation
                 nav.OnSeekForward();
                 _shoulderSeekCooldown = 0;
             }
-            if (_shoulderSeekCooldown > 0) _shoulderSeekCooldown -= 16;
+            if (_shoulderSeekCooldown > 0) _shoulderSeekCooldown -= 33;
             if (_shoulderSeekCooldown <= 0)
             {
                 if ((pressed & GamepadButtons.LeftShoulder) != 0)
@@ -261,6 +261,7 @@ namespace XFiles.Navigation
             }
 
             if (nav.IsMediaFullscreen) return;
+            if (nav.IsMediaPlayerActive) return;
 
             if (Math.Abs(y) > Deadzone)
             {

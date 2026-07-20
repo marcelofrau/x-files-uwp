@@ -42,9 +42,9 @@
         <!-- ═══ COLUMNS ═══ -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="20*" />
+                <ColumnDefinition Width="25*" />
                 <ColumnDefinition Width="35*" />
-                <ColumnDefinition Width="45*" />
+                <ColumnDefinition Width="40*" />
             </Grid.ColumnDefinitions>
 
             <!-- Parent column (left) -->
@@ -99,6 +99,58 @@
                     FontSize="12"
                     FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                     Padding="12,6,12,6" />
+
+                <!-- Welcome panel — shown at root (no parent) -->
+                <Grid x:Name="WelcomePanel" Grid.Row="0" Grid.RowSpan="3"
+                      Visibility="Collapsed" Background="#0F1318">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Logo + Title -->
+                    <StackPanel Grid.Row="0" HorizontalAlignment="Center"
+                                Margin="0,36,0,0">
+                        <Image Source="ms-appx:///Assets/logo.png"
+                               Height="56" HorizontalAlignment="Center"
+                               Margin="0,0,0,10" />
+                        <TextBlock Text="X-Files"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                                   FontSize="22" Foreground="{StaticResource XFilesAccentBrush}"
+                                   HorizontalAlignment="Center" />
+                        <TextBlock Text="Gamepad File Explorer"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                   FontSize="12" Foreground="{StaticResource XFilesTextMutedBrush}"
+                                   HorizontalAlignment="Center" Margin="0,2,0,0" />
+                    </StackPanel>
+
+                    <!-- Tagline -->
+                    <TextBlock Grid.Row="1"
+                               Text="Browse files and folders&#x0a;with your gamepad"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="13" Foreground="#66FFFFFF"
+                               TextAlignment="Center" TextWrapping="Wrap"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Margin="16,0,16,0" />
+
+                    <!-- File type icons row -->
+                    <StackPanel Grid.Row="2" Orientation="Horizontal"
+                                HorizontalAlignment="Center" Margin="0,0,0,20">
+                        <Image Source="ms-appx:///Assets/Views/FileActionSheet/ctx-folder-120.png"
+                               Width="28" Height="28" Margin="0,0,6,0" Opacity="0.5" />
+                        <Image Source="ms-appx:///Assets/Views/FileActionSheet/ctx-image-120.png"
+                               Width="28" Height="28" Margin="0,0,6,0" Opacity="0.5" />
+                        <Image Source="ms-appx:///Assets/Views/FileActionSheet/ctx-video-120.png"
+                               Width="28" Height="28" Margin="0,0,6,0" Opacity="0.5" />
+                        <Image Source="ms-appx:///Assets/Views/FileActionSheet/ctx-audio-120.png"
+                               Width="28" Height="28" Margin="0,0,6,0" Opacity="0.5" />
+                        <Image Source="ms-appx:///Assets/Views/FileActionSheet/ctx-text-120.png"
+                               Width="28" Height="28" Margin="0,0,6,0" Opacity="0.5" />
+                        <Image Source="ms-appx:///Assets/Views/FileActionSheet/ctx-archive-120.png"
+                               Width="28" Height="28" Opacity="0.5" />
+                    </StackPanel>
+                </Grid>
             </Grid>
 
             <!-- Current column (center) — has focus -->
@@ -311,6 +363,200 @@
                     FontSize="12"
                     FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                     Padding="12,6,12,6" />
+
+                <!-- Quick reference panel — shown at root (no parent) -->
+                <Grid x:Name="QuickRefPanel" Grid.Row="0" Grid.RowSpan="3"
+                      Visibility="Collapsed" Background="#0F1318">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="20,24,20,24">
+                            <!-- Title -->
+                            <TextBlock Text="QUICK REFERENCE"
+                                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                                       FontSize="13" Foreground="{StaticResource XFilesAccentBrush}"
+                                       Margin="0,0,0,16" />
+
+                            <!-- Navigation -->
+                            <TextBlock Text="NAVIGATION"
+                                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                                       FontSize="11" Foreground="{StaticResource XFilesTextMutedBrush}"
+                                       Margin="0,0,0,8" />
+
+                            <!-- DPad -->
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/dpad-3.png"
+                                       Width="26" Height="26" Margin="0,0,10,0"
+                                       VerticalAlignment="Center" />
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="Navigate"
+                                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                               FontSize="13" Foreground="#CCFFFFFF" />
+                                    <TextBlock Text="Up / Down to browse  ·  Left to go back"
+                                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                               FontSize="10" Foreground="{StaticResource XFilesTextDimBrush}"
+                                               Margin="0,1,0,0" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- A -->
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/a-1.png"
+                                       Width="26" Height="26" Margin="0,0,10,0"
+                                       VerticalAlignment="Center" />
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="Enter / Open"
+                                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                               FontSize="13" Foreground="#CCFFFFFF" />
+                                    <TextBlock Text="Enter folder  ·  Play media  ·  Preview file"
+                                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                               FontSize="10" Foreground="{StaticResource XFilesTextDimBrush}"
+                                               Margin="0,1,0,0" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- B -->
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/b-1.png"
+                                       Width="26" Height="26" Margin="0,0,10,0"
+                                       VerticalAlignment="Center" />
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="Back"
+                                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                               FontSize="13" Foreground="#CCFFFFFF" />
+                                    <TextBlock Text="Exit folder  ·  Close overlay  ·  Stop media"
+                                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                               FontSize="10" Foreground="{StaticResource XFilesTextDimBrush}"
+                                               Margin="0,1,0,0" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <Border Height="1" Background="{StaticResource XFilesBorderBrush}" Margin="0,0,0,14" />
+
+                            <!-- Media -->
+                            <TextBlock Text="MEDIA"
+                                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                                        FontSize="11" Foreground="{StaticResource XFilesTextMutedBrush}"
+                                        Margin="0,0,0,8" />
+
+                            <!-- LB/RB -->
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/lb.png"
+                                       Width="26" Height="16" Margin="0,0,4,0"
+                                       VerticalAlignment="Center" />
+                                <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/rb.png"
+                                       Width="26" Height="16" Margin="0,0,10,0"
+                                       VerticalAlignment="Center" />
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="Seek 5s"
+                                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                               FontSize="13" Foreground="#CCFFFFFF" />
+                                    <TextBlock Text="Back / Forward while media plays"
+                                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                               FontSize="10" Foreground="{StaticResource XFilesTextDimBrush}"
+                                               Margin="0,1,0,0" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- LT/RT -->
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/lt.png"
+                                       Width="16" Height="26" Margin="0,0,4,0"
+                                       VerticalAlignment="Center" />
+                                <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/rt.png"
+                                       Width="16" Height="26" Margin="0,0,10,0"
+                                       VerticalAlignment="Center" />
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="Accelerating seek"
+                                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                               FontSize="13" Foreground="#CCFFFFFF" />
+                                    <TextBlock Text="Hold longer = seek faster"
+                                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                               FontSize="10" Foreground="{StaticResource XFilesTextDimBrush}"
+                                               Margin="0,1,0,0" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- L/R Stick -->
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/lstick.png"
+                                       Width="26" Height="26" Margin="0,0,10,0"
+                                       VerticalAlignment="Center" />
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="Volume"
+                                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                               FontSize="13" Foreground="#CCFFFFFF" />
+                                    <TextBlock Text="Left / Right stick adjusts volume"
+                                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                               FontSize="10" Foreground="{StaticResource XFilesTextDimBrush}"
+                                               Margin="0,1,0,0" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <Border Height="1" Background="{StaticResource XFilesBorderBrush}" Margin="0,0,0,14" />
+
+                            <!-- File ops -->
+                            <TextBlock Text="ACTIONS"
+                                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                                       FontSize="11" Foreground="{StaticResource XFilesTextMutedBrush}"
+                                       Margin="0,0,0,8" />
+
+                            <!-- Y -->
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/y-1.png"
+                                       Width="26" Height="26" Margin="0,0,10,0"
+                                       VerticalAlignment="Center" />
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="Context Menu"
+                                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                               FontSize="13" Foreground="#CCFFFFFF" />
+                                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                        <Image Source="ms-appx:///Assets/Views/FileActionSheet/fileactionsheet-copy-48.png"
+                                               Width="14" Height="14" Margin="0,0,3,0" Opacity="0.6" />
+                                        <Image Source="ms-appx:///Assets/Views/FileActionSheet/fileactionsheet-move-48.png"
+                                               Width="14" Height="14" Margin="0,0,3,0" Opacity="0.6" />
+                                        <Image Source="ms-appx:///Assets/Views/FileActionSheet/fileactionsheet-rename-48.png"
+                                               Width="14" Height="14" Margin="0,0,3,0" Opacity="0.6" />
+                                        <Image Source="ms-appx:///Assets/Views/FileActionSheet/fileactionsheet-delete-48.png"
+                                               Width="14" Height="14" Margin="0,0,3,0" Opacity="0.6" />
+                                        <Image Source="ms-appx:///Assets/Views/FileActionSheet/fileactionsheet-extract-48.png"
+                                               Width="14" Height="14" Opacity="0.6" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- X -->
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/x-1.png"
+                                       Width="26" Height="26" Margin="0,0,10,0"
+                                       VerticalAlignment="Center" />
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="Refresh"
+                                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                               FontSize="13" Foreground="#CCFFFFFF" />
+                                    <TextBlock Text="Reload current directory"
+                                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                               FontSize="10" Foreground="{StaticResource XFilesTextDimBrush}"
+                                               Margin="0,1,0,0" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- Start -->
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,0">
+                                <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/menu.png"
+                                       Width="26" Height="26" Margin="0,0,10,0"
+                                       VerticalAlignment="Center" />
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="Start Menu"
+                                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                               FontSize="13" Foreground="#CCFFFFFF" />
+                                    <TextBlock Text="Settings, About, Close app"
+                                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                               FontSize="10" Foreground="{StaticResource XFilesTextDimBrush}"
+                                               Margin="0,1,0,0" />
+                                </StackPanel>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
             </Grid>
         </Grid>
 
@@ -460,6 +706,142 @@
         <controls:InputDialog x:Name="InputDialogControl" />
         <controls:ImageFullScreenOverlay x:Name="ImageFullScreen" />
 
+        <!-- Fullscreen audio overlay -->
+        <Grid x:Name="AudioFullScreenPanel" Visibility="Collapsed"
+              Background="#FF0D1117">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <MediaPlayerElement x:Name="FsAudioPlayer" Grid.Row="0" Grid.RowSpan="3"
+                          AutoPlay="True" AreTransportControlsEnabled="False"
+                          Visibility="Collapsed" />
+
+            <!-- Album art + metadata -->
+            <Grid Grid.Row="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <StackPanel Grid.Row="0" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Border x:Name="FsAlbumArtBorder" CornerRadius="8"
+                            Width="280" Height="280"
+                            Visibility="Collapsed">
+                        <Image x:Name="FsAlbumArtImage" Stretch="UniformToFill" />
+                    </Border>
+                    <Grid x:Name="FsDefaultArtPanel" Width="280" Height="280"
+                          Visibility="Collapsed" Background="#1A1D23" CornerRadius="8">
+                        <FontIcon Glyph="&#xE8D6;" FontSize="80" HorizontalAlignment="Center"
+                                  VerticalAlignment="Center"
+                                  Foreground="{StaticResource XFilesAccentDimBrush}" />
+                    </Grid>
+                </StackPanel>
+                <StackPanel Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                            Margin="0,0,0,20">
+                    <TextBlock x:Name="FsTitleText" TextAlignment="Center"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                               FontSize="22" Foreground="{StaticResource XFilesForegroundBrush}"
+                               TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                               MaxWidth="500" Margin="0,0,0,6" />
+                    <TextBlock x:Name="FsArtistText" TextAlignment="Center"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="15" Foreground="{StaticResource XFilesTextMutedBrush}"
+                               TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                               MaxWidth="400" Margin="0,0,0,4" />
+                    <TextBlock x:Name="FsAlbumText" TextAlignment="Center"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="12" Foreground="{StaticResource XFilesTextDimBrush}"
+                               TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                               MaxWidth="350" />
+                </StackPanel>
+            </Grid>
+
+            <!-- Transport controls -->
+            <Grid Grid.Row="1" Background="#CC1A1D23" Padding="16,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <FontIcon x:Name="FsPlayPauseIcon" Grid.Column="0" Glyph="&#xE768;"
+                          FontSize="26" Foreground="{StaticResource XFilesForegroundBrush}"
+                          VerticalAlignment="Center" Margin="0,0,16,0" />
+                <TextBlock x:Name="FsCurrentTimeText" Grid.Column="1"
+                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                           FontSize="12" Foreground="{StaticResource XFilesTextMutedBrush}"
+                           VerticalAlignment="Center" Margin="0,0,10,0" Text="0:00" />
+                <ProgressBar x:Name="FsAudioProgress" Grid.Column="2"
+                             Height="6" Minimum="0" Maximum="100" Margin="10,0"
+                             IsTabStop="False" IsHitTestVisible="False"
+                             Foreground="{StaticResource XFilesAccentBrush}"
+                             Background="#2A2D33" VerticalAlignment="Center" />
+                <TextBlock x:Name="FsTotalTimeText" Grid.Column="3"
+                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                           FontSize="12" Foreground="{StaticResource XFilesTextMutedBrush}"
+                           VerticalAlignment="Center" Margin="10,0,0,0" Text="0:00" />
+                <TextBlock x:Name="FsVolumeText" Grid.Column="4"
+                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                           FontSize="12" Foreground="{StaticResource XFilesTextMutedBrush}"
+                           VerticalAlignment="Center" Margin="16,0,0,0" Text="Vol 75%" />
+            </Grid>
+
+            <!-- Button legend -->
+            <StackPanel x:Name="FsAudioLegend" Grid.Row="0" Grid.RowSpan="2"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                        Margin="0,0,0,4">
+                <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                    <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/a-1.png"
+                           Width="16" Height="16" Margin="0,0,4,0" VerticalAlignment="Center" />
+                    <TextBlock Text="Play/Pause"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="12" Margin="0,2,0,0"
+                               Foreground="#99FFFFFF" VerticalAlignment="Center" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                    <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/lb.png"
+                           Width="16" Height="16" Margin="0,0,2,0" VerticalAlignment="Center" />
+                    <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/rb.png"
+                           Width="16" Height="16" Margin="0,0,4,0" VerticalAlignment="Center" />
+                    <TextBlock Text="Prev / Next"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="12" Margin="0,2,0,0"
+                               Foreground="#99FFFFFF" VerticalAlignment="Center" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                    <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/lstick.png"
+                           Width="16" Height="16" Margin="0,0,4,0" VerticalAlignment="Center" />
+                    <TextBlock Text="Vol"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="12" Margin="0,2,0,0"
+                               Foreground="#99FFFFFF" VerticalAlignment="Center" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/b-1.png"
+                           Width="16" Height="16" Margin="0,0,4,0" VerticalAlignment="Center" />
+                    <TextBlock Text="Close"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="12" Margin="0,2,0,0"
+                               Foreground="#99FFFFFF" VerticalAlignment="Center" />
+                </StackPanel>
+            </StackPanel>
+
+            <!-- OSD overlay for audio -->
+            <Border x:Name="FsAudioOsdBorder" Grid.Row="0" Grid.RowSpan="3"
+                    HorizontalAlignment="Left" VerticalAlignment="Top"
+                    Margin="24,28,0,0"
+                    Background="#991A1D23" CornerRadius="8" Padding="20,14"
+                    Visibility="Collapsed">
+                <TextBlock x:Name="FsAudioOsdText"
+                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                           FontSize="32" Margin="0,6,0,0"
+                           Foreground="{StaticResource XFilesAccentBrush}" />
+            </Border>
+        </Grid>
+
         <!-- Fullscreen video overlay -->
         <Grid x:Name="VideoFullScreenPanel" Visibility="Collapsed"
               Background="#FF000000" Tapped="OnVideoFullScreenTapped">
@@ -468,7 +850,7 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
-            <MediaElement x:Name="VideoFullScreenPlayer"
+            <MediaPlayerElement x:Name="VideoFullScreenPlayer"
                           Grid.Row="0" Grid.RowSpan="3"
                           AutoPlay="True"
                           AreTransportControlsEnabled="False"
@@ -583,7 +965,120 @@
         <!-- Start menu -->
         <controls:StartMenu x:Name="StartMenuControl" />
 
-        <!-- Placeholder screen overlay -->
+        <!-- About overlay -->
+        <Grid x:Name="AboutOverlay" Visibility="Collapsed"
+              Grid.Row="0" Grid.RowSpan="3"
+              HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid.Background>
+                <SolidColorBrush Color="#E60D1117" />
+            </Grid.Background>
+            <Border HorizontalAlignment="Center" VerticalAlignment="Center"
+                    MaxWidth="480" Width="480"
+                    Background="#FF0D1117" BorderBrush="#FF93C43C" BorderThickness="2"
+                    CornerRadius="8" Padding="32,28">
+                <StackPanel Spacing="0">
+                    <!-- Logo -->
+                    <Image Source="ms-appx:///Assets/Wide310x150Logo.scale-200.png"
+                           Width="120" Height="60"
+                           Stretch="Uniform"
+                           HorizontalAlignment="Center"
+                           Margin="0,0,0,12" />
+
+                    <!-- Title -->
+                    <TextBlock Text="X-FILES"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                               FontSize="28" Foreground="#FF93C43C"
+                               HorizontalAlignment="Center"
+                               CharacterSpacing="120" />
+                    <TextBlock Text="Gamepad File Explorer for Xbox"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="13" Foreground="#88FFFFFF"
+                               HorizontalAlignment="Center"
+                               Margin="0,-2,0,0" />
+
+                    <!-- Accent divider -->
+                    <Border Background="#FF93C43C" Height="2" Width="40"
+                            HorizontalAlignment="Center"
+                            Margin="0,14,0,12" />
+
+                    <!-- Version + Author -->
+                    <TextBlock x:Name="AboutVersionText"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                               FontSize="15" Foreground="#FF93C43C"
+                               HorizontalAlignment="Center" />
+                    <TextBlock Text="Marcelo Frau"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="12" Foreground="#888888"
+                               HorizontalAlignment="Center"
+                               Margin="0,2,0,0" />
+                    <TextBlock Text="GPL-3.0-only"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="11" Foreground="#FFD4A017"
+                               HorizontalAlignment="Center"
+                               Margin="0,2,0,0" />
+
+                    <!-- Separator -->
+                    <Border Background="#252830" Height="1"
+                            HorizontalAlignment="Center" Width="160"
+                            Margin="0,14,0,12" />
+
+                    <!-- Links -->
+                    <TextBlock Text="PROJECT"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                               FontSize="10" Foreground="#55FFFFFF"
+                               HorizontalAlignment="Center"
+                               CharacterSpacing="80" Margin="0,0,0,6" />
+
+                    <HyperlinkButton x:Name="AboutGithubLink"
+                                     NavigateUri="https://github.com/marcelofrau/x-files-uwp"
+                                     HorizontalAlignment="Center"
+                                     Margin="0,0,0,4">
+                        <TextBlock Text="github.com/marcelofrau/x-files-uwp"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                   FontSize="12" Foreground="#FF58A6FF" />
+                    </HyperlinkButton>
+
+                    <Border Background="#252830" Height="1"
+                            HorizontalAlignment="Center" Width="100"
+                            Margin="0,6,0,8" />
+
+                    <TextBlock Text="INSPIRED BY"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                               FontSize="10" Foreground="#55FFFFFF"
+                               HorizontalAlignment="Center"
+                               CharacterSpacing="80" Margin="0,0,0,6" />
+
+                    <HyperlinkButton x:Name="AboutYaziLink"
+                                     NavigateUri="https://github.com/sxyazi/yazi"
+                                     HorizontalAlignment="Center"
+                                     Margin="0,0,0,2">
+                        <TextBlock Text="yazi — blazing fast terminal file manager"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                   FontSize="12" Foreground="#FF58A6FF" />
+                    </HyperlinkButton>
+
+                    <TextBlock Text="Miller column navigation, keyboard-driven UX"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="10" Foreground="#55FFFFFF"
+                               HorizontalAlignment="Center"
+                               Margin="0,0,0,0" />
+
+                    <!-- Footer -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
+                                Margin="0,24,0,0" Spacing="6">
+                        <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/b-1.png"
+                               Width="14" Height="14" Stretch="Uniform"
+                               VerticalAlignment="Center" />
+                        <TextBlock Text="Back"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                   FontSize="11" Foreground="#44FFFFFF"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- Placeholder screen overlay (Settings / Startup Preferences) -->
         <Grid x:Name="PlaceholderOverlay" Visibility="Collapsed"
               Grid.Row="0" Grid.RowSpan="3"
               HorizontalAlignment="Stretch" VerticalAlignment="Stretch">

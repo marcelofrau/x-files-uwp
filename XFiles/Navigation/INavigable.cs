@@ -7,6 +7,7 @@ namespace XFiles.Navigation
     public interface INavigable
     {
         bool IsMediaFullscreen { get; }
+        bool IsMediaPlayerActive { get; }
         void OnDPadUp();
         void OnDPadDown();
         void OnDPadLeft();

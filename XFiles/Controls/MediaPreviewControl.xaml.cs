@@ -2,6 +2,8 @@ using System;
 using System.IO;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading.Tasks;
+using Windows.Media.Core;
+using Windows.Media.Playback;
 using Windows.Storage.Streams;
 using Windows.System;
 using Windows.UI.Xaml;
@@ -20,12 +22,22 @@ namespace XFiles.Controls
         private DispatcherTimer _progressTimer;
         private bool _isAudioMode;
         private string _currentFilePath;
+        private Uri _currentSourceUri;
+
+        private MediaPlayer Player => MediaPlayerElementControl.MediaPlayer;
+        private MediaPlaybackSession Session => Player.PlaybackSession;
+
+        public bool IsAudioMode => _isAudioMode;
+        public TimeSpan CurrentPosition => Session.Position;
 
         public MediaPreviewControl()
         {
             this.InitializeComponent();
-            _progressTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+            _progressTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
             _progressTimer.Tick += OnProgressTimerTick;
+            Player.MediaOpened += OnMediaOpened;
+            Player.MediaEnded += OnMediaEnded;
+            Player.MediaFailed += OnMediaFailed;
         }
 
         public void LoadFile(string filePath)
@@ -44,7 +56,8 @@ namespace XFiles.Controls
                 _ = LoadId3TagsAsync(filePath);
             }
 
-            MediaPlayer.Source = new Uri(filePath);
+            _currentSourceUri = new Uri(filePath);
+            Player.Source = MediaSource.CreateFromUri(_currentSourceUri);
             _isPlaying = false;
             UpdatePlayPauseIcon();
             Visibility = Visibility.Visible;
@@ -54,7 +67,7 @@ namespace XFiles.Controls
         {
             if (_isPlaying)
             {
-                MediaPlayer.Pause();
+                Player.Pause();
                 _isPlaying = false;
                 _progressTimer.Stop();
                 UpdatePlayPauseIcon();
@@ -65,8 +78,9 @@ namespace XFiles.Controls
         public void Stop()
         {
             _progressTimer.Stop();
-            MediaPlayer.Stop();
-            MediaPlayer.Source = null;
+            Player.Pause();
+            Player.Source = null;
+            _currentSourceUri = null;
             _isPlaying = false;
             _isAudioMode = false;
             UpdatePlayPauseIcon();
@@ -82,13 +96,13 @@ namespace XFiles.Controls
         {
             if (_isPlaying)
             {
-                MediaPlayer.Pause();
+                Player.Pause();
                 _isPlaying = false;
                 _progressTimer.Stop();
             }
             else
             {
-                MediaPlayer.Play();
+                Player.Play();
                 _isPlaying = true;
                 _progressTimer.Start();
             }
@@ -145,10 +159,12 @@ namespace XFiles.Controls
             try
             {
                 var bitmap = new BitmapImage();
-                var stream = new InMemoryRandomAccessStream();
-                await stream.WriteAsync(imageData.AsBuffer());
-                stream.Seek(0);
-                await bitmap.SetSourceAsync(stream);
+                using (var stream = new InMemoryRandomAccessStream())
+                {
+                    await stream.WriteAsync(imageData.AsBuffer());
+                    stream.Seek(0);
+                    await bitmap.SetSourceAsync(stream);
+                }
                 AlbumArtImage.Source = bitmap;
             }
             catch (Exception ex)
@@ -170,26 +186,35 @@ namespace XFiles.Controls
             AlbumText.Text = "";
         }
 
-        private void OnMediaOpened(object sender, RoutedEventArgs e)
+        private async void OnMediaOpened(Windows.Media.Playback.MediaPlayer sender, object args)
         {
-            Log.Verbose("Media opened: {Duration}", MediaPlayer.NaturalDuration.TimeSpan);
-            UpdateProgress();
+            await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+            {
+                Log.Verbose("Media opened: {Duration}", Session.NaturalDuration);
+                UpdateProgress();
+            });
         }
 
-        private void OnMediaEnded(object sender, RoutedEventArgs e)
+        private async void OnMediaEnded(Windows.Media.Playback.MediaPlayer sender, object args)
         {
-            _isPlaying = false;
-            UpdatePlayPauseIcon();
-            _progressTimer.Stop();
-            ProgressSlider.Value = 100;
+            await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+            {
+                _isPlaying = false;
+                UpdatePlayPauseIcon();
+                _progressTimer.Stop();
+                ProgressSlider.Value = 100;
+            });
         }
 
-        private void OnMediaFailed(object sender, ExceptionRoutedEventArgs e)
+        private async void OnMediaFailed(Windows.Media.Playback.MediaPlayer sender, Windows.Media.Playback.MediaPlayerFailedEventArgs args)
         {
-            Log.Error("Media preview failed");
-            _isPlaying = false;
-            _progressTimer.Stop();
-            UpdatePlayPauseIcon();
+            await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+            {
+                Log.Information("Media preview failed: {Error} {HResult}", args.Error.ToString(), args.ExtendedErrorCode);
+                _isPlaying = false;
+                _progressTimer.Stop();
+                UpdatePlayPauseIcon();
+            });
         }
 
         private void OnProgressTimerTick(object sender, object e)
@@ -199,15 +224,12 @@ namespace XFiles.Controls
 
         private void UpdateProgress()
         {
-            if (MediaPlayer.NaturalDuration.HasTimeSpan)
+            var total = Session.NaturalDuration;
+            if (total.TotalSeconds > 0)
             {
-                var current = MediaPlayer.Position;
-                var total = MediaPlayer.NaturalDuration.TimeSpan;
-                if (total.TotalSeconds > 0)
-                {
-                    ProgressSlider.Value = (current.TotalSeconds / total.TotalSeconds) * 100;
-                    TimeText.Text = $"{FormatTime(current)} / {FormatTime(total)}";
-                }
+                var current = Session.Position;
+                ProgressSlider.Value = (current.TotalSeconds / total.TotalSeconds) * 100;
+                TimeText.Text = $"{FormatTime(current)} / {FormatTime(total)}";
             }
         }
 
@@ -237,37 +259,35 @@ namespace XFiles.Controls
 
         public void Seek(TimeSpan offset)
         {
-            if (MediaPlayer.Source != null)
+            if (Player.Source != null)
             {
-                var newPos = MediaPlayer.Position + offset;
+                var total = Session.NaturalDuration;
+                var newPos = Session.Position + offset;
                 if (newPos < TimeSpan.Zero) newPos = TimeSpan.Zero;
-                if (MediaPlayer.NaturalDuration.HasTimeSpan)
-                {
-                    var total = MediaPlayer.NaturalDuration.TimeSpan;
-                    if (newPos > total) newPos = total;
-                }
-                MediaPlayer.Position = newPos;
+                if (total.TotalSeconds > 0 && newPos > total) newPos = total;
+                Session.Position = newPos;
             }
             UpdateProgress();
         }
 
         public void SetVolume(double volume)
         {
-            MediaPlayer.Volume = Math.Max(0.0, Math.Min(1.0, volume));
+            Player.Volume = Math.Max(0.0, Math.Min(1.0, volume));
         }
 
         public async Task OpenFullscreen()
         {
-            if (MediaPlayer.Source == null) return;
+            if (_currentSourceUri == null) return;
             var page = VisualTreeHelper.GetParent(this) as FrameworkElement;
             while (page != null && !(page is MillerColumnsPage))
                 page = VisualTreeHelper.GetParent(page) as FrameworkElement;
             if (page is MillerColumnsPage millerPage)
             {
-                bool isVideo = !_isAudioMode && MediaPlayer.NaturalVideoHeight > 0;
-                var source = MediaPlayer.Source;
-                var position = MediaPlayer.Position;
+                bool isVideo = !_isAudioMode && Session.NaturalVideoHeight > 0;
+                var source = _currentSourceUri;
+                var position = Session.Position;
                 StopPlayer();
+                PlayerStateChanged?.Invoke(this, EventArgs.Empty);
                 await millerPage.ShowMediaFullscreenAsync(source, isVideo, position);
             }
         }

@@ -13,15 +13,12 @@
         <!-- Media area -->
         <Grid Grid.Row="0">
             <!-- Video -->
-            <MediaElement x:Name="MediaPlayer"
+            <MediaPlayerElement x:Name="MediaPlayerElementControl"
                           AutoPlay="False"
                           AreTransportControlsEnabled="False"
                           HorizontalAlignment="Stretch"
                           VerticalAlignment="Stretch"
                           Stretch="Uniform"
-                          MediaOpened="OnMediaOpened"
-                          MediaEnded="OnMediaEnded"
-                          MediaFailed="OnMediaFailed"
                           PointerPressed="OnVideoPointerPressed" />
 
             <!-- Audio art + metadata overlay -->

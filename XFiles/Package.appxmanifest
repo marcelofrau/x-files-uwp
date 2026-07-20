@@ -9,7 +9,7 @@
   <Identity
     Name="XFiles.Xbox"
     Publisher="CN=ChangeMe"
-    Version="0.1.0.194" />
+    Version="0.1.0.211" />
 
   <mp:PhoneIdentity PhoneProductId="00000000-0000-0000-0000-000000000000" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 

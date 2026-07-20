@@ -81,6 +81,7 @@ namespace XFiles.Controls
         // INavigable implementation
 
         public bool IsMediaFullscreen => false;
+        public bool IsMediaPlayerActive => false;
 
         public void OnDPadUp()
         {
