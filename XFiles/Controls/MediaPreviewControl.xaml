@@ -1,0 +1,115 @@
+<UserControl
+    x:Class="XFiles.Controls.MediaPreviewControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Visibility="Collapsed">
+
+    <Grid Background="#0F1318">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Media area -->
+        <Grid Grid.Row="0">
+            <!-- Video -->
+            <MediaElement x:Name="MediaPlayer"
+                          AutoPlay="False"
+                          AreTransportControlsEnabled="False"
+                          HorizontalAlignment="Stretch"
+                          VerticalAlignment="Stretch"
+                          Stretch="Uniform"
+                          MediaOpened="OnMediaOpened"
+                          MediaEnded="OnMediaEnded"
+                          MediaFailed="OnMediaFailed"
+                          PointerPressed="OnVideoPointerPressed" />
+
+            <!-- Audio art + metadata overlay -->
+            <Grid x:Name="AudioInfoPanel" Visibility="Collapsed"
+                  Background="#0F1318">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <!-- Album art -->
+                <Grid Grid.Row="0" HorizontalAlignment="Center" VerticalAlignment="Center"
+                      Margin="0,20,0,0">
+                    <Border x:Name="AlbumArtBorder" CornerRadius="4" Width="200" Height="200"
+                            Visibility="Collapsed">
+                        <Image x:Name="AlbumArtImage" Stretch="UniformToFill" />
+                    </Border>
+                    <Grid x:Name="DefaultArtPanel" Width="200" Height="200"
+                          Visibility="Collapsed" Background="#1A1D23">
+                        <FontIcon Glyph="&#xE8D6;" FontSize="64" HorizontalAlignment="Center"
+                                  VerticalAlignment="Center"
+                                  Foreground="{StaticResource XFilesAccentDimBrush}" />
+                    </Grid>
+                </Grid>
+
+                <!-- Metadata text -->
+                <StackPanel Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Top"
+                            Margin="0,24,0,0" MaxWidth="300">
+                    <TextBlock x:Name="TitleText" TextAlignment="Center"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                               FontSize="16"
+                               Foreground="{StaticResource XFilesForegroundBrush}"
+                               TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                               Margin="0,0,0,6" />
+                    <TextBlock x:Name="ArtistText" TextAlignment="Center"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="13"
+                               Foreground="{StaticResource XFilesTextMutedBrush}"
+                               TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                               Margin="0,0,0,4" />
+                    <TextBlock x:Name="AlbumText" TextAlignment="Center"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="11"
+                               Foreground="{StaticResource XFilesTextDimBrush}"
+                               TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+            </Grid>
+        </Grid>
+
+        <!-- Controls bar -->
+        <Grid Grid.Row="1" Background="#1A1D23" Padding="12,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <Button x:Name="BtnPlayPause" Grid.Column="0"
+                    IsTabStop="False" IsHitTestVisible="False"
+                    Background="Transparent" BorderThickness="0"
+                    Padding="6,4">
+                <FontIcon x:Name="PlayPauseIcon" Glyph="&#xE768;" FontSize="18"
+                          Foreground="{StaticResource XFilesForegroundBrush}" />
+            </Button>
+
+            <Grid Grid.Column="1" Margin="10,0" VerticalAlignment="Center">
+                <ProgressBar x:Name="ProgressSlider"
+                             Height="6" Minimum="0" Maximum="100"
+                             IsTabStop="False" IsHitTestVisible="False"
+                             Foreground="{StaticResource XFilesAccentBrush}"
+                             Background="#2A2D33" />
+            </Grid>
+
+            <TextBlock x:Name="TimeText" Grid.Column="2"
+                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                       FontSize="11" Margin="0,0,10,0"
+                       Foreground="{StaticResource XFilesTextMutedBrush}"
+                       VerticalAlignment="Center"
+                       Text="0:00 / 0:00" />
+
+            <Button x:Name="BtnFullscreen" Grid.Column="3"
+                    IsTabStop="False" IsHitTestVisible="False"
+                    Background="Transparent" BorderThickness="0"
+                    Padding="6,4">
+                <FontIcon Glyph="&#xE740;" FontSize="16"
+                          Foreground="{StaticResource XFilesTextMutedBrush}" />
+            </Button>
+        </Grid>
+    </Grid>
+</UserControl>
