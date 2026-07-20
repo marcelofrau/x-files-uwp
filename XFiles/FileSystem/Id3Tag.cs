@@ -65,20 +65,30 @@ namespace XFiles.FileSystem
         public static Id3Tag ReadFromFile(string filePath)
         {
             byte[] header = ReadFileBytes(filePath, 10);
-            if (header == null || header.Length < 10) return null;
+            if (header == null || header.Length < 10)
+            {
+                Log.Warning("Id3Tag: failed to read header from {Path} (bytes={Bytes})", filePath, header?.Length);
+                return null;
+            }
             if (header[0] != 'I' || header[1] != 'D' || header[2] != '3')
             {
-                Log.Verbose("Id3Tag: no ID3v2 header in {Path}", filePath);
+                Log.Verbose("Id3Tag: no ID3v2 header in {Path} (first bytes: {B0} {B1} {B2})", filePath, header[0], header[1], header[2]);
                 return null;
             }
 
             int id3Version = header[3]; // 3 = ID3v2.3, 4 = ID3v2.4
             int tagSize = SynchsafeToInt(header, 6);
-            Log.Verbose("Id3Tag: found ID3v2.{Version}, tagSize={Size} in {Path}", id3Version, tagSize, filePath);
+            Log.Information("Id3Tag: ID3v2.{Version}, tagSize={Size}, reading {Read} bytes from {Path}",
+                id3Version, tagSize, tagSize + 10, filePath);
             if (tagSize <= 0 || tagSize > MaxTagSize) return null;
 
             byte[] tagData = ReadFileBytes(filePath, tagSize + 10);
-            if (tagData == null) return null;
+            if (tagData == null)
+            {
+                Log.Warning("Id3Tag: ReadFileBytes returned null for {Path}", filePath);
+                return null;
+            }
+            Log.Information("Id3Tag: read {Length} bytes, parsing frames from offset 10", tagData.Length);
 
             var tag = ParseTag(tagData, tagSize, id3Version);
             Log.Information("Id3Tag: title={Title} artist={Artist} album={Album} art={HasArt} in {Path}",
@@ -91,6 +101,7 @@ namespace XFiles.FileSystem
             var tag = new Id3Tag();
             int pos = 10;
             int end = Math.Min(data.Length, 10 + tagSize);
+            int frameCount = 0;
 
             while (pos + 10 <= end)
             {
@@ -101,6 +112,8 @@ namespace XFiles.FileSystem
                 int frameSize = id3Version >= 4
                     ? SynchsafeToInt(data, pos + 4)
                     : (data[pos + 4] << 24) | (data[pos + 5] << 16) | (data[pos + 6] << 8) | data[pos + 7];
+
+                Log.Verbose("Id3Tag: frame[{Count}] id={Id} size={Size} at pos={Pos}", frameCount, frameId, frameSize, pos);
 
                 if (frameSize <= 0 || pos + 10 + frameSize > end) break;
 
@@ -117,8 +130,10 @@ namespace XFiles.FileSystem
                     ReadApicFrame(frameData, tag);
 
                 pos += 10 + frameSize;
+                frameCount++;
             }
 
+            Log.Information("Id3Tag: parsed {Count} frames, end={End}", frameCount, end);
             return tag;
         }
 
