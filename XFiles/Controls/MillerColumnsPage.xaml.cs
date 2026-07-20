@@ -50,6 +50,9 @@ namespace XFiles.Controls
             _fsProgressTimer.Tick += OnFSProgressTimerTick;
             _fsHideTimer.Tick += OnFsHideTimerTick;
 
+            _mediaLoadTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
+            _mediaLoadTimer.Tick += OnMediaLoadTimerTick;
+
             PreviewCodeView.NavigationStarting += OnPreviewNavigationStarting;
             PreviewCodeView.NavigationCompleted += OnPreviewNavigationCompleted;
 
@@ -261,7 +264,9 @@ namespace XFiles.Controls
                         string mediaPath = _navigator.Preview.PreviewFilePath;
                         PreviewStatus.Text = _navigator.Preview.PreviewFileType;
                         PreviewMediaPanel.Visibility = Visibility.Visible;
-                        MediaPreview.LoadFile(mediaPath);
+                        _pendingMediaPath = mediaPath;
+                        _mediaLoadTimer.Stop();
+                        _mediaLoadTimer.Start();
                         break;
 
                     case FilePreviewType.Error:
@@ -291,6 +296,7 @@ namespace XFiles.Controls
             PreviewCodeView.Visibility = Visibility.Collapsed;
             PreviewImagePanel.Visibility = Visibility.Collapsed;
             PreviewMediaPanel.Visibility = Visibility.Collapsed;
+            _mediaLoadTimer.Stop();
             MediaPreview.Stop();
             PreviewErrorPanel.Visibility = Visibility.Collapsed;
             PreviewUnsupportedPanel.Visibility = Visibility.Collapsed;
@@ -1411,13 +1417,28 @@ namespace XFiles.Controls
 
         private DispatcherTimer _fsOsdHideTimer = new DispatcherTimer();
 
+        // Media load debounce — avoids loading video/audio on every scroll tick
+        private DispatcherTimer _mediaLoadTimer;
+        private string _pendingMediaPath;
+
         public void StopAllTimers()
         {
             _fsProgressTimer.Stop();
             _fsHideTimer.Stop();
             _fsOsdHideTimer.Stop();
+            _mediaLoadTimer.Stop();
             ImageFullScreen?.Close();
             MediaPreview?.StopPlayer();
+        }
+
+        private void OnMediaLoadTimerTick(object sender, object e)
+        {
+            _mediaLoadTimer.Stop();
+            if (!string.IsNullOrEmpty(_pendingMediaPath))
+            {
+                MediaPreview.LoadFile(_pendingMediaPath);
+                _pendingMediaPath = null;
+            }
         }
 
         // --- File Action Sheet ---

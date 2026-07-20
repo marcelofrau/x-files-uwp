@@ -127,23 +127,44 @@ namespace XFiles.Navigation
                     reading.RightThumbstickX, reading.RightThumbstickY);
             }
 
-            // D-pad — just pressed only
-            if ((justPressed & GamepadButtons.DPadUp) != 0)
+            // D-pad — initial press fires immediately, then repeats while held
+            var dpadNow = pressed & (GamepadButtons.DPadUp | GamepadButtons.DPadDown | GamepadButtons.DPadLeft | GamepadButtons.DPadRight);
+            var dpadJustPressed = dpadNow & ~_dpadHeld;
+            var dpadJustReleased = ~dpadNow & _dpadHeld;
+
+            if ((dpadJustPressed & GamepadButtons.DPadUp) != 0)
             {
                 nav.OnDPadUp();
+                _dpadRepeatCooldown = DpadInitialDelay;
             }
-            if ((justPressed & GamepadButtons.DPadDown) != 0)
+            if ((dpadJustPressed & GamepadButtons.DPadDown) != 0)
             {
                 nav.OnDPadDown();
+                _dpadRepeatCooldown = DpadInitialDelay;
             }
-            if ((justPressed & GamepadButtons.DPadLeft) != 0)
+            if ((dpadJustPressed & GamepadButtons.DPadLeft) != 0)
             {
                 nav.OnDPadLeft();
+                _dpadRepeatCooldown = DpadInitialDelay;
             }
-            if ((justPressed & GamepadButtons.DPadRight) != 0)
+            if ((dpadJustPressed & GamepadButtons.DPadRight) != 0)
             {
                 nav.OnDPadRight();
+                _dpadRepeatCooldown = DpadInitialDelay;
             }
+
+            // Repeat while held
+            if (_dpadRepeatCooldown > 0) _dpadRepeatCooldown -= 16;
+            if (_dpadRepeatCooldown <= 0 && dpadNow != 0)
+            {
+                if ((dpadNow & GamepadButtons.DPadUp) != 0) nav.OnDPadUp();
+                else if ((dpadNow & GamepadButtons.DPadDown) != 0) nav.OnDPadDown();
+                else if ((dpadNow & GamepadButtons.DPadLeft) != 0) nav.OnDPadLeft();
+                else if ((dpadNow & GamepadButtons.DPadRight) != 0) nav.OnDPadRight();
+                _dpadRepeatCooldown = DpadRepeatInterval;
+            }
+
+            _dpadHeld = dpadNow;
 
             // A, B, Y — just pressed only
             if ((justPressed & GamepadButtons.A) != 0)
@@ -226,6 +247,10 @@ namespace XFiles.Navigation
 
         private double _stickCooldown;
         private double _shoulderSeekCooldown;
+        private double _dpadRepeatCooldown;
+        private GamepadButtons _dpadHeld;
+        private const double DpadInitialDelay = 300;
+        private const double DpadRepeatInterval = 80;
 
         private void HandleLeftStick(double x, double y, INavigable nav)
         {
