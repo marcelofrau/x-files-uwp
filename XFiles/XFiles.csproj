@@ -95,6 +95,7 @@
     <Compile Include="FileSystem\DirectoryScanner.cs" />
     <Compile Include="FileSystem\FilePreviewService.cs" />
     <Compile Include="FileSystem\ArchiveBrowser.cs" />
+    <Compile Include="FileSystem\Id3Tag.cs" />
     <Compile Include="FileSystem\Win32FileStream.cs" />
     <Compile Include="FileSystem\FileOperations.cs" />
     <Compile Include="Log.cs" />
@@ -120,11 +121,20 @@
     <Compile Include="Controls\FileActionSheet.xaml.cs">
       <DependentUpon>FileActionSheet.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Controls\StartMenu.xaml.cs">
+      <DependentUpon>StartMenu.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Controls\ConfirmDialog.xaml.cs">
       <DependentUpon>ConfirmDialog.xaml</DependentUpon>
     </Compile>
     <Compile Include="Controls\InputDialog.xaml.cs">
       <DependentUpon>InputDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\MediaPreviewControl.xaml.cs">
+      <DependentUpon>MediaPreviewControl.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\ImageFullScreenOverlay.xaml.cs">
+      <DependentUpon>ImageFullScreenOverlay.xaml</DependentUpon>
     </Compile>
   </ItemGroup>
   <ItemGroup>
@@ -136,7 +146,7 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
-    <Page Include="Theming\RetroTheme.xaml">
+    <Page Include="Theming\BladeTheme.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
@@ -168,11 +178,23 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="Controls\StartMenu.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Page Include="Controls\ConfirmDialog.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Controls\InputDialog.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\MediaPreviewControl.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\ImageFullScreenOverlay.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
@@ -219,9 +241,81 @@
     <Content Include="Assets\FileTypes\file-archive-24.png" />
     <Content Include="Assets\FileTypes\file-generic-24.png" />
     <Content Include="Assets\FileTypes\drive-harddisk-24.png" />
+    <Content Include="Assets\FileTypes\filetype-image-png-24.png" />
+    <Content Include="Assets\FileTypes\filetype-image-jpeg-24.png" />
+    <Content Include="Assets\FileTypes\filetype-image-gif-24.png" />
+    <Content Include="Assets\FileTypes\filetype-image-bmp-24.png" />
+    <Content Include="Assets\FileTypes\filetype-image-svg-24.png" />
+    <Content Include="Assets\FileTypes\filetype-image-tiff-24.png" />
+    <Content Include="Assets\FileTypes\filetype-image-pbm-24.png" />
+    <Content Include="Assets\FileTypes\filetype-image-tga-24.png" />
+    <Content Include="Assets\FileTypes\filetype-video-mp4-24.png" />
+    <Content Include="Assets\FileTypes\filetype-video-avi-24.png" />
+    <Content Include="Assets\FileTypes\filetype-video-mkv-24.png" />
+    <Content Include="Assets\FileTypes\filetype-video-webm-24.png" />
+    <Content Include="Assets\FileTypes\filetype-video-flv-24.png" />
+    <Content Include="Assets\FileTypes\filetype-video-wmv-24.png" />
+    <Content Include="Assets\FileTypes\filetype-audio-mp3-24.png" />
+    <Content Include="Assets\FileTypes\filetype-audio-flac-24.png" />
+    <Content Include="Assets\FileTypes\filetype-audio-wav-24.png" />
+    <Content Include="Assets\FileTypes\filetype-audio-ogg-24.png" />
+    <Content Include="Assets\FileTypes\filetype-audio-m4a-24.png" />
+    <Content Include="Assets\FileTypes\filetype-audio-generic-24.png" />
+    <Content Include="Assets\FileTypes\filetype-application-iso-24.png" />
+    <Content Include="Assets\FileTypes\filetype-application-ciso-24.png" />
+    <Content Include="Assets\FileTypes\filetype-text-generic-24.png" />
+    <Content Include="Assets\FileTypes\filetype-text-python-24.png" />
+    <Content Include="Assets\FileTypes\filetype-text-javascript-24.png" />
+    <Content Include="Assets\FileTypes\filetype-text-c-24.png" />
+    <Content Include="Assets\FileTypes\filetype-text-cpp-24.png" />
+    <Content Include="Assets\FileTypes\filetype-text-csharp-24.png" />
+    <Content Include="Assets\FileTypes\filetype-text-java-24.png" />
+    <Content Include="Assets\FileTypes\filetype-text-rust-24.png" />
+    <Content Include="Assets\FileTypes\filetype-text-go-24.png" />
+    <Content Include="Assets\FileTypes\filetype-text-ruby-24.png" />
+    <Content Include="Assets\FileTypes\filetype-text-perl-24.png" />
+    <Content Include="Assets\FileTypes\filetype-text-lua-24.png" />
+    <Content Include="Assets\FileTypes\filetype-text-shell-24.png" />
+    <Content Include="Assets\FileTypes\filetype-text-markdown-24.png" />
+    <Content Include="Assets\FileTypes\filetype-text-log-24.png" />
+    <Content Include="Assets\FileTypes\filetype-text-css-24.png" />
+    <Content Include="Assets\FileTypes\filetype-text-xml-24.png" />
+    <Content Include="Assets\FileTypes\filetype-application-pdf-24.png" />
+    <Content Include="Assets\FileTypes\filetype-application-tar-24.png" />
+    <Content Include="Assets\FileTypes\filetype-application-gzip-24.png" />
+    <Content Include="Assets\FileTypes\filetype-application-executable-24.png" />
+    <Content Include="Assets\Views\FileActionSheet\fileactionsheet-copy-48.png" />
+    <Content Include="Assets\Views\FileActionSheet\fileactionsheet-move-48.png" />
+    <Content Include="Assets\Views\FileActionSheet\fileactionsheet-extract-48.png" />
+    <Content Include="Assets\Views\FileActionSheet\fileactionsheet-rename-48.png" />
+    <Content Include="Assets\Views\FileActionSheet\fileactionsheet-delete-48.png" />
+    <Content Include="Assets\Views\FileActionSheet\fileactionsheet-createfolder-48.png" />
+    <Content Include="Assets\Views\FileActionSheet\fileactionsheet-createzip-48.png" />
+    <Content Include="Assets\Views\FileActionSheet\ctx-drive-120.png" />
+    <Content Include="Assets\Views\FileActionSheet\ctx-generic-120.png" />
+    <Content Include="Assets\Views\FileActionSheet\ctx-archive-120.png" />
+    <Content Include="Assets\Views\FileActionSheet\ctx-image-120.png" />
+    <Content Include="Assets\Views\FileActionSheet\ctx-video-120.png" />
+    <Content Include="Assets\Views\FileActionSheet\ctx-audio-120.png" />
+    <Content Include="Assets\Views\FileActionSheet\ctx-text-120.png" />
+    <Content Include="Assets\Views\FileActionSheet\ctx-folder-green-120.png" />
+    <Content Include="Assets\Views\FileActionSheet\ctx-folder-orange-120.png" />
+    <Content Include="Assets\Views\FileActionSheet\ctx-folder-blue-120.png" />
+    <Content Include="Assets\Views\FileActionSheet\ctx-folder-yellow-120.png" />
+    <Content Include="Assets\Views\FileActionSheet\ctx-folder-deeporange-120.png" />
+    <Content Include="Assets\Views\FileActionSheet\ctx-folder-indigo-120.png" />
+    <Content Include="Assets\Views\FileActionSheet\ctx-folder-magenta-120.png" />
+    <Content Include="Assets\Views\FileActionSheet\ctx-folder-yaru-120.png" />
+    <Content Include="Assets\Views\FileActionSheet\ctx-folder-darkcyan-120.png" />
+    <Content Include="Assets\Views\StartMenu\startmenu-settings-48.png" />
+    <Content Include="Assets\Views\StartMenu\startmenu-startup-48.png" />
+    <Content Include="Assets\Views\StartMenu\startmenu-about-48.png" />
+    <Content Include="Assets\Views\StartMenu\startmenu-close-48.png" />
     <Content Include="Assets\highlight.min.js" />
     <Content Include="Assets\highlight-aco.css" />
     <Content Include="Assets\Inconsolata-Regular.ttf" />
+    <Content Include="Assets\Fonts\Oxanium-Bold.ttf" />
+    <Content Include="Assets\Fonts\Oxanium-Regular.ttf" />
     <Content Include="Assets\mac-startup.mp3" />
   </ItemGroup>
   <ItemGroup>
