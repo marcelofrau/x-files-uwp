@@ -46,6 +46,12 @@ jobs:
             echo "cert_thumbprint=$($cert.Thumbprint)" >> $env:GITHUB_OUTPUT
           }
 
+      - name: Setup NuGet
+        uses: nuget/setup-nuget@v2
+
+      - name: Restore NuGet packages
+        run: nuget restore XFiles.sln
+
       - name: Build
         shell: pwsh
         run: |
