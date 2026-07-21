@@ -1,0 +1,92 @@
+
+-- Completo
+- tem uma animacao muito bacana quando abre cada pasta, os listviews carregam os itens e anima como se eles tivessem meio q scrollado/movendo pra cima, da pra fazer essa animacao na verdade indo pra esquerda ou pra direita dependendo se o usuario deu Dpad pra direta ou esquerda?
+- o zoomin/out de imagens quando tao em fullscreen tem q ser smooth e animado. o pan da imagem pode ser mais rapido e mais suave. a legenda B/Tap to close deve usar a mesma identidade visual do resto da aplicacao, com imagem do botao B e Close em seguida. e o pan parece estar invertido.
+- media player buttons nao devem ter foco nunca. todas as acoes sao controladas pelos botoes do gamepad descrito na legenda q fica embaixo. os botoes sao meramente visuais. 
+- media player fullscreen deve ficar realmente em full screen, o auto hide da barra de progresso parece fazer auto hide mas a area de video ta cortada, a barra de play/progresso devem ficar em overlay em cima, e a legenda dos botoes deve aparecer tambem grudada em cima dessa barra, o B de back, deve ser incorporado a essa "legenda" dando uma impressao visual melhor ao usuario.
+
+- fazer controle geral de erros e excexoes pra mostrar na tela que deu algum erro, mostrando um alerta de log com as coisas tipo a janela de erro geral do xb-vault, F:\workspace\xb-homebrew-vault, pra ajudar a abrir erro ou reportar depois nas issues do github
+- no github tambem na parte de issues, acho que voce pode criar templates de features, bugs e etc, assim tambem ja definindo o que precisa pra quando abrir bug e etc, passos pra reproduzir, screenshots e etc. (tudo em ingles claro)
+
+- Start abre um dropdown com as opcoes:
+	- Settings
+	- Startup and Preferences
+	- About
+	- Close Application
+
+- Botao B quando ta no navegador de arquivos, ele faz o mesmo que <- e nao eh um back.
+
+- se tiver reproduzindo qualquer midia, as funcoes de navegacao ficam paralizadas ate dar stop pra nao acidentalmente sair do player, entao seek, volume e outras coisas funcionam no player nao fullscreen. a unica coisa que pode de fato sair eh o pracima e pra baixo.
+
+- se o player tiver tocando algo e ir pra fullscreen, tem que continuar exatamente do mesmo ponto que tava antes, assim dando uma impressao mais smooth.
+
+- player de video no fullscreen ta colocando DPAD up pra play/pause, nesse caso fazer o A mesmo fazer isso.  Lstick pode ter uma imagem de verdade, nos assets ou nas skills vc vai poder encontrar pra atualizar na legenda.
+
+menu de contexto overlay (Opcao Y)
+===============================================
+|                                             |
+|                           [context menu]    |
+|                           |Copiar      |    |
+| [Icone grande]            |Colar       |    |
+| Descricao/nome arquivo    |Renomear.   |    |
+|                           |xxx         |    |
+|                           [============]    |
+|                                             |
+===============================================
+no menu de contexto (Y), deixar as coisas mais ancoradas ao centro, tanto o dropdown menu (actions)
+quanto o icone e nome.. a descricao nao precisa pode tirar.. e tem que melhorar o layout, ficou cada coisa jogada pra um canto, seria mais bonito se ficasse tudo meio que no centro, dividido em colunas, mas a coluna da esquerda ancorada na direita e a coluna da direita ancorada na esquerda sabe?
+
+- se musica for mp3 ou tiver metadados id3 tags ou algo assim, mostrar na tela de preview. alem disso seria legal colocar uma imagem de fundo no meio do player em cima pra mostrar q eh uma musica q ta selecionada, alguns arquivos suportam imagens no id3 se nao me engano, se tiver imagem mostrar tambem, mas hoje nao vejo nenhum detalhe desses dados nas mp3. certeza q ta lendo as informacoes id3 de verdade?
+
+- se na pasta tem muitos videos, eu selecionar um apos o outro ta dando engasgada, acho q ta tentando carregar o video, talvez seja legal dar um cooldown pra quando eh video/musica e permitir a selecao de correr smooth. 	
+
+- texto no OSD do player de video ainda precisa descer mais, essa fonte tem alinhamento diferente do Y, e esta um pouco acima do que deveria, tem q baixar ela um pouco.
+
+- tela de about ajustar, e colocar links e referencias reais do projeto. link do github ta errado e nao notei de ter visto a versao. alem de nao ter nenhuma imagem ou logo e vc poderia colocar.
+	- veja como foi feita a do dosbox-pure-unleashed-uwp e a do xb-homebrew-vault e faca uma bem bonita pro x-files tbm.
+	- F:\workspace\xb-homebrew-vault
+	- F:\workspace\vs2022\dosbox-pure-unleashed-uwp
+
+-- Em progresso
+
+- em algum momento depois de usar e testar, os dpads ficaram duplicando eventos. se movendo de 2x em 2x. tentar verificar o que acontece.. 
+
+-- Backlog
+
+- se tiver tocando midia seja musica ou video, e tiver mais arquivos na pasta, pular pro proximo automaticamente quando terminar de tocar. 
+
+- implementar renomear
+- implementar janela de progresso de copia com barra de progresso e indicacao de copia, 
+  mostrando dados e informacoes como destino, origem e etc.
+- implementar copiar (tem que em algum lugar mostrar que tem coisa copiada)
+- implementar colar
+	- se selecao tiver em arquivo, colar arquivo na pasta atual (mostrar confirmacao)
+	- se selecao tiver em pasta, desambiguar se qer colar na pasta selecionada ou na pasta atual (pode ser um confirm dialog)
+	
+- implementar mover -> mostrando qual pasta escolher pra mover.
+- Implementar nova pasta
+
+- implementar zipar pasta/arquivo
+	- perguntar nome do zip sugerindo o mesmo nome do arquivo/pasta .zip
+
+- implementar extrair zip
+	- dialogo de extracao, com pergunta se cria subpasta ou nao.
+	- smart subfolder, se o zip ja tem subpasta, e usuario tinha pedido pra criar pasta, verificar pra nao ficar uma pasta nova com uma pasta vazia e fazer a extracao de maneira que faça mais sentido de um jeitinho mais esperto.. 
+
+- ainda temos um bug no Dropdown de selecao... ele devia "ganhar" foco e ficar exclusivo em overlay ate que o usuario ou cancele com B, ou escolha uma opcao. mas ainda assim, assim que abre o dropdown, se eu dou dpad down ou up com ele aberto, o dropdown fecha.
+- se zip tem pasta, e navega pra pasta depois volta, depois navega pra pasta de novo, ela ta ficando sem arquivos, pode ter dado algum erro.
+
+- a acao de new folder, tem q fazer uma pergunta ou mostrar um dropdown, indicando se eh pra criar a pasta dentro da outra pasta ou no mesmo nivel dela (caso a selecao esteja em uma pasta), pode ser confuso do jeito q ta. 
+
+- melhorar seek de video player. fazer mais proximo ao kodi.
+
+--- Ideias
+- vumeter bar igual winamp com AudioGraph
+- preview de pdf tambem
+- background music in the application
+- initial media file on startup
+- https://frontend-hero.com/how-to-animate-gradients-css
+
+
+
+
