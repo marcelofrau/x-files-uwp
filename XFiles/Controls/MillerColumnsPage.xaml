@@ -700,6 +700,7 @@
         <controls:FileActionSheet x:Name="FileActionSheetControl" />
         <controls:ConfirmDialog x:Name="ConfirmDialogControl" />
         <controls:InputDialog x:Name="InputDialogControl" />
+        <controls:OperationProgressDialog x:Name="OpProgressDialog" />
         <controls:ImageFullScreenOverlay x:Name="ImageFullScreen" />
 
         <!-- Fullscreen audio overlay -->

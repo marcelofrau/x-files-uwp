@@ -861,6 +861,7 @@ namespace XFiles.Controls
             if (VideoFullScreenPanel.Visibility == Visibility.Visible) { CloseVideoFullScreen(); UpdateFooterALabelFromSelection(); return; }
             if (AudioFullScreenPanel.Visibility == Visibility.Visible) { CloseAudioFullscreen(); UpdateMediaPlayerFocusUI(); return; }
             if (FileActionSheetControl.IsOpen) { FileActionSheetControl.ForwardDPad(Windows.System.VirtualKey.GamepadB); return; }
+            if (OpProgressDialog.IsOpen) { OpProgressDialog.Close(); return; }
             if (_isMediaPlayerActive)
             {
                 MediaPreview.StopPlayer();
@@ -1010,7 +1011,8 @@ namespace XFiles.Controls
             PlaceholderOverlay.Visibility == Visibility.Visible
             || AboutOverlay.Visibility == Visibility.Visible
             || InputDialogControl.Visibility == Visibility.Visible
-            || ConfirmDialogControl.Visibility == Visibility.Visible;
+            || ConfirmDialogControl.Visibility == Visibility.Visible
+            || OpProgressDialog.IsOpen;
 
         private bool IsAnyFullscreen =>
             ImageFullScreen.IsOpen || VideoFullScreenPanel.Visibility == Visibility.Visible
@@ -1907,13 +1909,61 @@ namespace XFiles.Controls
         private async Task HandleCopyAsync(FileEntry entry)
         {
             Log.Information("HandleCopyAsync: {File}", entry.FullPath);
-            CurrentStatus.Text = $"Copy: {entry.Name} (not yet implemented)";
+            var destDir = await InputDialogControl.ShowAsync("Copy to (full path)", _navigator.Current?.Path ?? "");
+            if (string.IsNullOrEmpty(destDir)) return;
+
+            var progress = new Progress<FileOperations.OperationProgress>(p =>
+            {
+                Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                    OpProgressDialog.UpdateProgress(p));
+            });
+
+            OpProgressDialog.Show("Copying", entry.Name, destDir);
+            var result = await FileOperations.CopyAsync(entry.FullPath, destDir, progress);
+            OpProgressDialog.Complete();
+            await Task.Delay(400);
+            OpProgressDialog.Close();
+
+            if (result == FileOperations.OperationResult.Success)
+            {
+                Log.Information("HandleCopyAsync: success");
+                await _navigator.RefreshCurrentAsync();
+            }
+            else
+            {
+                Log.Warning("HandleCopyAsync: failed");
+                CurrentStatus.Text = $"Copy failed: {entry.Name}";
+            }
         }
 
         private async Task HandleMoveAsync(FileEntry entry)
         {
             Log.Information("HandleMoveAsync: {File}", entry.FullPath);
-            CurrentStatus.Text = $"Move: {entry.Name} (not yet implemented)";
+            var destDir = await InputDialogControl.ShowAsync("Move to (full path)", _navigator.Current?.Path ?? "");
+            if (string.IsNullOrEmpty(destDir)) return;
+
+            var progress = new Progress<FileOperations.OperationProgress>(p =>
+            {
+                Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                    OpProgressDialog.UpdateProgress(p));
+            });
+
+            OpProgressDialog.Show("Moving", entry.Name, destDir);
+            var result = await FileOperations.MoveAsync(entry.FullPath, destDir, progress);
+            OpProgressDialog.Complete();
+            await Task.Delay(400);
+            OpProgressDialog.Close();
+
+            if (result == FileOperations.OperationResult.Success)
+            {
+                Log.Information("HandleMoveAsync: success");
+                await _navigator.RefreshCurrentAsync();
+            }
+            else
+            {
+                Log.Warning("HandleMoveAsync: failed");
+                CurrentStatus.Text = $"Move failed: {entry.Name}";
+            }
         }
 
         private async Task HandleRenameAsync(FileEntry entry)
@@ -2003,7 +2053,33 @@ namespace XFiles.Controls
         private async Task HandleExtractAsync(FileEntry entry)
         {
             Log.Information("HandleExtractAsync: {File}", entry.FullPath);
-            CurrentStatus.Text = $"Extract: {entry.Name} (not yet implemented)";
+            var currentPath = _navigator.Current?.Path;
+            if (string.IsNullOrEmpty(currentPath)) return;
+
+            var destDir = System.IO.Path.Combine(currentPath, System.IO.Path.GetFileNameWithoutExtension(entry.Name));
+
+            var progress = new Progress<FileOperations.OperationProgress>(p =>
+            {
+                Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                    OpProgressDialog.UpdateProgress(p));
+            });
+
+            OpProgressDialog.Show("Extracting", entry.Name, destDir);
+            var result = await FileOperations.ExtractAsync(entry.FullPath, destDir, progress);
+            OpProgressDialog.Complete();
+            await Task.Delay(400);
+            OpProgressDialog.Close();
+
+            if (result == FileOperations.OperationResult.Success)
+            {
+                Log.Information("HandleExtractAsync: success");
+                await _navigator.RefreshCurrentAsync();
+            }
+            else
+            {
+                Log.Warning("HandleExtractAsync: failed");
+                CurrentStatus.Text = $"Extract failed: {entry.Name}";
+            }
         }
 
         private async Task HandleCreateFolderAsync()
@@ -2047,10 +2123,16 @@ namespace XFiles.Controls
             if (string.IsNullOrEmpty(currentPath)) return;
 
             var zipPath = System.IO.Path.Combine(currentPath, zipName);
+
+            OpProgressDialog.Show("Creating ZIP", entry.Name, zipPath);
             var result = await FileOperations.CreateZipAsync(entry.FullPath, zipPath);
+            OpProgressDialog.Complete();
+            await Task.Delay(400);
+            OpProgressDialog.Close();
+
             if (result == FileOperations.OperationResult.Success)
             {
-                Log.Information("HandleCreateZipAsync: success — refreshing");
+                Log.Information("HandleCreateZipAsync: success");
                 await _navigator.RefreshCurrentAsync();
             }
             else
