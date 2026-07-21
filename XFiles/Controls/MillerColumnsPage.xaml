@@ -364,7 +364,7 @@
 
                 <!-- Quick reference panel — shown at root (no parent) -->
                 <Grid x:Name="QuickRefPanel" Grid.Row="0" Grid.RowSpan="3"
-                      Visibility="Collapsed" Background="#0F1318" Opacity="0.8">
+                      Visibility="Collapsed" Background="#0F1318" Opacity="0.5">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="20,24,20,24">
                             <!-- Title -->
@@ -896,8 +896,8 @@
                                Foreground="{StaticResource XFilesAccentBrush}" />
                 </StackPanel>
             </Border>
-            <!-- Button legend (floating over bottom of video) -->
-            <StackPanel x:Name="FSLegendText" Grid.Row="0"
+            <!-- Button legend (floating over bottom, below seekbar) -->
+            <StackPanel x:Name="FSLegendText" Grid.Row="0" Grid.RowSpan="2"
                         Orientation="Horizontal"
                         HorizontalAlignment="Center" VerticalAlignment="Bottom"
                         Margin="0,0,0,4">
@@ -923,16 +923,6 @@
                     <Image Source="ms-appx:///Assets/GamepadButtons/lr/button_xbox_digital_bumper_light_2.png"
                            Width="16" Height="16" Margin="0,0,4,0" VerticalAlignment="Center" />
                     <TextBlock Text="5s"
-                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                               FontSize="12" Margin="0,2,0,0"
-                               Foreground="#99FFFFFF" VerticalAlignment="Center" />
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
-                    <Image Source="ms-appx:///Assets/GamepadButtons/lr/button_xbox_analog_trigger_light_1.png"
-                           Width="16" Height="16" Margin="0,0,2,0" VerticalAlignment="Center" />
-                    <Image Source="ms-appx:///Assets/GamepadButtons/lr/button_xbox_analog_trigger_light_2.png"
-                           Width="16" Height="16" Margin="0,0,4,0" VerticalAlignment="Center" />
-                    <TextBlock Text="10s"
                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                FontSize="12" Margin="0,2,0,0"
                                Foreground="#99FFFFFF" VerticalAlignment="Center" />

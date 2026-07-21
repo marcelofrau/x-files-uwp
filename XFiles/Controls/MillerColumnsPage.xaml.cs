@@ -374,7 +374,7 @@ namespace XFiles.Controls
     font-weight:normal; font-style:normal;
   }}
   html, body {{ margin:0; padding:0; background:#0F1318; overflow-x:auto; }}
-  pre {{ margin:0; padding:12px; white-space:pre; overflow-x:auto;
+  pre {{ margin:0; padding:12px 8px; white-space:pre; overflow-x:auto;
          font-family:'Inconsolata','Consolas','Courier New',monospace;
          font-size:12px; color:#dcdcdc; line-height:1.4;
          display:inline-block; min-width:100%; }}

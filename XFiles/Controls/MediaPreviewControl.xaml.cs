@@ -306,9 +306,9 @@ namespace XFiles.Controls
             await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
             {
                 Log.Verbose("Media opened: {Duration}", Session.NaturalDuration);
-                _isPlaying = true;
+                _isPlaying = false;
                 UpdatePlayPauseIcon();
-                _progressTimer.Start();
+                _progressTimer.Stop();
                 UpdateProgress();
                 PlayerStateChanged?.Invoke(this, EventArgs.Empty);
             });

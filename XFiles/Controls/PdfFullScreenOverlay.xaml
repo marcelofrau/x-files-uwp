@@ -44,7 +44,7 @@
                     HorizontalAlignment="Center"
                     VerticalAlignment="Bottom"
                     Margin="0,0,0,24">
-            <Image Source="ms-appx:///Assets/GamepadButtons/lr/bumper_light_1.png"
+            <Image Source="ms-appx:///Assets/GamepadButtons/lr/button_xbox_digital_bumper_light_1.png"
                    Width="18" Height="18"
                    Margin="0,0,4,0"
                    VerticalAlignment="Center" />
@@ -54,7 +54,7 @@
                        Foreground="#80FFFFFF"
                        Margin="0,3,14,0"
                        VerticalAlignment="Center" />
-            <Image Source="ms-appx:///Assets/GamepadButtons/lr/bumper_light_2.png"
+            <Image Source="ms-appx:///Assets/GamepadButtons/lr/button_xbox_digital_bumper_light_2.png"
                    Width="18" Height="18"
                    Margin="0,0,4,0"
                    VerticalAlignment="Center" />
