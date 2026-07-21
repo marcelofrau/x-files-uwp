@@ -5,9 +5,8 @@
 <h1 align="center">X-Files</h1>
 
 <p align="center">
-  <strong>Gamepad-first file browser for Xbox</strong><br/>
-  Miller-column navigation (Parent | Current | Preview) inspired by
-  <a href="https://github.com/sxyazi/yazi">yazi</a>, built natively in C#/XAML for UWP.
+  <strong>The file browser your Xbox always needed.</strong><br/>
+  Navigate, preview, play, and manage your files — all from the couch, all with a gamepad.
 </p>
 
 <p align="center">
@@ -20,53 +19,91 @@
 
 ---
 
-## What is this?
+## Why X-Files?
 
-X-Files is a file browser designed for **Xbox consoles**, fully operable via gamepad. It
-uses a three-column Miller layout — just like [yazi](https://github.com/sxyazi/yazi) does
-in the terminal — but reimplemented from scratch in C#/XAML for the UWP platform.
+Xbox has no built-in way to browse files on USB drives, preview images, listen to music,
+or manage your media library. **X-Files fills that gap** — a full-featured file manager
+built specifically for the console experience.
 
-No code is shared with yazi (different language, different stack). The inspiration is
-purely UX: the Parent → Current → Preview column model with live preview as you navigate.
+### What makes it different
 
-## Current status
+- **Gamepad-first, couch-friendly.** Every action reachable with D-pad and face buttons.
+  No keyboard, no mouse, no touch required. Designed for the TV screen distance.
 
-**Phase 4 complete** — three-column Miller navigation working on real Xbox hardware.
+- **Miller-column navigation.** Three columns (Parent | Current | Preview) let you see
+  where you are, what's here, and what's inside — all at once. Navigate without opening
+  files just to check their contents.
 
-| What works | Status |
-|---|---|
-| Gamepad navigation (D-pad, sticks, all buttons) | Done |
-| Directory scanning (P/Invoke, all local drives) | Done |
-| Three-column Miller layout (Parent / Current / Preview) | Done |
-| Live preview on selection change (debounced) | Done |
-| LB/RB/LT/RT page navigation (±8 items) | Done |
-| Drill in/out (A/Right = enter, B/Left = back) | Done |
-| Retro theme (custom ControlTemplate, no Fluent chrome) | Done |
-| Debug overlay (XrayLib, remote logging) | Done |
-| Archive browsing (zip/7z/rar) | Phase 6 |
-| File operations (copy/move/rename/delete/extract) | Phase 7 |
-| Context menu (Y button) | Phase 7 |
+- **Live preview as you navigate.** Move the cursor over any file and instantly see its
+  contents: text files, images, code with syntax highlighting, audio with VU meter,
+  video playback. No "open → close → next file" tedium.
 
-## Controls
+- **Built-in audio player with VU meter.** Play MP3s directly from the file browser with
+  a real-time 26-bar spectrum analyzer. Pause, seek, skip tracks, adjust volume — all
+  from the gamepad. Winamp vibes on your Xbox.
+
+- **Archive browsing.** Navigate inside `.zip`, `.7z`, and `.rar` files as if they were
+  folders. Preview text and images inside archives without extracting.
+
+- **Retro aesthetic.** Custom dark theme inspired by classic dashboard UIs. No Fluent
+  Design chrome — just clean, sharp visuals that feel native to the console.
+
+- **Fast.** P/Invoke directory scanning, no unnecessary abstraction layers. Navigates
+  thousands of files without lag.
+
+## Features
+
+### File browsing
+- Browse all connected drives (internal + USB)
+- Three-column Miller layout with live preview
+- Folders-first sorting, alphabetical within type
+- Hidden/system files filtered automatically
+- Drill in (A/Right) and drill out (B/Left) navigation
+- Page navigation with LB/RB/LT/RT (±8 items)
+- X to refresh current directory
+
+### Preview
+- **Text files**: plain text preview with scroll
+- **Images**: thumbnail preview with size info (PNG, JPG, BMP, GIF, WebP)
+- **SVG**: rendered in WebView
+- **Code**: syntax highlighting for 40+ languages (highlight.js)
+- **Audio**: ID3 metadata (title, artist, album, album art) + VU meter
+- **Video**: inline playback with transport controls
+- **Archives**: browse zip/7z/rar contents as virtual folders
+
+### Audio player
+- Built-in playback via AudioGraph (native MediaFoundation decoding)
+- Real-time spectrum analyzer (26 bars × 12 segments)
+- Green → yellow → red color gradient with peak hold indicators
+- Play/pause (A), seek (LB/RB), volume (Right Analog)
+- Fullscreen mode with album art and metadata
+- Next/previous track navigation
+- Works on external USB drives (stream fallback via MediaSourceAudioInputNode)
+
+### File operations
+- Y button context menu
+- Rename with text input dialog
+- Delete with confirmation dialog
+- Copy, Move, Extract (backend implemented, UI pending)
+
+### Controls
 
 | Button | Action |
 |---|---|
-| D-pad / Left stick | Navigate up/down |
-| D-pad Left / B | Go back (drill out) |
-| D-pad Right / A | Enter folder (drill in) |
-| LB / LT | Page up (−8 items) |
-| RB / RT | Page down (+8 items) |
-| Y | Context menu (WIP) |
+| D-pad / Left Stick | Navigate up/down |
+| D-pad Right / A | Enter folder / Play file / Toggle play-pause |
+| D-pad Left / B | Go back (drill out) / Close fullscreen |
+| LB / LT | Page up (−8 items) / Seek backward |
+| RB / RT | Page down (+8 items) / Seek forward |
+| Y | Context menu (rename, delete, copy, etc.) |
+| X | Refresh current directory |
+| Right Analog Stick | Scroll preview / Adjust volume (fullscreen) |
+| Start | Settings (placeholder) |
+| Select | Info (placeholder) |
 
-## Inspirations
+## Screenshots
 
-- **[yazi](https://github.com/sxyazi/yazi)** — the Miller-column UX model, live preview,
-  keyboard-first philosophy adapted to gamepad-first
-- **[dosbox-pure-uwp](../dosbox-pure-uwp)** — sibling project; patterns reused as
-  documented references (P/Invoke directory scanning, gamepad input abstraction, manifest
-  capabilities), not shared code
-- **RetroArch UWP** — precedent for `FindFirstFileExFromAppW` P/Invoke on Xbox, where
-  `StorageFolder` APIs fail with `AccessDenied` for arbitrary drive paths
+> *Screenshots coming soon — deployed and tested on real Xbox hardware.*
 
 ## Getting started
 
@@ -90,14 +127,31 @@ Studio Remote Machine.
 
 ```
 XFiles/
-├── Controls/          # XAML views (MillerColumnsPage, ColumnListView, DebugOverlay)
-├── Navigation/        # ColumnNavigator, GamepadInputService, INavigable
-├── FileSystem/        # DirectoryScanner (P/Invoke), FileEntry model
-├── Theming/           # RetroTheme.xaml, AppTheme (JSON-backed)
-├── Assets/            # Icons, images
-├── ContextMenu/       # Y-button action sheet (WIP)
-└── App.xaml           # Entry point, theme merging
+├── Audio/              # AudioLevelService (playback + VU meter), FFT, COM interop
+├── Controls/           # XAML views (MillerColumnsPage, ColumnListView, VuMeterBar,
+│   │                   #   MediaPreviewControl, FileActionSheet, etc.)
+│   └── XAML + .cs      # Custom ControlTemplates (no Fluent chrome)
+├── Navigation/         # ColumnNavigator, GamepadInputService, INavigable
+├── FileSystem/         # DirectoryScanner (P/Invoke), FileEntry, ArchiveBrowser,
+│   │                   #   FileOperations, Id3Tag
+│   └── P/Invoke        # FindFirstFileExFromAppW, GetLogicalDrives (Xbox-compatible)
+├── Theming/            # RetroTheme.xaml, AppTheme (JSON-backed)
+├── Assets/             # Icons, gamepad button images, OSD images
+└── App.xaml            # Entry point, theme merging
 ```
+
+## Technical highlights
+
+- **P/Invoke directory scanning** — `FindFirstFileExFromAppW` + `GetLogicalDrives` for
+  reliable access to external drives on Xbox (where `StorageFolder` APIs fail).
+- **AudioGraph with stream fallback** — `MediaSourceAudioInputNode` enables playback +
+  VU meter on drives where `StorageFile` APIs return `E_ACCESSDENIED`.
+- **Zero Fluent Design chrome** — every control uses custom `ControlTemplate`/`Style`.
+  Gamepad focus (`XYFocusUp/Down/Left/Right`) still works natively via XAML.
+- **Inlined highlight.js** — syntax highlighting for 40+ languages without external
+  dependencies. Aco theme CSS + Inconsolata font embedded as base64.
+- **Serilog logging** — every operation, input event, and exception logged. Daily log
+  rotation, stored in `ApplicationData.Current.LocalFolder/logs/`.
 
 ## Key docs
 
@@ -108,9 +162,11 @@ XFiles/
 | [GAMEPAD.md](docs/GAMEPAD.md) | Button mapping, INavigable contract |
 | [FILEBROWSER.md](docs/FILEBROWSER.md) | FileEntry model, DirectoryScanner, sorting |
 | [ARCHIVES.md](docs/ARCHIVES.md) | zip/7z/rar via SharpCompress |
+| [AUDIO-VISUALIZATION.md](docs/AUDIO-VISUALIZATION.md) | VU meter architecture, AudioGraph, FFT |
 | [UI-THEMING.md](docs/UI-THEMING.md) | ControlTemplate conventions |
 | [ROADMAP.md](docs/ROADMAP.md) | Phased plan with done criteria |
 | [DECISIONS.md](docs/DECISIONS.md) | ADRs — why XAML, why SharpCompress, etc. |
+| [DEPLOY-XBOX.md](docs/DEPLOY-XBOX.md) | Developer Mode, Device Portal, sideload steps |
 
 ## License
 

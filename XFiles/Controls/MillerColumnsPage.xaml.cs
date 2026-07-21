@@ -14,6 +14,7 @@ using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Media.Animation;
+using XFiles.Audio;
 using XFiles.FileSystem;
 using XFiles.Navigation;
 
@@ -287,6 +288,7 @@ namespace XFiles.Controls
                     case FilePreviewType.Video:
                     case FilePreviewType.Audio:
                         string mediaPath = _navigator.Preview.PreviewFilePath;
+                        Log.Information("UpdatePreviewColumn: media type={Type} path={Path}", _navigator.Preview.PreviewType, mediaPath);
                         PreviewStatus.Text = _navigator.Preview.PreviewFileType;
                         PreviewMediaPanel.Visibility = Visibility.Visible;
                         _pendingMediaPath = mediaPath;
@@ -806,17 +808,39 @@ namespace XFiles.Controls
                 else if (FilePreviewService.IsAudioFile(ext))
                 {
                     Log.Verbose("OnConfirm: audio file — toggling play/pause");
-                    if (MediaPreview != null && MediaPreview.Visibility == Visibility.Visible)
+                    if (_isMediaPlayerActive)
                     {
                         MediaPreview.TogglePlayPause();
+                    }
+                    else if (MediaPreview.IsFileLoaded(selected.FullPath))
+                    {
+                        MediaPreview.TogglePlayPause();
+                        UpdateMediaPlayerFocusUI();
+                    }
+                    else
+                    {
+                        MediaPreview.LoadFile(selected.FullPath);
+                        MediaPreview.TogglePlayPause();
+                        UpdateMediaPlayerFocusUI();
                     }
                 }
                 else if (FilePreviewService.IsVideoFile(ext))
                 {
                     Log.Verbose("OnConfirm: video file — toggling play/pause");
-                    if (MediaPreview != null && MediaPreview.Visibility == Visibility.Visible)
+                    if (_isMediaPlayerActive)
                     {
                         MediaPreview.TogglePlayPause();
+                    }
+                    else if (MediaPreview.IsFileLoaded(selected.FullPath))
+                    {
+                        MediaPreview.TogglePlayPause();
+                        UpdateMediaPlayerFocusUI();
+                    }
+                    else
+                    {
+                        MediaPreview.LoadFile(selected.FullPath);
+                        MediaPreview.TogglePlayPause();
+                        UpdateMediaPlayerFocusUI();
                     }
                 }
                 else
@@ -843,6 +867,10 @@ namespace XFiles.Controls
                 UpdateMediaPlayerFocusUI();
                 return;
             }
+
+            // B button → go to parent directory
+            _slideFromRight = false;
+            _ = _navigator.DrillOutAsync();
         }
 
         public void OnContextMenu()
@@ -864,6 +892,8 @@ namespace XFiles.Controls
             if (StartMenuControl.IsOpen) return;
             if (ErrorOverlay.Visibility == Visibility.Visible) return;
             if (IsAnyOverlayVisible) return;
+
+            // If media player is active, X goes fullscreen
             if (_isMediaPlayerActive)
             {
                 if (MediaPreview.IsAudioMode)
@@ -879,6 +909,27 @@ namespace XFiles.Controls
                 }
                 return;
             }
+
+            // If a media file is selected (not playing yet), X opens fullscreen directly
+            var selected = CurrentList.SelectedItem as EntryViewModel;
+            if (selected != null)
+            {
+                string ext = System.IO.Path.GetExtension(selected.Name);
+                if (FilePreviewService.IsAudioFile(ext))
+                {
+                    Log.Verbose("OnRefresh: media file selected — opening audio fullscreen");
+                    MediaPreview.LoadFile(selected.FullPath);
+                    OpenAudioFullscreen(selected.FullPath, TimeSpan.Zero);
+                    return;
+                }
+                if (FilePreviewService.IsVideoFile(ext))
+                {
+                    Log.Verbose("OnRefresh: video file selected — opening video fullscreen");
+                    _ = MediaPreviewControl.OpenFullscreenForFile(selected.FullPath);
+                    return;
+                }
+            }
+
             Log.Information("OnRefresh: refreshing current directory");
             FooterSpinner.IsActive = true;
             _ = _navigator.RefreshCurrentAsync().ContinueWith(t =>
@@ -1131,12 +1182,12 @@ namespace XFiles.Controls
                 }
 
                 string dir = seconds > 0 ? "\u25B6\u25B6" : "\u25C0\u25C0";
-                ShowFsOsd($"{dir}  {(seconds > 0 ? "+" : "")}{seconds}s", 800);
+                ShowFsOsd($"{dir}  {(seconds > 0 ? "+" : "")}{seconds}s", null, 800);
             }
             else if (_isMediaPlayerActive)
             {
                 MediaPreview.Seek(TimeSpan.FromSeconds(seconds));
-                ShowFsOsd($"{(seconds > 0 ? "+" : "")}{seconds}s", 800);
+                ShowFsOsd($"{(seconds > 0 ? "+" : "")}{seconds}s", null, 800);
             }
         }
 
@@ -1168,7 +1219,11 @@ namespace XFiles.Controls
                 ImageFullScreen.HandleRightStick(x, y);
                 return;
             }
-            if (VideoFullScreenPanel.Visibility == Visibility.Visible)
+            if (AudioFullScreenPanel.Visibility == Visibility.Visible)
+            {
+                UpdateFsVolume(y);
+            }
+            else if (VideoFullScreenPanel.Visibility == Visibility.Visible)
             {
                 UpdateFsVolume(y);
             }
@@ -1242,6 +1297,12 @@ namespace XFiles.Controls
 
         // --- Fullscreen Video ---
 
+        public async Task OpenFullscreenForFile(string filePath, TimeSpan position)
+        {
+            OpenAudioFullscreen(filePath, position);
+            await System.Threading.Tasks.Task.CompletedTask;
+        }
+
         public async Task ShowMediaFullscreenAsync(Uri source, bool isVideo, TimeSpan position)
         {
             if (!isVideo) return;
@@ -1255,7 +1316,7 @@ namespace XFiles.Controls
             _fullscreenProgressTimer.Start();
             VideoFullScreenPanel.Visibility = Visibility.Visible;
             ShowFsControls();
-            ShowFsOsd("\u25B6  PLAY");
+            ShowFsOsd("PLAY", "ms-appx:///Assets/Views/MillerColumnsPage/osd/osd-play-48.png");
             Log.Information("ShowMediaFullscreenAsync: started fullscreen video at {Position}", position);
             await System.Threading.Tasks.Task.CompletedTask;
         }
@@ -1286,12 +1347,12 @@ namespace XFiles.Controls
                 }
             }
             // Fullscreen audio progress
-            else if (AudioFullScreenPanel.Visibility == Visibility.Visible)
+            else if (AudioFullScreenPanel.Visibility == Visibility.Visible && _fsAudioLevelService != null && _fsAudioLevelService.IsFileLoaded)
             {
-                var total = FsAudioSession.NaturalDuration;
+                var total = _fsAudioLevelService.Duration;
                 if (total.TotalSeconds > 0)
                 {
-                    var current = FsAudioSession.Position;
+                    var current = _fsAudioLevelService.Position;
                     FsAudioProgress.Value = (current.TotalSeconds / total.TotalSeconds) * 100;
                     FsCurrentTimeText.Text = FormatFsTime(current);
                     FsTotalTimeText.Text = FormatFsTime(total);
@@ -1354,9 +1415,18 @@ namespace XFiles.Controls
             sb.Begin();
         }
 
-        private void ShowFsOsd(string text, double hideDelayMs = 1500)
+        private void ShowFsOsd(string text, string iconSource = null, double hideDelayMs = 1500)
         {
             FsOsdText.Text = text;
+            if (iconSource != null)
+            {
+                FsOsdIcon.Source = new Windows.UI.Xaml.Media.Imaging.BitmapImage(new Uri(iconSource));
+                FsOsdIcon.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                FsOsdIcon.Visibility = Visibility.Collapsed;
+            }
             FsOsdBorder.Visibility = Visibility.Visible;
             var fadeIn = new Storyboard();
             var dur = new Duration(TimeSpan.FromMilliseconds(150));
@@ -1392,9 +1462,18 @@ namespace XFiles.Controls
 
         private DispatcherTimer _fsAudioOsdHideTimer = new DispatcherTimer();
 
-        private void ShowAudioOsd(string text, double hideDelayMs = 1500)
+        private void ShowAudioOsd(string text, string iconSource = null, double hideDelayMs = 1500)
         {
             FsAudioOsdText.Text = text;
+            if (iconSource != null)
+            {
+                FsAudioOsdIcon.Source = new Windows.UI.Xaml.Media.Imaging.BitmapImage(new Uri(iconSource));
+                FsAudioOsdIcon.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                FsAudioOsdIcon.Visibility = Visibility.Collapsed;
+            }
             FsAudioOsdBorder.Visibility = Visibility.Visible;
             var fadeIn = new Storyboard();
             var dur = new Duration(TimeSpan.FromMilliseconds(150));
@@ -1449,14 +1528,14 @@ namespace XFiles.Controls
                 FsVideoPlayer.Pause();
                 FSPlayPauseIcon.Glyph = "\uE768";
                 _fsVideoPlaying = false;
-                ShowFsOsd("\u275A\u275A  PAUSE");
+                ShowFsOsd("PAUSE", "ms-appx:///Assets/Views/MillerColumnsPage/osd/osd-pause-48.png");
             }
             else
             {
                 FsVideoPlayer.Play();
                 FSPlayPauseIcon.Glyph = "\uE769";
                 _fsVideoPlaying = true;
-                ShowFsOsd("\u25B6  PLAY");
+                ShowFsOsd("PLAY", "ms-appx:///Assets/Views/MillerColumnsPage/osd/osd-play-48.png");
             }
         }
 
@@ -1472,9 +1551,9 @@ namespace XFiles.Controls
             if (AudioFullScreenPanel.Visibility == Visibility.Visible)
             {
                 _audioVolume = Math.Max(0.0, Math.Min(1.0, _audioVolume + delta));
-                FsAudioPlayer2.Volume = _audioVolume;
+                _fsAudioLevelService?.SetVolume(_audioVolume);
                 FsVolumeText.Text = $"Vol {(int)(_audioVolume * 100)}%";
-                ShowAudioOsd($"Vol {(int)(_audioVolume * 100)}%", 1200);
+                ShowAudioOsd($"Vol {(int)(_audioVolume * 100)}%", null, 1200);
             }
             else if (VideoFullScreenPanel.Visibility == Visibility.Visible)
             {
@@ -1482,7 +1561,7 @@ namespace XFiles.Controls
                 ShowFsControls();
                 FsVideoPlayer.Volume = _fsVolume;
                 FSVolumeText.Text = $"Vol {(int)(_fsVolume * 100)}%";
-                ShowFsOsd($"Vol {(int)(_fsVolume * 100)}%", 1200);
+                ShowFsOsd($"Vol {(int)(_fsVolume * 100)}%", null, 1200);
             }
             else if (_isMediaPlayerActive)
             {
@@ -1503,7 +1582,7 @@ namespace XFiles.Controls
         // Single shared timer for all fullscreen progress updates (video + audio)
         private DispatcherTimer _fullscreenProgressTimer = new DispatcherTimer
         {
-            Interval = TimeSpan.FromMilliseconds(500)
+            Interval = TimeSpan.FromMilliseconds(100)
         };
 
         private DispatcherTimer _fsHideTimer = new DispatcherTimer
@@ -1526,6 +1605,7 @@ namespace XFiles.Controls
             ImageFullScreen?.Close();
             MediaPreview?.StopPlayer();
             if (_isAudioFullscreen) CloseAudioFullscreen();
+            StopFsAudioAnalysis();
         }
 
         private void OnMediaLoadTimerTick(object sender, object e)
@@ -1533,7 +1613,11 @@ namespace XFiles.Controls
             _mediaLoadTimer.Stop();
             if (!string.IsNullOrEmpty(_pendingMediaPath))
             {
-                MediaPreview.LoadFile(_pendingMediaPath);
+                if (!MediaPreview.IsFileLoaded(_pendingMediaPath))
+                {
+                    Log.Information("OnMediaLoadTimerTick: loading {Path}", _pendingMediaPath);
+                    MediaPreview.LoadFile(_pendingMediaPath);
+                }
                 _pendingMediaPath = null;
             }
         }
@@ -1543,6 +1627,7 @@ namespace XFiles.Controls
         private bool _isAudioFullscreen;
         private string _audioFullscreenPath;
         private double _audioVolume = 0.75;
+        private AudioLevelService _fsAudioLevelService;
 
         // MediaPlayer/Session helpers for fullscreen video + audio (migrated from MediaElement)
         private Windows.Media.Playback.MediaPlayer FsVideoPlayer => VideoFullScreenPlayer.MediaPlayer;
@@ -1558,13 +1643,20 @@ namespace XFiles.Controls
 
             MediaPreview.Stop();
 
-            // Create a fresh MediaPlayerElement for fullscreen
-            FsAudioPlayer2.Source = Windows.Media.Core.MediaSource.CreateFromUri(new Uri(filePath));
-            FsAudioSession.Position = position;
-            FsAudioPlayer2.Volume = _audioVolume;
-            FsAudioPlayer2.Play();
-            FsPlayPauseIcon.Glyph = "\uE769";
+            // Use AudioGraph for both playback + VU meter (no duplicate MediaPlayer)
+            StopFsAudioAnalysis();
+            _fsAudioLevelService = new AudioLevelService();
+            _fsAudioLevelService.MediaOpened += OnFsAudioOpened;
+            _fsAudioLevelService.MediaEnded += OnFsAudioEnded;
+            _fsAudioLevelService.MediaFailed += OnFsAudioFailed;
+            FsVuMeter.AttachService(_fsAudioLevelService);
+            await _fsAudioLevelService.LoadAndPlay(filePath);
 
+            // Seek to position after load
+            if (position > TimeSpan.Zero)
+                _fsAudioLevelService.Seek(position);
+
+            FsPlayPauseIcon.Glyph = "\uE769";
             FsVolumeText.Text = $"Vol {(int)(_audioVolume * 100)}%";
 
             AudioFullScreenPanel.Visibility = Visibility.Visible;
@@ -1624,8 +1716,7 @@ namespace XFiles.Controls
         public void CloseAudioFullscreen()
         {
             Log.Information("CloseAudioFullscreen");
-            FsAudioPlayer2.Pause();
-            FsAudioPlayer2.Source = null;
+            StopFsAudioAnalysis();
             _isAudioFullscreen = false;
             _audioFullscreenPath = null;
             AudioFullScreenPanel.Visibility = Visibility.Collapsed;
@@ -1636,17 +1727,19 @@ namespace XFiles.Controls
 
         public void ToggleAudioFullscreenPlayPause()
         {
-            if (FsAudioSession.PlaybackState == Windows.Media.Playback.MediaPlaybackState.Playing)
+            if (_fsAudioLevelService == null || !_fsAudioLevelService.IsFileLoaded) return;
+
+            _fsAudioLevelService.TogglePlayPause();
+
+            if (_fsAudioLevelService.IsPlaying)
             {
-                FsAudioPlayer2.Pause();
-                FsPlayPauseIcon.Glyph = "\uE768";
-                ShowAudioOsd("\uE768  Pause", 1200);
+                FsPlayPauseIcon.Glyph = "\uE769";
+                ShowAudioOsd("Play", "ms-appx:///Assets/Views/MillerColumnsPage/osd/osd-play-48.png", 1200);
             }
             else
             {
-                FsAudioPlayer2.Play();
-                FsPlayPauseIcon.Glyph = "\uE769";
-                ShowAudioOsd("\uE769  Play", 1200);
+                FsPlayPauseIcon.Glyph = "\uE768";
+                ShowAudioOsd("Pause", "ms-appx:///Assets/Views/MillerColumnsPage/osd/osd-pause-48.png", 1200);
             }
         }
 
@@ -1670,13 +1763,17 @@ namespace XFiles.Controls
             var nextFile = audioFiles[nextIdx];
             _audioFullscreenPath = nextFile.FullPath;
 
-            FsAudioPlayer2.Pause();
-            FsAudioPlayer2.Source = Windows.Media.Core.MediaSource.CreateFromUri(new Uri(nextFile.FullPath));
-            FsAudioSession.Position = TimeSpan.Zero;
-            FsAudioPlayer2.Volume = _audioVolume;
-            FsAudioPlayer2.Play();
+            // Load next track via AudioGraph (playback + VU meter)
+            StopFsAudioAnalysis();
+            _fsAudioLevelService = new AudioLevelService();
+            _fsAudioLevelService.MediaOpened += OnFsAudioOpened;
+            _fsAudioLevelService.MediaEnded += OnFsAudioEnded;
+            _fsAudioLevelService.MediaFailed += OnFsAudioFailed;
+            FsVuMeter.AttachService(_fsAudioLevelService);
+            _ = _fsAudioLevelService.LoadAndPlay(nextFile.FullPath);
+
             FsPlayPauseIcon.Glyph = "\uE769";
-            ShowAudioOsd(direction > 0 ? "\u23ED  Next" : "\u23EE  Prev", 1200);
+            ShowAudioOsd(direction > 0 ? "Next" : "Prev", direction > 0 ? "ms-appx:///Assets/Views/MillerColumnsPage/osd/osd-next-48.png" : "ms-appx:///Assets/Views/MillerColumnsPage/osd/osd-prev-48.png", 1200);
 
             _ = LoadAudioFullscreenMetadataAsync(nextFile.FullPath);
 
@@ -1688,6 +1785,47 @@ namespace XFiles.Controls
                 CurrentList.SelectedIndex = mainIdx;
                 _updating = false;
             }
+        }
+
+        private void StopFsAudioAnalysis()
+        {
+            FsVuMeter.DetachService();
+            if (_fsAudioLevelService != null)
+            {
+                _fsAudioLevelService.MediaOpened -= OnFsAudioOpened;
+                _fsAudioLevelService.MediaEnded -= OnFsAudioEnded;
+                _fsAudioLevelService.MediaFailed -= OnFsAudioFailed;
+                _fsAudioLevelService.Dispose();
+                _fsAudioLevelService = null;
+            }
+        }
+
+        private async void OnFsAudioOpened(object sender, EventArgs e)
+        {
+            await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+            {
+                FsPlayPauseIcon.Glyph = "\uE769";
+                Log.Information("FsAudio: opened");
+            });
+        }
+
+        private async void OnFsAudioEnded(object sender, EventArgs e)
+        {
+            await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+            {
+                FsPlayPauseIcon.Glyph = "\uE768";
+                FsAudioProgress.Value = 100;
+                Log.Information("FsAudio: ended");
+            });
+        }
+
+        private async void OnFsAudioFailed(object sender, EventArgs e)
+        {
+            await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+            {
+                Log.Warning("FsAudio: failed");
+                FsPlayPauseIcon.Glyph = "\uE768";
+            });
         }
 
         // --- File Action Sheet ---
@@ -1756,6 +1894,9 @@ namespace XFiles.Controls
                     break;
                 case FileAction.CreateZip:
                     await HandleCreateZipAsync(entry);
+                    break;
+                case FileAction.Refresh:
+                    OnRefresh();
                     break;
             }
         }

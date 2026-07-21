@@ -171,6 +171,28 @@ keyboard/mouse needed, including destination folder selection.
 
 ---
 
+## Phase 9 — Media (Audio + Video + VU Meter)
+
+- [x] Built-in audio player via `AudioLevelService` (AudioGraph + MediaFoundation).
+- [x] VU meter: 26-bar spectrum analyzer with peak hold, green→yellow→red gradient.
+- [x] ID3 tag reading (title, artist, album art) from external USB drives.
+- [x] Audio playback in preview pane (A to play/pause, LB/RB to seek, Right Analog for volume).
+- [x] Fullscreen audio mode with album art, metadata, transport controls.
+- [x] Next/previous track navigation in fullscreen.
+- [x] Stream-based fallback via `MediaSourceAudioInputNode` for Xbox external drives
+      where `StorageFile` APIs fail (`E_ACCESSDENIED`).
+- [x] Video playback via MediaPlayer in preview pane and fullscreen.
+- [x] Unified AudioGraph for fullscreen audio (no duplicate MediaPlayer).
+- [x] OSD icons (play/pause/next/prev) as white-on-transparent PNGs.
+- [x] Welcome panel, About overlay, refresh action in Y-menu.
+
+**Completion criteria**: audio plays on Xbox from external USB drives, VU meter animates,
+fullscreen works with play/pause/seek/next/volume, no double-play.
+
+**Status**: implemented and validated on real Xbox.
+
+---
+
 ## Assets & Icons
 
 Asset process documented in `docs/ASSETS-GUIDE.md`. Skill available at

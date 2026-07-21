@@ -16,6 +16,9 @@ namespace XFiles.FileSystem
         private const int MaxTagSize = 2 * 1024 * 1024;
 
         private const uint GENERIC_READ = 0x80000000;
+        private const uint FILE_SHARE_READ = 0x00000001;
+        private const uint FILE_SHARE_WRITE = 0x00000002;
+        private const uint FILE_SHARE_DELETE = 0x00000004;
         private const uint OPEN_EXISTING = 3;
         private static readonly IntPtr INVALID_HANDLE_VALUE = new IntPtr(-1);
 
@@ -37,7 +40,7 @@ namespace XFiles.FileSystem
 
         private static byte[] ReadFileBytes(string path, int maxBytes)
         {
-            IntPtr hFile = CreateFileFromAppW(path, GENERIC_READ, 0, IntPtr.Zero,
+            IntPtr hFile = CreateFileFromAppW(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, IntPtr.Zero,
                 OPEN_EXISTING, 0, IntPtr.Zero);
             if (hFile == INVALID_HANDLE_VALUE) return null;
             try

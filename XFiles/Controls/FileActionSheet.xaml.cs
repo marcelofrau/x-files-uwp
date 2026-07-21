@@ -18,7 +18,8 @@ namespace XFiles.Controls
         Delete,
         Extract,
         CreateFolder,
-        CreateZip
+        CreateZip,
+        Refresh
     }
 
     public class ActionItem
@@ -43,6 +44,15 @@ namespace XFiles.Controls
         private static readonly string ArchiveIcon = "ctx-archive-120.png";
         private static readonly string DriveIcon = "ctx-drive-120.png";
         private static readonly string GenericIcon = "ctx-generic-120.png";
+
+        private static readonly string ActionCopy = "fileactionsheet-copy-48.png";
+        private static readonly string ActionMove = "fileactionsheet-move-48.png";
+        private static readonly string ActionRename = "fileactionsheet-rename-48.png";
+        private static readonly string ActionDelete = "fileactionsheet-delete-48.png";
+        private static readonly string ActionExtract = "fileactionsheet-extract-48.png";
+        private static readonly string ActionCreateFolder = "fileactionsheet-createfolder-48.png";
+        private static readonly string ActionCreateZip = "fileactionsheet-createzip-48.png";
+        private static readonly string ActionRefresh = "fileactionsheet-refresh-48.png";
 
         private static readonly HashSet<string> ImageExts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -115,13 +125,24 @@ namespace XFiles.Controls
             bool isArchiveFile = entry.IsArchive && !entry.IsDirectory;
             bool isFolder = entry.IsDirectory;
 
+            if (!isInArchive)
+            {
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.Refresh,
+                    Label = "Refresh",
+                    IconPath = IconBase + ActionRefresh,
+                    LabelBrush = accent
+                });
+            }
+
             if (isArchiveFile)
             {
                 actions.Add(new ActionItem
                 {
                     Action = FileAction.Extract,
                     Label = "Extract",
-                    IconPath = IconBase + "extract-48.png",
+                    IconPath = IconBase + ActionExtract,
                     LabelBrush = accent
                 });
             }
@@ -132,7 +153,7 @@ namespace XFiles.Controls
                 {
                     Action = FileAction.Copy,
                     Label = "Copy",
-                    IconPath = IconBase + "copy-48.png",
+                    IconPath = IconBase + ActionCopy,
                     LabelBrush = accent
                 });
 
@@ -140,7 +161,7 @@ namespace XFiles.Controls
                 {
                     Action = FileAction.Move,
                     Label = "Move",
-                    IconPath = IconBase + "move-48.png",
+                    IconPath = IconBase + ActionMove,
                     LabelBrush = accent
                 });
             }
@@ -149,7 +170,7 @@ namespace XFiles.Controls
             {
                 Action = FileAction.Rename,
                 Label = "Rename",
-                    IconPath = IconBase + "rename-48.png",
+                IconPath = IconBase + ActionRename,
                 LabelBrush = dim
             });
 
@@ -157,7 +178,7 @@ namespace XFiles.Controls
             {
                 Action = FileAction.CreateFolder,
                 Label = "New Folder",
-                IconPath = IconBase + "createfolder-48.png",
+                IconPath = IconBase + ActionCreateFolder,
                 LabelBrush = accent
             });
 
@@ -167,7 +188,7 @@ namespace XFiles.Controls
                 {
                     Action = FileAction.CreateZip,
                     Label = "Create ZIP",
-                    IconPath = IconBase + "createzip-48.png",
+                    IconPath = IconBase + ActionCreateZip,
                     LabelBrush = accent
                 });
             }
@@ -176,7 +197,7 @@ namespace XFiles.Controls
             {
                 Action = FileAction.Delete,
                 Label = "Delete",
-                IconPath = IconBase + "delete-48.png",
+                IconPath = IconBase + ActionDelete,
                 LabelBrush = red
             });
 

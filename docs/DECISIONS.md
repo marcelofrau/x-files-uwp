@@ -116,10 +116,63 @@ open with).
 - Moving selection (D-pad/stick) **always** updates the preview column automatically —
   no confirmation needed.
 - **A** on a folder = enter it (drill-in, column shift).
-- **A** on a file = contextual default action (defined by file type — open with associated
-  app, for example), configurable in the future.
+- **A** on a file = contextual default action (defined by file type — play audio, open
+  fullscreen for video, etc.). For audio files, A toggles play/pause in the preview pane.
 - **Y** explicitly opens the `FileActionSheet` (context menu: open with, extract, copy,
   move, rename, delete) — the user doesn't need to "confirm" just to *see* the preview.
 
 **Reason**: clearly separates "looking" (automatic preview, no cost) from "acting" (explicit
 context menu), preventing accidental destructive actions with the most-used button (A).
+
+---
+
+## ADR-007: AudioGraph with MediaSourceAudioInputNode for Xbox stream fallback
+
+**Context**: `AudioGraph.CreateFileInputNodeAsync(StorageFile)` requires a `StorageFile`
+object. On Xbox, `StorageFile.GetFileFromPathAsync()` and
+`StorageFolder.GetFolderFromPathAsync()` both fail with `E_ACCESSDENIED` for files on
+external USB drives, even with `broadFileSystemAccess` capability declared in the manifest.
+`FileStream` (managed I/O) works fine for reading file bytes (proven by ID3Tag parsing),
+but `AudioGraph` has no `CreateFileInputNodeAsync(IInputStream)` overload.
+
+**Decision**: try `StorageFile` first (two methods: folder+GetFileAsync, then direct
+GetFileFromPathAsync). If both fail, fall back to `FileStream` → `IRandomAccessStream` →
+`MediaSource.CreateFromStream()` → `AudioGraph.CreateMediaSourceAudioInputNodeAsync()`.
+Both paths share the same AudioGraph, `AudioDeviceOutputNode`, and `AudioFrameOutputNode`
+for playback + VU meter FFT analysis.
+
+**Reason**: `MediaSourceAudioInputNode` is the bridge between stream-based sources and
+AudioGraph. Created via `AudioGraph.CreateMediaSourceAudioInputNodeAsync(MediaSource)`,
+it accepts any `MediaSource` — including one backed by `IRandomAccessStream`. This means:
+- VU meter works regardless of whether the file is accessed via StorageFile or FileStream.
+- No `MediaPlayer` fallback needed (which would lose VU meter capability).
+- Single audio engine (AudioGraph) handles both playback and analysis.
+
+**Rejected approach**: `MediaPlayer` + `MediaSource.CreateFromStream()` for playback, with
+no VU meter in fallback mode. This was the initial implementation but was replaced because
+the VU meter is a key UX feature that should work on all storage backends.
+
+**Key API**: `CreateMediaSourceAudioInputNodeResult` has `.Status` and `.Node`
+(`MediaSourceAudioInputNode`). The node has `.Start()`, `.Seek(TimeSpan)`, `.Position`,
+`.Duration`, and `.AddOutgoingConnection()` — same interface pattern as
+`AudioFileInputNode`.
+
+---
+
+## ADR-008: Unified AudioEngine for fullscreen audio (no MediaPlayer duplicate)
+
+**Context**: fullscreen audio originally used two engines simultaneously —
+`MediaPlayer` (`FsAudioPlayer`) for playback and `AudioLevelService` (AudioGraph) for
+VU meter analysis. This caused:
+1. Music playing twice (both engines decoding and outputting the same file).
+2. Pause only pausing one engine.
+3. Track navigation out of sync between the two engines.
+
+**Decision**: use a single `AudioLevelService` instance for fullscreen audio, handling
+both playback (via `LoadAndPlay()`) and VU meter analysis. Remove `MediaPlayer` from the
+fullscreen audio path entirely.
+
+**Reason**: one engine = one audio output, one position state, one pause/resume/seek.
+The `AudioLevelService.LoadAndPlay()` creates an `AudioGraph` with `AudioDeviceOutputNode`
+(for hardware clock + speakers) and `AudioFrameOutputNode` (for FFT/VU meter), all
+synchronized by the same graph clock. No possibility of drift or double-play.

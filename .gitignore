@@ -23,8 +23,8 @@ AppPackages/
 certs/
 
 # Build metadata (auto-generated)
-build_counter.txt
-version.txt
+#build_counter.txt
+#version.txt
 
 # Environment
 .env
@@ -49,3 +49,6 @@ _ReSharper*/
 # OS
 .DS_Store
 Thumbs.db
+
+session.txt
+bugs-ideias.txt

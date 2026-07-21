@@ -2,6 +2,7 @@
     x:Class="XFiles.Controls.MediaPreviewControl"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:XFiles.Controls"
     Visibility="Collapsed">
 
     <Grid Background="#0F1318">
@@ -26,6 +27,7 @@
                   Background="#0F1318">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
@@ -44,9 +46,15 @@
                     </Grid>
                 </Grid>
 
+                <!-- VU Meter -->
+                <controls:VuMeterBar x:Name="VuMeter" Grid.Row="1"
+                                     Height="80" Margin="0,12,0,0"
+                                     HorizontalAlignment="Center"
+                                     VerticalAlignment="Center" />
+
                 <!-- Metadata text -->
-                <StackPanel Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Top"
-                            Margin="0,24,0,0" MaxWidth="300">
+                <StackPanel Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Top"
+                            Margin="0,12,0,0" MaxWidth="300">
                     <TextBlock x:Name="TitleText" TextAlignment="Center"
                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
                                FontSize="16"

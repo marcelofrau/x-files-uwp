@@ -16,6 +16,7 @@
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <MinimumVisualStudioVersion>14</MinimumVisualStudioVersion>
     <EnableDotNetNativeCompatibleProfile>true</EnableDotNetNativeCompatibleProfile>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ProjectTypeGuids>{A5A43C5B-DE2A-4C0C-9213-0A381AF9435A};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
     <PackageCertificateKeyFile>..\certs\xfiles.pfx</PackageCertificateKeyFile>
     <PackageCertificatePassword>dev</PackageCertificatePassword>
@@ -136,6 +137,12 @@
     <Compile Include="Controls\ImageFullScreenOverlay.xaml.cs">
       <DependentUpon>ImageFullScreenOverlay.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Audio\IMemoryBufferAccess.cs" />
+    <Compile Include="Audio\AudioLevelService.cs" />
+    <Compile Include="Audio\FftHelper.cs" />
+    <Compile Include="Controls\VuMeterBar.xaml.cs">
+      <DependentUpon>VuMeterBar.xaml</DependentUpon>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
     <ApplicationDefinition Include="App.xaml">
@@ -198,6 +205,10 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="Controls\VuMeterBar.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
   </ItemGroup>
   <ItemGroup>
     <AppxManifest Include="Package.appxmanifest">
@@ -212,6 +223,7 @@
     <None Include="Theming\README.md" />
     <None Include="Assets\README.md" />
     <None Include="..\docs\ASSETS-GUIDE.md" />
+    <None Include="..\docs\AUDIO-VISUALIZATION.md" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Assets\StoreLogo.png" />
@@ -291,6 +303,7 @@
     <Content Include="Assets\Views\FileActionSheet\fileactionsheet-delete-48.png" />
     <Content Include="Assets\Views\FileActionSheet\fileactionsheet-createfolder-48.png" />
     <Content Include="Assets\Views\FileActionSheet\fileactionsheet-createzip-48.png" />
+    <Content Include="Assets\Views\FileActionSheet\fileactionsheet-refresh-48.png" />
     <Content Include="Assets\Views\FileActionSheet\ctx-drive-120.png" />
     <Content Include="Assets\Views\FileActionSheet\ctx-generic-120.png" />
     <Content Include="Assets\Views\FileActionSheet\ctx-archive-120.png" />
@@ -311,6 +324,10 @@
     <Content Include="Assets\Views\StartMenu\startmenu-startup-48.png" />
     <Content Include="Assets\Views\StartMenu\startmenu-about-48.png" />
     <Content Include="Assets\Views\StartMenu\startmenu-close-48.png" />
+    <Content Include="Assets\Views\MillerColumnsPage\osd\osd-play-48.png" />
+    <Content Include="Assets\Views\MillerColumnsPage\osd\osd-pause-48.png" />
+    <Content Include="Assets\Views\MillerColumnsPage\osd\osd-next-48.png" />
+    <Content Include="Assets\Views\MillerColumnsPage\osd\osd-prev-48.png" />
     <Content Include="Assets\highlight.min.js" />
     <Content Include="Assets\highlight-aco.css" />
     <Content Include="Assets\Inconsolata-Regular.ttf" />
