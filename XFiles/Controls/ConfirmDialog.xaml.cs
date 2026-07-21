@@ -21,7 +21,7 @@ namespace XFiles.Controls
             _tcs = new TaskCompletionSource<bool>();
             Visibility = Visibility.Visible;
             Overlay.Visibility = Visibility.Visible;
-            NoButton.Focus(FocusState.Programmatic);
+            _ = Windows.UI.Xaml.Input.FocusManager.TryFocusAsync(Overlay, FocusState.Programmatic);
             return _tcs.Task;
         }
 
@@ -33,6 +33,23 @@ namespace XFiles.Controls
         private void OnNoClicked(object sender, RoutedEventArgs e)
         {
             Close(false);
+        }
+
+        private void OnKeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            switch (e.Key)
+            {
+                case Windows.System.VirtualKey.GamepadA:
+                case Windows.System.VirtualKey.Enter:
+                    e.Handled = true;
+                    Close(true);
+                    break;
+                case Windows.System.VirtualKey.GamepadB:
+                case Windows.System.VirtualKey.Escape:
+                    e.Handled = true;
+                    Close(false);
+                    break;
+            }
         }
 
         private void OnOverlayTapped(object sender, TappedRoutedEventArgs e)

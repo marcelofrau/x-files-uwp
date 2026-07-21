@@ -37,35 +37,12 @@
                             HorizontalAlignment="Right"
                             Margin="0,16,0,0">
 
-                    <!-- OK: A button image + text -->
                     <Button x:Name="OkButton"
                             Style="{StaticResource ConfirmDialogButton}"
-                            Click="OnOkClicked"
-                            Margin="0,0,8,0">
-                        <StackPanel Orientation="Horizontal">
-                            <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/a-1.png"
-                                   Width="18" Height="18" Margin="0,0,6,0"
-                                   VerticalAlignment="Center" />
-                            <TextBlock Text="OK"
-                                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
-                                       Foreground="{StaticResource XFilesForegroundBrush}"
-                                       VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-
-                    <!-- CANCEL: B button image + text -->
-                    <Button x:Name="CancelButton"
-                            Style="{StaticResource ConfirmDialogButton}"
-                            Click="OnCancelClicked">
-                        <StackPanel Orientation="Horizontal">
-                            <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/b-1.png"
-                                   Width="18" Height="18" Margin="0,0,6,0"
-                                   VerticalAlignment="Center" />
-                            <TextBlock Text="CANCEL"
-                                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
-                                       Foreground="{StaticResource XFilesForegroundBrush}"
-                                       VerticalAlignment="Center" />
-                        </StackPanel>
+                            Click="OnOkClicked">
+                        <TextBlock Text="OK"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                                   Foreground="{StaticResource XFilesForegroundBrush}" />
                     </Button>
                 </StackPanel>
             </StackPanel>

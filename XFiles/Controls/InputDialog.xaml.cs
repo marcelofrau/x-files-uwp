@@ -23,7 +23,6 @@ namespace XFiles.Controls
             Visibility = Visibility.Visible;
             Overlay.Visibility = Visibility.Visible;
 
-            // Select all text for easy replacement
             InputBox.Focus(FocusState.Programmatic);
             InputBox.SelectAll();
             return _tcs.Task;
@@ -39,10 +38,12 @@ namespace XFiles.Controls
             switch (e.Key)
             {
                 case Windows.System.VirtualKey.Enter:
+                case Windows.System.VirtualKey.GamepadMenu:
                     e.Handled = true;
                     Close(InputBox.Text);
                     break;
                 case Windows.System.VirtualKey.Escape:
+                case Windows.System.VirtualKey.GamepadB:
                     e.Handled = true;
                     Close(null);
                     break;
@@ -52,11 +53,6 @@ namespace XFiles.Controls
         private void OnOkClicked(object sender, RoutedEventArgs e)
         {
             Close(InputBox.Text);
-        }
-
-        private void OnCancelClicked(object sender, RoutedEventArgs e)
-        {
-            Close(null);
         }
 
         private void OnOverlayTapped(object sender, TappedRoutedEventArgs e)

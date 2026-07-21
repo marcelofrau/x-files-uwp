@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Windows.Storage;
 using Windows.System;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
@@ -124,8 +125,10 @@ namespace XFiles.Controls
             bool isInArchive = !string.IsNullOrEmpty(entry.ArchiveRootPath);
             bool isArchiveFile = entry.IsArchive && !entry.IsDirectory;
             bool isFolder = entry.IsDirectory;
+            bool isExternalDrive = !isInArchive && !entry.FullPath.StartsWith(
+                ApplicationData.Current.LocalFolder.Path, StringComparison.OrdinalIgnoreCase);
 
-            if (!isInArchive)
+            if (isExternalDrive)
             {
                 actions.Add(new ActionItem
                 {
@@ -135,20 +138,37 @@ namespace XFiles.Controls
                     LabelBrush = accent
                 });
             }
-
-            if (isArchiveFile)
+            else if (isInArchive)
             {
+                if (isArchiveFile)
+                {
+                    actions.Add(new ActionItem
+                    {
+                        Action = FileAction.Extract,
+                        Label = "Extract",
+                        IconPath = IconBase + ActionExtract,
+                        LabelBrush = accent
+                    });
+                }
+
                 actions.Add(new ActionItem
                 {
-                    Action = FileAction.Extract,
-                    Label = "Extract",
-                    IconPath = IconBase + ActionExtract,
+                    Action = FileAction.Refresh,
+                    Label = "Refresh",
+                    IconPath = IconBase + ActionRefresh,
                     LabelBrush = accent
                 });
             }
-
-            if (!isInArchive)
+            else
             {
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.Refresh,
+                    Label = "Refresh",
+                    IconPath = IconBase + ActionRefresh,
+                    LabelBrush = accent
+                });
+
                 actions.Add(new ActionItem
                 {
                     Action = FileAction.Copy,
@@ -172,34 +192,34 @@ namespace XFiles.Controls
                     IconPath = IconBase + ActionRename,
                     LabelBrush = dim
                 });
-            }
 
-            actions.Add(new ActionItem
-            {
-                Action = FileAction.CreateFolder,
-                Label = "New Folder",
-                IconPath = IconBase + ActionCreateFolder,
-                LabelBrush = accent
-            });
-
-            if (isFolder && !isInArchive)
-            {
                 actions.Add(new ActionItem
                 {
-                    Action = FileAction.CreateZip,
-                    Label = "Create ZIP",
-                    IconPath = IconBase + ActionCreateZip,
+                    Action = FileAction.CreateFolder,
+                    Label = "New Folder",
+                    IconPath = IconBase + ActionCreateFolder,
                     LabelBrush = accent
                 });
-            }
 
-            actions.Add(new ActionItem
-            {
-                Action = FileAction.Delete,
-                Label = "Delete",
-                IconPath = IconBase + ActionDelete,
-                LabelBrush = red
-            });
+                if (isFolder)
+                {
+                    actions.Add(new ActionItem
+                    {
+                        Action = FileAction.CreateZip,
+                        Label = "Create ZIP",
+                        IconPath = IconBase + ActionCreateZip,
+                        LabelBrush = accent
+                    });
+                }
+
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.Delete,
+                    Label = "Delete",
+                    IconPath = IconBase + ActionDelete,
+                    LabelBrush = red
+                });
+            }
 
             ActionList.ItemsSource = actions;
             FileNameText.Text = entry.Name;

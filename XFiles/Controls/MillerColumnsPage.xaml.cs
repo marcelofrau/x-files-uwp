@@ -1008,7 +1008,9 @@ namespace XFiles.Controls
 
         private bool IsAnyOverlayVisible =>
             PlaceholderOverlay.Visibility == Visibility.Visible
-            || AboutOverlay.Visibility == Visibility.Visible;
+            || AboutOverlay.Visibility == Visibility.Visible
+            || InputDialogControl.Visibility == Visibility.Visible
+            || ConfirmDialogControl.Visibility == Visibility.Visible;
 
         private bool IsAnyFullscreen =>
             ImageFullScreen.IsOpen || VideoFullScreenPanel.Visibility == Visibility.Visible
@@ -1842,6 +1844,7 @@ namespace XFiles.Controls
                     Name = selected.Name,
                     FullPath = selected.FullPath,
                     IsDirectory = selected.IsDirectory,
+                    IsDrive = selected.IsDrive,
                     IsArchive = selected.IsArchive,
                     SizeBytes = selected.SizeBytes,
                     ArchiveRootPath = selected.ArchiveRootPath
