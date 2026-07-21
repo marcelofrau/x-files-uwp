@@ -23,17 +23,12 @@ if (-not (Test-Path $pfx)) {
     Export-Certificate -Cert $cert -FilePath $cerPath -Type CERT -Force | Out-Null
     Write-Host "  Cert created: $pfx" -ForegroundColor Green
     Write-Host "  Thumbprint: $($cert.Thumbprint)" -ForegroundColor Yellow
-
-    # Auto-update csproj thumbprint via XML (safe encoding)
-    $csproj = Join-Path $root 'XFiles' 'XFiles.csproj'
-    [xml]$xml = Get-Content $csproj -Raw
-    $ns = New-Object System.Xml.XmlNamespaceManager($xml.NameTable)
-    $ns.AddNamespace('ms', 'http://schemas.microsoft.com/developer/msbuild/2003')
-    $node = $xml.SelectSingleNode('//ms:PackageCertificateThumbprint', $ns)
-    if ($node) { $node.InnerText = $cert.Thumbprint }
-    $xml.Save($csproj)
-    Write-Host "  Updated XFiles.csproj thumbprint" -ForegroundColor Green
 }
+
+# Resolve thumbprint from existing cert
+$cert2 = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($pfx, $certPass)
+$thumbprint = $cert2.Thumbprint
+Write-Host "  Thumbprint: $thumbprint" -ForegroundColor Yellow
 
 # ── 2. Clean old packages ──
 $appDir = Join-Path $root 'AppPackages'
