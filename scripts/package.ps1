@@ -30,9 +30,9 @@ $cert2 = New-Object System.Security.Cryptography.X509Certificates.X509Certificat
 $thumbprint = $cert2.Thumbprint
 Write-Host "  Thumbprint: $thumbprint" -ForegroundColor Yellow
 
-# ── 2. Clean old packages ──
+# ── 2. Clean old packages (skip if -SkipBuild, build output is already there) ──
 $appDir = Join-Path $root 'AppPackages'
-if (Test-Path $appDir) {
+if (-not $SkipBuild -and (Test-Path $appDir)) {
     Remove-Item -Recurse -Force $appDir
     Write-Host "Cleaned old AppPackages/" -ForegroundColor DarkGray
 }
