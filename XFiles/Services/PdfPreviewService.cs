@@ -47,10 +47,19 @@ namespace XFiles.FileSystem
                     {
                         using (var writer = new DataWriter(ims.GetOutputStreamAt(0)))
                         {
-                            var buf = new byte[Math.Min(fs.Length, 1024 * 1024)];
+                            var buf = new byte[8192];
                             int read;
                             while ((read = fs.Read(buf, 0, buf.Length)) > 0)
-                                writer.WriteBytes(buf, 0, read);
+                            {
+                                if (read == buf.Length)
+                                    writer.WriteBytes(buf);
+                                else
+                                {
+                                    var chunk = new byte[read];
+                                    Array.Copy(buf, chunk, read);
+                                    writer.WriteBytes(chunk);
+                                }
+                            }
                             await writer.StoreAsync();
                             await writer.FlushAsync();
                         }

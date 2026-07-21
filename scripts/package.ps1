@@ -24,11 +24,14 @@ if (-not (Test-Path $pfx)) {
     Write-Host "  Cert created: $pfx" -ForegroundColor Green
     Write-Host "  Thumbprint: $($cert.Thumbprint)" -ForegroundColor Yellow
 
-    # Auto-update csproj thumbprint
+    # Auto-update csproj thumbprint via XML (safe encoding)
     $csproj = Join-Path $root 'XFiles' 'XFiles.csproj'
-    $csprojContent = Get-Content $csproj -Raw
-    $csprojContent = $csprojContent -replace '(<PackageCertificateThumbprint>)[^<]+(</PackageCertificateThumbprint>)', "`$1$($cert.Thumbprint)`$2"
-    Set-Content -Path $csproj -Value $csprojContent -NoNewline
+    [xml]$xml = Get-Content $csproj -Raw
+    $ns = New-Object System.Xml.XmlNamespaceManager($xml.NameTable)
+    $ns.AddNamespace('ms', 'http://schemas.microsoft.com/developer/msbuild/2003')
+    $node = $xml.SelectSingleNode('//ms:PackageCertificateThumbprint', $ns)
+    if ($node) { $node.InnerText = $cert.Thumbprint }
+    $xml.Save($csproj)
     Write-Host "  Updated XFiles.csproj thumbprint" -ForegroundColor Green
 }
 

@@ -115,11 +115,14 @@ namespace XFiles.Controls
                 TextWrapping = TextWrapping.NoWrap
             };
 
-            _rootGrid = new Grid
+            _rootGrid = new Grid();
+            var clip = new Windows.UI.Xaml.Media.RectangleGeometry();
+            _rootGrid.Clip = clip;
+            _rootGrid.SizeChanged += (s, e) =>
             {
-                ClipToBounds = true,
-                Children = { _textBlock }
+                clip.Rect = new Windows.Foundation.Rect(0, 0, _rootGrid.ActualWidth, _rootGrid.ActualHeight);
             };
+            _rootGrid.Children.Add(_textBlock);
 
             Content = _rootGrid;
 
