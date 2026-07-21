@@ -379,7 +379,7 @@
 
                             <!-- DPad -->
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/dpad-3.png"
+                                <Image Source="ms-appx:///Assets/GamepadButtons/dpads/dpad-all-directions.png"
                                        Width="26" Height="26" Margin="0,0,10,0"
                                        VerticalAlignment="Center" />
                                 <StackPanel VerticalAlignment="Center">
@@ -395,7 +395,7 @@
 
                             <!-- A -->
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/a-1.png"
+                                <Image Source="ms-appx:///Assets/GamepadButtons/abxy/a.png"
                                        Width="26" Height="26" Margin="0,0,10,0"
                                        VerticalAlignment="Center" />
                                 <StackPanel VerticalAlignment="Center">
@@ -411,7 +411,7 @@
 
                             <!-- B -->
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-                                <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/b-1.png"
+                                <Image Source="ms-appx:///Assets/GamepadButtons/abxy/b.png"
                                        Width="26" Height="26" Margin="0,0,10,0"
                                        VerticalAlignment="Center" />
                                 <StackPanel VerticalAlignment="Center">
@@ -435,10 +435,10 @@
 
                             <!-- LB/RB -->
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/lb.png"
+                                <Image Source="ms-appx:///Assets/GamepadButtons/lr/button_xbox_digital_bumper_light_1.png"
                                        Width="26" Height="16" Margin="0,0,4,0"
                                        VerticalAlignment="Center" />
-                                <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/rb.png"
+                                <Image Source="ms-appx:///Assets/GamepadButtons/lr/button_xbox_digital_bumper_light_2.png"
                                        Width="26" Height="16" Margin="0,0,10,0"
                                        VerticalAlignment="Center" />
                                 <StackPanel VerticalAlignment="Center">
@@ -454,10 +454,10 @@
 
                             <!-- LT/RT -->
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/lt.png"
+                                <Image Source="ms-appx:///Assets/GamepadButtons/lr/button_xbox_analog_trigger_light_1.png"
                                        Width="16" Height="26" Margin="0,0,4,0"
                                        VerticalAlignment="Center" />
-                                <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/rt.png"
+                                <Image Source="ms-appx:///Assets/GamepadButtons/lr/button_xbox_analog_trigger_light_2.png"
                                        Width="16" Height="26" Margin="0,0,10,0"
                                        VerticalAlignment="Center" />
                                 <StackPanel VerticalAlignment="Center">
@@ -473,7 +473,7 @@
 
                             <!-- L/R Stick -->
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-                                <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/lstick.png"
+                                <Image Source="ms-appx:///Assets/GamepadButtons/analog/button_xbox_analog_l.png"
                                        Width="26" Height="26" Margin="0,0,10,0"
                                        VerticalAlignment="Center" />
                                 <StackPanel VerticalAlignment="Center">
@@ -497,7 +497,7 @@
 
                             <!-- Y -->
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/y-1.png"
+                                <Image Source="ms-appx:///Assets/GamepadButtons/abxy/y.png"
                                        Width="26" Height="26" Margin="0,0,10,0"
                                        VerticalAlignment="Center" />
                                 <StackPanel VerticalAlignment="Center">
@@ -521,7 +521,7 @@
 
                             <!-- X -->
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/x-1.png"
+                                <Image Source="ms-appx:///Assets/GamepadButtons/abxy/x.png"
                                        Width="26" Height="26" Margin="0,0,10,0"
                                        VerticalAlignment="Center" />
                                 <StackPanel VerticalAlignment="Center">
@@ -537,7 +537,7 @@
 
                             <!-- Start -->
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,0">
-                                <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/menu.png"
+                                <Image Source="ms-appx:///Assets/GamepadButtons/system/xboxl_menu.png"
                                        Width="26" Height="26" Margin="0,0,10,0"
                                        VerticalAlignment="Center" />
                                 <StackPanel VerticalAlignment="Center">
@@ -568,7 +568,7 @@
             <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                 <!-- A -->
                 <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
-                    <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/a-1.png"
+                    <Image Source="ms-appx:///Assets/GamepadButtons/abxy/a.png"
                            Width="18" Height="18" Margin="0,0,4,0"
                            VerticalAlignment="Center" />
                     <TextBlock x:Name="FooterALabel"
@@ -581,7 +581,7 @@
                 </StackPanel>
                 <!-- B -->
                 <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
-                    <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/b-1.png"
+                    <Image Source="ms-appx:///Assets/GamepadButtons/abxy/b.png"
                            Width="18" Height="18" Margin="0,0,4,0"
                            VerticalAlignment="Center" />
                     <TextBlock x:Name="FooterBLabel"
@@ -594,7 +594,7 @@
                 </StackPanel>
                 <!-- X -->
                 <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
-                    <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/x-1.png"
+                    <Image Source="ms-appx:///Assets/GamepadButtons/abxy/x.png"
                            Width="18" Height="18" Margin="0,0,4,0"
                            VerticalAlignment="Center" />
                     <TextBlock x:Name="FooterXLabel"
@@ -607,7 +607,7 @@
                 </StackPanel>
                 <!-- Y -->
                 <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
-                    <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/y-1.png"
+                    <Image Source="ms-appx:///Assets/GamepadButtons/abxy/y.png"
                            Width="18" Height="18" Margin="0,0,4,0"
                            VerticalAlignment="Center" />
                     <TextBlock x:Name="FooterYLabel"
@@ -620,7 +620,7 @@
                 </StackPanel>
                 <!-- LT / RT -->
                 <StackPanel x:Name="FooterLTRT" Orientation="Horizontal" Margin="0,0,14,0" Visibility="Collapsed">
-                    <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/lt.png"
+                    <Image Source="ms-appx:///Assets/GamepadButtons/lr/button_xbox_analog_trigger_light_1.png"
                            Width="18" Height="18" Margin="0,0,4,0"
                            VerticalAlignment="Center" />
                     <TextBlock x:Name="FooterLTLabel"
@@ -630,7 +630,7 @@
                                Margin="0,3,0,0"
                                Foreground="{StaticResource XFilesTextMutedBrush}"
                                VerticalAlignment="Center" />
-                    <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/rt.png"
+                    <Image Source="ms-appx:///Assets/GamepadButtons/lr/button_xbox_analog_trigger_light_2.png"
                            Width="18" Height="18" Margin="8,0,4,0"
                            VerticalAlignment="Center" />
                     <TextBlock x:Name="FooterRTLabel"
@@ -643,7 +643,7 @@
                 </StackPanel>
                 <!-- LB / RB -->
                 <StackPanel x:Name="FooterLBRB" Orientation="Horizontal" Margin="0,0,14,0" Visibility="Collapsed">
-                    <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/lb.png"
+                    <Image Source="ms-appx:///Assets/GamepadButtons/lr/button_xbox_digital_bumper_light_1.png"
                            Width="18" Height="18" Margin="0,0,4,0"
                            VerticalAlignment="Center" />
                     <TextBlock x:Name="FooterLBLabel"
@@ -653,7 +653,7 @@
                                Margin="0,3,0,0"
                                Foreground="{StaticResource XFilesTextMutedBrush}"
                                VerticalAlignment="Center" />
-                    <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/rb.png"
+                    <Image Source="ms-appx:///Assets/GamepadButtons/lr/button_xbox_digital_bumper_light_2.png"
                            Width="18" Height="18" Margin="8,0,4,0"
                            VerticalAlignment="Center" />
                     <TextBlock x:Name="FooterRBLabel"
@@ -666,7 +666,7 @@
                 </StackPanel>
                 <!-- Start -->
                 <StackPanel x:Name="FooterStart" Orientation="Horizontal" Margin="0,0,14,0">
-                    <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/menu.png"
+                    <Image Source="ms-appx:///Assets/GamepadButtons/system/xboxl_menu.png"
                            Width="18" Height="18" Margin="0,0,4,0"
                            VerticalAlignment="Center" />
                     <TextBlock Text="Settings"
@@ -798,7 +798,7 @@
                         HorizontalAlignment="Center" VerticalAlignment="Bottom"
                         Margin="0,0,0,4">
                 <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
-                    <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/a-1.png"
+                    <Image Source="ms-appx:///Assets/GamepadButtons/abxy/a.png"
                            Width="16" Height="16" Margin="0,0,4,0" VerticalAlignment="Center" />
                     <TextBlock Text="Play/Pause"
                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
@@ -806,9 +806,9 @@
                                Foreground="#99FFFFFF" VerticalAlignment="Center" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
-                    <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/lb.png"
+                    <Image Source="ms-appx:///Assets/GamepadButtons/lr/button_xbox_digital_bumper_light_1.png"
                            Width="16" Height="16" Margin="0,0,2,0" VerticalAlignment="Center" />
-                    <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/rb.png"
+                    <Image Source="ms-appx:///Assets/GamepadButtons/lr/button_xbox_digital_bumper_light_2.png"
                            Width="16" Height="16" Margin="0,0,4,0" VerticalAlignment="Center" />
                     <TextBlock Text="Prev / Next"
                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
@@ -816,7 +816,7 @@
                                Foreground="#99FFFFFF" VerticalAlignment="Center" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
-                    <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/lstick.png"
+                    <Image Source="ms-appx:///Assets/GamepadButtons/analog/button_xbox_analog_l.png"
                            Width="16" Height="16" Margin="0,0,4,0" VerticalAlignment="Center" />
                     <TextBlock Text="Vol"
                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
@@ -824,7 +824,7 @@
                                Foreground="#99FFFFFF" VerticalAlignment="Center" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal">
-                    <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/b-1.png"
+                    <Image Source="ms-appx:///Assets/GamepadButtons/abxy/b.png"
                            Width="16" Height="16" Margin="0,0,4,0" VerticalAlignment="Center" />
                     <TextBlock Text="Close"
                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
@@ -887,7 +887,7 @@
                         HorizontalAlignment="Center" VerticalAlignment="Bottom"
                         Margin="0,0,0,4">
                 <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
-                    <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/b-1.png"
+                    <Image Source="ms-appx:///Assets/GamepadButtons/abxy/b.png"
                            Width="16" Height="16" Margin="0,0,4,0" VerticalAlignment="Center" />
                     <TextBlock Text="Close"
                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
@@ -895,7 +895,7 @@
                                Foreground="#99FFFFFF" VerticalAlignment="Center" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
-                    <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/a-1.png"
+                    <Image Source="ms-appx:///Assets/GamepadButtons/abxy/a.png"
                            Width="16" Height="16" Margin="0,0,4,0" VerticalAlignment="Center" />
                     <TextBlock Text="Play/Pause"
                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
@@ -903,9 +903,9 @@
                                Foreground="#99FFFFFF" VerticalAlignment="Center" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
-                    <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/lb.png"
+                    <Image Source="ms-appx:///Assets/GamepadButtons/lr/button_xbox_digital_bumper_light_1.png"
                            Width="16" Height="16" Margin="0,0,2,0" VerticalAlignment="Center" />
-                    <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/rb.png"
+                    <Image Source="ms-appx:///Assets/GamepadButtons/lr/button_xbox_digital_bumper_light_2.png"
                            Width="16" Height="16" Margin="0,0,4,0" VerticalAlignment="Center" />
                     <TextBlock Text="5s"
                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
@@ -913,9 +913,9 @@
                                Foreground="#99FFFFFF" VerticalAlignment="Center" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
-                    <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/lt.png"
+                    <Image Source="ms-appx:///Assets/GamepadButtons/lr/button_xbox_analog_trigger_light_1.png"
                            Width="16" Height="16" Margin="0,0,2,0" VerticalAlignment="Center" />
-                    <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/rt.png"
+                    <Image Source="ms-appx:///Assets/GamepadButtons/lr/button_xbox_analog_trigger_light_2.png"
                            Width="16" Height="16" Margin="0,0,4,0" VerticalAlignment="Center" />
                     <TextBlock Text="10s"
                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
@@ -923,7 +923,7 @@
                                Foreground="#99FFFFFF" VerticalAlignment="Center" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal">
-                    <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/lstick.png"
+                    <Image Source="ms-appx:///Assets/GamepadButtons/analog/button_xbox_analog_l.png"
                            Width="16" Height="16" Margin="0,0,4,0" VerticalAlignment="Center" />
                     <TextBlock Text="Vol"
                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
@@ -1060,7 +1060,7 @@
                         <!-- Footer -->
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
                                     Margin="0,24,0,0" Spacing="6">
-                            <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/b-1.png"
+                            <Image Source="ms-appx:///Assets/GamepadButtons/abxy/b.png"
                                    Width="14" Height="14" Stretch="Uniform"
                                    VerticalAlignment="Center" />
                             <TextBlock Text="Back"

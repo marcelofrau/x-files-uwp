@@ -33,7 +33,7 @@
                             Click="OnYesClicked"
                             Margin="0,0,8,0">
                         <StackPanel Orientation="Horizontal">
-                            <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/a-1.png"
+                            <Image Source="ms-appx:///Assets/GamepadButtons/abxy/a.png"
                                    Width="18" Height="18" Margin="0,0,6,0"
                                    VerticalAlignment="Center" />
                             <TextBlock Text="YES"
@@ -48,7 +48,7 @@
                             Style="{StaticResource ConfirmDialogButton}"
                             Click="OnNoClicked">
                         <StackPanel Orientation="Horizontal">
-                            <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/b-1.png"
+                            <Image Source="ms-appx:///Assets/GamepadButtons/abxy/b.png"
                                    Width="18" Height="18" Margin="0,0,6,0"
                                    VerticalAlignment="Center" />
                             <TextBlock Text="NO"

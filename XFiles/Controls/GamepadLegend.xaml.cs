@@ -5,7 +5,7 @@ namespace XFiles.Controls
 {
     public sealed partial class GamepadLegend : UserControl
     {
-        private const string Theme = "xbox-dark";
+        private const string BtnBase = "ms-appx:///Assets/GamepadButtons/";
 
         public GamepadLegend()
         {
@@ -15,13 +15,13 @@ namespace XFiles.Controls
 
         private void LoadIcons()
         {
-            IconA.Source = new BitmapImage(new System.Uri($"ms-appx:///Assets/GamepadButtons/{Theme}/a-1.png"));
-            IconB.Source = new BitmapImage(new System.Uri($"ms-appx:///Assets/GamepadButtons/{Theme}/b-1.png"));
-            IconX.Source = new BitmapImage(new System.Uri($"ms-appx:///Assets/GamepadButtons/{Theme}/x-1.png"));
-            IconY.Source = new BitmapImage(new System.Uri($"ms-appx:///Assets/GamepadButtons/{Theme}/y-1.png"));
-            IconLB.Source = new BitmapImage(new System.Uri($"ms-appx:///Assets/GamepadButtons/{Theme}/lb.png"));
-            IconRB.Source = new BitmapImage(new System.Uri($"ms-appx:///Assets/GamepadButtons/{Theme}/rb.png"));
-            IconDpad.Source = new BitmapImage(new System.Uri($"ms-appx:///Assets/GamepadButtons/{Theme}/dpad-1.png"));
+            IconA.Source = new BitmapImage(new System.Uri(BtnBase + "abxy/a.png"));
+            IconB.Source = new BitmapImage(new System.Uri(BtnBase + "abxy/b.png"));
+            IconX.Source = new BitmapImage(new System.Uri(BtnBase + "abxy/x.png"));
+            IconY.Source = new BitmapImage(new System.Uri(BtnBase + "abxy/y.png"));
+            IconLB.Source = new BitmapImage(new System.Uri(BtnBase + "lr/button_xbox_digital_bumper_light_1.png"));
+            IconRB.Source = new BitmapImage(new System.Uri(BtnBase + "lr/button_xbox_digital_bumper_light_2.png"));
+            IconDpad.Source = new BitmapImage(new System.Uri(BtnBase + "dpads/dpad-all-directions.png"));
         }
 
         public void SetContextLabels(string xLabel, string yLabel, string lbLabel = "", string rbLabel = "")

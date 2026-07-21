@@ -79,7 +79,7 @@
                     <StackPanel Orientation="Horizontal"
                                 HorizontalAlignment="Center"
                                 Padding="0,10,0,4">
-                        <Image Source="ms-appx:///Assets/GamepadButtons/xboxone-dark/b-1.png"
+                        <Image Source="ms-appx:///Assets/GamepadButtons/abxy/b.png"
                                Width="18" Height="18" Margin="0,0,4,0"
                                VerticalAlignment="Center" />
                         <TextBlock Text="Back"
