@@ -1,53 +1,42 @@
-# Xbox Deploy — Reference Guide
+# Xbox Deploy
 
-Based on the same flow used/documented in the sibling project `dosbox-pure-uwp` (see
-`README.md` and `AGENTS.md` in that repo for specific details already validated).
+## Prerequisites
 
-## 1. Prerequisites
+- **Xbox One / Xbox Series X|S** with Developer Mode enabled
+- That's it. No Windows PC, no Visual Studio, no special tools.
 
-- Xbox console with **Developer Mode** enabled (via Microsoft Store "Dev Home" app,
-  requires a registered developer account).
-- Windows machine with Visual Studio 2022 ("Universal Windows Platform development"
-  workload) — **this project does not build on Linux/WSL**, only the structure/docs are
-  created here; compilation and real deploy must be done on a Windows machine.
-- Xbox and development machine on the same local network.
+## 1. Enable Developer Mode
 
-## 2. Enable Developer Mode on Console
+1. Install the **"Dev Home"** app from Microsoft Store on your Xbox (in Retail mode).
+2. Follow the registration flow (free Microsoft developer account).
+3. Console restarts in Developer Mode. Dev Home shows your **IP address** and **pairing code**.
 
-1. Install the "Dev Home" app (Microsoft Store) on Xbox in normal Retail mode.
-2. Follow the registration flow (requires Microsoft developer account — free or paid
-   depending on timing/region).
-3. Console restarts in Developer Mode; "Dev Home" app shows the **IP address** and a
-   **pairing code** for Device Portal.
+## 2. Get the Package
 
-## 3. Device Portal
+The `.appx` or `.appxbundle` package is provided in releases. Download it to a USB drive
+or to a shared folder accessible from the Xbox browser.
 
-1. In browser on Windows machine: `https://<XBOX-IP>:11443`.
-2. Authenticate with the pairing code shown in "Dev Home".
-3. **Apps** menu → allows installing `.appx`/`.msix` (or `.appxbundle`) packages directly
-   via the web interface, or via Visual Studio (more practical during development).
+## 3. Deploy via Device Portal
 
-## 4. Deploy via Visual Studio (Recommended During Development)
+1. Open Xbox Dev Home → note the IP address and pairing code.
+2. On any device (phone, tablet, PC) connected to the same network:
+   Open browser → `https://<XBOX-IP>:11443`
+3. Enter the pairing code when prompted.
+4. Go to **Apps** → **Add** → select the `.appxbundle` file.
+5. Install. The app appears in your Dev Mode app list.
 
-1. Open `XFiles.sln` in Visual Studio (Windows).
-2. Select `x64` platform (or `ARM`/`ARM64` depending on target console — Xbox uses a
-   specific internal architecture; consult the current Xbox Developer Mode documentation
-   for the correct value at build time, as this changes between console generations).
-3. In the deploy device dropdown, choose **Remote Machine**, enter Xbox IP
-   (Developer Mode exposes a separate debugging port from the Device Portal port).
-4. F5 (Debug) or Ctrl+F5 (Run without debug) — Visual Studio packages, copies and installs
-   automatically.
+## 4. Deploy via xbHomebrewVault (Alternative)
 
-## 5. Deploy via Device Portal (For "Release" Builds, Without Visual Studio)
+If you have [xbHomebrewVault](https://github.com/vektorvamp xbHomebrewVault) or similar
+homebrew installer:
 
-1. Generate package via **Project → Publish → Create App Packages** in Visual Studio,
-   selecting "Sideloading" (not "Microsoft Store").
-2. In Xbox Device Portal → Apps → **Add** → select the generated `.appxbundle`/`.msix` +
-   certificate file (`.cer`) if needed.
-3. Install and run from the Device Portal app list or the Xbox dashboard itself
-   (Developer Mode exposes a separate "Dev Mode Home" menu with sideloaded apps).
+1. Copy the `.appx` package to a USB drive.
+2. On Xbox, open xbHomebrewVault → Install from USB.
+3. Select the package → Install.
 
-## 6. Required Capabilities in Manifest
+## 5. Required Capabilities
+
+Already included in the manifest — no action needed:
 
 ```xml
 <Capabilities>
@@ -56,33 +45,13 @@ Based on the same flow used/documented in the sibling project `dosbox-pure-uwp` 
 </Capabilities>
 ```
 
-Without these two, `FindFirstFileExFromAppW`/`GetLogicalDrives` (see `FILEBROWSER.md`)
-fail silently or return access denied for any path outside the app sandbox.
-Requires the `rescap` namespace declared in `Package.appxmanifest`
-(`xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"`)
-and the corresponding declaration in `<Dependencies>`/`TargetDeviceFamily`.
+These allow browsing external USB drives. Without them, the app can only see its own
+sandbox folder.
 
-## 7. `TargetDeviceFamily`
+## Troubleshooting
 
-```xml
-<Dependencies>
-  <TargetDeviceFamily Name="Windows.Xbox" MinVersion="10.0.0.0" MaxVersionTested="10.0.0.0" />
-</Dependencies>
-```
-
-Adjust `MinVersion`/`MaxVersionTested` to the real values of the SDK installed at build
-time (Visual Studio auto-fills these when changing `TargetDeviceFamily` in the project).
-
-## 8. Common Troubleshooting Checklist
-
-- [ ] App doesn't appear in Device Portal → verify the package signing certificate is
-      trusted on the device (self-signed must be manually installed via Device Portal →
-      Certificates before first deploy).
-- [ ] `Access Denied` when listing drives → confirm both capabilities above and that
-      Developer Mode is actually active (not just "Retail with sideload", which has
-      different restrictions).
-- [ ] Gamepad not detected → confirm the app is in the foreground (Xbox only delivers
-      gamepad input to the focused app) and that `Gamepad.GamepadAdded` was subscribed
-      before initial enumeration (common race condition: controller already connected before
-      app start doesn't fire `GamepadAdded` — must also iterate `Gamepad.Gamepads` at
-      startup).
+- **App doesn't appear in Device Portal** → Install the signing certificate first:
+  Device Portal → Certificates → upload the `.cer` file.
+- **Access Denied on drives** → Confirm Developer Mode is active (not Retail with sideload).
+- **Gamepad not responding** → Make sure the app is in the foreground. Connect the
+  controller before launching the app, or reconnect after launch.

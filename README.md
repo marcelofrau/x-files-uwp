@@ -109,19 +109,18 @@ built specifically for the console experience.
 
 ### Prerequisites
 
-- **Windows** with Visual Studio 2022 + "Universal Windows Platform development" workload
-- Xbox with **Developer Mode** enabled (see [DEPLOY-XBOX.md](docs/DEPLOY-XBOX.md))
+- **Xbox One** or **Xbox Series X|S** with Developer Mode enabled
 
-### Build
+That's it. No PC, no Visual Studio, no special tools needed.
 
-```powershell
-MSBuild.exe "XFiles.sln" /p:Configuration=Debug /p:Platform=x64
-```
+### Install
 
-### Deploy to Xbox
+1. Enable Developer Mode on your Xbox (install "Dev Home" from Microsoft Store).
+2. Download the `.appxbundle` package from [releases](https://github.com/marcelofrau/x-files-uwp/releases).
+3. Open Xbox Device Portal from any device on your network: `https://<XBOX-IP>:11443`
+4. Go to **Apps** → **Add** → select the package → Install.
 
-See [docs/DEPLOY-XBOX.md](docs/DEPLOY-XBOX.md) for sideload via Device Portal or Visual
-Studio Remote Machine.
+See [DEPLOY-XBOX.md](docs/DEPLOY-XBOX.md) for detailed steps.
 
 ## Project structure
 
