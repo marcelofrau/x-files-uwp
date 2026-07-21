@@ -98,6 +98,7 @@
     <Compile Include="FileSystem\ArchiveBrowser.cs" />
     <Compile Include="FileSystem\Id3Tag.cs" />
     <Compile Include="FileSystem\Win32FileStream.cs" />
+    <Compile Include="FileSystem\ClipboardState.cs" />
     <Compile Include="FileSystem\FileOperations.cs" />
     <Compile Include="Log.cs" />
     <Compile Include="ScreenLogger.cs" />
@@ -140,9 +141,14 @@
     <Compile Include="Controls\ImageFullScreenOverlay.xaml.cs">
       <DependentUpon>ImageFullScreenOverlay.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Controls\PdfFullScreenOverlay.xaml.cs">
+      <DependentUpon>PdfFullScreenOverlay.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Services\PdfPreviewService.cs" />
     <Compile Include="Audio\IMemoryBufferAccess.cs" />
     <Compile Include="Audio\AudioLevelService.cs" />
     <Compile Include="Audio\FftHelper.cs" />
+    <Compile Include="Controls\MarqueeTextBlock.cs" />
     <Compile Include="Controls\VuMeterBar.xaml.cs">
       <DependentUpon>VuMeterBar.xaml</DependentUpon>
     </Compile>
@@ -209,6 +215,10 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Controls\ImageFullScreenOverlay.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\PdfFullScreenOverlay.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>

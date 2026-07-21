@@ -1,0 +1,97 @@
+<UserControl
+    x:Class="XFiles.Controls.PdfFullScreenOverlay"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Visibility="Collapsed">
+
+    <Grid Background="#E60D1117" Tapped="OnOverlayTapped">
+        <!-- PDF page with pan/zoom -->
+        <Grid x:Name="ImageContainer"
+              HorizontalAlignment="Center"
+              VerticalAlignment="Center">
+            <Image x:Name="FullImage"
+                   Stretch="Uniform"
+                   RenderTransformOrigin="0.5,0.5">
+                <Image.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform x:Name="ImageScale" ScaleX="1" ScaleY="1" />
+                        <TranslateTransform x:Name="ImageTranslate" X="0" Y="0" />
+                    </TransformGroup>
+                </Image.RenderTransform>
+            </Image>
+        </Grid>
+
+        <!-- Loading indicator -->
+        <ProgressRing x:Name="LoadingRing"
+                      IsActive="False"
+                      Width="48" Height="48"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Center"
+                      Foreground="#80FFFFFF" />
+
+        <!-- Page indicator -->
+        <TextBlock x:Name="PageText"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Top"
+                   Margin="0,16,0,0"
+                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                   FontSize="14"
+                   Foreground="#B0FFFFFF"
+                   Text="1 / 1" />
+
+        <!-- LB/RB page hints -->
+        <StackPanel Orientation="Horizontal"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Bottom"
+                    Margin="0,0,0,24">
+            <Image Source="ms-appx:///Assets/GamepadButtons/lr/bumper_light_1.png"
+                   Width="18" Height="18"
+                   Margin="0,0,4,0"
+                   VerticalAlignment="Center" />
+            <TextBlock Text="Prev"
+                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                       FontSize="12"
+                       Foreground="#80FFFFFF"
+                       Margin="0,3,14,0"
+                       VerticalAlignment="Center" />
+            <Image Source="ms-appx:///Assets/GamepadButtons/lr/bumper_light_2.png"
+                   Width="18" Height="18"
+                   Margin="0,0,4,0"
+                   VerticalAlignment="Center" />
+            <TextBlock Text="Next"
+                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                       FontSize="12"
+                       Foreground="#80FFFFFF"
+                       Margin="0,3,0,0"
+                       VerticalAlignment="Center" />
+        </StackPanel>
+
+        <!-- Close hint -->
+        <StackPanel Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Bottom"
+                    Margin="0,0,24,24">
+            <Image Source="ms-appx:///Assets/GamepadButtons/abxy/b.png"
+                   Width="18" Height="18"
+                   Margin="0,0,6,0"
+                   VerticalAlignment="Center" />
+            <TextBlock Text="Close"
+                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                       FontSize="12"
+                       Foreground="#80FFFFFF"
+                       Margin="0,3,0,0"
+                       VerticalAlignment="Center" />
+        </StackPanel>
+
+        <!-- Zoom level indicator -->
+        <TextBlock x:Name="ZoomText"
+                   HorizontalAlignment="Right"
+                   VerticalAlignment="Top"
+                   Margin="0,16,24,0"
+                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                   FontSize="14"
+                   Foreground="#80FFFFFF"
+                   Text="100%"
+                   Visibility="Collapsed" />
+    </Grid>
+</UserControl>

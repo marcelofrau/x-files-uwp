@@ -296,6 +296,7 @@ namespace XFiles.Navigation
                     _preview.PreviewPixelWidth = previewResult.PixelWidth;
                     _preview.PreviewPixelHeight = previewResult.PixelHeight;
                     _preview.PreviewFilePath = selected.FullPath;
+                    _preview.PreviewPdfPageCount = previewResult.PdfPageCount;
                 }
             }
         }
@@ -397,6 +398,7 @@ namespace XFiles.Navigation
         public int PreviewPixelWidth { get; set; }
         public int PreviewPixelHeight { get; set; }
         public string PreviewFilePath { get; set; }
+        public int PreviewPdfPageCount { get; set; }
 
         public string ParentPath
         {

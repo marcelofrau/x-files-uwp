@@ -4,6 +4,7 @@ using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Input;
 using XFiles.FileSystem;
+using static XFiles.FileSystem.FileOperations;
 
 namespace XFiles.Controls
 {

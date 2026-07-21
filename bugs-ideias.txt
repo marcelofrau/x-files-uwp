@@ -47,24 +47,29 @@ quanto o icone e nome.. a descricao nao precisa pode tirar.. e tem que melhorar 
 	- F:\workspace\xb-homebrew-vault
 	- F:\workspace\vs2022\dosbox-pure-unleashed-uwp
 
--- Em progresso
+- vumeter bar igual winamp com AudioGraph
+
+- Play de musica/video nao ta funcionando na primeira vez que aperta A no arquivo selecionado da lista, tem algo impedindo e tem que ficar tentando varias vezes ate o player comecar. 
 
 - em algum momento depois de usar e testar, os dpads ficaram duplicando eventos. se movendo de 2x em 2x. tentar verificar o que acontece.. 
 
--- Backlog
+-- Em progresso
 
 - se tiver tocando midia seja musica ou video, e tiver mais arquivos na pasta, pular pro proximo automaticamente quando terminar de tocar. 
-
 - implementar renomear
-- implementar janela de progresso de copia com barra de progresso e indicacao de copia, 
-  mostrando dados e informacoes como destino, origem e etc.
-- implementar copiar (tem que em algum lugar mostrar que tem coisa copiada)
+- implementar janela de progresso de operacao com barra de progresso e indicacao de copia, mostrando dados e informacoes como destino, origem e etc. (preparativos pra copia, extracao, mover, colar, etc)
+
+- Implementar nova pasta
+- a acao de new folder, tem q fazer uma pergunta ou mostrar um dropdown, indicando se eh pra criar a pasta dentro da outra pasta ou no mesmo nivel dela (caso a selecao esteja em uma pasta), pode ser confuso do jeito q ta. 
+- preview de pdf tambem
+
+-- Backlog
+
 - implementar colar
 	- se selecao tiver em arquivo, colar arquivo na pasta atual (mostrar confirmacao)
 	- se selecao tiver em pasta, desambiguar se qer colar na pasta selecionada ou na pasta atual (pode ser um confirm dialog)
 	
 - implementar mover -> mostrando qual pasta escolher pra mover.
-- Implementar nova pasta
 
 - implementar zipar pasta/arquivo
 	- perguntar nome do zip sugerindo o mesmo nome do arquivo/pasta .zip
@@ -76,13 +81,12 @@ quanto o icone e nome.. a descricao nao precisa pode tirar.. e tem que melhorar 
 - ainda temos um bug no Dropdown de selecao... ele devia "ganhar" foco e ficar exclusivo em overlay ate que o usuario ou cancele com B, ou escolha uma opcao. mas ainda assim, assim que abre o dropdown, se eu dou dpad down ou up com ele aberto, o dropdown fecha.
 - se zip tem pasta, e navega pra pasta depois volta, depois navega pra pasta de novo, ela ta ficando sem arquivos, pode ter dado algum erro.
 
-- a acao de new folder, tem q fazer uma pergunta ou mostrar um dropdown, indicando se eh pra criar a pasta dentro da outra pasta ou no mesmo nivel dela (caso a selecao esteja em uma pasta), pode ser confuso do jeito q ta. 
 
-- melhorar seek de video player. fazer mais proximo ao kodi.
 
 --- Ideias
-- vumeter bar igual winamp com AudioGraph
-- preview de pdf tambem
+
+- player de video suportar legendas e permitir trocar
+- player de video suportar modificar trilhas de audio
 - background music in the application
 - initial media file on startup
 - https://frontend-hero.com/how-to-animate-gradients-css

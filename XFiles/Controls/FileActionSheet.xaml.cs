@@ -14,11 +14,15 @@ namespace XFiles.Controls
     public enum FileAction
     {
         Copy,
+        Cut,
+        Paste,
         Move,
         Rename,
         Delete,
         Extract,
         CreateFolder,
+        CreateInside,
+        CreateNextTo,
         CreateZip,
         Refresh
     }
@@ -161,6 +165,17 @@ namespace XFiles.Controls
             }
             else
             {
+                if (ClipboardState.HasItems)
+                {
+                    actions.Add(new ActionItem
+                    {
+                        Action = FileAction.Paste,
+                        Label = ClipboardState.IsCut ? "Paste (move)" : "Paste (copy)",
+                        IconPath = IconBase + ActionCopy,
+                        LabelBrush = accent
+                    });
+                }
+
                 actions.Add(new ActionItem
                 {
                     Action = FileAction.Refresh,
@@ -175,6 +190,14 @@ namespace XFiles.Controls
                     Label = "Copy",
                     IconPath = IconBase + ActionCopy,
                     LabelBrush = accent
+                });
+
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.Cut,
+                    Label = "Cut",
+                    IconPath = IconBase + ActionMove,
+                    LabelBrush = dim
                 });
 
                 actions.Add(new ActionItem
@@ -226,6 +249,45 @@ namespace XFiles.Controls
 
             FileIconImage.Source = new Windows.UI.Xaml.Media.Imaging.BitmapImage(
                 new Uri(ResolveContextFileIcon(entry)));
+
+            Visibility = Visibility.Visible;
+            Overlay.Visibility = Visibility.Visible;
+
+            ActionList.SelectedIndex = 0;
+            ActionList.Focus(FocusState.Programmatic);
+
+            return _tcs.Task;
+        }
+
+        public Task<FileAction?> ShowLocationChoiceAsync(string folderName)
+        {
+            _tcs = new TaskCompletionSource<FileAction?>();
+
+            var actions = new List<ActionItem>();
+            var accent = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x93, 0xC4, 0x3C));
+            var dim = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x7A, 0xA8, 0x32));
+
+            actions.Add(new ActionItem
+            {
+                Action = FileAction.CreateInside,
+                Label = $"Inside \"{folderName}\"",
+                IconPath = IconBase + ActionCreateFolder,
+                LabelBrush = accent
+            });
+
+            actions.Add(new ActionItem
+            {
+                Action = FileAction.CreateNextTo,
+                Label = $"Next to \"{folderName}\"",
+                IconPath = IconBase + ActionCreateFolder,
+                LabelBrush = dim
+            });
+
+            ActionList.ItemsSource = actions;
+            FileNameText.Text = "New folder";
+
+            FileIconImage.Source = new Windows.UI.Xaml.Media.Imaging.BitmapImage(
+                new Uri(IconBase + ActionCreateFolder));
 
             Visibility = Visibility.Visible;
             Overlay.Visibility = Visibility.Visible;

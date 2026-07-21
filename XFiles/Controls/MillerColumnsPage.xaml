@@ -59,7 +59,7 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <TextBlock Grid.Row="0"
+                <controls:MarqueeTextBlock Grid.Row="0"
                     x:Name="ParentHeader"
                     Text=""
                     Foreground="{StaticResource XFilesAccentBrush}"
@@ -161,7 +161,7 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <TextBlock Grid.Row="0"
+                <controls:MarqueeTextBlock Grid.Row="0"
                     x:Name="CurrentHeader"
                     Text=""
                     Foreground="{StaticResource XFilesAccentBrush}"
@@ -189,7 +189,8 @@
                                        Width="20" Height="20"
                                        Margin="0,0,8,0"
                                        VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="1"
+                                <controls:MarqueeTextBlock Grid.Column="1"
+                                           x:Name="ItemNameText"
                                            Text="{Binding Name}"
                                            FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                            FontSize="15"
@@ -245,13 +246,14 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <TextBlock Grid.Row="0"
+                <controls:MarqueeTextBlock Grid.Row="0"
                     x:Name="PreviewHeader"
                     Text=""
                     Foreground="{StaticResource XFilesAccentBrush}"
                     FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
                     FontSize="14"
-                    Padding="12,8,12,4" />
+                    Padding="12,8,12,4"
+                    Marquee="True" />
 
                 <!-- Preview content: folder listing -->
                 <ListView Grid.Row="1"
@@ -362,7 +364,7 @@
 
                 <!-- Quick reference panel — shown at root (no parent) -->
                 <Grid x:Name="QuickRefPanel" Grid.Row="0" Grid.RowSpan="3"
-                      Visibility="Collapsed" Background="#0F1318">
+                      Visibility="Collapsed" Background="#0F1318" Opacity="0.8">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="20,24,20,24">
                             <!-- Title -->
@@ -678,6 +680,17 @@
                 </StackPanel>
             </StackPanel>
 
+            <!-- Clipboard indicator (center) -->
+            <TextBlock x:Name="FooterClipboardIndicator"
+                       Grid.Column="1"
+                       Text=""
+                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                       FontSize="11"
+                       Foreground="#FF93C43C"
+                       VerticalAlignment="Center"
+                       HorizontalAlignment="Center"
+                       Visibility="Collapsed" />
+
             <!-- Status: item count + loading -->
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                 <ProgressRing x:Name="FooterSpinner"
@@ -701,6 +714,7 @@
         <controls:ConfirmDialog x:Name="ConfirmDialogControl" />
         <controls:InputDialog x:Name="InputDialogControl" />
         <controls:OperationProgressDialog x:Name="OpProgressDialog" />
+        <controls:PdfFullScreenOverlay x:Name="PdfFullScreen" />
         <controls:ImageFullScreenOverlay x:Name="ImageFullScreen" />
 
         <!-- Fullscreen audio overlay -->

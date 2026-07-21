@@ -285,6 +285,22 @@ namespace XFiles.Controls
                         PreviewImagePanel.Visibility = Visibility.Visible;
                         break;
 
+                    case FilePreviewType.Pdf:
+                        PreviewImage.Source = _navigator.Preview.PreviewImageSource;
+                        int pdfPw = _navigator.Preview.PreviewPixelWidth;
+                        int pdfPh = _navigator.Preview.PreviewPixelHeight;
+                        if (pdfPw > 0 && pdfPh > 0)
+                        {
+                            PreviewImage.MaxWidth = double.PositiveInfinity;
+                            PreviewImage.MaxHeight = double.PositiveInfinity;
+                        }
+                        int pageCount = _navigator.Preview.PreviewPdfPageCount;
+                        PreviewStatus.Text = pageCount > 1
+                            ? $"{_navigator.Preview.PreviewFileType} — 1/{pageCount} pages"
+                            : _navigator.Preview.PreviewFileType;
+                        PreviewImagePanel.Visibility = Visibility.Visible;
+                        break;
+
                     case FilePreviewType.Video:
                     case FilePreviewType.Audio:
                         string mediaPath = _navigator.Preview.PreviewFilePath;
@@ -581,6 +597,10 @@ namespace XFiles.Controls
         {
             Log.Information("SelectionChanged: index={Index}, updating={Updating}, mediaActive={MediaActive}",
                 CurrentList.SelectedIndex, _updating, _isMediaPlayerActive);
+
+            // stop marquee on previous selection
+            StopMarqueeOnIndex(_lastValidSelectedIndex);
+
             if (_updating) return;
             if (_isMediaPlayerActive)
             {
@@ -593,6 +613,9 @@ namespace XFiles.Controls
             if (CurrentList.SelectedIndex >= 0 && _navigator.Current != null)
             {
                 _navigator.Current.SelectedIndex = CurrentList.SelectedIndex;
+
+                // start marquee on new selection
+                StartMarqueeOnIndex(CurrentList.SelectedIndex);
 
                 // Instant loading feedback — clear stale preview immediately
                 HideAllPreviewPanels();
@@ -610,6 +633,42 @@ namespace XFiles.Controls
 
             // Update A button label based on selected item type
             UpdateFooterALabelFromSelection();
+        }
+
+        private void StartMarqueeOnIndex(int index)
+        {
+            if (index < 0) return;
+            var container = CurrentList.ContainerFromIndex(index) as ContentPresenter;
+            if (container == null) return;
+            var marquee = FindMarqueeTextBlock(container);
+            if (marquee != null) marquee.Marquee = true;
+        }
+
+        private void StopMarqueeOnIndex(int index)
+        {
+            if (index < 0) return;
+            var container = CurrentList.ContainerFromIndex(index) as ContentPresenter;
+            if (container == null) return;
+            var marquee = FindMarqueeTextBlock(container);
+            if (marquee != null)
+            {
+                marquee.Marquee = false;
+                marquee.StopMarquee();
+            }
+        }
+
+        private static MarqueeTextBlock FindMarqueeTextBlock(DependencyObject parent)
+        {
+            int count = VisualTreeHelper.GetChildrenCount(parent);
+            for (int i = 0; i < count; i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                if (child is MarqueeTextBlock m)
+                    return m;
+                var result = FindMarqueeTextBlock(child);
+                if (result != null) return result;
+            }
+            return null;
         }
 
         private void UpdateFooterALabel(string label)
@@ -631,12 +690,35 @@ namespace XFiles.Controls
                 return;
             }
             string ext = System.IO.Path.GetExtension(selected.Name);
-            if (FilePreviewService.IsMediaFile(ext) || FilePreviewService.IsImageFile(ext))
+            if (FilePreviewService.IsImageFile(ext) && !FilePreviewService.IsSvgFile(ext)
+                || FilePreviewService.IsPdfFile(ext))
+            {
+                UpdateFooterALabel("Open");
+                return;
+            }
+            if (FilePreviewService.IsMediaFile(ext))
             {
                 UpdateFooterALabel("Play");
                 return;
             }
             UpdateFooterALabel("Menu");
+        }
+
+        private void UpdateClipboardIndicator()
+        {
+            if (ClipboardState.HasItems)
+            {
+                var label = ClipboardState.IsCut ? "Cut" : "Copied";
+                var count = ClipboardState.Count;
+                var item = count == 1 ? "1 item" : $"{count} items";
+                FooterClipboardIndicator.Text = $"📋 {label}: {item}";
+                FooterClipboardIndicator.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                FooterClipboardIndicator.Text = "";
+                FooterClipboardIndicator.Visibility = Visibility.Collapsed;
+            }
         }
 
         // --- Input handling ---
@@ -708,7 +790,8 @@ namespace XFiles.Controls
             Log.Information("OnPreviewNavigationCompleted: isSuccess={IsSuccess}", args.IsSuccess);
         }
 
-        public bool IsMediaFullscreen => VideoFullScreenPanel.Visibility == Visibility.Visible
+        public bool IsMediaFullscreen => ImageFullScreen.IsOpen || PdfFullScreen.IsOpen
+            || VideoFullScreenPanel.Visibility == Visibility.Visible
             || AudioFullScreenPanel.Visibility == Visibility.Visible;
 
         public bool IsMediaPlayerActive => _isMediaPlayerActive;
@@ -744,6 +827,7 @@ namespace XFiles.Controls
         public void OnDPadLeft()
         {
             if (ImageFullScreen.IsOpen) return;
+            if (PdfFullScreen.IsOpen) return;
             if (AudioFullScreenPanel.Visibility == Visibility.Visible) return;
             if (VideoFullScreenPanel.Visibility == Visibility.Visible) { HandleContinuousSeek(-5); return; }
             if (IsAnyOverlayVisible) return;
@@ -757,6 +841,7 @@ namespace XFiles.Controls
         public void OnDPadRight()
         {
             if (ImageFullScreen.IsOpen) return;
+            if (PdfFullScreen.IsOpen) return;
             if (AudioFullScreenPanel.Visibility == Visibility.Visible) return;
             if (VideoFullScreenPanel.Visibility == Visibility.Visible) { HandleContinuousSeek(5); return; }
             if (IsAnyOverlayVisible) return;
@@ -773,6 +858,7 @@ namespace XFiles.Controls
             if (IsAnyOverlayVisible) return;
             if (StartMenuControl.IsOpen) { StartMenuControl.ForwardDPad(Windows.System.VirtualKey.GamepadA); return; }
             if (ImageFullScreen.IsOpen) return;
+            if (PdfFullScreen.IsOpen) return;
             if (VideoFullScreenPanel.Visibility == Visibility.Visible) { OnFsVideoInput(); return; }
             if (AudioFullScreenPanel.Visibility == Visibility.Visible) { ToggleAudioFullscreenPlayPause(); return; }
             if (FileActionSheetControl.IsOpen) { FileActionSheetControl.ForwardDPad(Windows.System.VirtualKey.GamepadA); return; }
@@ -804,6 +890,16 @@ namespace XFiles.Controls
                 {
                     Log.Verbose("OnConfirm: image selected — opening fullscreen");
                     ImageFullScreen.Show(_navigator.Preview?.PreviewImageSource);
+                }
+                else if (FilePreviewService.IsPdfFile(ext))
+                {
+                    Log.Verbose("OnConfirm: PDF selected — opening fullscreen");
+                    var preview = _navigator.Preview;
+                    if (preview != null)
+                    {
+                        _ = PdfFullScreen.ShowAsync(
+                            selected.FullPath, preview.PreviewPdfPageCount, 0);
+                    }
                 }
                 else if (FilePreviewService.IsAudioFile(ext))
                 {
@@ -858,6 +954,7 @@ namespace XFiles.Controls
             if (PlaceholderOverlay.Visibility == Visibility.Visible) { HidePlaceholder(); return; }
             if (StartMenuControl.IsOpen) { StartMenuControl.ForwardDPad(Windows.System.VirtualKey.GamepadB); return; }
             if (ImageFullScreen.IsOpen) { ImageFullScreen.HandleButton(Windows.System.VirtualKey.GamepadB); UpdateFooterALabelFromSelection(); return; }
+            if (PdfFullScreen.IsOpen) { PdfFullScreen.HandleButton(Windows.System.VirtualKey.GamepadB); UpdateFooterALabelFromSelection(); return; }
             if (VideoFullScreenPanel.Visibility == Visibility.Visible) { CloseVideoFullScreen(); UpdateFooterALabelFromSelection(); return; }
             if (AudioFullScreenPanel.Visibility == Visibility.Visible) { CloseAudioFullscreen(); UpdateMediaPlayerFocusUI(); return; }
             if (FileActionSheetControl.IsOpen) { FileActionSheetControl.ForwardDPad(Windows.System.VirtualKey.GamepadB); return; }
@@ -947,6 +1044,7 @@ namespace XFiles.Controls
             if (StartMenuControl.IsOpen) { StartMenuControl.ForwardDPad(Windows.System.VirtualKey.GamepadA); return; }
             if (FileActionSheetControl.IsOpen) return;
             if (ImageFullScreen.IsOpen) return;
+            if (PdfFullScreen.IsOpen) return;
             if (VideoFullScreenPanel.Visibility == Visibility.Visible) return;
             if (_isMediaPlayerActive) return;
             _ = ShowStartMenuAsync();
@@ -1015,12 +1113,14 @@ namespace XFiles.Controls
             || OpProgressDialog.IsOpen;
 
         private bool IsAnyFullscreen =>
-            ImageFullScreen.IsOpen || VideoFullScreenPanel.Visibility == Visibility.Visible
+            ImageFullScreen.IsOpen || PdfFullScreen.IsOpen
+            || VideoFullScreenPanel.Visibility == Visibility.Visible
             || AudioFullScreenPanel.Visibility == Visibility.Visible;
 
         public void OnPageUp()
         {
             if (ImageFullScreen.IsOpen) { ImageFullScreen.HandleButton((Windows.System.VirtualKey)VK_LT); return; }
+            if (PdfFullScreen.IsOpen) return;
             if (VideoFullScreenPanel.Visibility == Visibility.Visible) { HandleContinuousSeek(-5); return; }
             var before = CurrentList.SelectedIndex;
             if (CurrentList.SelectedIndex > 0)
@@ -1031,6 +1131,7 @@ namespace XFiles.Controls
         public void OnPageDown()
         {
             if (ImageFullScreen.IsOpen) { ImageFullScreen.HandleButton((Windows.System.VirtualKey)VK_RT); return; }
+            if (PdfFullScreen.IsOpen) return;
             if (VideoFullScreenPanel.Visibility == Visibility.Visible) { HandleContinuousSeek(5); return; }
             var before = CurrentList.SelectedIndex;
             if (_navigator.Current != null && CurrentList.Items.Count > 0)
@@ -1041,6 +1142,7 @@ namespace XFiles.Controls
         public void OnSeekBack()
         {
             if (ImageFullScreen.IsOpen) return;
+            if (PdfFullScreen.IsOpen) { PdfFullScreen.HandleBumper(true); return; }
             if (AudioFullScreenPanel.Visibility == Visibility.Visible) { NavigateAudioTrack(-1); return; }
             if (VideoFullScreenPanel.Visibility == Visibility.Visible) { HandleContinuousSeek(-5); return; }
             if (_isMediaPlayerActive) { MediaPreview.Seek(TimeSpan.FromSeconds(-5)); return; }
@@ -1050,6 +1152,7 @@ namespace XFiles.Controls
         public void OnSeekForward()
         {
             if (ImageFullScreen.IsOpen) return;
+            if (PdfFullScreen.IsOpen) { PdfFullScreen.HandleBumper(false); return; }
             if (AudioFullScreenPanel.Visibility == Visibility.Visible) { NavigateAudioTrack(1); return; }
             if (VideoFullScreenPanel.Visibility == Visibility.Visible) { HandleContinuousSeek(5); return; }
             if (_isMediaPlayerActive) { MediaPreview.Seek(TimeSpan.FromSeconds(5)); return; }
@@ -1109,6 +1212,13 @@ namespace XFiles.Controls
             if (ImageFullScreen.IsOpen)
             {
                 ImageFullScreen.HandleTriggers(leftTrigger, rightTrigger);
+                _ltWasDown = false;
+                _rtWasDown = false;
+                return;
+            }
+            if (PdfFullScreen.IsOpen)
+            {
+                PdfFullScreen.HandleTriggers(leftTrigger, rightTrigger);
                 _ltWasDown = false;
                 _rtWasDown = false;
                 return;
@@ -1202,6 +1312,11 @@ namespace XFiles.Controls
                 ImageFullScreen.HandleRightStick(x, y);
                 return;
             }
+            if (PdfFullScreen.IsOpen)
+            {
+                PdfFullScreen.HandleRightStick(x, y);
+                return;
+            }
             if (AudioFullScreenPanel.Visibility == Visibility.Visible)
             {
                 UpdateFsVolume(y);
@@ -1221,6 +1336,11 @@ namespace XFiles.Controls
             if (ImageFullScreen.IsOpen)
             {
                 ImageFullScreen.HandleRightStick(x, y);
+                return;
+            }
+            if (PdfFullScreen.IsOpen)
+            {
+                PdfFullScreen.HandleRightStick(x, y);
                 return;
             }
             if (AudioFullScreenPanel.Visibility == Visibility.Visible)
@@ -1258,6 +1378,7 @@ namespace XFiles.Controls
         public void OnScrollVertical(double delta)
         {
             if (ImageFullScreen.IsOpen) return;
+            if (PdfFullScreen.IsOpen) return;
             try
             {
                 if (PreviewTextScroll.Visibility == Visibility.Visible)
@@ -1280,6 +1401,7 @@ namespace XFiles.Controls
         public void OnScrollHorizontal(double delta)
         {
             if (ImageFullScreen.IsOpen) return;
+            if (PdfFullScreen.IsOpen) return;
             try
             {
                 if (PreviewTextScroll.Visibility == Visibility.Visible)
@@ -1882,6 +2004,12 @@ namespace XFiles.Controls
                 case FileAction.Copy:
                     await HandleCopyAsync(entry);
                     break;
+                case FileAction.Cut:
+                    await HandleCutAsync(entry);
+                    break;
+                case FileAction.Paste:
+                    await HandlePasteAsync();
+                    break;
                 case FileAction.Move:
                     await HandleMoveAsync(entry);
                     break;
@@ -1895,7 +2023,7 @@ namespace XFiles.Controls
                     await HandleExtractAsync(entry);
                     break;
                 case FileAction.CreateFolder:
-                    await HandleCreateFolderAsync();
+                    await HandleCreateFolderAsync(entry);
                     break;
                 case FileAction.CreateZip:
                     await HandleCreateZipAsync(entry);
@@ -1908,32 +2036,73 @@ namespace XFiles.Controls
 
         private async Task HandleCopyAsync(FileEntry entry)
         {
-            Log.Information("HandleCopyAsync: {File}", entry.FullPath);
-            var destDir = await InputDialogControl.ShowAsync("Copy to (full path)", _navigator.Current?.Path ?? "");
-            if (string.IsNullOrEmpty(destDir)) return;
+            Log.Information("HandleCopyAsync: {File} → clipboard", entry.FullPath);
+            ClipboardState.Copy(new[] { entry });
+            UpdateClipboardIndicator();
+            await Task.CompletedTask;
+        }
 
-            var progress = new Progress<FileOperations.OperationProgress>(p =>
+        private async Task HandleCutAsync(FileEntry entry)
+        {
+            Log.Information("HandleCutAsync: {File} → clipboard", entry.FullPath);
+            ClipboardState.Cut(new[] { entry });
+            UpdateClipboardIndicator();
+            await Task.CompletedTask;
+        }
+
+        private async Task HandlePasteAsync()
+        {
+            if (!ClipboardState.HasItems) return;
+
+            var destDir = _navigator.Current?.Path;
+            if (string.IsNullOrEmpty(destDir))
             {
-                Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
-                    OpProgressDialog.UpdateProgress(p));
-            });
-
-            OpProgressDialog.Show("Copying", entry.Name, destDir);
-            var result = await FileOperations.CopyAsync(entry.FullPath, destDir, progress);
-            OpProgressDialog.Complete();
-            await Task.Delay(400);
-            OpProgressDialog.Close();
-
-            if (result == FileOperations.OperationResult.Success)
-            {
-                Log.Information("HandleCopyAsync: success");
-                await _navigator.RefreshCurrentAsync();
+                Log.Warning("HandlePasteAsync: no current directory");
+                await Task.CompletedTask;
+                return;
             }
-            else
+
+            var entries = ClipboardState.Entries;
+            Log.Information("HandlePasteAsync: {Count} items → {Dest}, isCut={IsCut}",
+                entries.Count, destDir, ClipboardState.IsCut);
+
+            foreach (var entry in entries)
             {
-                Log.Warning("HandleCopyAsync: failed");
-                CurrentStatus.Text = $"Copy failed: {entry.Name}";
+                var progress = new Progress<FileOperations.OperationProgress>(p =>
+                {
+                    Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                        OpProgressDialog.UpdateProgress(p));
+                });
+
+                var opTitle = ClipboardState.IsCut ? "Moving" : "Copying";
+                OpProgressDialog.Show(opTitle, entry.Name, destDir);
+
+                FileOperations.OperationResult result;
+                if (ClipboardState.IsCut)
+                {
+                    result = await FileOperations.MoveAsync(entry.FullPath, destDir, progress);
+                }
+                else
+                {
+                    result = await FileOperations.CopyAsync(entry.FullPath, destDir, progress);
+                }
+
+                OpProgressDialog.Complete();
+                await Task.Delay(400);
+                OpProgressDialog.Close();
+
+                if (result != FileOperations.OperationResult.Success)
+                {
+                    Log.Warning("HandlePasteAsync: {File} failed", entry.Name);
+                    CurrentStatus.Text = $"{opTitle} failed: {entry.Name}";
+                }
             }
+
+            if (ClipboardState.IsCut)
+                ClipboardState.Clear();
+
+            UpdateClipboardIndicator();
+            await _navigator.RefreshCurrentAsync();
         }
 
         private async Task HandleMoveAsync(FileEntry entry)
@@ -2082,25 +2251,50 @@ namespace XFiles.Controls
             }
         }
 
-        private async Task HandleCreateFolderAsync()
+        private async Task HandleCreateFolderAsync(FileEntry entry)
         {
-            Log.Information("HandleCreateFolderAsync");
-            var folderName = await InputDialogControl.ShowAsync("New Folder", "New Folder");
-            if (string.IsNullOrEmpty(folderName))
+            Log.Information("HandleCreateFolderAsync: {File}", entry?.Name ?? "(none)");
+
+            string targetDir;
+            if (entry != null && entry.IsDirectory && !entry.IsDrive)
             {
-                Log.Verbose("HandleCreateFolderAsync: cancelled");
+                var choice = await FileActionSheetControl.ShowLocationChoiceAsync(entry.Name);
+                if (choice == null)
+                {
+                    Log.Verbose("HandleCreateFolderAsync: location choice cancelled");
+                    return;
+                }
+                targetDir = choice == FileAction.CreateInside
+                    ? entry.FullPath
+                    : System.IO.Path.GetDirectoryName(entry.FullPath);
+            }
+            else
+            {
+                targetDir = _navigator.Current?.Path;
+            }
+
+            if (string.IsNullOrEmpty(targetDir))
+            {
+                Log.Warning("HandleCreateFolderAsync: no target directory");
                 return;
             }
 
-            var currentPath = _navigator.Current?.Path;
-            if (string.IsNullOrEmpty(currentPath)) return;
+            var folderName = await InputDialogControl.ShowAsync("New Folder", "New Folder");
+            if (string.IsNullOrEmpty(folderName))
+            {
+                Log.Verbose("HandleCreateFolderAsync: name cancelled");
+                return;
+            }
 
-            var fullPath = System.IO.Path.Combine(currentPath, folderName);
+            var fullPath = System.IO.Path.Combine(targetDir, folderName);
             var result = await FileOperations.CreateFolderAsync(fullPath);
             if (result == FileOperations.OperationResult.Success)
             {
                 Log.Information("HandleCreateFolderAsync: success — refreshing");
-                await _navigator.RefreshCurrentAsync();
+                if (targetDir == _navigator.Current?.Path)
+                    await _navigator.RefreshCurrentAsync();
+                else
+                    await _navigator.RefreshCurrentAsync();
             }
             else
             {

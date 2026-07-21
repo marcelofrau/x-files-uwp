@@ -19,6 +19,7 @@ namespace XFiles.FileSystem
         None,
         Text,
         Image,
+        Pdf,
         Audio,
         Video,
         Unsupported,
@@ -36,6 +37,7 @@ namespace XFiles.FileSystem
         public bool IsTruncated { get; set; }
         public int PixelWidth { get; set; }
         public int PixelHeight { get; set; }
+        public int PdfPageCount { get; set; }
     }
 
     public static class FilePreviewService
@@ -153,6 +155,12 @@ namespace XFiles.FileSystem
                 ".ts", ".vob", ".3gp"
             };
 
+        private static readonly HashSet<string> PdfExtensions =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ".pdf"
+            };
+
         public static bool IsTextFile(string extension)
         {
             return !string.IsNullOrEmpty(extension) && TextExtensions.Contains(extension);
@@ -183,6 +191,11 @@ namespace XFiles.FileSystem
             return string.Equals(extension, ".svg", StringComparison.OrdinalIgnoreCase);
         }
 
+        public static bool IsPdfFile(string extension)
+        {
+            return !string.IsNullOrEmpty(extension) && PdfExtensions.Contains(extension);
+        }
+
         public static async Task<FilePreviewResult> GetPreviewAsync(string filePath)
         {
             var result = new FilePreviewResult { FileType = "" };
@@ -206,6 +219,21 @@ namespace XFiles.FileSystem
                 else if (IsSvgFile(ext))
                 {
                     await LoadSvgPreview(filePath, result);
+                }
+                else if (IsPdfFile(ext))
+                {
+                    long fileSize = 0;
+                    GetFileSizeWin32(filePath, out fileSize);
+                    result.FileSizeBytes = fileSize;
+                    result.Type = FilePreviewType.Pdf;
+                    var page = await PdfPreviewService.LoadPageAsync(filePath, 0);
+                    result.PdfPageCount = page.PageCount;
+                    if (page.Bitmap != null)
+                    {
+                        result.ImageSource = page.Bitmap;
+                        result.PixelWidth = page.PageWidth;
+                        result.PixelHeight = page.PageHeight;
+                    }
                 }
                 else if (IsTextFile(ext))
                 {

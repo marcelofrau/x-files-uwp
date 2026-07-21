@@ -4,7 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Visibility="Collapsed">
 
-    <Grid x:Name="Overlay" Background="#CC0D1117" Tapped="OnOverlayTapped" KeyDown="OnKeyDown" IsTabStop="True">
+    <Grid x:Name="Overlay" Background="#CC0D1117" Tapped="OnOverlayTapped" KeyDown="OnKeyDown">
         <Border Background="#1A1D23"
                 BorderBrush="#2A2D33"
                 BorderThickness="1"
