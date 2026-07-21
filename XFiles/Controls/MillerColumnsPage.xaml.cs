@@ -1923,6 +1923,28 @@ namespace XFiles.Controls
                 return;
             }
 
+            var invalidChars = new char[] { '\\', '/', ':', '*', '?', '"', '<', '>', '|' };
+            if (newName.IndexOfAny(invalidChars) >= 0)
+            {
+                Log.Warning("HandleRenameAsync: invalid characters in name");
+                CurrentStatus.Text = "Invalid characters in name";
+                return;
+            }
+
+            var reservedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "CON", "PRN", "AUX", "NUL",
+                "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+                "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
+            };
+            var nameNoExt = Path.GetFileNameWithoutExtension(newName);
+            if (reservedNames.Contains(nameNoExt))
+            {
+                Log.Warning("HandleRenameAsync: reserved name");
+                CurrentStatus.Text = "Reserved name";
+                return;
+            }
+
             var confirmed = await ConfirmDialogControl.ShowAsync($"Rename '{entry.Name}' to '{newName}'?");
             if (!confirmed)
             {
@@ -1934,7 +1956,7 @@ namespace XFiles.Controls
             if (result == FileOperations.OperationResult.Success)
             {
                 Log.Information("HandleRenameAsync: success — refreshing");
-                await _navigator.RefreshCurrentAsync();
+                await _navigator.RefreshCurrentAsync(newName);
             }
             else
             {

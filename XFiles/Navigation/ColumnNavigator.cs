@@ -326,11 +326,11 @@ namespace XFiles.Navigation
         /// <summary>
         /// Re-scan current directory (after rename/delete). Preserves selection by name.
         /// </summary>
-        public async Task RefreshCurrentAsync()
+        public async Task RefreshCurrentAsync(string selectName = null)
         {
             if (_current == null) return;
 
-            string prevName = _current.GetSelectedEntry()?.Name;
+            string prevName = selectName ?? _current.GetSelectedEntry()?.Name;
             int prevIndex = _current.SelectedIndex;
 
             // Cancel any in-flight scan

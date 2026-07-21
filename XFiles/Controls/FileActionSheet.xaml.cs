@@ -164,15 +164,15 @@ namespace XFiles.Controls
                     IconPath = IconBase + ActionMove,
                     LabelBrush = accent
                 });
-            }
 
-            actions.Add(new ActionItem
-            {
-                Action = FileAction.Rename,
-                Label = "Rename",
-                IconPath = IconBase + ActionRename,
-                LabelBrush = dim
-            });
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.Rename,
+                    Label = "Rename",
+                    IconPath = IconBase + ActionRename,
+                    LabelBrush = dim
+                });
+            }
 
             actions.Add(new ActionItem
             {
