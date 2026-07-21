@@ -72,13 +72,13 @@
       <Version>2.0.0</Version>
     </PackageReference>
   </ItemGroup>
-  <ItemGroup>
+  <ItemGroup Condition="Exists('..\..\XrayLib\XrayLib\XrayLib.csproj')">
     <ProjectReference Include="..\..\XrayLib\XrayLib\XrayLib.csproj">
       <Project>{8A3C3E6E-5B9D-4F7A-B2C1-D4E8F6A9B0C2}</Project>
       <Name>XrayLib</Name>
     </ProjectReference>
   </ItemGroup>
-  <ItemGroup>
+  <ItemGroup Condition="Exists('$(MSBuildProgramFiles32)\Microsoft SDKs\UAP\v10.0\ExtensionsSDKs\WindowsMobile$(TargetPlatformVersion)')">
     <SDKReference Include="WindowsMobile, Version=$(TargetPlatformVersion)" />
   </ItemGroup>
   <ItemGroup>
