@@ -428,6 +428,8 @@ namespace XFiles.Controls
         public void OnScrollHorizontal(double delta) { }
 
         public void OnScrollVertical(double delta) { }
+
+        public void OnSelectVisualizer() { }
     }
 
     /// <summary>

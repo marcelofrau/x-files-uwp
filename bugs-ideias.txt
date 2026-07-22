@@ -2,7 +2,7 @@
 -- Completo
 - tem uma animacao muito bacana quando abre cada pasta, os listviews carregam os itens e anima como se eles tivessem meio q scrollado/movendo pra cima, da pra fazer essa animacao na verdade indo pra esquerda ou pra direita dependendo se o usuario deu Dpad pra direta ou esquerda?
 - o zoomin/out de imagens quando tao em fullscreen tem q ser smooth e animado. o pan da imagem pode ser mais rapido e mais suave. a legenda B/Tap to close deve usar a mesma identidade visual do resto da aplicacao, com imagem do botao B e Close em seguida. e o pan parece estar invertido.
-- media player buttons nao devem ter foco nunca. todas as acoes sao controladas pelos botoes do gamepad descrito na legenda q fica embaixo. os botoes sao meramente visuais. 
+- media player buttons nao devem ter foco nunca. todas as acoes sao controladas pelos botoes do gamepad descrito na legenda q fica embaixo. os botoes sao meramente visuais.
 - media player fullscreen deve ficar realmente em full screen, o auto hide da barra de progresso parece fazer auto hide mas a area de video ta cortada, a barra de play/progresso devem ficar em overlay em cima, e a legenda dos botoes deve aparecer tambem grudada em cima dessa barra, o B de back, deve ser incorporado a essa "legenda" dando uma impressao visual melhor ao usuario.
 
 - fazer controle geral de erros e excexoes pra mostrar na tela que deu algum erro, mostrando um alerta de log com as coisas tipo a janela de erro geral do xb-vault, F:\workspace\xb-homebrew-vault, pra ajudar a abrir erro ou reportar depois nas issues do github
@@ -38,7 +38,7 @@ quanto o icone e nome.. a descricao nao precisa pode tirar.. e tem que melhorar 
 
 - se musica for mp3 ou tiver metadados id3 tags ou algo assim, mostrar na tela de preview. alem disso seria legal colocar uma imagem de fundo no meio do player em cima pra mostrar q eh uma musica q ta selecionada, alguns arquivos suportam imagens no id3 se nao me engano, se tiver imagem mostrar tambem, mas hoje nao vejo nenhum detalhe desses dados nas mp3. certeza q ta lendo as informacoes id3 de verdade?
 
-- se na pasta tem muitos videos, eu selecionar um apos o outro ta dando engasgada, acho q ta tentando carregar o video, talvez seja legal dar um cooldown pra quando eh video/musica e permitir a selecao de correr smooth. 	
+- se na pasta tem muitos videos, eu selecionar um apos o outro ta dando engasgada, acho q ta tentando carregar o video, talvez seja legal dar um cooldown pra quando eh video/musica e permitir a selecao de correr smooth.
 
 - texto no OSD do player de video ainda precisa descer mais, essa fonte tem alinhamento diferente do Y, e esta um pouco acima do que deveria, tem q baixar ela um pouco.
 
@@ -49,26 +49,46 @@ quanto o icone e nome.. a descricao nao precisa pode tirar.. e tem que melhorar 
 
 - vumeter bar igual winamp com AudioGraph
 
-- Play de musica/video nao ta funcionando na primeira vez que aperta A no arquivo selecionado da lista, tem algo impedindo e tem que ficar tentando varias vezes ate o player comecar. 
+- Play de musica/video nao ta funcionando na primeira vez que aperta A no arquivo selecionado da lista, tem algo impedindo e tem que ficar tentando varias vezes ate o player comecar.
 
-- em algum momento depois de usar e testar, os dpads ficaram duplicando eventos. se movendo de 2x em 2x. tentar verificar o que acontece.. 
+- em algum momento depois de usar e testar, os dpads ficaram duplicando eventos. se movendo de 2x em 2x. tentar verificar o que acontece..
 
 -- Em progresso
 
-- se tiver tocando midia seja musica ou video, e tiver mais arquivos na pasta, pular pro proximo automaticamente quando terminar de tocar. 
+- se tiver tocando midia seja musica ou video, e tiver mais arquivos na pasta, pular pro proximo automaticamente quando terminar de tocar.
 - implementar renomear
 - implementar janela de progresso de operacao com barra de progresso e indicacao de copia, mostrando dados e informacoes como destino, origem e etc. (preparativos pra copia, extracao, mover, colar, etc)
 
 - Implementar nova pasta
-- a acao de new folder, tem q fazer uma pergunta ou mostrar um dropdown, indicando se eh pra criar a pasta dentro da outra pasta ou no mesmo nivel dela (caso a selecao esteja em uma pasta), pode ser confuso do jeito q ta. 
+- a acao de new folder, tem q fazer uma pergunta ou mostrar um dropdown, indicando se eh pra criar a pasta dentro da outra pasta ou no mesmo nivel dela (caso a selecao esteja em uma pasta), pode ser confuso do jeito q ta.
 - preview de pdf tambem
+
+
+--
+Bugs em aberto
+
+- Estado inconsistente, eventos em duplicidade
+	- apos clicar em refresh, deu alghuma coisa errada e os eventos do DPAD passaram a se duplicar, pode dar uma olhada nesse fluxo e entender porque aconteceu isso e corrigir?
+
+Ajustes em dropdowns:
+- Dropdown esperado de arquivos e pastas:
+	- Rename
+	- Copy
+	- Delete
+	- Move
+	- Create zip
+	- Create folder
+
+- Dropdown esperado de unidades de disco:
+	- Refresh
+	- Hide (mais pra frente vamos implementar isso e colocar no settings pra deshidar todas as unidades escondidas)
 
 -- Backlog
 
 - implementar colar
 	- se selecao tiver em arquivo, colar arquivo na pasta atual (mostrar confirmacao)
 	- se selecao tiver em pasta, desambiguar se qer colar na pasta selecionada ou na pasta atual (pode ser um confirm dialog)
-	
+
 - implementar mover -> mostrando qual pasta escolher pra mover.
 
 - implementar zipar pasta/arquivo
@@ -76,12 +96,10 @@ quanto o icone e nome.. a descricao nao precisa pode tirar.. e tem que melhorar 
 
 - implementar extrair zip
 	- dialogo de extracao, com pergunta se cria subpasta ou nao.
-	- smart subfolder, se o zip ja tem subpasta, e usuario tinha pedido pra criar pasta, verificar pra nao ficar uma pasta nova com uma pasta vazia e fazer a extracao de maneira que faça mais sentido de um jeitinho mais esperto.. 
+	- smart subfolder, se o zip ja tem subpasta, e usuario tinha pedido pra criar pasta, verificar pra nao ficar uma pasta nova com uma pasta vazia e fazer a extracao de maneira que faça mais sentido de um jeitinho mais esperto..
 
 - ainda temos um bug no Dropdown de selecao... ele devia "ganhar" foco e ficar exclusivo em overlay ate que o usuario ou cancele com B, ou escolha uma opcao. mas ainda assim, assim que abre o dropdown, se eu dou dpad down ou up com ele aberto, o dropdown fecha.
 - se zip tem pasta, e navega pra pasta depois volta, depois navega pra pasta de novo, ela ta ficando sem arquivos, pode ter dado algum erro.
-
-
 
 --- Ideias
 
@@ -90,7 +108,32 @@ quanto o icone e nome.. a descricao nao precisa pode tirar.. e tem que melhorar 
 - background music in the application
 - initial media file on startup
 - https://frontend-hero.com/how-to-animate-gradients-css
+- suporte a epub e mobi files
+-
+
+- suporte a temas e cores
+- permitir trocar fontes
+- permitir colocar imagem de fundo.
+
+- colocar no about e no readme agradecimentos a comunidade emulationrevival, especialmente a alouisious por estar ajudando com features e ideias pro x-files e a MewLew, Caorthann e DanP142 por apoiarem estarem presentes a ajudarem a comunidade de homebrew
 
 
+O que dá pra fazer bonito em Win2D:
 
-
+| #   | Name                  | Concept                                                                                 | Complexity |
+| --- | --------------------- | --------------------------------------------------------------------------------------- | ---------- |
+| 4   | **Starfield**         | Star field that pulses/explodes with beat. Speed = bass. Color = avg frequency.         | Medium     |
+| 5   | **Spiral Spectrum**   | Spiral of points where distance from center = magnitude, angle = time. Rotating colors. | Medium     |
+| 6   | **Mirror Tunnel**     | Infinite tunnel with 4x mirroring. Walls react to bandLevels.                           | High       |
+| 7   | **Fire Particles**    | 2D particle system with physics. Beat = explosion. Color = heatmap.                     | High       |
+| 8   | **Matrix Rain**       | Matrix-style character rain. Speed = bass. Density = volume.                            | Medium     |
+| 9   | **Lissajous**         | Lissajous figures parametrized by bandLevels. Color by time.                            | Low        |
+| 10  | **Terrain Generator** | Demoscene-style 2D terrain. Height = magnitudes. Scroll = time.                         | Medium     |
+| 11  | **Gradient Noise**    | Perlin/Simplex noise reactive to audio. Colors modulated by frequency.                  | Medium     |
+| 12  | **Orbiting Circles**  | Circles orbiting center. Radius = bandLevel. Speed = beat.                              | Low        |
+| 13  | Kaleidoscope		  | Mandala simétrica que reage ao beat, com blur + color shift								| Alta 		 |
+| 14  | Particle Burst		  | Partículas que explodem no beat, trails com fade, gravity								| Alta 		 |
+| 15  |  Vortex	Espiral 	  | de cores que distorce com a música, polar coords							        	| Média 	 |
+| 16  | Ripple Pulse		  | Ondas concêntricas que pulsam com o bass, distorção						        		| Média 	 |
+| 17  | Feedback Trail		  | Ghosting do frame anterior com decay → efeito "cauda de cometa"		  				   | Média      |
+| 18  | Wave Tunnel	          | Tunel de ondas com perspectiva simulada, cores mudam com beat					        | Alta 		 |

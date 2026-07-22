@@ -27,5 +27,6 @@ namespace XFiles.Navigation
         void OnRightStickMove(float x, float y);
         void OnScrollHorizontal(double delta);
         void OnScrollVertical(double delta);
+        void OnSelectVisualizer();
     }
 }

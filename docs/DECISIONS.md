@@ -176,3 +176,28 @@ fullscreen audio path entirely.
 The `AudioLevelService.LoadAndPlay()` creates an `AudioGraph` with `AudioDeviceOutputNode`
 (for hardware clock + speakers) and `AudioFrameOutputNode` (for FFT/VU meter), all
 synchronized by the same graph clock. No possibility of drift or double-play.
+
+---
+
+## ADR-009: Win2D for Audio Visualizers (extends ADR-002)
+
+**Context**: ADR-002 decides XAML with custom `ControlTemplate` for the file browser UI.
+This remains correct — no D2D for buttons, columns, dialogs. Audio visualizers are a
+different case: pixel-perfect rendering, custom HLSL shaders, per-frame control — exactly
+what ADR-002 noted "not needed for a file browser."
+
+**Decision**: use Win2D (`CanvasCustomControl` + `PixelShaderEffect`) exclusively for
+audio visualizers. File browser UI stays 100% XAML.
+
+**Reason**:
+- Win2D is a lightweight D3D11 wrapper, already a transitive dependency (via
+  UWPAudioVisualizer)
+- HLSL pixel shaders via `PixelShaderEffect` (ShaderModel 4.0, level 9.1+)
+- Xbox One supports D3D11 feature level 11.0+ — compatible
+- Zero impact on file browser UI — visualizers are isolated in their own
+  `CanvasCustomControl`
+- `CanvasCustomControl` is a native UWP `FrameworkElement` — integrates with XAML layout,
+  gamepad focus still works via XAML's `XYFocus` system
+
+**Accepted risk**: Win2D on Xbox needs hardware validation. Shader compilation is cached
+after first frame — first frame may stutter.

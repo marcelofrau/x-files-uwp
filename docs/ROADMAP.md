@@ -193,6 +193,39 @@ fullscreen works with play/pause/seek/next/volume, no double-play.
 
 ---
 
+## Phase 10 — Audio Visualizers (Win2D + HLSL Shaders)
+
+- [ ] Win2D NuGet package added to csproj.
+- [ ] `AudioLevelService`: expose `Magnitudes[512]`, `Waveform[512]`, `Beat` (0–1).
+- [ ] Beat detector implemented (energy threshold + exponential decay).
+- [ ] `AudioData` snapshot struct.
+- [ ] `IAudioVisualizer` interface.
+- [ ] `AudioVisualizerBase` (CanvasCustomControl base class, 60fps timer, shader pipeline).
+- [ ] `VisualizerRegistry` (registry of available visualizers).
+- [ ] RadialSpectrum visualizer + HLSL shader.
+- [ ] Waveform visualizer + HLSL shader.
+- [ ] Plasma visualizer + HLSL shader.
+- [ ] `AudioFullscreenMode` enum + cycling logic in `MillerColumnsPage`.
+- [ ] Select button remapped in audio fullscreen → `OnSelectVisualizer()`.
+- [ ] Mode OSD overlay (name text, 2s auto-fade).
+- [ ] XAML layout: toggle between `FsDefaultContent` and `FsVisualizerCanvas`.
+- [ ] `INavigable.OnSelectVisualizer()` contract.
+- [ ] Transport controls remain visible over visualizer (overlay).
+- [ ] `docs/DECISIONS.md` updated with ADR-009.
+- [ ] `docs/AUDIO-VISUALIZERS.md` created (complete documentation).
+- [ ] `docs/AUDIO-VISUALIZATION.md` updated with shader visualizers section.
+
+**Phase 10A — Foundation**: Win2D + AudioLevelService data + base framework + 1 visualizer.
+**Phase 10B — Integration**: Select cycling + OSD + layout toggle.
+**Phase 10C — Remaining Visualizers**: Waveform + Plasma.
+**Phase 10D — Polish & Xbox Validation**: Hardware test + performance tuning.
+
+**Completion criteria**: Select cycles through Default + 3 visualizers in audio fullscreen.
+Visualizers react to audio in real-time. VU meter (Default) unchanged. No regressions in
+audio playback, track navigation, or transport controls. 60fps sustained on Xbox.
+
+---
+
 ## Assets & Icons
 
 Asset process documented in `docs/ASSETS-GUIDE.md`. Skill available at

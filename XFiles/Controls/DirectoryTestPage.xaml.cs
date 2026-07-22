@@ -241,5 +241,7 @@ namespace XFiles.Controls
         public void OnRefresh() { }
 
         public void OnSettings() { }
+
+        public void OnSelectVisualizer() { }
     }
 }

@@ -71,6 +71,10 @@
     <PackageReference Include="MoonSharp">
       <Version>2.0.0</Version>
     </PackageReference>
+    <!-- Win2D for audio visualizers (HLSL shaders, CanvasCustomControl) -->
+    <PackageReference Include="Win2D.uwp">
+      <Version>1.26.0</Version>
+    </PackageReference>
   </ItemGroup>
   <ItemGroup Condition="Exists('..\..\XrayLib\XrayLib\XrayLib.csproj')">
     <ProjectReference Include="..\..\XrayLib\XrayLib\XrayLib.csproj">
@@ -152,6 +156,12 @@
     <Compile Include="Controls\VuMeterBar.xaml.cs">
       <DependentUpon>VuMeterBar.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Visualizers\AudioData.cs" />
+    <Compile Include="Visualizers\AudioFullscreenMode.cs" />
+    <Compile Include="Visualizers\IAudioVisualizer.cs" />
+    <Compile Include="Visualizers\AudioVisualizerBase.cs" />
+    <Compile Include="Visualizers\VisualizerRegistry.cs" />
+    <Compile Include="Visualizers\Visualizers\RadialSpectrumVisualizer.cs" />
   </ItemGroup>
   <ItemGroup>
     <ApplicationDefinition Include="App.xaml">
@@ -241,6 +251,9 @@
     <None Include="Assets\README.md" />
     <None Include="..\docs\ASSETS-GUIDE.md" />
     <None Include="..\docs\AUDIO-VISUALIZATION.md" />
+    <None Include="Visualizers\Shaders\RadialSpectrum.hlsl" />
+    <None Include="Visualizers\Shaders\Waveform.hlsl" />
+    <None Include="Visualizers\Shaders\Plasma.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Assets\StoreLogo.png" />

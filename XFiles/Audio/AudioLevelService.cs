@@ -15,7 +15,7 @@ namespace XFiles.Audio
     public sealed class AudioLevelService : IDisposable
     {
         public const int BandCount = 26;
-        public const int FftSize = 1024;
+        public const int FftSize = 2048;
 
         private AudioGraph _graph;
         private AudioFileInputNode _fileInputNode;
@@ -36,6 +36,18 @@ namespace XFiles.Audio
         private readonly int[] _bandBinStart = new int[BandCount];
         private readonly int[] _bandBinEnd = new int[BandCount];
 
+        // Waveform: time-domain samples for visualizers
+        private readonly float[] _waveformBuffer = new float[FftSize];
+        private int _waveformCount;
+
+        // Beat detector
+        private float _beat;
+        private float _beatDecay = 0.92f;
+        private float _energyHistory;
+        private float _energyInstant;
+        private const float BeatThreshold = 1.5f;
+        private const float BeatEnergySmoothing = 0.05f;
+
         private bool _isAnalyzing;
         private int _isProcessing;
         private float _decayFactor = 0.85f;
@@ -46,6 +58,10 @@ namespace XFiles.Audio
 
         public float[] BandLevels => _bandLevels;
         public float[] BandPeaks => _bandPeaks;
+        public float[] Magnitudes => _magnitudes;
+        public float[] Waveform => _waveformBuffer;
+        public int WaveformCount => _waveformCount;
+        public float Beat => _beat;
         public bool IsAnalyzing => _isAnalyzing;
 
         private bool _isGraphRunning;
@@ -428,6 +444,10 @@ namespace XFiles.Audio
                 _bandPeakHoldTimers[i] = 0f;
             }
 
+            _beat = 0f;
+            _energyHistory = 0f;
+            _waveformCount = 0;
+
             Log.Information("AudioLevelService: stopped");
         }
 
@@ -501,6 +521,13 @@ namespace XFiles.Audio
                 for (int i = fftSamples; i < FftSize; i++)
                     _windowedBuffer[i] = 0f;
 
+                // Save raw waveform before Hamming window (for visualizers)
+                _waveformCount = fftSamples;
+                for (int i = 0; i < fftSamples; i++)
+                    _waveformBuffer[i] = _windowedBuffer[i];
+                for (int i = fftSamples; i < FftSize; i++)
+                    _waveformBuffer[i] = 0f;
+
                 FftHelper.ApplyHammingWindow(_windowedBuffer, FftSize);
 
                 for (int i = 0; i < FftSize; i++)
@@ -512,21 +539,28 @@ namespace XFiles.Audio
                 FftHelper.Compute(_fftReal, _fftImag, false);
 
                 int binCount = FftSize / 2;
+                float normFactor = FftSize / 2f;
                 for (int i = 0; i < binCount; i++)
-                    _magnitudes[i] = (float)Math.Sqrt(_fftReal[i] * _fftReal[i] + _fftImag[i] * _fftImag[i]);
+                    _magnitudes[i] = (float)Math.Sqrt(_fftReal[i] * _fftReal[i] + _fftImag[i] * _fftImag[i]) / normFactor;
 
                 for (int b = 0; b < BandCount; b++)
                 {
-                    float sum = 0f;
-                    int count = _bandBinEnd[b] - _bandBinStart[b] + 1;
+                    float maxMag = 0f;
                     for (int k = _bandBinStart[b]; k <= _bandBinEnd[b] && k < binCount; k++)
-                        sum += _magnitudes[k];
-                    float avg = count > 0 ? sum / count : 0f;
+                    {
+                        if (_magnitudes[k] > maxMag) maxMag = _magnitudes[k];
+                    }
 
-                    float db = avg > 0f ? 20f * (float)Math.Log10(avg) : -60f;
-                    db = Math.Max(-60f, Math.Min(0f, db));
-                    float normalized = (db + 60f) / 60f;
-                    _bandDb[b] = (float)Math.Pow(normalized, 1.6);
+                    if (maxMag < 0.00001f) maxMag = 0.00001f;
+
+                    float db = 20f * (float)Math.Log10(maxMag);
+
+                    float trebleBoost = (b / (float)(BandCount - 1)) * 12f;
+                    db += trebleBoost;
+
+                    db = Math.Max(-48f, Math.Min(0f, db));
+                    float normalized = (db + 48f) / 48f;
+                    _bandDb[b] = (float)Math.Pow(normalized, 1.2);
                 }
 
                 float dt = (float)FftSize / _sampleRate;
@@ -557,6 +591,19 @@ namespace XFiles.Audio
                     _bandLevels[b] = Math.Max(0f, Math.Min(1f, _bandLevels[b]));
                     _bandPeaks[b] = Math.Max(0f, Math.Min(1f, _bandPeaks[b]));
                 }
+
+                // Beat detection: compare instantaneous energy to moving average
+                float energy = 0f;
+                for (int b = 0; b < BandCount; b++)
+                    energy += _bandLevels[b];
+                energy /= BandCount;
+
+                _energyHistory = _energyHistory * (1f - BeatEnergySmoothing) + energy * BeatEnergySmoothing;
+                if (energy > _energyHistory * BeatThreshold)
+                    _beat = 1f;
+                else
+                    _beat *= _beatDecay;
+                if (_beat < 0.01f) _beat = 0f;
             }
         }
 

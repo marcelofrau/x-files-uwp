@@ -167,6 +167,13 @@ XFiles/
 | [DECISIONS.md](docs/DECISIONS.md) | ADRs — why XAML, why SharpCompress, etc. |
 | [DEPLOY-XBOX.md](docs/DEPLOY-XBOX.md) | Developer Mode, Device Portal, sideload steps |
 
+## Community
+
+Thanks to the **emulationrevival** community for the support and encouragement:
+
+- **alouisious** — feature ideas and active collaboration on X-Files
+- **MewLew**, **Caorthann**, **DanP142** — keeping the homebrew community alive and thriving
+
 ## License
 
 [GPL-3.0](LICENSE) — free software; you can redistribute it and/or modify it under the

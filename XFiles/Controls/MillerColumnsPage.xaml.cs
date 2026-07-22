@@ -17,6 +17,7 @@ using Windows.UI.Xaml.Media.Animation;
 using XFiles.Audio;
 using XFiles.FileSystem;
 using XFiles.Navigation;
+using XFiles.Visualizers;
 
 namespace XFiles.Controls
 {
@@ -1421,6 +1422,17 @@ namespace XFiles.Controls
             }
         }
 
+        public void OnSelectVisualizer()
+        {
+            if (_isAudioFullscreen)
+            {
+                _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                {
+                    CycleAudioVisualizer();
+                });
+            }
+        }
+
         // --- Fullscreen Video ---
 
         public async Task OpenFullscreenForFile(string filePath, TimeSpan position)
@@ -1633,6 +1645,90 @@ namespace XFiles.Controls
             HideAudioOsd();
         }
 
+        private static readonly (AudioFullscreenMode Mode, string Label)[] _fsModeOrder = new[]
+        {
+            (AudioFullscreenMode.Default, "Default"),
+            (AudioFullscreenMode.RadialSpectrum, "Radial Spectrum"),
+            (AudioFullscreenMode.Waveform, "Waveform"),
+            (AudioFullscreenMode.Plasma, "Plasma")
+        };
+
+        private DispatcherTimer _fsModeOsdTimer;
+
+        public void CycleAudioVisualizer()
+        {
+            int count = Enum.GetValues(typeof(AudioFullscreenMode)).Length;
+            int next = (int)_fsVisualizerMode;
+            for (int i = 0; i < count; i++)
+            {
+                next = (next + 1) % count;
+                var candidate = (AudioFullscreenMode)next;
+                if (candidate == AudioFullscreenMode.Default || VisualizerRegistry.Resolve(candidate) != null)
+                {
+                    _fsVisualizerMode = candidate;
+                    ApplyAudioVisualizerMode();
+                    ShowModeOsd(_fsModeOrder.First(m => m.Mode == candidate).Label);
+                    return;
+                }
+            }
+        }
+
+        private void ApplyAudioVisualizerMode()
+        {
+            bool showDefault = _fsVisualizerMode == AudioFullscreenMode.Default;
+            FsAlbumArtBorder.Visibility = showDefault && _fsHasAlbumArt
+                ? Visibility.Visible : Visibility.Collapsed;
+            FsDefaultArtPanel.Visibility = showDefault && !_fsHasAlbumArt
+                ? Visibility.Visible : Visibility.Collapsed;
+            FsTitleText.Visibility = showDefault ? Visibility.Visible : Visibility.Collapsed;
+            FsArtistText.Visibility = showDefault ? Visibility.Visible : Visibility.Collapsed;
+            FsAlbumText.Visibility = showDefault ? Visibility.Visible : Visibility.Collapsed;
+            FsVuMeter.Visibility = showDefault ? Visibility.Visible : Visibility.Collapsed;
+
+            if (showDefault)
+            {
+                FsVisualizerCanvas.Deactivate();
+                FsVisualizerCanvas.DetachService();
+                FsVisualizerCanvas.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                var viz = VisualizerRegistry.Resolve(_fsVisualizerMode);
+                if (viz != null)
+                {
+                    FsVisualizerCanvas.AttachService(_fsAudioLevelService);
+                    FsVisualizerCanvas.Activate(viz);
+                    FsVisualizerCanvas.Visibility = Visibility.Visible;
+                }
+            }
+        }
+
+        private void ShowModeOsd(string label)
+        {
+            FsModeText.Text = label;
+            FsModeText.Visibility = Visibility.Visible;
+            FsModeText.Opacity = 1.0;
+
+            if (_fsModeOsdTimer == null)
+            {
+                _fsModeOsdTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1200) };
+                _fsModeOsdTimer.Tick += (s, e) =>
+                {
+                    _fsModeOsdTimer.Stop();
+                    var fade = new Storyboard();
+                    var dur = new Duration(TimeSpan.FromMilliseconds(300));
+                    var anim = new DoubleAnimation { To = 0.0, Duration = dur, EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn } };
+                    Storyboard.SetTarget(anim, FsModeText);
+                    Storyboard.SetTargetProperty(anim, "Opacity");
+                    fade.Children.Add(anim);
+                    fade.Completed += (s2, e2) => FsModeText.Visibility = Visibility.Collapsed;
+                    fade.Begin();
+                };
+            }
+            _fsModeOsdTimer.Stop();
+            _fsModeOsdTimer.Start();
+        }
+
         private void OnFsHideTimerTick(object sender, object e)
         {
             _fsHideTimer.Stop();
@@ -1754,6 +1850,8 @@ namespace XFiles.Controls
         private string _audioFullscreenPath;
         private double _audioVolume = 0.75;
         private AudioLevelService _fsAudioLevelService;
+        private AudioFullscreenMode _fsVisualizerMode = AudioFullscreenMode.Default;
+        private bool _fsHasAlbumArt;
 
         // MediaPlayer/Session helpers for fullscreen video + audio (migrated from MediaElement)
         private Windows.Media.Playback.MediaPlayer FsVideoPlayer => VideoFullScreenPlayer.MediaPlayer;
@@ -1771,6 +1869,7 @@ namespace XFiles.Controls
 
             // Use AudioGraph for both playback + VU meter (no duplicate MediaPlayer)
             StopFsAudioAnalysis();
+            _fsVisualizerMode = AudioFullscreenMode.Default;
             _fsAudioLevelService = new AudioLevelService();
             _fsAudioLevelService.MediaOpened += OnFsAudioOpened;
             _fsAudioLevelService.MediaEnded += OnFsAudioEnded;
@@ -1802,6 +1901,7 @@ namespace XFiles.Controls
             {
                 var tag = await Task.Run(() => Id3Tag.ReadFromFile(filePath));
                 bool hasArt = tag?.AlbumArt != null && tag.AlbumArt.Length > 0;
+                _fsHasAlbumArt = hasArt;
 
                 if (hasArt)
                 {
@@ -1843,6 +1943,10 @@ namespace XFiles.Controls
         {
             Log.Information("CloseAudioFullscreen");
             StopFsAudioAnalysis();
+            FsVisualizerCanvas.Deactivate();
+            FsVisualizerCanvas.DetachService();
+            FsVisualizerCanvas.Visibility = Visibility.Collapsed;
+            _fsVisualizerMode = AudioFullscreenMode.Default;
             _isAudioFullscreen = false;
             _audioFullscreenPath = null;
             AudioFullScreenPanel.Visibility = Visibility.Collapsed;

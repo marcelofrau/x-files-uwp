@@ -193,7 +193,10 @@ namespace XFiles.Navigation
             }
             if ((justPressed & GamepadButtons.View) != 0)
             {
-                nav.OnSettings();
+                if (nav.IsMediaFullscreen)
+                    nav.OnSelectVisualizer();
+                else
+                    nav.OnSettings();
             }
 
             // LB, RB — continuous seek while held
