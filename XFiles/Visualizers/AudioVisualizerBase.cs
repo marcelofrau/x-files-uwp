@@ -11,16 +11,26 @@ namespace XFiles.Visualizers
     /// <summary>
     /// Hosts a CanvasAnimatedControl and drives the IAudioVisualizer lifecycle.
     /// Uses composition (not inheritance) because CanvasAnimatedControl is sealed.
+    /// Thread safety: Activate/Deactivate may be called from UI thread while
+    /// Draw/Update fire on the composition thread. A lock protects _visualizer access.
+    /// Post-processing: wraps visualizer output with MilkDrop-style effects
+    /// (feedback trails, bloom/glare, vignette depth).
     /// </summary>
     public sealed class AudioVisualizerBase : UserControl
     {
         private readonly CanvasAnimatedControl _canvas;
+        private readonly object _lock = new object();
         private IAudioVisualizer _visualizer;
         private Audio.AudioLevelService _service;
+        private PostProcessPipeline _pipeline;
         private float _elapsed;
         private bool _initialized;
         private float _cachedWidth;
         private float _cachedHeight;
+
+        // Cached audio data for pipeline (read from Update, used in Draw)
+        private float _bassLevel;
+        private float _beatLevel;
 
         public AudioVisualizerBase()
         {
@@ -59,8 +69,11 @@ namespace XFiles.Visualizers
         public void Activate(IAudioVisualizer visualizer)
         {
             Deactivate();
-            _visualizer = visualizer;
-            _initialized = false;
+            lock (_lock)
+            {
+                _visualizer = visualizer;
+                _initialized = false;
+            }
         }
 
         /// <summary>
@@ -68,12 +81,14 @@ namespace XFiles.Visualizers
         /// </summary>
         public void Deactivate()
         {
-            if (_visualizer != null)
+            IAudioVisualizer old = null;
+            lock (_lock)
             {
-                _visualizer.Dispose();
+                old = _visualizer;
                 _visualizer = null;
                 _initialized = false;
             }
+            old?.Dispose();
         }
 
         /// <summary>
@@ -86,23 +101,39 @@ namespace XFiles.Visualizers
 
         private void OnCanvasDraw(ICanvasAnimatedControl sender, CanvasAnimatedDrawEventArgs args)
         {
-            if (_visualizer == null) return;
+            IAudioVisualizer vis;
+            lock (_lock)
+            {
+                vis = _visualizer;
+            }
+            if (vis == null) return;
 
             if (!_initialized)
             {
-                _visualizer.Initialize(args.DrawingSession.Device);
+                vis.Initialize(args.DrawingSession.Device);
+
+                // Initialize pipeline
+                _pipeline = new PostProcessPipeline();
+                _pipeline.Initialize(args.DrawingSession.Device);
+
                 if (_cachedWidth > 0 && _cachedHeight > 0)
                 {
-                    _visualizer.Resize(_cachedWidth, _cachedHeight);
+                    vis.Resize(_cachedWidth, _cachedHeight);
+                    _pipeline.Resize(_cachedWidth, _cachedHeight);
                 }
                 _initialized = true;
             }
 
             var ds = args.DrawingSession;
-            var image = _visualizer.GetImage();
-            if (image != null)
+
+            // Use post-processing pipeline for MilkDrop-style effects
+            if (_pipeline != null)
             {
-                ds.DrawImage(image);
+                _pipeline.Draw(ds, (sceneDs) => vis.Draw(sceneDs), _bassLevel, _beatLevel);
+            }
+            else
+            {
+                vis.Draw(ds);
             }
         }
 
@@ -110,12 +141,23 @@ namespace XFiles.Visualizers
         {
             _elapsed += (float)args.Timing.ElapsedTime.TotalSeconds;
 
-            if (_visualizer == null || !_initialized) return;
+            IAudioVisualizer vis;
+            lock (_lock)
+            {
+                vis = _visualizer;
+            }
+            if (vis == null || !_initialized) return;
 
             if (_service != null && _service.IsAnalyzing)
             {
                 var data = AudioData.FromService(_service, _elapsed);
-                _visualizer.Update(data, args.Timing.ElapsedTime);
+                vis.Update(data, args.Timing.ElapsedTime);
+
+                // Cache bass/beat for pipeline
+                float bass = 0;
+                for (int i = 0; i < 6; i++) bass += data.BandLevels[i];
+                _bassLevel = Math.Min(1f, bass / 6f);
+                _beatLevel = data.Beat;
             }
         }
 
@@ -123,9 +165,18 @@ namespace XFiles.Visualizers
         {
             _cachedWidth = (float)e.NewSize.Width;
             _cachedHeight = (float)e.NewSize.Height;
-            if (_visualizer != null && _initialized)
+            IAudioVisualizer vis;
+            lock (_lock)
             {
-                _visualizer.Resize(_cachedWidth, _cachedHeight);
+                vis = _visualizer;
+            }
+            if (vis != null && _initialized)
+            {
+                vis.Resize(_cachedWidth, _cachedHeight);
+            }
+            if (_pipeline != null && _initialized)
+            {
+                _pipeline.Resize(_cachedWidth, _cachedHeight);
             }
         }
     }

@@ -52,17 +52,49 @@ quanto o icone e nome.. a descricao nao precisa pode tirar.. e tem que melhorar 
 - Play de musica/video nao ta funcionando na primeira vez que aperta A no arquivo selecionado da lista, tem algo impedindo e tem que ficar tentando varias vezes ate o player comecar.
 
 - em algum momento depois de usar e testar, os dpads ficaram duplicando eventos. se movendo de 2x em 2x. tentar verificar o que acontece..
+- preview de pdf tambem
 
 -- Em progresso
 
 - se tiver tocando midia seja musica ou video, e tiver mais arquivos na pasta, pular pro proximo automaticamente quando terminar de tocar.
 - implementar renomear
 - implementar janela de progresso de operacao com barra de progresso e indicacao de copia, mostrando dados e informacoes como destino, origem e etc. (preparativos pra copia, extracao, mover, colar, etc)
-
 - Implementar nova pasta
-- a acao de new folder, tem q fazer uma pergunta ou mostrar um dropdown, indicando se eh pra criar a pasta dentro da outra pasta ou no mesmo nivel dela (caso a selecao esteja em uma pasta), pode ser confuso do jeito q ta.
-- preview de pdf tambem
+	- a acao de new folder, tem q fazer uma pergunta ou mostrar um dropdown, indicando se eh pra criar a pasta dentro da outra pasta ou no mesmo nivel dela (caso a selecao esteja em uma pasta), pode ser confuso do jeito q ta.
 
+
+
+
+-- Ajustes dos Vizualizers
+- Plasma
+	- adicionar uma waveform de linha de ponta a ponta, mas desenhar ela varias vezes mudando a rotacao causando um efeito de perseguido.. mas tem que adicionar motion blur geral
+	- plasma em si ficou meio lento no xbox, talvez ajustar alguma coisa pra melhorar a velovidade dele, e pode dar uma escurecidinha de leve nele tambem, acho q pode simplificar ele tbm ou algo assim.
+
+
+
+- Starfield
+	- a velocidade das "estrelas" vindo em nossa direcao ta muito rapida, tem que ser mais devagar, e os picos em si fazem as estrelas expandirem em si.. e ta faltando motion blur e glare.
+- Spiral Spectrum
+	- ele eh bem legal, mas as linhas podem ter waveform e tentar fazer eles meio que se movimentando adentrando num tunel circular.
+- Mirror tunel
+	- adicionar na linha de baixo do tunnel barras do do espectro e fazer elas irem se aprofundando no tunel com um blur
+- Fire Particles
+	- Ta muito pouco sensivel, esse aqui tem que reagir mais com a musica, ele eh bem interessante mas ta mostrando muito pouco atividade.
+- Terrain Generator
+	- Ta muito pouco sensivel, esse aqui tem que reagir mais com a musica, ele eh bem interessante mas ta mostrando muito pouco atividade.
+- Orbiting Circles
+	- muito bonito, mas falta efeito de glare, blur e flares
+- Isometric bars
+	- As barras tao muito grandes e nao crescem nada com a musica
+	- deixar cada barra como um cubo menor, e ter um espacamento/margem/padding entre elas
+	- Parece que as barras nao estao crescendo em Y, tem q revisar se a ideia de XYZ esta ok nele, minha ideia eh espalhar barras em X e Z e as barras crescerem em Y.
+- Kaleidoscope
+	- Adicionar blur e glare
+- Particle Burst
+	- Blur e Glare.
+	- Ta muito pouco sensivel, esse aqui tem que reagir mais com a musica, ele eh bem interessante mas ta mostrando muito pouco atividade.
+- Ripple Pulse
+	- Blur e Glare.
 
 --
 Bugs em aberto
@@ -114,26 +146,111 @@ Ajustes em dropdowns:
 - suporte a temas e cores
 - permitir trocar fontes
 - permitir colocar imagem de fundo.
+- tocar musica em background
 
-- colocar no about e no readme agradecimentos a comunidade emulationrevival, especialmente a alouisious por estar ajudando com features e ideias pro x-files e a MewLew, Caorthann e DanP142 por apoiarem estarem presentes a ajudarem a comunidade de homebrew
 
 
-O que dá pra fazer bonito em Win2D:
+---
+ uma duvida, da pra fazer o player de musica ficar tocando em background?
 
-| #   | Name                  | Concept                                                                                 | Complexity |
-| --- | --------------------- | --------------------------------------------------------------------------------------- | ---------- |
-| 4   | **Starfield**         | Star field that pulses/explodes with beat. Speed = bass. Color = avg frequency.         | Medium     |
-| 5   | **Spiral Spectrum**   | Spiral of points where distance from center = magnitude, angle = time. Rotating colors. | Medium     |
-| 6   | **Mirror Tunnel**     | Infinite tunnel with 4x mirroring. Walls react to bandLevels.                           | High       |
-| 7   | **Fire Particles**    | 2D particle system with physics. Beat = explosion. Color = heatmap.                     | High       |
-| 8   | **Matrix Rain**       | Matrix-style character rain. Speed = bass. Density = volume.                            | Medium     |
-| 9   | **Lissajous**         | Lissajous figures parametrized by bandLevels. Color by time.                            | Low        |
-| 10  | **Terrain Generator** | Demoscene-style 2D terrain. Height = magnitudes. Scroll = time.                         | Medium     |
-| 11  | **Gradient Noise**    | Perlin/Simplex noise reactive to audio. Colors modulated by frequency.                  | Medium     |
-| 12  | **Orbiting Circles**  | Circles orbiting center. Radius = bandLevel. Speed = beat.                              | Low        |
-| 13  | Kaleidoscope		  | Mandala simétrica que reage ao beat, com blur + color shift								| Alta 		 |
-| 14  | Particle Burst		  | Partículas que explodem no beat, trails com fade, gravity								| Alta 		 |
-| 15  |  Vortex	Espiral 	  | de cores que distorce com a música, polar coords							        	| Média 	 |
-| 16  | Ripple Pulse		  | Ondas concêntricas que pulsam com o bass, distorção						        		| Média 	 |
-| 17  | Feedback Trail		  | Ghosting do frame anterior com decay → efeito "cauda de cometa"		  				   | Média      |
-| 18  | Wave Tunnel	          | Tunel de ondas com perspectiva simulada, cores mudam com beat					        | Alta 		 |
+Com certeza dá! O UWP no Windows e no Xbox tem suporte nativo a Background Audio, o que permite que seu aplicativo continue tocando música normalmente enquanto o usuário joga, navega pela Dashboard do Xbox ou minimiza o app no PC.
+
+A chave para isso funcionar é que, desde as versões mais recentes do UWP, a Microsoft simplificou bastante o processo usando o modelo de processo único (Single-Process Background Audio).
+
+Aqui está o que você precisa configurar no seu projeto para habilitar o áudio em segundo plano:
+1. Habilitar a Capability no Package.appxmanifest
+
+Você precisa avisar ao sistema operacional que o seu app tem permissão para rodar tarefas de áudio em background.
+
+    Abra o arquivo Package.appxmanifest no Visual Studio.
+
+    Clique com o botão direito e selecione Exibir Código (XML).
+
+    Na seção <Capabilities>, adicione a funcionalidade de áudio em background:
+
+XML
+
+<Capabilities>
+  <Capability Name="internetClient" />
+  <!-- Adicione esta linha para habilitar áudio em segundo plano -->
+  <uap:Capability Name="backgroundMediaPlayback" />
+</Capabilities>
+
+    Nota: Certifique-se de que o namespace uap está declarado no topo do seu arquivo manifest (geralmente xmlns:uap="[http://schemas.microsoft.com/appx/manifest/uap/windows10](http://schemas.microsoft.com/appx/manifest/uap/windows10)").
+
+2. O comportamento do AudioGraph em Background
+
+Como o seu player usa o AudioGraph, o Windows gerencia o ciclo de vida do áudio automaticamente:
+
+    Quando o app é minimizado ou o usuário abre um jogo no Xbox, o UWP envia o evento EnteredBackground.
+
+    Se a funcionalidade backgroundMediaPlayback estiver ativada no manifest, o AudioGraph continua processando e enviando áudio para as caixas de som.
+
+⚠️ A Pegadinha com a Interface e o VU Meter / Visualizadores
+
+Embora o som continue tocando perfeitamente em segundo plano, existe um ponto crucial que você precisa tratar no seu código: a interface gráfica é suspensa pelo sistema quando o app entra em background.
+
+Isso significa que:
+
+    O loop visual para: Controles gráficos como CanvasAnimatedControl (Win2D) ou bibliotecas de renderização (SeeingSharp, Shaders) têm suas chamadas de desenho congeladas/pausadas pelo Xbox/Windows para economizar GPU para os jogos.
+
+    Evite desperdício de CPU: Quando o app entra em segundo plano, você deve pausar a execução da FFT e as atualizações da UI do VU Meter para evitar que o app seja sumariamente fechado pelo sistema por consumo indevido de recursos.
+
+Como tratar a transição no C#:
+
+No seu App.xaml.cs (ou na sua Page principal):
+C#
+
+public MainPage()
+{
+    this.InitializeComponent();
+
+    // Inscreve nos eventos de ciclo de vida da janela
+    Application.Current.EnteredBackground += OnEnteredBackground;
+    Application.Current.LeavingBackground += OnLeavingBackground;
+}
+
+private void OnEnteredBackground(object sender, EnteredBackgroundEventArgs e)
+{
+    // O app foi minimizado ou o usuário abriu um jogo!
+    // Mantenha o AudioGraph TOCANDO, mas PAUSE o processamento visual da FFT/VU Meter.
+    audioLevelService.PauseFFTProcessing();
+}
+
+private void OnLeavingBackground(object sender, LeavingBackgroundEventArgs e)
+{
+    // O usuário voltou para o app!
+    // Retome a leitura da FFT e a renderização das barras no Win2D.
+    audioLevelService.ResumeFFTProcessing();
+}
+
+3. Integração com as Mídias do Sistema (SystemMediaTransportControls)
+
+Para que o usuário consiga pausar, avançar a música ou ajustar o volume usando o menu rápido do Xbox (Guia) ou as teclas de mídia do teclado do PC enquanto joga, você deve conectar seu player ao SystemMediaTransportControls (SMTC).
+C#
+
+// Pega os controles de mídia do sistema
+var smtc = SystemMediaTransportControls.GetForCurrentView();
+
+// Habilita os botões que seu player suporta
+smtc.IsPlayEnabled = true;
+smtc.IsPauseEnabled = true;
+smtc.IsNextEnabled = true;
+
+// Escuta o clique dos botões físicos ou da interface do Xbox
+smtc.ButtonPressed += (sender, args) =>
+{
+    switch (args.Button)
+    {
+        case SystemMediaTransportControlsButton.Play:
+            audioGraph.Start();
+            break;
+        case SystemMediaTransportControlsButton.Pause:
+            audioGraph.Stop();
+            break;
+    }
+};
+
+Resumo
+
+Configurando a capability backgroundMediaPlayback no Package.appxmanifest e pausando apenas o loop gráfico da FFT/VU Meter quando o app entra em background, o seu player vai tocar músicas em segundo plano no Xbox e no PC de forma leve e nativa!

@@ -1224,7 +1224,7 @@ namespace XFiles.Controls
                 _rtWasDown = false;
                 return;
             }
-            bool isMedia = VideoFullScreenPanel.Visibility == Visibility.Visible || _isMediaPlayerActive;
+            bool isMedia = VideoFullScreenPanel.Visibility == Visibility.Visible || _isMediaPlayerActive || AudioFullScreenPanel.Visibility == Visibility.Visible;
             if (!isMedia) { _ltWasDown = false; _rtWasDown = false; return; }
 
             const float Threshold = 0.3f;
@@ -1295,6 +1295,18 @@ namespace XFiles.Controls
                     FSProgress.Value = (pos.TotalSeconds / total.TotalSeconds) * 100;
                     FSTimeText.Text = $"{FormatFsTime(pos)} / {FormatFsTime(total)}";
                 }
+
+                string dir = seconds > 0 ? "\u25B6\u25B6" : "\u25C0\u25C0";
+                ShowFsOsd($"{dir}  {(seconds > 0 ? "+" : "")}{seconds}s", null, 800);
+            }
+            else if (AudioFullScreenPanel.Visibility == Visibility.Visible && _fsAudioLevelService != null && _fsAudioLevelService.IsFileLoaded)
+            {
+                var pos = _fsAudioLevelService.Position + TimeSpan.FromSeconds(seconds);
+                if (pos < TimeSpan.Zero) pos = TimeSpan.Zero;
+                var total = _fsAudioLevelService.Duration;
+                if (total.TotalSeconds > 0 && pos > total) pos = total;
+
+                _fsAudioLevelService.Seek(pos);
 
                 string dir = seconds > 0 ? "\u25B6\u25B6" : "\u25C0\u25C0";
                 ShowFsOsd($"{dir}  {(seconds > 0 ? "+" : "")}{seconds}s", null, 800);
@@ -1650,7 +1662,25 @@ namespace XFiles.Controls
             (AudioFullscreenMode.Default, "Default"),
             (AudioFullscreenMode.RadialSpectrum, "Radial Spectrum"),
             (AudioFullscreenMode.Waveform, "Waveform"),
-            (AudioFullscreenMode.Plasma, "Plasma")
+            (AudioFullscreenMode.Plasma, "Plasma"),
+            (AudioFullscreenMode.Starfield, "Starfield"),
+            (AudioFullscreenMode.SpiralSpectrum, "Spiral Spectrum"),
+            (AudioFullscreenMode.MirrorTunnel, "Mirror Tunnel"),
+            (AudioFullscreenMode.FireParticles, "Fire Particles"),
+            (AudioFullscreenMode.Lissajous, "Lissajous"),
+            (AudioFullscreenMode.TerrainGenerator, "Terrain Generator"),
+            (AudioFullscreenMode.OrbitingCircles, "Orbiting Circles"),
+            (AudioFullscreenMode.IsometricEqualizer, "Isometric Equalizer"),
+            (AudioFullscreenMode.NeonGlare, "Neon Glare"),
+            (AudioFullscreenMode.Kaleidoscope, "Kaleidoscope"),
+            (AudioFullscreenMode.ParticleBurst, "Particle Burst"),
+            (AudioFullscreenMode.RipplePulse, "Ripple Pulse"),
+            (AudioFullscreenMode.FeedbackTrail, "Feedback Trail"),
+            (AudioFullscreenMode.VoxelMatrix, "Voxel Matrix"),
+            (AudioFullscreenMode.AnalogVUMeter, "Analog VU Meter"),
+            (AudioFullscreenMode.CircularRadialSpectrum, "Circular Radial Spectrum"),
+            (AudioFullscreenMode.RetroOscilloscope, "Retro Oscilloscope"),
+            (AudioFullscreenMode.InfernoCore, "Inferno Core")
         };
 
         private DispatcherTimer _fsModeOsdTimer;
@@ -1862,6 +1892,7 @@ namespace XFiles.Controls
         public async void OpenAudioFullscreen(string filePath, TimeSpan position)
         {
             Log.Information("OpenAudioFullscreen: {Path}", filePath);
+            bool wasAlreadyFullscreen = _isAudioFullscreen;
             _audioFullscreenPath = filePath;
             _isAudioFullscreen = true;
 
@@ -1869,7 +1900,8 @@ namespace XFiles.Controls
 
             // Use AudioGraph for both playback + VU meter (no duplicate MediaPlayer)
             StopFsAudioAnalysis();
-            _fsVisualizerMode = AudioFullscreenMode.Default;
+            if (!wasAlreadyFullscreen)
+                _fsVisualizerMode = AudioFullscreenMode.Default;
             _fsAudioLevelService = new AudioLevelService();
             _fsAudioLevelService.MediaOpened += OnFsAudioOpened;
             _fsAudioLevelService.MediaEnded += OnFsAudioEnded;
@@ -1893,6 +1925,10 @@ namespace XFiles.Controls
 
             // Load metadata async — don't block UI thread
             await LoadAudioFullscreenMetadataAsync(filePath);
+
+            // Re-apply current visualizer mode with new audio service
+            if (_fsVisualizerMode != AudioFullscreenMode.Default)
+                ApplyAudioVisualizerMode();
         }
 
         private async Task LoadAudioFullscreenMetadataAsync(string filePath)
@@ -2001,6 +2037,10 @@ namespace XFiles.Controls
             _fsAudioLevelService.MediaFailed += OnFsAudioFailed;
             FsVuMeter.AttachService(_fsAudioLevelService);
             _ = _fsAudioLevelService.LoadAndPlay(nextFile.FullPath);
+
+            // Re-apply current visualizer mode with new audio service
+            if (_fsVisualizerMode != AudioFullscreenMode.Default)
+                ApplyAudioVisualizerMode();
 
             FsPlayPauseIcon.Glyph = "\uE769";
             ShowAudioOsd(direction > 0 ? "Next" : "Prev", direction > 0 ? "ms-appx:///Assets/Views/MillerColumnsPage/osd/osd-next-48.png" : "ms-appx:///Assets/Views/MillerColumnsPage/osd/osd-prev-48.png", 1200);

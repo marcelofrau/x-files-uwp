@@ -555,12 +555,12 @@ namespace XFiles.Audio
 
                     float db = 20f * (float)Math.Log10(maxMag);
 
-                    float trebleBoost = (b / (float)(BandCount - 1)) * 12f;
+                    float trebleBoost = (b / (float)(BandCount - 1)) * 32f;
                     db += trebleBoost;
 
-                    db = Math.Max(-48f, Math.Min(0f, db));
-                    float normalized = (db + 48f) / 48f;
-                    _bandDb[b] = (float)Math.Pow(normalized, 1.2);
+                    db = Math.Max(-60f, Math.Min(0f, db));
+                    float normalized = (db + 60f) / 60f;
+                    _bandDb[b] = Math.Min(1f, normalized * 2.0f);
                 }
 
                 float dt = (float)FftSize / _sampleRate;

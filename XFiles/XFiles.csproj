@@ -160,9 +160,29 @@
     <Compile Include="Visualizers\AudioFullscreenMode.cs" />
     <Compile Include="Visualizers\IAudioVisualizer.cs" />
     <Compile Include="Visualizers\AudioVisualizerBase.cs" />
+    <Compile Include="Visualizers\PostProcessPipeline.cs" />
     <Compile Include="Visualizers\VisualizerRegistry.cs" />
     <Compile Include="Visualizers\Visualizers\RadialSpectrumVisualizer.cs" />
     <Compile Include="Visualizers\Visualizers\WaveformVisualizer.cs" />
+    <Compile Include="Visualizers\Visualizers\PlasmaVisualizer.cs" />
+    <Compile Include="Visualizers\Visualizers\StarfieldVisualizer.cs" />
+    <Compile Include="Visualizers\Visualizers\SpiralSpectrumVisualizer.cs" />
+    <Compile Include="Visualizers\Visualizers\MirrorTunnelVisualizer.cs" />
+    <Compile Include="Visualizers\Visualizers\FireParticlesVisualizer.cs" />
+    <Compile Include="Visualizers\Visualizers\LissajousVisualizer.cs" />
+    <Compile Include="Visualizers\Visualizers\TerrainGeneratorVisualizer.cs" />
+    <Compile Include="Visualizers\Visualizers\OrbitingCirclesVisualizer.cs" />
+    <Compile Include="Visualizers\Visualizers\IsometricEqualizerVisualizer.cs" />
+    <Compile Include="Visualizers\Visualizers\NeonGlareVisualizer.cs" />
+    <Compile Include="Visualizers\Visualizers\KaleidoscopeVisualizer.cs" />
+    <Compile Include="Visualizers\Visualizers\ParticleBurstVisualizer.cs" />
+    <Compile Include="Visualizers\Visualizers\RipplePulseVisualizer.cs" />
+    <Compile Include="Visualizers\Visualizers\FeedbackTrailVisualizer.cs" />
+    <Compile Include="Visualizers\Visualizers\VoxelMatrixVisualizer.cs" />
+    <Compile Include="Visualizers\Visualizers\AnalogVUMeterVisualizer.cs" />
+    <Compile Include="Visualizers\Visualizers\CircularRadialSpectrumVisualizer.cs" />
+    <Compile Include="Visualizers\Visualizers\RetroOscilloscopeVisualizer.cs" />
+    <Compile Include="Visualizers\Visualizers\InfernoCoreVisualizer.cs" />
   </ItemGroup>
   <ItemGroup>
     <ApplicationDefinition Include="App.xaml">

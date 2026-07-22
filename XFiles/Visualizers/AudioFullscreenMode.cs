@@ -6,16 +6,27 @@ namespace XFiles.Visualizers
     /// </summary>
     public enum AudioFullscreenMode
     {
-        /// <summary>Album art + VU meter + metadata (default).</summary>
         Default,
-
-        /// <summary>Radial spectrum: 26 frequency bars in a circle.</summary>
         RadialSpectrum,
-
-        /// <summary>Waveform: time-domain oscilloscope with symmetry.</summary>
         Waveform,
-
-        /// <summary>Plasma: color waves reactive to audio.</summary>
-        Plasma
+        Plasma,
+        Starfield,
+        SpiralSpectrum,
+        MirrorTunnel,
+        FireParticles,
+        Lissajous,
+        TerrainGenerator,
+        OrbitingCircles,
+        IsometricEqualizer,
+        NeonGlare,
+        Kaleidoscope,
+        ParticleBurst,
+        RipplePulse,
+        FeedbackTrail,
+        VoxelMatrix,
+        AnalogVUMeter,
+        CircularRadialSpectrum,
+        RetroOscilloscope,
+        InfernoCore
     }
 }

@@ -6,6 +6,8 @@ namespace XFiles.Visualizers
     /// <summary>
     /// Lifecycle interface for audio visualizers.
     /// Each visualizer owns its own Win2D effects and shader state.
+    /// Uses draw-direct pattern (void Draw) to avoid cross-thread disposal races
+    /// with CanvasRenderTarget used as effect sources.
     /// </summary>
     public interface IAudioVisualizer : IDisposable
     {
@@ -21,8 +23,10 @@ namespace XFiles.Visualizers
         /// <summary>Called each frame with fresh audio data. Update shader parameters here.</summary>
         void Update(AudioData data, TimeSpan elapsed);
 
-        /// <summary>Return the current Win2D image to render. Use ICanvasImage for flexibility.</summary>
-        ICanvasImage GetImage();
+        /// <summary>Draw the visualizer directly to the provided drawing session.
+        /// All effects (blur, blend) must be created and drawn within this call.
+        /// Do NOT return ICanvasImage — the caller's session owns the GPU context.</summary>
+        void Draw(CanvasDrawingSession ds);
 
         /// <summary>Called when the canvas is resized. Update resolution-dependent parameters.</summary>
         void Resize(float width, float height);

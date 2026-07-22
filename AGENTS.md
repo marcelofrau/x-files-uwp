@@ -20,9 +20,8 @@ plan. Do not skip ahead to later phases without completing/documenting earlier o
 ## Critical Rules
 - **NEVER commit or push** without explicit user request. Stage changes only. Wait for
   "commit", "push", "faz o commit", etc.
-- **This project cannot be built or run in this (Linux) environment.** UWP requires
-  Visual Studio on Windows. Treat all `.csproj`/`.xaml`/manifest edits as unverified until
-  built on a Windows machine — flag this clearly whenever making structural changes.
+- **This project builds on Windows with VS2022 (MSBuild found).** Always run build
+  verification after structural changes: `& "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe" "XFiles.sln" /p:Configuration=Debug /p:Platform=x64 /t:Build /v:minimal`.
 - **x64 target primarily** (Xbox Series). Confirm ARM64 needs before adding that platform.
 - **`broadFileSystemAccess` + `runFullTrust`** capabilities are required in the manifest
   for any filesystem code outside the app's sandboxed folders (see `docs/FILEBROWSER.md`

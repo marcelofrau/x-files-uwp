@@ -166,8 +166,8 @@ namespace XFiles.Controls
 
             for (int b = 0; b < BarCount && b < levels.Length; b++)
             {
-                float level = levels[b];
-                float peak = peaks[b];
+                float level = Math.Min(1.0f, levels[b]);
+                float peak = Math.Min(1.0f, peaks[b]);
 
                 int litSegments = (int)(level * SegmentsPerBar);
                 litSegments = Math.Max(0, Math.Min(SegmentsPerBar, litSegments));
