@@ -7,7 +7,7 @@ namespace XFiles.Visualizers
     public readonly struct AudioData
     {
         public const int BandCount = 26;
-        public const int FftBinCount = 512;
+        public const int FftBinCount = 1024;
 
         public readonly float[] BandLevels;
         public readonly float[] BandPeaks;

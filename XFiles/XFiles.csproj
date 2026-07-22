@@ -162,6 +162,7 @@
     <Compile Include="Visualizers\AudioVisualizerBase.cs" />
     <Compile Include="Visualizers\VisualizerRegistry.cs" />
     <Compile Include="Visualizers\Visualizers\RadialSpectrumVisualizer.cs" />
+    <Compile Include="Visualizers\Visualizers\WaveformVisualizer.cs" />
   </ItemGroup>
   <ItemGroup>
     <ApplicationDefinition Include="App.xaml">

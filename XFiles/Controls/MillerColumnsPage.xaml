@@ -851,6 +851,14 @@
                                FontSize="12" Margin="0,2,0,0"
                                Foreground="#99FFFFFF" VerticalAlignment="Center" />
                 </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <Image Source="ms-appx:///Assets/GamepadButtons/system/xboxl_view.png"
+                           Width="16" Height="16" Margin="0,0,4,0" VerticalAlignment="Center" />
+                    <TextBlock Text="Visualizer"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="12" Margin="0,2,0,0"
+                               Foreground="#99FFFFFF" VerticalAlignment="Center" />
+                </StackPanel>
             </StackPanel>
 
             <!-- OSD overlay for audio -->

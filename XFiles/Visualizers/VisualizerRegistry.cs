@@ -12,8 +12,8 @@ namespace XFiles.Visualizers
         private static readonly Type[] VisualizerTypes = new[]
         {
             typeof(Visualizers.RadialSpectrumVisualizer),
+            typeof(Visualizers.WaveformVisualizer),
             // Future visualizers go here:
-            // typeof(Visualizers.WaveformVisualizer),
             // typeof(Visualizers.PlasmaVisualizer),
         };
 
