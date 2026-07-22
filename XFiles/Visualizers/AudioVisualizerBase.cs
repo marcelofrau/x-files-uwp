@@ -129,6 +129,7 @@ namespace XFiles.Visualizers
             // Use post-processing pipeline for MilkDrop-style effects
             if (_pipeline != null)
             {
+                vis.ConfigurePipeline(_pipeline);
                 _pipeline.Draw(ds, (sceneDs) => vis.Draw(sceneDs), _bassLevel, _beatLevel);
             }
             else

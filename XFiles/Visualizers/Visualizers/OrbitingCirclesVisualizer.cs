@@ -189,5 +189,9 @@ namespace XFiles.Visualizers.Visualizers
             else { r = c; g = 0; b = x; }
             return Color.FromArgb(255, (byte)((r + m) * 255), (byte)((g + m) * 255), (byte)((b + m) * 255));
         }
+
+        public void ConfigurePipeline(PostProcessPipeline pipeline)
+        {
+        }
     }
 }

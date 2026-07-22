@@ -19,9 +19,9 @@ namespace XFiles.Visualizers.Visualizers
         private float _velBass, _velMid, _velTreble;
         private float _smoothBass, _smoothMid, _smoothTreble, _smoothBeat;
         private const float AudioSmooth = 0.35f;
-        private const float SpringK = 250f;
+        private const float SpringK = 180f;
         private const float Damping = 8f;
-        private const float InputGain = 2.2f;
+        private const float InputGain = 0.7f;
 
         public void Initialize(CanvasDevice device) { _device = device; }
 
@@ -84,14 +84,14 @@ namespace XFiles.Visualizers.Visualizers
             Color bezelColor = Color.FromArgb(255, 45, 40, 35);
             ds.DrawRoundedRectangle(x, y, w, h, cornerR, cornerR, bezelColor, 2f);
 
-            Color faceColor = Color.FromArgb(255, 235, 228, 210);
+            Color faceColor = Color.FromArgb(255, 200, 195, 180);
             float inset = w * 0.06f;
             ds.FillRoundedRectangle(x + inset, y + inset, w - inset * 2, h - inset * 2, cornerR, cornerR, faceColor);
 
             float pivotX = x + w * 0.5f;
             float pivotY = y + h * 0.82f;
             float needleLen = h * 0.6f;
-            float angle = -135f + needlePos * 270f;
+            float angle = -90f + needlePos * 180f;
             float rad = angle * (float)Math.PI / 180f;
             float tipX = pivotX + (float)Math.Cos(rad) * needleLen;
             float tipY = pivotY + (float)Math.Sin(rad) * needleLen;
@@ -110,7 +110,7 @@ namespace XFiles.Visualizers.Visualizers
             if (needlePos > 0.75f)
             {
                 float redZone = (needlePos - 0.75f) / 0.25f;
-                float flashAlpha = (byte)Math.Min(255, (int)(redZone * 60 * (0.5f + _smoothBeat * 0.5f)));
+                float flashAlpha = (byte)Math.Min(255, (int)(redZone * 40 * (0.5f + _smoothBeat * 0.5f)));
                 ds.FillRoundedRectangle(x + inset, y + inset, w - inset * 2, h * 0.25f, cornerR, cornerR,
                     Color.FromArgb((byte)flashAlpha, 255, 40, 20));
             }
@@ -133,7 +133,7 @@ namespace XFiles.Visualizers.Visualizers
             for (int i = 0; i <= tickCount; i++)
             {
                 float t = (float)i / tickCount;
-                float angle = (-135f + t * 270f) * (float)Math.PI / 180f;
+                float angle = (-90f + t * 180f) * (float)Math.PI / 180f;
                 float innerR = radius * 0.88f;
                 float outerR = radius;
                 float x1 = cx + (float)Math.Cos(angle) * innerR;
@@ -152,7 +152,7 @@ namespace XFiles.Visualizers.Visualizers
         private void DrawIncandescentGlow(CanvasDrawingSession ds)
         {
             float glowIntensity = 0.5f + _smoothBeat * 0.5f;
-            byte a = (byte)Math.Min(255, (int)(8 * glowIntensity));
+            byte a = (byte)Math.Min(255, (int)(4 * glowIntensity));
             Color warmGlow = Color.FromArgb(a, 255, 200, 120);
             var geo = CanvasGeometry.CreateEllipse(ds, _width * 0.5f, _height * 0.5f, _width * 0.45f, _height * 0.4f);
             ds.FillGeometry(geo, warmGlow);
@@ -175,6 +175,10 @@ namespace XFiles.Visualizers.Visualizers
             else if (hue < 300) { r = x; g = 0; b = c; }
             else { r = c; g = 0; b = x; }
             return Color.FromArgb(255, (byte)((r + m) * 255), (byte)((g + m) * 255), (byte)((b + m) * 255));
+        }
+
+        public void ConfigurePipeline(PostProcessPipeline pipeline)
+        {
         }
     }
 }

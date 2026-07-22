@@ -16,6 +16,7 @@ using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Media.Animation;
 using XFiles.Audio;
 using XFiles.FileSystem;
+using XFiles.Metadata;
 using XFiles.Navigation;
 using XFiles.Visualizers;
 
@@ -1880,8 +1881,10 @@ namespace XFiles.Controls
         private string _audioFullscreenPath;
         private double _audioVolume = 0.75;
         private AudioLevelService _fsAudioLevelService;
-        private AudioFullscreenMode _fsVisualizerMode = AudioFullscreenMode.Default;
+        private AudioFullscreenMode _fsVisualizerMode;
+        private DispatcherTimer _fsVisualizerTimer = new DispatcherTimer();
         private bool _fsHasAlbumArt;
+        private MetadataGuesser _fsMetadataGuesser = new MetadataGuesser();
 
         // MediaPlayer/Session helpers for fullscreen video + audio (migrated from MediaElement)
         private Windows.Media.Playback.MediaPlayer FsVideoPlayer => VideoFullScreenPlayer.MediaPlayer;
@@ -1916,6 +1919,16 @@ namespace XFiles.Controls
             FsPlayPauseIcon.Glyph = "\uE769";
             FsVolumeText.Text = $"Vol {(int)(_audioVolume * 100)}%";
 
+            // Show placeholder immediately — don't wait for metadata
+            FsTitleText.Text = System.IO.Path.GetFileNameWithoutExtension(filePath);
+            FsArtistText.Text = "";
+            FsArtistText.Visibility = Visibility.Collapsed;
+            FsAlbumText.Text = "";
+            FsAlbumText.Visibility = Visibility.Collapsed;
+            FsAlbumArtBorder.Visibility = Visibility.Collapsed;
+            FsDefaultArtPanel.Visibility = Visibility.Visible;
+            _fsHasAlbumArt = false;
+
             AudioFullScreenPanel.Visibility = Visibility.Visible;
             UpdateMediaPlayerFocusUI();
 
@@ -1924,7 +1937,7 @@ namespace XFiles.Controls
                 _fullscreenProgressTimer.Start();
 
             // Load metadata async — don't block UI thread
-            await LoadAudioFullscreenMetadataAsync(filePath);
+            _ = LoadAudioFullscreenMetadataAsync(filePath);
 
             // Re-apply current visualizer mode with new audio service
             if (_fsVisualizerMode != AudioFullscreenMode.Default)
@@ -1935,8 +1948,21 @@ namespace XFiles.Controls
         {
             try
             {
-                var tag = await Task.Run(() => Id3Tag.ReadFromFile(filePath));
-                bool hasArt = tag?.AlbumArt != null && tag.AlbumArt.Length > 0;
+                Log.Information("FsMetadata: starting async load for {Path}", filePath);
+                _fsMetadataGuesser.SetInternetAvailable(true);
+                var match = await _fsMetadataGuesser.ResolveAsync(filePath);
+                var tag = match?.Metadata;
+
+                Log.Information("FsMetadata: source={Source} score={Score:F2} title='{Title}' artist='{Artist}' album='{Album}' art={HasArt}",
+                    match?.Source, match?.Confidence, tag?.Title, tag?.Artist, tag?.Album, tag?.HasAlbumArt);
+
+                if (_audioFullscreenPath != filePath)
+                {
+                    Log.Information("FsMetadata: stale result for {Path}, discarding", filePath);
+                    return;
+                }
+
+                bool hasArt = tag?.HasAlbumArt == true;
                 _fsHasAlbumArt = hasArt;
 
                 if (hasArt)
@@ -1952,26 +1978,26 @@ namespace XFiles.Controls
                     FsDefaultArtPanel.Visibility = Visibility.Collapsed;
                     FsAlbumArtImage.Source = bitmap;
                 }
-                else
+
+                if (tag?.HasTitle == true)
+                    FsTitleText.Text = tag.Title;
+                if (tag?.HasArtist == true)
                 {
-                    FsAlbumArtBorder.Visibility = Visibility.Collapsed;
-                    FsDefaultArtPanel.Visibility = Visibility.Visible;
+                    FsArtistText.Text = tag.Artist;
+                    FsArtistText.Visibility = Visibility.Visible;
+                }
+                if (tag?.HasAlbum == true)
+                {
+                    FsAlbumText.Text = tag.Album;
+                    FsAlbumText.Visibility = Visibility.Visible;
                 }
 
-                FsTitleText.Text = tag?.Title ?? System.IO.Path.GetFileNameWithoutExtension(filePath);
-                FsArtistText.Text = tag?.Artist ?? "";
-                FsArtistText.Visibility = string.IsNullOrEmpty(tag?.Artist) ? Visibility.Collapsed : Visibility.Visible;
-                FsAlbumText.Text = tag?.Album ?? "";
-                FsAlbumText.Visibility = string.IsNullOrEmpty(tag?.Album) ? Visibility.Collapsed : Visibility.Visible;
+                Log.Information("FsMetadata: applied title={Title} artist={Artist} album={Album} art={HasArt}",
+                    tag?.Title, tag?.Artist, tag?.Album, hasArt);
             }
             catch (Exception ex)
             {
-                Log.Warning("Failed to load audio metadata: {Error}", ex.Message);
-                FsAlbumArtBorder.Visibility = Visibility.Collapsed;
-                FsDefaultArtPanel.Visibility = Visibility.Visible;
-                FsTitleText.Text = System.IO.Path.GetFileNameWithoutExtension(filePath);
-                FsArtistText.Visibility = Visibility.Collapsed;
-                FsAlbumText.Visibility = Visibility.Collapsed;
+                Log.Warning("FsMetadata: failed for {Path}: {Error}", filePath, ex.Message);
             }
         }
 
@@ -2028,6 +2054,16 @@ namespace XFiles.Controls
 
             var nextFile = audioFiles[nextIdx];
             _audioFullscreenPath = nextFile.FullPath;
+
+            // Show placeholder immediately
+            FsTitleText.Text = System.IO.Path.GetFileNameWithoutExtension(nextFile.FullPath);
+            FsArtistText.Text = "";
+            FsArtistText.Visibility = Visibility.Collapsed;
+            FsAlbumText.Text = "";
+            FsAlbumText.Visibility = Visibility.Collapsed;
+            FsAlbumArtBorder.Visibility = Visibility.Collapsed;
+            FsDefaultArtPanel.Visibility = Visibility.Visible;
+            _fsHasAlbumArt = false;
 
             // Load next track via AudioGraph (playback + VU meter)
             StopFsAudioAnalysis();

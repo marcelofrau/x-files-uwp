@@ -107,5 +107,21 @@ namespace XFiles.Visualizers.Visualizers
             else { r = c; g = 0; b = x; }
             return Color.FromArgb(255, (byte)((r + m) * 255), (byte)((g + m) * 255), (byte)((b + m) * 255));
         }
+
+        public void ConfigurePipeline(PostProcessPipeline pipeline)
+        {
+            pipeline.Rotation = 0.2f;
+            pipeline.FeedbackOpacity = 0.42f;
+            pipeline.FeedbackZoom = 1.002f;
+            pipeline.FeedbackDecay = 0f;
+            pipeline.SlideX = 0f;
+            pipeline.SlideY = 0f;
+            pipeline.BloomAmount = 0.2f;
+            pipeline.BloomBlur = 5f;
+            pipeline.BloomThreshold = 0.3f;
+            pipeline.ScanlinesEnabled = true;
+            pipeline.ScanlineIntensity = 0.06f;
+            pipeline.ScanlineCount = 500f;
+        }
     }
 }

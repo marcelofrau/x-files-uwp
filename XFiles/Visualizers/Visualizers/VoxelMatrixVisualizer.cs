@@ -44,7 +44,7 @@ namespace XFiles.Visualizers.Visualizers
                 for (int gx = 0; gx < GridX; gx++)
                 {
                     int cellIdx = gz * GridX + gx;
-                    int bandIdx = (cellIdx * AudioData.BandCount) / totalCells;
+                    int bandIdx = ((totalCells - 1 - cellIdx) * AudioData.BandCount) / totalCells;
                     bandIdx = Math.Min(bandIdx, AudioData.BandCount - 1);
                     _smoothLevels[cellIdx] += (data.BandLevels[bandIdx] - _smoothLevels[cellIdx]) * AudioSmooth;
                 }
@@ -75,7 +75,7 @@ namespace XFiles.Visualizers.Visualizers
         private void DrawCity(CanvasDrawingSession ds)
         {
             float cx = _width * 0.5f;
-            float groundY = _height * 0.55f;
+            float groundY = _height * 0.65f;
             float tileW = _width * 0.06f;
             float tileH = tileW * 0.5f;
             float maxHeight = _height * 0.35f;
@@ -178,6 +178,10 @@ namespace XFiles.Visualizers.Visualizers
             else if (hue < 300) { r = x; g = 0; b = c; }
             else { r = c; g = 0; b = x; }
             return Color.FromArgb(255, (byte)((r + m) * 255), (byte)((g + m) * 255), (byte)((b + m) * 255));
+        }
+
+        public void ConfigurePipeline(PostProcessPipeline pipeline)
+        {
         }
     }
 }

@@ -1,7 +1,6 @@
 using System;
 using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.Effects;
-using Microsoft.Graphics.Canvas.Geometry;
 using Windows.Foundation;
 using Windows.UI;
 
@@ -18,9 +17,6 @@ namespace XFiles.Visualizers.Visualizers
         private float _smoothBass, _smoothMid, _smoothTreble, _smoothBeat, _smoothAvgEnergy;
         private const float SmoothFactor = 0.25f;
         private const int GridStep = 6;
-        private float _waveRotation;
-        private float[] _waveform;
-        private int _waveformCount;
 
         private static byte[] _shaderBytecode;
         private static bool _shaderLoaded;
@@ -39,16 +35,8 @@ namespace XFiles.Visualizers.Visualizers
             _smoothMid += (mid - _smoothMid) * SmoothFactor;
             _smoothTreble += (treble - _smoothTreble) * SmoothFactor;
             _smoothBeat += (data.Beat - _smoothBeat) * 0.3f;
-            if (data.Waveform != null && data.WaveformCount > 0)
-            {
-                if (_waveform == null || _waveform.Length < data.WaveformCount)
-                    _waveform = new float[data.WaveformCount];
-                Array.Copy(data.Waveform, _waveform, data.WaveformCount);
-                _waveformCount = data.WaveformCount;
-            }
             float avg = (bass + mid + treble) / 3f;
             _smoothAvgEnergy += (avg - _smoothAvgEnergy) * SmoothFactor;
-            _waveRotation += (0.4f + _smoothBass * 0.8f) * (float)elapsed.TotalSeconds;
         }
 
         public void Draw(CanvasDrawingSession ds)
@@ -150,67 +138,6 @@ namespace XFiles.Visualizers.Visualizers
                     ds.FillRectangle(gx * GridStep, gy * GridStep, GridStep, GridStep, HslToRgb(hue, sat, brightness * vignette));
                 }
             }
-
-            // Rotating waveform rings with motion blur
-            if (_waveform != null && _waveformCount > 1)
-            {
-                float cx = _width * 0.5f;
-                float cy = _height * 0.5f;
-                float minDim = _width < _height ? _width : _height;
-                var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
-                float twoPi = (float)(Math.PI * 2.0);
-
-                int ringCount = 6;
-                for (int ring = 0; ring < ringCount; ring++)
-                {
-                    float ringT = (float)ring / ringCount;
-                    float rotation = _waveRotation + ringT * 0.7f;
-                    float baseRadius = minDim * (0.08f + ringT * 0.12f) * (1f + _smoothBeat * 0.2f);
-
-                    // Older rings are more transparent (motion blur tail)
-                    float age = 1f - ringT;
-                    float glowAlpha = 12 + (int)(age * 25);
-                    float sharpAlpha = 40 + (int)(age * 140);
-                    float glowThickness = 4f + age * 3f;
-                    float sharpThickness = 1.2f + age * 1.5f;
-
-                    // Color shifts per ring
-                    float ringHue = (_time * 0.05f + ringT * 0.15f + 0.5f) % 1.0f;
-                    Color sharpColor = HslToRgb(ringHue, 0.85f, 0.6f + age * 0.15f);
-                    Color glowColor = Color.FromArgb((byte)glowAlpha, sharpColor.R, sharpColor.G, sharpColor.B);
-                    Color lineColor = Color.FromArgb((byte)sharpAlpha, sharpColor.R, sharpColor.G, sharpColor.B);
-
-                    // Glow pass
-                    float prevX = 0, prevY = 0;
-                    bool first = true;
-                    for (int i = 0; i <= _waveformCount; i++)
-                    {
-                        float angle = (float)i / _waveformCount * twoPi + rotation;
-                        int idx = i % _waveformCount;
-                        float sampleR = baseRadius + _waveform[idx] * baseRadius * 0.35f;
-                        float x = cx + (float)Math.Cos(angle) * sampleR;
-                        float y = cy + (float)Math.Sin(angle) * sampleR;
-                        if (!first) ds.DrawLine(prevX, prevY, x, y, glowColor, glowThickness, strokeStyle);
-                        prevX = x; prevY = y;
-                        first = false;
-                    }
-
-                    // Sharp pass
-                    prevX = 0; prevY = 0;
-                    first = true;
-                    for (int i = 0; i <= _waveformCount; i++)
-                    {
-                        float angle = (float)i / _waveformCount * twoPi + rotation;
-                        int idx = i % _waveformCount;
-                        float sampleR = baseRadius + _waveform[idx] * baseRadius * 0.35f;
-                        float x = cx + (float)Math.Cos(angle) * sampleR;
-                        float y = cy + (float)Math.Sin(angle) * sampleR;
-                        if (!first) ds.DrawLine(prevX, prevY, x, y, lineColor, sharpThickness, strokeStyle);
-                        prevX = x; prevY = y;
-                        first = false;
-                    }
-                }
-            }
         }
 
         private static Color HslToRgb(float h, float s, float l)
@@ -228,6 +155,13 @@ namespace XFiles.Visualizers.Visualizers
             else if (hue < 300) { r = x; g = 0; b = c; }
             else { r = c; g = 0; b = x; }
             return Color.FromArgb(255, (byte)((r + m) * 255), (byte)((g + m) * 255), (byte)((b + m) * 255));
+        }
+
+        public void ConfigurePipeline(PostProcessPipeline pipeline)
+        {
+            pipeline.BloomEnabled = false;
+            pipeline.FeedbackOpacity = 0.35f;
+            pipeline.FeedbackZoom = 1.0f;
         }
     }
 }

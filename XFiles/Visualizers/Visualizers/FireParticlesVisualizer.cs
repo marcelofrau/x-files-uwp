@@ -170,5 +170,9 @@ namespace XFiles.Visualizers.Visualizers
             float f2 = t / 0.2f;
             return Color.FromArgb(255, (byte)(f2 * 180), 0, 0);
         }
+
+        public void ConfigurePipeline(PostProcessPipeline pipeline)
+        {
+        }
     }
 }

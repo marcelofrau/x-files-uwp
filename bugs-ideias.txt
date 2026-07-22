@@ -66,15 +66,13 @@ quanto o icone e nome.. a descricao nao precisa pode tirar.. e tem que melhorar 
 
 
 -- Ajustes dos Vizualizers
-- Plasma
-	- adicionar uma waveform de linha de ponta a ponta, mas desenhar ela varias vezes mudando a rotacao causando um efeito de perseguido.. mas tem que adicionar motion blur geral
-	- plasma em si ficou meio lento no xbox, talvez ajustar alguma coisa pra melhorar a velovidade dele, e pode dar uma escurecidinha de leve nele tambem, acho q pode simplificar ele tbm ou algo assim.
+
 
 
 
 - Starfield
 	- a velocidade das "estrelas" vindo em nossa direcao ta muito rapida, tem que ser mais devagar, e os picos em si fazem as estrelas expandirem em si.. e ta faltando motion blur e glare.
-- Spiral Spectrum
+	- Spiral Spectrum
 	- ele eh bem legal, mas as linhas podem ter waveform e tentar fazer eles meio que se movimentando adentrando num tunel circular.
 - Mirror tunel
 	- adicionar na linha de baixo do tunnel barras do do espectro e fazer elas irem se aprofundando no tunel com um blur
@@ -84,10 +82,13 @@ quanto o icone e nome.. a descricao nao precisa pode tirar.. e tem que melhorar 
 	- Ta muito pouco sensivel, esse aqui tem que reagir mais com a musica, ele eh bem interessante mas ta mostrando muito pouco atividade.
 - Orbiting Circles
 	- muito bonito, mas falta efeito de glare, blur e flares
+
 - Isometric bars
+	- Acho que tem q fazer ele mais parecido com o voxel matrix, a ideia sao varios "cubos" crescendo representando cada barra, mas acho q ta implementado errado.
 	- As barras tao muito grandes e nao crescem nada com a musica
 	- deixar cada barra como um cubo menor, e ter um espacamento/margem/padding entre elas
 	- Parece que as barras nao estao crescendo em Y, tem q revisar se a ideia de XYZ esta ok nele, minha ideia eh espalhar barras em X e Z e as barras crescerem em Y.
+
 - Kaleidoscope
 	- Adicionar blur e glare
 - Particle Burst

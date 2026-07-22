@@ -119,5 +119,14 @@ namespace XFiles.Visualizers.Visualizers
         }
 
         private static float Lerp(float a, float b, float t) => a + (b - a) * t;
+
+        public void ConfigurePipeline(PostProcessPipeline pipeline)
+        {
+            pipeline.FeedbackOpacity = 0.45f;
+            pipeline.FeedbackZoom = 1.0005f;
+            pipeline.SlideY = -0.8f;
+            pipeline.BloomAmount = 0.35f;
+            pipeline.BloomBlur = 8f;
+        }
     }
 }

@@ -226,6 +226,25 @@ audio playback, track navigation, or transport controls. 60fps sustained on Xbox
 
 ---
 
+## Phase 11 — Metadata Guesser (MusicBrainz + Cache)
+
+- [x] `Id3Tag.cs` extended with `TCON` (genre), `TYER`/`TDRC` (year), `TRCK` (track#), `TLEN` (duration) frames.
+- [x] `TrackMetadata` model — unified metadata with completeness scoring and merge semantics.
+- [x] `FilenameParser` — extracts artist/album/track# from path patterns (`Artist - Album/01 - Title.mp3`).
+- [x] `MusicBrainzProvider` — async search via MusicBrainz API with 1 req/s IP rate limit.
+- [x] `MusicBrainzProvider.FetchCoverArtAsync()` — album art from Cover Art Archive.
+- [x] `MetadataCache` — JSON cache in `ApplicationData.Current.LocalFolder/metadata-cache/`, 90-day TTL.
+- [x] `MetadataMatch` — match result with confidence score (0.0–1.0) and source tracking.
+- [x] `MetadataGuesser` — orchestrator: ID3 → filename → cache → MusicBrainz → merge → UI.
+- [x] Integration in `MediaPreviewControl` and `MillerColumnsPage` (fullscreen audio).
+- [x] `XFiles.csproj` updated with all new files.
+
+**Completion criteria**: selecting an audio file shows metadata from ID3 + filename inference.
+With internet, MusicBrainz enriches missing fields (genre, year, track#, cover art).
+Results cached locally; second access instant. Offline degrades gracefully to local data only.
+
+---
+
 ## Assets & Icons
 
 Asset process documented in `docs/ASSETS-GUIDE.md`. Skill available at

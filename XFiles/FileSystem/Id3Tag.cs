@@ -10,6 +10,10 @@ namespace XFiles.FileSystem
         public string Title;
         public string Artist;
         public string Album;
+        public string Genre;
+        public string Year;
+        public string TrackNumber;
+        public int DurationSeconds;
         public byte[] AlbumArt;
         public string AlbumArtMime;
 
@@ -94,8 +98,8 @@ namespace XFiles.FileSystem
             Log.Information("Id3Tag: read {Length} bytes, parsing frames from offset 10", tagData.Length);
 
             var tag = ParseTag(tagData, tagSize, id3Version);
-            Log.Information("Id3Tag: title={Title} artist={Artist} album={Album} art={HasArt} in {Path}",
-                tag?.Title, tag?.Artist, tag?.Album, tag?.AlbumArt != null, filePath);
+            Log.Information("Id3Tag: title={Title} artist={Artist} album={Album} genre={Genre} year={Year} track={Track} dur={Dur}s art={HasArt} in {Path}",
+                tag?.Title, tag?.Artist, tag?.Album, tag?.Genre, tag?.Year, tag?.TrackNumber, tag?.DurationSeconds, tag?.AlbumArt != null, filePath);
             return tag;
         }
 
@@ -129,6 +133,14 @@ namespace XFiles.FileSystem
                     tag.Artist = ReadTextFrame(frameData);
                 else if (frameId == "TALB")
                     tag.Album = ReadTextFrame(frameData);
+                else if (frameId == "TCON")
+                    tag.Genre = ReadTextFrame(frameData);
+                else if (frameId == "TYER" || frameId == "TDRC")
+                    tag.Year = ReadTextFrame(frameData);
+                else if (frameId == "TRCK")
+                    tag.TrackNumber = ReadTextFrame(frameData);
+                else if (frameId == "TLEN")
+                    tag.DurationSeconds = ParseDurationFrame(frameData);
                 else if (frameId == "APIC" && tag.AlbumArt == null)
                     ReadApicFrame(frameData, tag);
 
@@ -222,6 +234,14 @@ namespace XFiles.FileSystem
         {
             return (data[offset] << 21) | (data[offset + 1] << 14) |
                    (data[offset + 2] << 7) | data[offset + 3];
+        }
+
+        private static int ParseDurationFrame(byte[] data)
+        {
+            string text = ReadTextFrame(data);
+            if (int.TryParse(text, out int ms))
+                return ms / 1000;
+            return 0;
         }
     }
 }

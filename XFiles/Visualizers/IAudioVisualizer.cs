@@ -30,5 +30,10 @@ namespace XFiles.Visualizers
 
         /// <summary>Called when the canvas is resized. Update resolution-dependent parameters.</summary>
         void Resize(float width, float height);
+
+        /// <summary>Configure post-processing pipeline before each draw.
+        /// Override to enable/customize effects (slide, rotation, bloom, scanlines, etc.).
+        /// Default implementation does nothing (pipeline uses its own defaults).</summary>
+        void ConfigurePipeline(PostProcessPipeline pipeline);
     }
 }

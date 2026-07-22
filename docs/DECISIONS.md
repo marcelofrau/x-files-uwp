@@ -201,3 +201,42 @@ audio visualizers. File browser UI stays 100% XAML.
 
 **Accepted risk**: Win2D on Xbox needs hardware validation. Shader compilation is cached
 after first frame — first frame may stutter.
+
+---
+
+## ADR-010: Metadata lookup via MusicBrainz (online enrichment)
+
+**Context**: ID3 tags on USB drives are often incomplete — missing genre, year, track#,
+album art. The user wanted a "metadata guesser" that fills gaps using online databases
+when internet is available, without blocking playback or requiring manual action.
+
+**Decision**: async metadata enrichment via MusicBrainz API + Cover Art Archive, with:
+- `FilenameParser` for path-based inference (artist/album from parent folder, track#
+  from filename prefix).
+- `MetadataCache` (JSON in `LocalFolder/metadata-cache/`, 90-day TTL) to avoid
+  repeated network calls.
+- Confidence scoring (0.0–1.0) with threshold of 0.5 to accept a match.
+- Graceful offline fallback — uses only local ID3 + filename data.
+
+**Rate limiting**: MusicBrainz enforces 1 req/s per IP (hard limit — 100% rejection on
+exceed). Implemented via `SemaphoreSlim(1,1)` + 1.1s delay between requests. User-Agent
+set to `XFiles/1.0 (contact-url)` to avoid anonymous UA throttling.
+
+**Cover art**: fetched from Cover Art Archive (`coverartarchive.org/release/{mbid}/front-250`)
+as a separate async step after recording match. Not rate-limited by MusicBrainz (different
+service), but conservatively fetched only when album art is missing from ID3.
+
+**Reason**:
+- MusicBrainz is free, no API key, rich data (genre, year, track#, duration, cover art).
+- Filename parsing adds value for files with poor/missing ID3 but well-organized folder
+  structure (e.g. `Artist - Album/01 - Song.mp3`).
+- Cache avoids re-fetching — second access is instant.
+- Confidence scoring prevents bad matches from overwriting good local data.
+
+**Rejected alternatives**:
+- Last.fm: requires API key, less raw metadata than MusicBrainz.
+- Spotify: requires OAuth, more complex integration.
+- No cache: wasteful for repeated access to same music library.
+
+**Known limitation**: MusicBrainz doesn't have all obscure recordings. Confidence < 0.5
+means "no usable match" — falls back to local data only.

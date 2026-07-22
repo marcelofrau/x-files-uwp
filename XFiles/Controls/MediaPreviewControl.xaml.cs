@@ -13,6 +13,7 @@ using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Media.Imaging;
 using XFiles.Audio;
 using XFiles.FileSystem;
+using XFiles.Metadata;
 using XFiles.Navigation;
 
 namespace XFiles.Controls
@@ -25,6 +26,7 @@ namespace XFiles.Controls
         private Uri _currentSourceUri;
         private AudioLevelService _audioLevelService;
         private bool _isPlaying;
+        private MetadataGuesser _metadataGuesser;
 
         private MediaPlayer Player => MediaPlayerElementControl.MediaPlayer;
         private MediaPlaybackSession Session => Player?.PlaybackSession;
@@ -47,6 +49,7 @@ namespace XFiles.Controls
         {
             this.InitializeComponent();
             _audioLevelService = new AudioLevelService();
+            _metadataGuesser = new MetadataGuesser();
             VuMeter.AttachService(_audioLevelService);
             _progressTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
             _progressTimer.Tick += OnProgressTimerTick;
@@ -72,8 +75,14 @@ namespace XFiles.Controls
             if (_isAudioMode)
             {
                 AudioInfoPanel.Visibility = Visibility.Visible;
-                Log.Information("MediaPreviewControl: AudioInfoPanel set to Visible, starting ID3 load");
-                _ = LoadId3TagsAsync(filePath);
+                AlbumArtBorder.Visibility = Visibility.Collapsed;
+                DefaultArtPanel.Visibility = Visibility.Visible;
+                TitleText.Text = Path.GetFileNameWithoutExtension(filePath);
+                ArtistText.Text = "";
+                ArtistText.Visibility = Visibility.Collapsed;
+                AlbumText.Text = "";
+                AlbumText.Visibility = Visibility.Collapsed;
+                _ = LoadMetadataAsync(filePath);
             }
             else
             {
@@ -193,44 +202,50 @@ namespace XFiles.Controls
             PlayPauseIcon.Glyph = _isPlaying ? "\uE769" : "\uE768";
         }
 
-        private async Task LoadId3TagsAsync(string filePath)
+        private async Task LoadMetadataAsync(string filePath)
         {
-            Log.Information("ID3: starting load for {Path}", filePath);
+            Log.Information("Metadata: starting async load for {Path}", filePath);
             try
             {
-                var tag = await Task.Run(() => Id3Tag.ReadFromFile(filePath));
-                Log.Information("ID3: tag result null={IsNull}", tag == null);
+                _metadataGuesser.SetInternetAvailable(true);
+                var match = await _metadataGuesser.ResolveAsync(filePath);
+                var tag = match?.Metadata;
+                Log.Information("Metadata: source={Source} score={Score:F2} title={Title} artist={Artist} album={Album}",
+                    match?.Source, match?.Confidence, tag?.Title, tag?.Artist, tag?.Album);
 
-                bool hasArt = tag?.AlbumArt != null && tag.AlbumArt.Length > 0;
+                if (_currentFilePath != filePath)
+                {
+                    Log.Information("Metadata: stale result for {Path}, discarding", filePath);
+                    return;
+                }
+
+                bool hasArt = tag?.HasAlbumArt == true;
                 if (hasArt)
                 {
                     AlbumArtBorder.Visibility = Visibility.Visible;
                     DefaultArtPanel.Visibility = Visibility.Collapsed;
                     await LoadAlbumArtAsync(tag.AlbumArt);
                 }
-                else
+
+                if (tag?.HasTitle == true)
+                    TitleText.Text = tag.Title;
+                if (tag?.HasArtist == true)
                 {
-                    AlbumArtBorder.Visibility = Visibility.Collapsed;
-                    DefaultArtPanel.Visibility = Visibility.Visible;
+                    ArtistText.Text = tag.Artist;
+                    ArtistText.Visibility = Visibility.Visible;
+                }
+                if (tag?.HasAlbum == true)
+                {
+                    AlbumText.Text = tag.Album;
+                    AlbumText.Visibility = Visibility.Visible;
                 }
 
-                TitleText.Text = tag?.Title ?? Path.GetFileNameWithoutExtension(filePath);
-                ArtistText.Text = tag?.Artist ?? "";
-                ArtistText.Visibility = string.IsNullOrEmpty(tag?.Artist) ? Visibility.Collapsed : Visibility.Visible;
-                AlbumText.Text = tag?.Album ?? "";
-                AlbumText.Visibility = string.IsNullOrEmpty(tag?.Album) ? Visibility.Collapsed : Visibility.Visible;
-
-                Log.Information("ID3: title={Title} artist={Artist} album={Album} art={HasArt} panel={PanelVis}",
-                    tag?.Title, tag?.Artist, tag?.Album, hasArt, AudioInfoPanel.Visibility);
+                Log.Information("Metadata: applied title={Title} artist={Artist} album={Album} art={HasArt}",
+                    tag?.Title, tag?.Artist, tag?.Album, hasArt);
             }
             catch (Exception ex)
             {
-                Log.Warning("Failed to read ID3 tags: {Error}", ex.Message);
-                AlbumArtBorder.Visibility = Visibility.Collapsed;
-                DefaultArtPanel.Visibility = Visibility.Visible;
-                TitleText.Text = Path.GetFileNameWithoutExtension(filePath);
-                ArtistText.Visibility = Visibility.Collapsed;
-                AlbumText.Visibility = Visibility.Collapsed;
+                Log.Warning("Metadata: failed to load for {Path}: {Error}", filePath, ex.Message);
             }
         }
 

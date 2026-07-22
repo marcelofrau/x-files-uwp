@@ -104,6 +104,12 @@
     <Compile Include="FileSystem\Win32FileStream.cs" />
     <Compile Include="FileSystem\ClipboardState.cs" />
     <Compile Include="FileSystem\FileOperations.cs" />
+    <Compile Include="Metadata\TrackMetadata.cs" />
+    <Compile Include="Metadata\FilenameParser.cs" />
+    <Compile Include="Metadata\MetadataMatch.cs" />
+    <Compile Include="Metadata\MusicBrainzProvider.cs" />
+    <Compile Include="Metadata\MetadataCache.cs" />
+    <Compile Include="Metadata\MetadataGuesser.cs" />
     <Compile Include="Log.cs" />
     <Compile Include="ScreenLogger.cs" />
     <Compile Include="Controls\CounterPage.xaml.cs">
