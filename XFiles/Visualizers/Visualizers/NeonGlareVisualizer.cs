@@ -22,8 +22,8 @@ namespace XFiles.Visualizers.Visualizers
 
         private const int BarCount = 32;
         private const float BarGapRatio = 0.15f;
-        private const float GlowWidthMul = 2.0f;
-        private const float GlowAlphaMul = 0.10f;
+        private const float GlowWidthMul = 1.5f;
+        private const float GlowAlphaMul = 0.06f;
         private const float BeatFlareDecay = 0.88f;
 
         public void Initialize(CanvasDevice device) { _device = device; }
@@ -69,7 +69,7 @@ namespace XFiles.Visualizers.Visualizers
                 float x = startX + i * (barWidth + gap);
                 float barT = (float)i / (BarCount - 1);
 
-                Color barColor = HslToRgb(300f - barT * 180f, 0.85f + _smoothBeat * 0.1f, 0.5f + level * 0.2f);
+                Color barColor = HslToRgb(300f - barT * 180f, 0.85f + _smoothBeat * 0.1f, 0.4f + level * 0.15f);
 
                 Color glowColor = Color.FromArgb(
                     (byte)(barColor.A * GlowAlphaMul),
@@ -80,10 +80,10 @@ namespace XFiles.Visualizers.Visualizers
 
                 ds.FillRectangle(x, bottomY - barH, barWidth, barH, barColor);
 
-                Color topColor = Color.FromArgb(220,
-                    (byte)Math.Min(255, (int)(barColor.R * 1.4f)),
-                    (byte)Math.Min(255, (int)(barColor.G * 1.4f)),
-                    (byte)Math.Min(255, (int)(barColor.B * 1.4f)));
+                Color topColor = Color.FromArgb(200,
+                    (byte)Math.Min(255, (int)(barColor.R * 1.2f)),
+                    (byte)Math.Min(255, (int)(barColor.G * 1.2f)),
+                    (byte)Math.Min(255, (int)(barColor.B * 1.2f)));
                 ds.FillRectangle(x, bottomY - barH, barWidth, 3f, topColor);
             }
 
@@ -136,9 +136,9 @@ namespace XFiles.Visualizers.Visualizers
 
         public void ConfigurePipeline(PostProcessPipeline pipeline)
         {
-            pipeline.BloomAmount = 0.01f;
-            pipeline.BloomBlur = 1.5f;
-            pipeline.BloomThreshold = 0.7f;
+            pipeline.BloomAmount = 0.003f;
+            pipeline.BloomBlur = 0.5f;
+            pipeline.BloomThreshold = 0.8f;
         }
     }
 }

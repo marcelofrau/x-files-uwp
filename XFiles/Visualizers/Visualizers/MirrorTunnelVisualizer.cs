@@ -17,7 +17,7 @@ namespace XFiles.Visualizers.Visualizers
         private readonly float[] _smoothBands = new float[AudioData.BandCount];
         private float _smoothBeat, _smoothBass, _smoothMid, _smoothTreble;
         private const float AudioSmooth = 0.25f;
-        private const int RingCount = 30;
+        private const int RingCount = 20;
         private const float TunnelSpeed = 0.3f;
         private const float WallThickness = 2.5f;
 
@@ -165,6 +165,9 @@ namespace XFiles.Visualizers.Visualizers
 
         public void ConfigurePipeline(PostProcessPipeline pipeline)
         {
+            pipeline.BloomAmount = 0.001f;
+            pipeline.BloomBlur = 0.08f;
+            pipeline.BloomThreshold = 0.07f;
         }
     }
 }

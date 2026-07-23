@@ -413,8 +413,13 @@
     <Content Include="Assets\Views\MillerColumnsPage\osd\osd-next-48.png" />
     <Content Include="Assets\Views\MillerColumnsPage\osd\osd-prev-48.png" />
     <Content Include="Assets\Views\VideoTrackMenu\videotrackmenu-audio-20.png" />
+    <Content Include="Assets\Views\VideoTrackMenu\videotrackmenu-audio-48.png" />
+    <Content Include="Assets\Views\VideoTrackMenu\videotrackmenu-audio-64.png" />
     <Content Include="Assets\Views\VideoTrackMenu\videotrackmenu-subtitles-20.png" />
+    <Content Include="Assets\Views\VideoTrackMenu\videotrackmenu-subtitles-48.png" />
     <Content Include="Assets\Views\VideoTrackMenu\videotrackmenu-checkmark-20.png" />
+    <Content Include="Assets\Views\VideoTrackMenu\videotrackmenu-checkmark-48.png" />
+    <Content Include="Assets\Views\VideoTrackMenu\videotrackmenu-checkmark-64.png" />
     <Content Include="Assets\highlight.min.js" />
     <Content Include="Assets\highlight-aco.css" />
     <Content Include="Assets\Inconsolata-Regular.ttf" />

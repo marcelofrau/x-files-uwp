@@ -4,12 +4,14 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Visibility="Collapsed">
 
-    <Grid x:Name="Overlay" Background="#CC0D1117" Tapped="OnOverlayTapped">
+    <Grid x:Name="Overlay" Background="#CC0D1117" Tapped="OnOverlayTapped" KeyDown="OnOverlayKeyDown"
+          IsHitTestVisible="True">
         <Border Background="#1A1D23"
                 BorderBrush="#2A2D33"
                 BorderThickness="1"
                 CornerRadius="6"
-                MaxWidth="400"
+                MinWidth="500"
+                MaxWidth="900"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"
                 Padding="24,20">
@@ -30,6 +32,8 @@
                          BorderBrush="{StaticResource XFilesInputBorderBrush}"
                          BorderThickness="1"
                          Padding="8,6"
+                         MaxWidth="850"
+                         HorizontalAlignment="Stretch"
                          GotFocus="OnInputGotFocus"
                          KeyDown="OnInputKeyDown" />
 
@@ -40,9 +44,15 @@
                     <Button x:Name="OkButton"
                             Style="{StaticResource ConfirmDialogButton}"
                             Click="OnOkClicked">
-                        <TextBlock Text="OK"
-                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
-                                   Foreground="{StaticResource XFilesForegroundBrush}" />
+                        <StackPanel Orientation="Horizontal">
+                            <Image Source="ms-appx:///Assets/GamepadButtons/system/xboxl_menu.png"
+                                   Width="18" Height="18" Margin="0,0,6,0"
+                                   VerticalAlignment="Center" />
+                            <TextBlock Text="OK"
+                                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                                       Foreground="{StaticResource XFilesForegroundBrush}"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
                     </Button>
                 </StackPanel>
             </StackPanel>

@@ -12,6 +12,7 @@ namespace XFiles.Controls
     {
         private CancellationTokenSource _cts;
         private bool _isIndeterminate;
+        public Action OnClosed;
 
         public bool IsOpen => Visibility == Visibility.Visible;
         public CancellationToken CancelToken => _cts?.Token ?? CancellationToken.None;
@@ -83,6 +84,7 @@ namespace XFiles.Controls
             Visibility = Visibility.Collapsed;
             _cts?.Cancel();
             _cts = null;
+            OnClosed?.Invoke();
         }
 
         private void OnOverlayTapped(object sender, TappedRoutedEventArgs e)

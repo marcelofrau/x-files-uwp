@@ -45,20 +45,8 @@ namespace XFiles.Controls
 
         private void OnKeyDown(object sender, KeyRoutedEventArgs e)
         {
-            switch (e.Key)
-            {
-                case VirtualKey.Up:        OnDPadUp(); break;
-                case VirtualKey.Down:      OnDPadDown(); break;
-                case VirtualKey.Left:      OnDPadLeft(); break;
-                case VirtualKey.Right:     OnDPadRight(); break;
-                case VirtualKey.Enter:
-                case VirtualKey.Space:     OnConfirm(); break;
-                case VirtualKey.Escape:
-                case VirtualKey.Back:      OnBack(); break;
-                case VirtualKey.Y:         OnContextMenu(); break;
-                case VirtualKey.PageUp:    OnPageUp(); break;
-                case VirtualKey.PageDown:  OnPageDown(); break;
-            }
+            // GamepadInputService handles all gamepad input via polling.
+            // OnKeyDown left empty to avoid double-processing DPAD keys.
         }
 
         private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
@@ -83,13 +71,13 @@ namespace XFiles.Controls
         public bool IsMediaFullscreen => false;
         public bool IsMediaPlayerActive => false;
 
-        public void OnDPadUp()
+        public void OnDPadUp(bool isRepeat = false)
         {
             _counter++;
             UpdateDisplay("DPad Up");
         }
 
-        public void OnDPadDown()
+        public void OnDPadDown(bool isRepeat = false)
         {
             _counter--;
             UpdateDisplay("DPad Down");

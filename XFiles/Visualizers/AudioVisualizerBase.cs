@@ -78,6 +78,7 @@ namespace XFiles.Visualizers
 
         /// <summary>
         /// Deactivate and dispose the current visualizer.
+        /// Disposal is deferred to avoid race with in-flight draw calls.
         /// </summary>
         public void Deactivate()
         {
@@ -88,7 +89,13 @@ namespace XFiles.Visualizers
                 _visualizer = null;
                 _initialized = false;
             }
-            old?.Dispose();
+            if (old != null)
+            {
+                Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                {
+                    old.Dispose();
+                });
+            }
         }
 
         /// <summary>
@@ -111,6 +118,9 @@ namespace XFiles.Visualizers
             if (!_initialized)
             {
                 vis.Initialize(args.DrawingSession.Device);
+
+                // Dispose old pipeline before creating new one
+                _pipeline?.Dispose();
 
                 // Initialize pipeline
                 _pipeline = new PostProcessPipeline();

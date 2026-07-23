@@ -10,6 +10,7 @@ namespace XFiles.Controls
     public sealed partial class ConfirmDialog : UserControl
     {
         private TaskCompletionSource<bool> _tcs;
+        public Action OnClosed;
 
         public ConfirmDialog()
         {
@@ -22,7 +23,6 @@ namespace XFiles.Controls
             _tcs = new TaskCompletionSource<bool>();
             Visibility = Visibility.Visible;
             Overlay.Visibility = Visibility.Visible;
-            _ = Windows.UI.Xaml.Input.FocusManager.TryFocusAsync(Overlay, FocusState.Programmatic);
             return _tcs.Task;
         }
 
@@ -40,15 +40,25 @@ namespace XFiles.Controls
         {
             switch (e.Key)
             {
-                case Windows.System.VirtualKey.GamepadA:
-                case Windows.System.VirtualKey.Enter:
+                case VirtualKey.GamepadA:
+                case VirtualKey.Enter:
                     e.Handled = true;
                     Close(true);
                     break;
-                case Windows.System.VirtualKey.GamepadB:
-                case Windows.System.VirtualKey.Escape:
+                case VirtualKey.GamepadB:
+                case VirtualKey.Escape:
                     e.Handled = true;
                     Close(false);
+                    break;
+                case VirtualKey.GamepadDPadUp:
+                case VirtualKey.GamepadDPadDown:
+                case VirtualKey.GamepadDPadLeft:
+                case VirtualKey.GamepadDPadRight:
+                case VirtualKey.Up:
+                case VirtualKey.Down:
+                case VirtualKey.Left:
+                case VirtualKey.Right:
+                    e.Handled = true;
                     break;
             }
         }
@@ -60,9 +70,11 @@ namespace XFiles.Controls
 
         private void Close(bool result)
         {
+            Log.Information("ConfirmDialog.Close: result={Result}", result);
             Overlay.Visibility = Visibility.Collapsed;
             Visibility = Visibility.Collapsed;
             _tcs?.TrySetResult(result);
+            OnClosed?.Invoke();
         }
 
         public bool IsDialogVisible => Visibility == Visibility.Visible;

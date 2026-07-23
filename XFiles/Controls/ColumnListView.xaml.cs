@@ -367,14 +367,14 @@ namespace XFiles.Controls
         public bool IsMediaFullscreen => false;
         public bool IsMediaPlayerActive => false;
 
-        public void OnDPadUp()
+        public void OnDPadUp(bool isRepeat = false)
         {
             if (EntryList.SelectedIndex > 0)
                 EntryList.SelectedIndex--;
             Log.Verbose("ColumnListView.OnDPadUp: index={Index}", EntryList.SelectedIndex);
         }
 
-        public void OnDPadDown()
+        public void OnDPadDown(bool isRepeat = false)
         {
             if (EntryList.SelectedIndex < _entries.Count - 1)
                 EntryList.SelectedIndex++;

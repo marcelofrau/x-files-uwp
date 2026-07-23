@@ -39,6 +39,7 @@ namespace XFiles.Controls
     public sealed partial class FileActionSheet : UserControl
     {
         private TaskCompletionSource<FileAction?> _tcs;
+        public Action OnClosed;
 
         private static readonly string IconBase = "ms-appx:///Assets/Views/FileActionSheet/";
 
@@ -129,10 +130,8 @@ namespace XFiles.Controls
             bool isInArchive = !string.IsNullOrEmpty(entry.ArchiveRootPath);
             bool isArchiveFile = entry.IsArchive && !entry.IsDirectory;
             bool isFolder = entry.IsDirectory;
-            bool isExternalDrive = !isInArchive && !entry.FullPath.StartsWith(
-                ApplicationData.Current.LocalFolder.Path, StringComparison.OrdinalIgnoreCase);
 
-            if (isExternalDrive)
+            if (entry.IsDrive)
             {
                 actions.Add(new ActionItem
                 {
@@ -144,16 +143,17 @@ namespace XFiles.Controls
             }
             else if (isInArchive)
             {
-                if (isArchiveFile)
-                {
-                    actions.Add(new ActionItem
-                    {
-                        Action = FileAction.Extract,
-                        Label = "Extract",
-                        IconPath = IconBase + ActionExtract,
-                        LabelBrush = accent
-                    });
-                }
+                // Extract disabled for now
+                // if (isArchiveFile)
+                // {
+                //     actions.Add(new ActionItem
+                //     {
+                //         Action = FileAction.Extract,
+                //         Label = "Extract",
+                //         IconPath = IconBase + ActionExtract,
+                //         LabelBrush = accent
+                //     });
+                // }
 
                 actions.Add(new ActionItem
                 {
@@ -165,17 +165,6 @@ namespace XFiles.Controls
             }
             else
             {
-                if (ClipboardState.HasItems)
-                {
-                    actions.Add(new ActionItem
-                    {
-                        Action = FileAction.Paste,
-                        Label = ClipboardState.IsCut ? "Paste (move)" : "Paste (copy)",
-                        IconPath = IconBase + ActionCopy,
-                        LabelBrush = accent
-                    });
-                }
-
                 actions.Add(new ActionItem
                 {
                     Action = FileAction.Refresh,
@@ -184,29 +173,42 @@ namespace XFiles.Controls
                     LabelBrush = accent
                 });
 
-                actions.Add(new ActionItem
-                {
-                    Action = FileAction.Copy,
-                    Label = "Copy",
-                    IconPath = IconBase + ActionCopy,
-                    LabelBrush = accent
-                });
+                // Clipboard actions disabled for now — enable one by one later
+                // if (ClipboardState.HasItems)
+                // {
+                //     actions.Add(new ActionItem
+                //     {
+                //         Action = FileAction.Paste,
+                //         Label = ClipboardState.IsCut ? "Paste (move)" : "Paste (copy)",
+                //         IconPath = IconBase + ActionCopy,
+                //         LabelBrush = accent
+                //     });
+                // }
 
-                actions.Add(new ActionItem
-                {
-                    Action = FileAction.Cut,
-                    Label = "Cut",
-                    IconPath = IconBase + ActionMove,
-                    LabelBrush = dim
-                });
+                // actions.Add(new ActionItem
+                // {
+                //     Action = FileAction.Copy,
+                //     Label = "Copy",
+                //     IconPath = IconBase + ActionCopy,
+                //     LabelBrush = accent
+                // });
 
-                actions.Add(new ActionItem
-                {
-                    Action = FileAction.Move,
-                    Label = "Move",
-                    IconPath = IconBase + ActionMove,
-                    LabelBrush = accent
-                });
+                // actions.Add(new ActionItem
+                // {
+                //     Action = FileAction.Cut,
+                //     Label = "Cut",
+                //     IconPath = IconBase + ActionMove,
+                //     LabelBrush = dim
+                // });
+
+                // Move disabled for now
+                // actions.Add(new ActionItem
+                // {
+                //     Action = FileAction.Move,
+                //     Label = "Move",
+                //     IconPath = IconBase + ActionMove,
+                //     LabelBrush = accent
+                // });
 
                 actions.Add(new ActionItem
                 {
@@ -216,32 +218,47 @@ namespace XFiles.Controls
                     LabelBrush = dim
                 });
 
-                actions.Add(new ActionItem
-                {
-                    Action = FileAction.CreateFolder,
-                    Label = "New Folder",
-                    IconPath = IconBase + ActionCreateFolder,
-                    LabelBrush = accent
-                });
+                // New folder disabled for now
+                // actions.Add(new ActionItem
+                // {
+                //     Action = FileAction.CreateFolder,
+                //     Label = "New Folder",
+                //     IconPath = IconBase + ActionCreateFolder,
+                //     LabelBrush = accent
+                // });
 
-                if (isFolder)
-                {
-                    actions.Add(new ActionItem
-                    {
-                        Action = FileAction.CreateZip,
-                        Label = "Create ZIP",
-                        IconPath = IconBase + ActionCreateZip,
-                        LabelBrush = accent
-                    });
-                }
+                // Create ZIP disabled for now
+                // if (isFolder)
+                // {
+                //     actions.Add(new ActionItem
+                //     {
+                //         Action = FileAction.CreateZip,
+                //         Label = "Create ZIP",
+                //         IconPath = IconBase + ActionCreateZip,
+                //         LabelBrush = accent
+                //     });
+                // }
 
-                actions.Add(new ActionItem
-                {
-                    Action = FileAction.Delete,
-                    Label = "Delete",
-                    IconPath = IconBase + ActionDelete,
-                    LabelBrush = red
-                });
+                // Extract disabled for now
+                // else if (isArchiveFile)
+                // {
+                //     actions.Add(new ActionItem
+                //     {
+                //         Action = FileAction.Extract,
+                //         Label = "Extract",
+                //         IconPath = IconBase + ActionExtract,
+                //         LabelBrush = accent
+                //     });
+                // }
+
+                // Delete disabled for now
+                // actions.Add(new ActionItem
+                // {
+                //     Action = FileAction.Delete,
+                //     Label = "Delete",
+                //     IconPath = IconBase + ActionDelete,
+                //     LabelBrush = red
+                // });
             }
 
             ActionList.ItemsSource = actions;
@@ -366,9 +383,11 @@ namespace XFiles.Controls
 
         private void Close(FileAction? result)
         {
+            Log.Information("FileActionSheet.Close: result={Result}", result?.ToString() ?? "null");
             Overlay.Visibility = Visibility.Collapsed;
             Visibility = Visibility.Collapsed;
             _tcs?.TrySetResult(result);
+            OnClosed?.Invoke();
         }
     }
 }

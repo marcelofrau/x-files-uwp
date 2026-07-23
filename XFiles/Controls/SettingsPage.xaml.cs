@@ -22,6 +22,7 @@ namespace XFiles.Controls
     {
         private TaskCompletionSource<bool> _tcs;
         private bool _cacheWasCleared;
+        public Action OnClosed;
 
         private static readonly string IconBase = "ms-appx:///Assets/Views/StartMenu/";
 
@@ -173,6 +174,7 @@ namespace XFiles.Controls
             Overlay.Visibility = Visibility.Collapsed;
             Visibility = Visibility.Collapsed;
             _tcs?.TrySetResult(_cacheWasCleared);
+            OnClosed?.Invoke();
         }
     }
 }

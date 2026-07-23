@@ -14,6 +14,7 @@ using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Media.Animation;
+using Windows.System.Display;
 using XFiles.Audio;
 using XFiles.FileSystem;
 using XFiles.Metadata;
@@ -30,6 +31,8 @@ namespace XFiles.Controls
         private static string _highlightJs;
         private static string _highlightCss;
         private static string _fontBase64;
+
+
 
         private const int VK_LT = 0x7001;
         private const int VK_RT = 0x7002;
@@ -79,10 +82,33 @@ namespace XFiles.Controls
         private bool _isMediaPlayerActive;
         private int _lastValidSelectedIndex = -1;
 
+        private long _overlayClosedTick;
+        private readonly DisplayRequest _displayRequest = new DisplayRequest();
+        private bool _displayActive;
+
         private void OnMediaPlayerStateChanged(object sender, EventArgs e)
         {
             _isMediaPlayerActive = MediaPreview.IsPlayerActive;
             UpdateMediaPlayerFocusUI();
+            UpdateDisplayRequest();
+        }
+
+        private void UpdateDisplayRequest()
+        {
+            bool shouldKeepAlive = _isMediaPlayerActive
+                || AudioFullScreenPanel.Visibility == Visibility.Visible
+                || VideoFullScreenPanel.Visibility == Visibility.Visible;
+
+            if (shouldKeepAlive && !_displayActive)
+            {
+                try { _displayRequest.RequestActive(); _displayActive = true; }
+                catch (Exception ex) { Log.Warning("DisplayRequest failed: {Error}", ex.Message); }
+            }
+            else if (!shouldKeepAlive && _displayActive)
+            {
+                try { _displayRequest.RequestRelease(); _displayActive = false; }
+                catch (Exception ex) { Log.Warning("DisplayRequest release failed: {Error}", ex.Message); }
+            }
         }
 
         private void OnMediaPreviewAudioEnded(object sender, EventArgs e)
@@ -93,10 +119,16 @@ namespace XFiles.Controls
 
         private void UpdateMediaPlayerFocusUI()
         {
+            bool isFullscreen = AudioFullScreenPanel.Visibility == Visibility.Visible
+                             || VideoFullScreenPanel.Visibility == Visibility.Visible;
+
             if (_isMediaPlayerActive)
             {
-                ParentColumn.Opacity = 0.3;
-                CurrentColumn.Opacity = 0.6;
+                if (!isFullscreen)
+                {
+                    ParentColumn.Opacity = 0.3;
+                    CurrentColumn.Opacity = 0.6;
+                }
                 ParentColumn.IsHitTestVisible = false;
                 CurrentColumn.IsHitTestVisible = false;
 
@@ -109,7 +141,7 @@ namespace XFiles.Controls
                 FooterRBLabel.Text = "Next";
                 FooterLTRT.Visibility = Visibility.Visible;
                 FooterLBRB.Visibility = Visibility.Visible;
-                FooterViewLabel.Visibility = Visibility.Visible;
+                FooterViewLabel.Visibility = MediaPreview.IsAudioMode ? Visibility.Collapsed : Visibility.Visible;
                 FooterViewLabelText.Text = "Tracks";
             }
             else
@@ -137,6 +169,16 @@ namespace XFiles.Controls
                 App.GamepadInput.ActiveNavigable = this;
                 Log.Information("MillerColumnsPage: set as ActiveNavigable");
             }
+            Action markOverlayClosed = () => _overlayClosedTick = Environment.TickCount;
+            InputDialogControl.OnClosed = markOverlayClosed;
+            ConfirmDialogControl.OnClosed = markOverlayClosed;
+            FileActionSheetControl.OnClosed = markOverlayClosed;
+            StartMenuControl.OnClosed = markOverlayClosed;
+            SettingsPageControl.OnClosed = markOverlayClosed;
+            ImageFullScreen.OnClosed = markOverlayClosed;
+            PdfFullScreen.OnClosed = markOverlayClosed;
+            VideoTrackMenuControl.OnClosed = markOverlayClosed;
+            OpProgressDialog.OnClosed = markOverlayClosed;
         }
 
         private async void OnColumnsChanged()
@@ -344,10 +386,24 @@ namespace XFiles.Controls
                         break;
 
                     case FilePreviewType.Unsupported:
-                        PreviewUnsupportedType.Text = $"No preview available ({_navigator.Preview.PreviewFileType})";
-                        PreviewUnsupportedSize.Text = FormatSize(_navigator.Preview.PreviewFileSize);
-                        PreviewStatus.Text = "";
-                        PreviewUnsupportedPanel.Visibility = Visibility.Visible;
+                        {
+                            string previewPath = _navigator.Preview.PreviewFilePath ?? "";
+                            bool isInsideArchive = previewPath.Contains("|");
+                            string fileExt = System.IO.Path.GetExtension(previewPath);
+                            bool isMedia = FilePreviewService.IsAudioFile(fileExt) || FilePreviewService.IsVideoFile(fileExt);
+
+                            if (isInsideArchive && isMedia)
+                            {
+                                PreviewArchiveMediaPanel.Visibility = Visibility.Visible;
+                            }
+                            else
+                            {
+                                PreviewUnsupportedType.Text = $"No preview available ({_navigator.Preview.PreviewFileType})";
+                                PreviewUnsupportedSize.Text = FormatSize(_navigator.Preview.PreviewFileSize);
+                                PreviewStatus.Text = "";
+                                PreviewUnsupportedPanel.Visibility = Visibility.Visible;
+                            }
+                        }
                         break;
 
                     default:
@@ -368,6 +424,7 @@ namespace XFiles.Controls
             MediaPreview.Stop();
             PreviewErrorPanel.Visibility = Visibility.Collapsed;
             PreviewUnsupportedPanel.Visibility = Visibility.Collapsed;
+            PreviewArchiveMediaPanel.Visibility = Visibility.Collapsed;
         }
 
         private static string FormatSize(long bytes)
@@ -620,13 +677,17 @@ namespace XFiles.Controls
 
         private void CurrentList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            Log.Information("SelectionChanged: index={Index}, updating={Updating}, mediaActive={MediaActive}",
-                CurrentList.SelectedIndex, _updating, _isMediaPlayerActive);
+            var items = _navigator.Current?.Entries;
+            string itemName = (items != null && CurrentList.SelectedIndex >= 0 && CurrentList.SelectedIndex < items.Count)
+                ? items[CurrentList.SelectedIndex].Name : "(none)";
+            Log.Information("SelectionChanged: index={Index} item=\"{Item}\" count={Count} updating={Updating}",
+                CurrentList.SelectedIndex, itemName, items?.Count ?? 0, _updating);
 
             // stop marquee on previous selection
             StopMarqueeOnIndex(_lastValidSelectedIndex);
 
             if (_updating) return;
+
             _lastValidSelectedIndex = CurrentList.SelectedIndex;
             if (CurrentList.SelectedIndex >= 0 && _navigator.Current != null)
             {
@@ -703,11 +764,13 @@ namespace XFiles.Controls
             if (selected == null || FileActionSheetControl.IsOpen)
             {
                 UpdateFooterALabel("Enter");
+                FooterXLabel.Text = "Refresh";
                 return;
             }
             if (selected.IsDirectory || selected.IsArchive)
             {
                 UpdateFooterALabel("Open");
+                FooterXLabel.Text = "Refresh";
                 return;
             }
             string ext = System.IO.Path.GetExtension(selected.Name);
@@ -715,14 +778,17 @@ namespace XFiles.Controls
                 || FilePreviewService.IsPdfFile(ext))
             {
                 UpdateFooterALabel("Open");
+                FooterXLabel.Text = "Refresh";
                 return;
             }
             if (FilePreviewService.IsMediaFile(ext))
             {
                 UpdateFooterALabel("Play");
+                FooterXLabel.Text = "Fullscreen";
                 return;
             }
             UpdateFooterALabel("Menu");
+            FooterXLabel.Text = "Refresh";
         }
 
         private void UpdateClipboardIndicator()
@@ -746,49 +812,9 @@ namespace XFiles.Controls
 
         private void OnKeyDown(object sender, KeyRoutedEventArgs e)
         {
-            switch (e.Key)
-            {
-                case Windows.System.VirtualKey.Enter:
-                    e.Handled = true;
-                    OnConfirm();
-                    break;
-                case Windows.System.VirtualKey.Back:
-                    e.Handled = true;
-                    OnBack();
-                    break;
-                case Windows.System.VirtualKey.Left:
-                    e.Handled = true;
-                    OnBack();
-                    break;
-                case Windows.System.VirtualKey.Right:
-                    e.Handled = true;
-                    OnConfirm();
-                    break;
-                case Windows.System.VirtualKey.Up:
-                    e.Handled = true;
-                    OnDPadUp();
-                    break;
-                case Windows.System.VirtualKey.Down:
-                    e.Handled = true;
-                    OnDPadDown();
-                    break;
-                case Windows.System.VirtualKey.PageUp:
-                    e.Handled = true;
-                    OnPageUp();
-                    break;
-                case Windows.System.VirtualKey.PageDown:
-                    e.Handled = true;
-                    OnPageDown();
-                    break;
-                case Windows.System.VirtualKey.Home:
-                    e.Handled = true;
-                    OnHome();
-                    break;
-                case Windows.System.VirtualKey.End:
-                    e.Handled = true;
-                    OnEnd();
-                    break;
-            }
+            // GamepadInputService handles all gamepad input via polling.
+            // OnKeyDown only handles keyboard-specific keys that GamepadInputService doesn't cover.
+            // Gamepad DPAD produces VirtualKey.Up/Down/Left/Right which would duplicate input.
         }
 
         private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
@@ -819,32 +845,56 @@ namespace XFiles.Controls
 
         // --- INavigable ---
 
-        public void OnDPadUp()
+        public void OnDPadUp(bool isRepeat = false)
         {
             if (VideoTrackMenuControl.IsOpen) { VideoTrackMenuControl.HandleButton(Windows.System.VirtualKey.GamepadDPadUp); return; }
-            if (IsAnyFullscreen) return;
-            if (IsAnyOverlayVisible) return;
+            if (IsAnyFullscreen) { Log.Information("OnDPadUp: blocked by fullscreen (repeat={R})", isRepeat); return; }
+            if (IsAnyOverlayVisible) { Log.Information("OnDPadUp: blocked by overlay (repeat={R})", isRepeat); return; }
             if (StartMenuControl.IsOpen) { StartMenuControl.ForwardDPad(Windows.System.VirtualKey.Up); return; }
             if (FileActionSheetControl.IsOpen) { FileActionSheetControl.ForwardDPad(Windows.System.VirtualKey.Up); return; }
             if (SettingsPageControl.IsVisible) { SettingsPageControl.HandleDPad(Windows.System.VirtualKey.Up); return; }
+
+            if (_isMediaPlayerActive) { MediaPreview.StopPlayer(); UpdateMediaPlayerFocusUI(); }
+
             var before = CurrentList.SelectedIndex;
-            if (CurrentList.SelectedIndex > 0)
+            var entries = _navigator.Current?.Entries;
+            int count = entries?.Count ?? 0;
+            string beforeName = (entries != null && before >= 0 && before < count) ? entries[before].Name : "(none)";
+
+            if (count > 0 && CurrentList.SelectedIndex <= 0)
+                CurrentList.SelectedIndex = count - 1;
+            else if (count > 0)
                 CurrentList.SelectedIndex--;
-            Log.Information("OnDPadUp: before={Before} after={After}", before, CurrentList.SelectedIndex);
+
+            CurrentList.ScrollIntoView(CurrentList.SelectedItem);
+            string afterName = (entries != null && CurrentList.SelectedIndex >= 0 && CurrentList.SelectedIndex < count) ? entries[CurrentList.SelectedIndex].Name : "(none)";
+            Log.Information("OnDPadUp: {Before}→{After} \"{BeforeName}\"→\"{AfterName}\" repeat={R}", before, CurrentList.SelectedIndex, beforeName, afterName, isRepeat);
         }
 
-        public void OnDPadDown()
+        public void OnDPadDown(bool isRepeat = false)
         {
             if (VideoTrackMenuControl.IsOpen) { VideoTrackMenuControl.HandleButton(Windows.System.VirtualKey.GamepadDPadDown); return; }
-            if (IsAnyFullscreen) return;
-            if (IsAnyOverlayVisible) return;
+            if (IsAnyFullscreen) { Log.Information("OnDPadDown: blocked by fullscreen (repeat={R})", isRepeat); return; }
+            if (IsAnyOverlayVisible) { Log.Information("OnDPadDown: blocked by overlay (repeat={R})", isRepeat); return; }
             if (StartMenuControl.IsOpen) { StartMenuControl.ForwardDPad(Windows.System.VirtualKey.Down); return; }
             if (FileActionSheetControl.IsOpen) { FileActionSheetControl.ForwardDPad(Windows.System.VirtualKey.Down); return; }
             if (SettingsPageControl.IsVisible) { SettingsPageControl.HandleDPad(Windows.System.VirtualKey.Down); return; }
+
+            if (_isMediaPlayerActive) { MediaPreview.StopPlayer(); UpdateMediaPlayerFocusUI(); }
+
             var before = CurrentList.SelectedIndex;
-            if (CurrentList.SelectedIndex < _navigator.Current?.Entries.Count - 1)
+            var entries = _navigator.Current?.Entries;
+            int count = entries?.Count ?? 0;
+            string beforeName = (entries != null && before >= 0 && before < count) ? entries[before].Name : "(none)";
+
+            if (count > 0 && CurrentList.SelectedIndex >= count - 1)
+                CurrentList.SelectedIndex = 0;
+            else if (count > 0)
                 CurrentList.SelectedIndex++;
-            Log.Information("OnDPadDown: before={Before} after={After}", before, CurrentList.SelectedIndex);
+
+            CurrentList.ScrollIntoView(CurrentList.SelectedItem);
+            string afterName = (entries != null && CurrentList.SelectedIndex >= 0 && CurrentList.SelectedIndex < count) ? entries[CurrentList.SelectedIndex].Name : "(none)";
+            Log.Information("OnDPadDown: {Before}→{After} \"{BeforeName}\"→\"{AfterName}\" repeat={R}", before, CurrentList.SelectedIndex, beforeName, afterName, isRepeat);
         }
 
         public void OnDPadLeft()
@@ -879,18 +929,21 @@ namespace XFiles.Controls
 
         public void OnConfirm()
         {
-            if (ErrorOverlay.Visibility == Visibility.Visible) return;
-            if (IsAnyOverlayVisible) return;
-            if (StartMenuControl.IsOpen) { StartMenuControl.ForwardDPad(Windows.System.VirtualKey.GamepadA); return; }
-            if (SettingsPageControl.IsVisible) { SettingsPageControl.HandleDPad(Windows.System.VirtualKey.GamepadA); return; }
-            if (ImageFullScreen.IsOpen) return;
-            if (PdfFullScreen.IsOpen) return;
-            if (VideoTrackMenuControl.IsOpen) { VideoTrackMenuControl.HandleButton(Windows.System.VirtualKey.GamepadA); return; }
-            if (VideoFullScreenPanel.Visibility == Visibility.Visible) { OnFsVideoInput(); return; }
-            if (AudioFullScreenPanel.Visibility == Visibility.Visible) { ToggleAudioFullscreenPlayPause(); return; }
-            if (FileActionSheetControl.IsOpen) { FileActionSheetControl.ForwardDPad(Windows.System.VirtualKey.GamepadA); return; }
+            if (ErrorOverlay.Visibility == Visibility.Visible) { Log.Information("OnConfirm: blocked by ErrorOverlay"); return; }
+            if (InputDialogControl.Visibility == Visibility.Visible) { Log.Information("OnConfirm: → InputDialog"); InputDialogControl.HandleButton(Windows.System.VirtualKey.GamepadA); return; }
+            if (ConfirmDialogControl.Visibility == Visibility.Visible) { Log.Information("OnConfirm: → ConfirmDialog"); ConfirmDialogControl.HandleButton(Windows.System.VirtualKey.GamepadA); return; }
+            if (IsAnyOverlayVisible) { Log.Information("OnConfirm: blocked by overlay"); return; }
+            if (StartMenuControl.IsOpen) { Log.Information("OnConfirm: → StartMenu"); StartMenuControl.ForwardDPad(Windows.System.VirtualKey.GamepadA); return; }
+            if (SettingsPageControl.IsVisible) { Log.Information("OnConfirm: → Settings"); SettingsPageControl.HandleDPad(Windows.System.VirtualKey.GamepadA); return; }
+            if (ImageFullScreen.IsOpen) { Log.Information("OnConfirm: blocked by ImageFullScreen"); return; }
+            if (PdfFullScreen.IsOpen) { Log.Information("OnConfirm: blocked by PdfFullScreen"); return; }
+            if (VideoTrackMenuControl.IsOpen) { Log.Information("OnConfirm: → VideoTrackMenu"); VideoTrackMenuControl.HandleButton(Windows.System.VirtualKey.GamepadA); return; }
+            if (VideoFullScreenPanel.Visibility == Visibility.Visible) { Log.Information("OnConfirm: → FsVideoInput"); OnFsVideoInput(); return; }
+            if (AudioFullScreenPanel.Visibility == Visibility.Visible) { Log.Information("OnConfirm: → toggle audio play/pause"); ToggleAudioFullscreenPlayPause(); return; }
+            if (FileActionSheetControl.IsOpen) { Log.Information("OnConfirm: → FileActionSheet"); FileActionSheetControl.ForwardDPad(Windows.System.VirtualKey.GamepadA); return; }
             if (_isMediaPlayerActive)
             {
+                Log.Information("OnConfirm: → media player button");
                 MediaPreview.HandleButton(Windows.System.VirtualKey.GamepadA);
                 UpdateMediaPlayerFocusUI();
                 return;
@@ -980,26 +1033,38 @@ namespace XFiles.Controls
 
         public void OnBack()
         {
-            if (ErrorOverlay.Visibility == Visibility.Visible) { HideError(); return; }
-            if (AboutOverlay.Visibility == Visibility.Visible) { HideAbout(); return; }
-            if (PlaceholderOverlay.Visibility == Visibility.Visible) { HidePlaceholder(); return; }
-            if (StartMenuControl.IsOpen) { StartMenuControl.ForwardDPad(Windows.System.VirtualKey.GamepadB); return; }
-            if (SettingsPageControl.IsVisible) { SettingsPageControl.HandleDPad(Windows.System.VirtualKey.GamepadB); return; }
-            if (ImageFullScreen.IsOpen) { ImageFullScreen.HandleButton(Windows.System.VirtualKey.GamepadB); UpdateFooterALabelFromSelection(); return; }
-            if (PdfFullScreen.IsOpen) { PdfFullScreen.HandleButton(Windows.System.VirtualKey.GamepadB); UpdateFooterALabelFromSelection(); return; }
-            if (VideoTrackMenuControl.IsOpen) { VideoTrackMenuControl.HandleButton(Windows.System.VirtualKey.GamepadB); return; }
-            if (VideoFullScreenPanel.Visibility == Visibility.Visible) { CloseVideoFullScreen(); UpdateFooterALabelFromSelection(); return; }
-            if (AudioFullScreenPanel.Visibility == Visibility.Visible) { CloseAudioFullscreen(); UpdateMediaPlayerFocusUI(); return; }
-            if (FileActionSheetControl.IsOpen) { FileActionSheetControl.ForwardDPad(Windows.System.VirtualKey.GamepadB); return; }
-            if (OpProgressDialog.IsOpen) { OpProgressDialog.Close(); return; }
+            // Skip if an overlay just closed this tick (XAML Escape closed dialog, same B press arrives here)
+            if (Environment.TickCount - _overlayClosedTick < 100)
+            {
+                Log.Information("OnBack: skipped — overlay just closed");
+                return;
+            }
+
+            if (ErrorOverlay.Visibility == Visibility.Visible) { Log.Information("OnBack: → HideError"); HideError(); return; }
+            if (AboutOverlay.Visibility == Visibility.Visible) { Log.Information("OnBack: → HideAbout"); HideAbout(); return; }
+            if (PlaceholderOverlay.Visibility == Visibility.Visible) { Log.Information("OnBack: → HidePlaceholder"); HidePlaceholder(); return; }
+            if (InputDialogControl.Visibility == Visibility.Visible) { Log.Information("OnBack: → InputDialog cancel"); InputDialogControl.HandleButton(Windows.System.VirtualKey.GamepadB); return; }
+            if (ConfirmDialogControl.Visibility == Visibility.Visible) { Log.Information("OnBack: → ConfirmDialog cancel"); ConfirmDialogControl.HandleButton(Windows.System.VirtualKey.GamepadB); return; }
+            if (IsAnyOverlayVisible) { Log.Information("OnBack: blocked by overlay"); return; }
+            if (StartMenuControl.IsOpen) { Log.Information("OnBack: → StartMenu"); StartMenuControl.ForwardDPad(Windows.System.VirtualKey.GamepadB); return; }
+            if (SettingsPageControl.IsVisible) { Log.Information("OnBack: → Settings close"); SettingsPageControl.HandleDPad(Windows.System.VirtualKey.GamepadB); return; }
+            if (ImageFullScreen.IsOpen) { Log.Information("OnBack: → ImageFullScreen close"); ImageFullScreen.HandleButton(Windows.System.VirtualKey.GamepadB); UpdateFooterALabelFromSelection(); return; }
+            if (PdfFullScreen.IsOpen) { Log.Information("OnBack: → PdfFullScreen close"); PdfFullScreen.HandleButton(Windows.System.VirtualKey.GamepadB); UpdateFooterALabelFromSelection(); return; }
+            if (VideoTrackMenuControl.IsOpen) { Log.Information("OnBack: → VideoTrackMenu close"); VideoTrackMenuControl.HandleButton(Windows.System.VirtualKey.GamepadB); return; }
+            if (VideoFullScreenPanel.Visibility == Visibility.Visible) { Log.Information("OnBack: → CloseVideoFullScreen"); CloseVideoFullScreen(); UpdateFooterALabelFromSelection(); return; }
+            if (AudioFullScreenPanel.Visibility == Visibility.Visible) { Log.Information("OnBack: → CloseAudioFullscreen"); CloseAudioFullscreen(); UpdateMediaPlayerFocusUI(); return; }
+            if (FileActionSheetControl.IsOpen) { Log.Information("OnBack: → FileActionSheet cancel"); FileActionSheetControl.ForwardDPad(Windows.System.VirtualKey.GamepadB); return; }
+            if (OpProgressDialog.IsOpen) { Log.Information("OnBack: → OpProgressDialog close"); OpProgressDialog.Close(); return; }
             if (_isMediaPlayerActive)
             {
+                Log.Information("OnBack: → StopPlayer");
                 MediaPreview.StopPlayer();
                 UpdateMediaPlayerFocusUI();
                 return;
             }
 
             // B button → go to parent directory
+            Log.Information("OnBack: → DrillOutAsync");
             _slideFromRight = false;
             _ = _navigator.DrillOutAsync();
         }
@@ -1024,39 +1089,30 @@ namespace XFiles.Controls
             if (ErrorOverlay.Visibility == Visibility.Visible) return;
             if (IsAnyOverlayVisible) return;
 
-            // If media player is active, X goes fullscreen
-            if (_isMediaPlayerActive)
-            {
-                if (MediaPreview.IsAudioMode)
-                {
-                    var pos = MediaPreview.CurrentPosition;
-                    MediaPreview.StopPlayer();
-                    UpdateMediaPlayerFocusUI();
-                    OpenAudioFullscreen(_navigator.Preview?.PreviewFilePath ?? "", pos);
-                }
-                else
-                {
-                    MediaPreview.OpenFullscreen();
-                }
-                return;
-            }
-
-            // If a media file is selected (not playing yet), X opens fullscreen directly
             var selected = CurrentList.SelectedItem as EntryViewModel;
             if (selected != null)
             {
                 string ext = System.IO.Path.GetExtension(selected.Name);
-                if (FilePreviewService.IsAudioFile(ext))
-                {
-                    Log.Verbose("OnRefresh: media file selected — opening audio fullscreen");
-                    MediaPreview.LoadFile(selected.FullPath);
-                    OpenAudioFullscreen(selected.FullPath, TimeSpan.Zero);
-                    return;
-                }
+
                 if (FilePreviewService.IsVideoFile(ext))
                 {
-                    Log.Verbose("OnRefresh: video file selected — opening video fullscreen");
-                    _ = MediaPreviewControl.OpenFullscreenForFile(selected.FullPath);
+                    Log.Information("OnRefresh: video file → fullscreen");
+                    var pos = (_isMediaPlayerActive && !MediaPreview.IsAudioMode)
+                        ? MediaPreview.CurrentPosition
+                        : TimeSpan.Zero;
+                    if (_isMediaPlayerActive) { MediaPreview.StopPlayer(); UpdateMediaPlayerFocusUI(); }
+                    _ = ShowMediaFullscreenAsync(new Uri(selected.FullPath), true, pos);
+                    return;
+                }
+
+                if (FilePreviewService.IsAudioFile(ext))
+                {
+                    Log.Information("OnRefresh: audio file → fullscreen");
+                    var pos = (_isMediaPlayerActive && MediaPreview.IsAudioMode)
+                        ? MediaPreview.CurrentPosition
+                        : TimeSpan.Zero;
+                    if (_isMediaPlayerActive) { MediaPreview.StopPlayer(); UpdateMediaPlayerFocusUI(); }
+                    OpenAudioFullscreen(selected.FullPath, pos);
                     return;
                 }
             }
@@ -1490,6 +1546,24 @@ namespace XFiles.Controls
                     }
                 });
             }
+            else if (_isMediaPlayerActive)
+            {
+                _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                {
+                    if (VideoTrackMenuControl.IsOpen)
+                    {
+                        VideoTrackMenuControl.HandleButton(Windows.System.VirtualKey.GamepadA);
+                    }
+                    else if (MediaPreview.CurrentSubtitleTracks.Count > 0 || MediaPreview.CurrentAudioTracks.Count > 1)
+                    {
+                        VideoTrackMenuControl.Show(
+                            MediaPreview.CurrentSubtitleTracks,
+                            MediaPreview.CurrentAudioTracks,
+                            MediaPreview.CurrentSubtitleTrackIndex,
+                            MediaPreview.CurrentAudioTrackIndex);
+                    }
+                });
+            }
             else if (_isAudioFullscreen)
             {
                 _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
@@ -1551,6 +1625,7 @@ namespace XFiles.Controls
             _fullscreenProgressTimer.Start();
             VideoFullScreenPanel.Visibility = Visibility.Visible;
             ShowFsControls();
+            UpdateDisplayRequest();
             ShowFsOsd("PLAY", "ms-appx:///Assets/Views/MillerColumnsPage/osd/osd-play-48.png");
             Log.Information("ShowMediaFullscreenAsync: started fullscreen video at {Position}, {SubCount} external subs", position, _fsSubtitles.Count);
             await System.Threading.Tasks.Task.CompletedTask;
@@ -1681,26 +1756,24 @@ namespace XFiles.Controls
 
         private void OnVideoSubtitleSelected(object sender, SubtitleTrack track)
         {
-            if (_fsPlaybackItem == null) return;
+            var playbackItem = _fsPlaybackItem ?? MediaPreview.CurrentPlaybackItem;
+            if (playbackItem == null) return;
 
             try
             {
-                // Disable all subtitle tracks first
-                for (uint i = 0; i < _fsPlaybackItem.TimedMetadataTracks.Count; i++)
+                for (uint i = 0; i < playbackItem.TimedMetadataTracks.Count; i++)
                 {
-                    _fsPlaybackItem.TimedMetadataTracks.SetPresentationMode(i,
+                    playbackItem.TimedMetadataTracks.SetPresentationMode(i,
                         TimedMetadataTrackPresentationMode.Disabled);
                 }
 
-                if (track.IsExternal)
+                if (track.IsExternal && _fsPlaybackItem != null)
                 {
-                    // Find the external subtitle track by matching the file path
                     for (uint i = 0; i < _fsPlaybackItem.TimedMetadataTracks.Count; i++)
                     {
                         var ttTrack = _fsPlaybackItem.TimedMetadataTracks[(int)i];
                         if (ttTrack.TimedMetadataKind == TimedMetadataKind.Subtitle)
                         {
-                            // External subtitles added first, so they come before embedded
                             int externalIndex = _fsSubtitles.FindIndex(s => s.IsExternal && s.FilePath == track.FilePath);
                             int trackIndex = externalIndex >= 0 ? externalIndex : (int)i;
 
@@ -1718,19 +1791,18 @@ namespace XFiles.Controls
                 }
                 else if (track.EmbeddedIndex >= 0)
                 {
-                    // Enable the embedded track
                     int count = 0;
-                    for (uint i = 0; i < _fsPlaybackItem.TimedMetadataTracks.Count; i++)
+                    for (uint i = 0; i < playbackItem.TimedMetadataTracks.Count; i++)
                     {
-                        var ttTrack = _fsPlaybackItem.TimedMetadataTracks[(int)i];
+                        var ttTrack = playbackItem.TimedMetadataTracks[(int)i];
                         if (ttTrack.TimedMetadataKind == TimedMetadataKind.Subtitle)
                         {
                             if (count == track.EmbeddedIndex)
                             {
-                                _fsPlaybackItem.TimedMetadataTracks.SetPresentationMode(i,
+                                playbackItem.TimedMetadataTracks.SetPresentationMode(i,
                                     TimedMetadataTrackPresentationMode.PlatformPresented);
-                                _fsSelectedSubtitleIndex = _fsSubtitles.IndexOf(track);
-                                ShowFsOsd($"Sub: {track.GetDisplayName()}");
+                                if (_fsPlaybackItem != null)
+                                    _fsSelectedSubtitleIndex = _fsSubtitles.IndexOf(track);
                                 Log.Information("OnVideoSubtitleSelected: enabled embedded subtitle '{Name}'", track.GetDisplayName());
                                 return;
                             }
@@ -1740,9 +1812,8 @@ namespace XFiles.Controls
                 }
                 else
                 {
-                    // "Off" selected — all tracks already disabled above
-                    _fsSelectedSubtitleIndex = -1;
-                    ShowFsOsd("Sub: Off");
+                    if (_fsPlaybackItem != null)
+                        _fsSelectedSubtitleIndex = -1;
                     Log.Information("OnVideoSubtitleSelected: subtitles disabled");
                 }
             }
@@ -1754,20 +1825,25 @@ namespace XFiles.Controls
 
         private void OnVideoAudioTrackSelected(object sender, int trackIndex)
         {
-            if (_fsPlaybackItem == null) return;
-
             try
             {
-                if (trackIndex >= 0 && trackIndex < _fsPlaybackItem.AudioTracks.Count)
-                {
-                    _fsPlaybackItem.AudioTracks.SelectedIndex = trackIndex;
-                    _fsSelectedAudioIndex = trackIndex;
+                var playbackItem = _fsPlaybackItem ?? MediaPreview.CurrentPlaybackItem;
+                if (playbackItem == null) return;
 
-                    string name = trackIndex < _fsAudioTracks.Count
-                        ? _fsAudioTracks[trackIndex].DisplayName
-                        : $"Track {trackIndex + 1}";
-                    ShowFsOsd($"Audio: {name}");
-                    Log.Information("OnVideoAudioTrackSelected: selected audio track {Index} '{Name}'", trackIndex, name);
+                if (trackIndex >= 0 && trackIndex < playbackItem.AudioTracks.Count)
+                {
+                    playbackItem.AudioTracks.SelectedIndex = trackIndex;
+
+                    if (_fsPlaybackItem != null)
+                    {
+                        _fsSelectedAudioIndex = trackIndex;
+                        string name = trackIndex < _fsAudioTracks.Count
+                            ? _fsAudioTracks[trackIndex].DisplayName
+                            : $"Track {trackIndex + 1}";
+                        ShowFsOsd($"Audio: {name}");
+                    }
+
+                    Log.Information("OnVideoAudioTrackSelected: selected audio track {Index}", trackIndex);
                 }
             }
             catch (Exception ex)
@@ -1792,6 +1868,7 @@ namespace XFiles.Controls
             VideoTrackMenuControl.Close();
             VideoFullScreenPanel.Visibility = Visibility.Collapsed;
             Log.Information("CloseVideoFullScreen: stopped, track state cleared");
+            UpdateDisplayRequest();
         }
 
         private void OnFullscreenProgressTick(object sender, object e)
@@ -2306,6 +2383,7 @@ namespace XFiles.Controls
             AudioFullScreenPanel.Visibility = Visibility.Visible;
             FsVuMeter.EnsureInitialized();
             UpdateMediaPlayerFocusUI();
+            UpdateDisplayRequest();
 
             if (_fullscreenProgressTimer.IsEnabled == false)
                 _fullscreenProgressTimer.Start();
@@ -2393,6 +2471,7 @@ namespace XFiles.Controls
             // Stop shared progress timer only if no video fullscreen is active
             if (VideoFullScreenPanel.Visibility != Visibility.Visible)
                 _fullscreenProgressTimer.Stop();
+            UpdateDisplayRequest();
         }
 
         public void ToggleAudioFullscreenPlayPause()

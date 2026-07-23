@@ -23,6 +23,7 @@ namespace XFiles.Controls
         private const double LerpFactor = 0.35;
 
         private readonly DispatcherTimer _renderTimer;
+        public Action OnClosed;
 
         public bool IsOpen => Visibility == Visibility.Visible;
 
@@ -61,6 +62,7 @@ namespace XFiles.Controls
             Visibility = Visibility.Collapsed;
             FullImage.Source = null;
             Log.Information("ImageFullScreenOverlay: closed");
+            OnClosed?.Invoke();
         }
 
         public void HandleButton(VirtualKey key)

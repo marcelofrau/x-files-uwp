@@ -133,40 +133,67 @@ namespace XFiles.Navigation
             var dpadNow = pressed & (GamepadButtons.DPadUp | GamepadButtons.DPadDown | GamepadButtons.DPadLeft | GamepadButtons.DPadRight);
             var dpadJustPressed = dpadNow & ~_dpadHeld;
             var dpadJustReleased = ~dpadNow & _dpadHeld;
+            _dpadNavigatedThisTick = false;
+
+            if (dpadNow != 0 || dpadJustPressed != 0 || dpadJustReleased != 0)
+            {
+                Log.Verbose("DPAD state: now={Now} justPressed={JP} justReleased={JR} held={Held} cooldown={Cd}",
+                    dpadNow, dpadJustPressed, dpadJustReleased, _dpadHeld, _dpadRepeatCooldown);
+            }
 
             if ((dpadJustPressed & GamepadButtons.DPadUp) != 0)
             {
-                nav.OnDPadUp();
+                Log.Information("DPAD: initial press Up");
+                nav.OnDPadUp(isRepeat: false);
                 _dpadRepeatCooldown = DpadInitialDelay;
                 _dpadNavigatedThisTick = true;
             }
             if ((dpadJustPressed & GamepadButtons.DPadDown) != 0)
             {
-                nav.OnDPadDown();
+                Log.Information("DPAD: initial press Down");
+                nav.OnDPadDown(isRepeat: false);
                 _dpadRepeatCooldown = DpadInitialDelay;
                 _dpadNavigatedThisTick = true;
             }
             if ((dpadJustPressed & GamepadButtons.DPadLeft) != 0)
             {
+                Log.Information("DPAD: initial press Left");
                 nav.OnDPadLeft();
                 _dpadRepeatCooldown = DpadInitialDelay;
                 _dpadNavigatedThisTick = true;
             }
             if ((dpadJustPressed & GamepadButtons.DPadRight) != 0)
             {
+                Log.Information("DPAD: initial press Right");
                 nav.OnDPadRight();
                 _dpadRepeatCooldown = DpadInitialDelay;
                 _dpadNavigatedThisTick = true;
             }
 
-            // Repeat while held
+            // Repeat while held (skip if initial press already handled this tick)
             if (_dpadRepeatCooldown > 0) _dpadRepeatCooldown -= 33;
-            if (_dpadRepeatCooldown <= 0 && dpadNow != 0)
+            if (_dpadRepeatCooldown <= 0 && dpadNow != 0 && !_dpadNavigatedThisTick)
             {
-                if ((dpadNow & GamepadButtons.DPadUp) != 0) nav.OnDPadUp();
-                else if ((dpadNow & GamepadButtons.DPadDown) != 0) nav.OnDPadDown();
-                else if ((dpadNow & GamepadButtons.DPadLeft) != 0) nav.OnDPadLeft();
-                else if ((dpadNow & GamepadButtons.DPadRight) != 0) nav.OnDPadRight();
+                if ((dpadNow & GamepadButtons.DPadUp) != 0)
+                {
+                    Log.Information("DPAD: repeat Up (cooldown={Cd})", _dpadRepeatCooldown);
+                    nav.OnDPadUp(isRepeat: true);
+                }
+                else if ((dpadNow & GamepadButtons.DPadDown) != 0)
+                {
+                    Log.Information("DPAD: repeat Down (cooldown={Cd})", _dpadRepeatCooldown);
+                    nav.OnDPadDown(isRepeat: true);
+                }
+                else if ((dpadNow & GamepadButtons.DPadLeft) != 0)
+                {
+                    Log.Information("DPAD: repeat Left (cooldown={Cd})", _dpadRepeatCooldown);
+                    nav.OnDPadLeft();
+                }
+                else if ((dpadNow & GamepadButtons.DPadRight) != 0)
+                {
+                    Log.Information("DPAD: repeat Right (cooldown={Cd})", _dpadRepeatCooldown);
+                    nav.OnDPadRight();
+                }
                 _dpadRepeatCooldown = DpadRepeatInterval;
                 _dpadNavigatedThisTick = true;
             }
@@ -176,20 +203,24 @@ namespace XFiles.Navigation
             // A, B, Y — just pressed only
             if ((justPressed & GamepadButtons.A) != 0)
             {
+                Log.Information("Button: A (Confirm)");
                 nav.OnConfirm();
             }
             if ((justPressed & GamepadButtons.B) != 0)
             {
+                Log.Information("Button: B (Back)");
                 nav.OnBack();
             }
             if ((justPressed & GamepadButtons.Y) != 0)
             {
+                Log.Information("Button: Y (Context)");
                 nav.OnContextMenu();
             }
 
             // X — refresh
             if ((justPressed & GamepadButtons.X) != 0)
             {
+                Log.Information("Button: X (Refresh)");
                 nav.OnRefresh();
             }
 
@@ -200,7 +231,7 @@ namespace XFiles.Navigation
             }
             if ((justPressed & GamepadButtons.View) != 0)
             {
-                if (nav.IsMediaFullscreen)
+                if (nav.IsMediaFullscreen || nav.IsMediaPlayerActive)
                     nav.OnSelectVisualizer();
                 else
                     nav.OnSettings();

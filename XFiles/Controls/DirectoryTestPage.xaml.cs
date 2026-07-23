@@ -146,33 +146,8 @@ namespace XFiles.Controls
         private void OnKeyDown(object sender, KeyRoutedEventArgs e)
         {
             Log.Verbose("OnKeyDown: key={Key}", e.Key);
-            switch (e.Key)
-            {
-                case VirtualKey.Enter:
-                case VirtualKey.Right:
-                    OpenSelected();
-                    e.Handled = true;
-                    break;
-                case VirtualKey.Back:
-                case VirtualKey.Left:
-                    NavigateBack();
-                    e.Handled = true;
-                    break;
-                case VirtualKey.Up:
-                    if (EntryList.SelectedIndex > 0)
-                        EntryList.SelectedIndex--;
-                    e.Handled = true;
-                    break;
-                case VirtualKey.Down:
-                    if (EntryList.SelectedIndex < EntryList.Items.Count - 1)
-                        EntryList.SelectedIndex++;
-                    e.Handled = true;
-                    break;
-                case VirtualKey.Escape:
-                    NavigateBack();
-                    e.Handled = true;
-                    break;
-            }
+            // GamepadInputService handles all gamepad input via polling.
+            // OnKeyDown left empty to avoid double-processing DPAD keys.
         }
 
         private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
@@ -198,13 +173,13 @@ namespace XFiles.Controls
         public bool IsMediaFullscreen => false;
         public bool IsMediaPlayerActive => false;
 
-        public void OnDPadUp()
+        public void OnDPadUp(bool isRepeat = false)
         {
             if (EntryList.SelectedIndex > 0)
                 EntryList.SelectedIndex--;
         }
 
-        public void OnDPadDown()
+        public void OnDPadDown(bool isRepeat = false)
         {
             if (EntryList.SelectedIndex < EntryList.Items.Count - 1)
                 EntryList.SelectedIndex++;

@@ -12,6 +12,7 @@ namespace XFiles.Controls
     {
         public event EventHandler<SubtitleTrack> SubtitleSelected;
         public event EventHandler<int> AudioTrackSelected;
+        public Action OnClosed;
 
         private enum MenuView { Options, Subtitles, AudioTracks }
         private MenuView _currentView = MenuView.Options;
@@ -48,9 +49,9 @@ namespace XFiles.Controls
 
             _optionItems = new List<OptionItem>();
             if (_hasAudio)
-                _optionItems.Add(new OptionItem { Label = "Audio Tracks", IconPath = "ms-appx:///Assets/Views/VideoTrackMenu/videotrackmenu-audio-20.png" });
+                _optionItems.Add(new OptionItem { Label = "Audio Tracks", IconPath = "ms-appx:///Assets/Views/VideoTrackMenu/videotrackmenu-audio-64.png" });
             if (_hasSubtitles)
-                _optionItems.Add(new OptionItem { Label = "Subtitles", IconPath = "ms-appx:///Assets/Views/VideoTrackMenu/videotrackmenu-subtitles-20.png" });
+                _optionItems.Add(new OptionItem { Label = "Subtitles", IconPath = "ms-appx:///Assets/Views/VideoTrackMenu/videotrackmenu-subtitles-48.png" });
 
             _subtitleItems = new List<SubtitleTrackItem>();
             if (_hasSubtitles)
@@ -96,6 +97,7 @@ namespace XFiles.Controls
             _currentView = MenuView.Options;
             Overlay.Visibility = Visibility.Collapsed;
             Visibility = Visibility.Collapsed;
+            OnClosed?.Invoke();
         }
 
         public bool HandleButton(VirtualKey key)
@@ -264,7 +266,7 @@ namespace XFiles.Controls
             for (int i = 0; i < _subtitleItems.Count; i++)
             {
                 bool active = (i == _activeSubtitleIndex);
-                _subtitleItems[i].IndicatorIcon = active ? "ms-appx:///Assets/Views/VideoTrackMenu/videotrackmenu-checkmark-20.png" : "";
+                _subtitleItems[i].IndicatorIcon = active ? "ms-appx:///Assets/Views/VideoTrackMenu/videotrackmenu-checkmark-64.png" : "";
                 _subtitleItems[i].IsActive = active ? Visibility.Visible : Visibility.Collapsed;
             }
         }
@@ -275,7 +277,7 @@ namespace XFiles.Controls
             for (int i = 0; i < _audioItems.Count; i++)
             {
                 bool active = (i == _activeAudioIndex);
-                _audioItems[i].IndicatorIcon = active ? "ms-appx:///Assets/Views/VideoTrackMenu/videotrackmenu-checkmark-20.png" : "";
+                _audioItems[i].IndicatorIcon = active ? "ms-appx:///Assets/Views/VideoTrackMenu/videotrackmenu-checkmark-64.png" : "";
                 _audioItems[i].IsActive = active ? Visibility.Visible : Visibility.Collapsed;
             }
         }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading;
@@ -30,12 +31,24 @@ namespace XFiles.Controls
         private MetadataGuesser _metadataGuesser;
         private CancellationTokenSource _metadataCts;
 
+        private MediaPlaybackItem _currentPlaybackItem;
+        private List<SubtitleTrack> _currentSubtitleTracks = new List<SubtitleTrack>();
+        private List<AudioTrackInfo> _currentAudioTracks = new List<AudioTrackInfo>();
+        private int _currentSubtitleIndex = -1;
+        private int _currentAudioIndex = -1;
+
         private MediaPlayer Player => MediaPlayerElementControl.MediaPlayer;
         private MediaPlaybackSession Session => Player?.PlaybackSession;
 
         public bool IsAudioMode => _isAudioMode;
         public string CurrentFilePath => _currentFilePath;
         public bool IsFileLoaded(string filePath) => _currentFilePath == filePath;
+
+        public MediaPlaybackItem CurrentPlaybackItem => _currentPlaybackItem;
+        public List<SubtitleTrack> CurrentSubtitleTracks => _currentSubtitleTracks;
+        public List<AudioTrackInfo> CurrentAudioTracks => _currentAudioTracks;
+        public int CurrentSubtitleTrackIndex => _currentSubtitleIndex;
+        public int CurrentAudioTrackIndex => _currentAudioIndex;
 
         public TimeSpan CurrentPosition
         {
@@ -89,7 +102,9 @@ namespace XFiles.Controls
             else
             {
                 _currentSourceUri = new Uri(filePath);
-                Player.Source = MediaSource.CreateFromUri(_currentSourceUri);
+                var source = MediaSource.CreateFromUri(_currentSourceUri);
+                _currentPlaybackItem = new MediaPlaybackItem(source);
+                Player.Source = _currentPlaybackItem;
             }
 
             _isPlaying = false;
@@ -358,8 +373,50 @@ namespace XFiles.Controls
                 UpdatePlayPauseIcon();
                 _progressTimer.Stop();
                 UpdateProgress();
+                EnumeratePreviewTracks();
                 PlayerStateChanged?.Invoke(this, EventArgs.Empty);
             });
+        }
+
+        private void EnumeratePreviewTracks()
+        {
+            _currentSubtitleTracks.Clear();
+            _currentAudioTracks.Clear();
+            _currentSubtitleIndex = -1;
+            _currentAudioIndex = -1;
+
+            if (_currentPlaybackItem == null) return;
+
+            for (int i = 0; i < _currentPlaybackItem.TimedMetadataTracks.Count; i++)
+            {
+                var track = _currentPlaybackItem.TimedMetadataTracks[i];
+                if (track.TimedMetadataKind == Windows.Media.Core.TimedMetadataKind.Subtitle)
+                {
+                    string lang = track.Language ?? "Unknown";
+                    _currentSubtitleTracks.Add(new SubtitleTrack
+                    {
+                        Language = lang,
+                        EmbeddedIndex = i,
+                        IsExternal = false
+                    });
+                }
+            }
+
+            for (int i = 0; i < _currentPlaybackItem.AudioTracks.Count; i++)
+            {
+                var track = _currentPlaybackItem.AudioTracks[i];
+                string lang = track.Language ?? "Unknown";
+                _currentAudioTracks.Add(new AudioTrackInfo
+                {
+                    Language = lang,
+                    Index = i
+                });
+            }
+
+            _currentAudioIndex = (int)_currentPlaybackItem.AudioTracks.SelectedIndex;
+
+            Log.Information("EnumeratePreviewTracks: {SubCount} subtitle, {AudioCount} audio",
+                _currentSubtitleTracks.Count, _currentAudioTracks.Count);
         }
 
         private async void OnMediaPlayerEnded(Windows.Media.Playback.MediaPlayer sender, object args)

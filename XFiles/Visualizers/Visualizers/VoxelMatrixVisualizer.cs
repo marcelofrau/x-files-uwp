@@ -15,8 +15,8 @@ namespace XFiles.Visualizers.Visualizers
         private CanvasDevice _device;
         private float _width, _height, _time;
 
-        private const int GridX = 12;
-        private const int GridZ = 12;
+        private const int GridX = 8;
+        private const int GridZ = 8;
         private readonly float[] _smoothLevels = new float[GridX * GridZ];
         private float _smoothBass, _smoothBeat, _smoothAvg;
         private const float AudioSmooth = 0.25f;
@@ -227,11 +227,12 @@ namespace XFiles.Visualizers.Visualizers
 
         public void ConfigurePipeline(PostProcessPipeline pipeline)
         {
-            pipeline.FeedbackOpacity = 0f;
-            pipeline.FeedbackZoom = 1.0f;
-            pipeline.BloomEnabled = false;
-            pipeline.BloomAmount = 0f;
-            pipeline.BloomBlur = 0f;
+            pipeline.FeedbackOpacity = 0.30f;
+            pipeline.FeedbackZoom = 1.003f;
+            pipeline.FeedbackDecay = 0.02f;
+            pipeline.BloomEnabled = true;
+            pipeline.BloomAmount = 0.06f;
+            pipeline.BloomBlur = 0.8f;
             pipeline.BloomThreshold = 0.5f;
             pipeline.VignetteEnabled = true;
             pipeline.VignetteAmount = 0.25f;

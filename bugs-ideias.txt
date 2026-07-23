@@ -2,28 +2,38 @@
 - player de video suportar legendas e permitir trocar (com select abrindo subemnu Video)
 - player de video suportar modificar trilhas de audio (com select abrindo subemnu Audio)
 
--- Em progresso
-
-- implementar renomear
-- implementar janela de progresso de operacao com barra de progresso e indicacao de copia, mostrando dados e informacoes como destino, origem e etc. (preparativos pra copia, extracao, mover, colar, etc)
-- Implementar nova pasta
-	- a acao de new folder, tem q fazer uma pergunta ou mostrar um dropdown, indicando se eh pra criar a pasta dentro da outra pasta ou no mesmo nivel dela (caso a selecao esteja em uma pasta), pode ser confuso do jeito q ta.
-
---
-Bugs em aberto
-
 Ajustes em dropdowns:
-- Dropdown esperado de arquivos e pastas:
+- Dropdown esperado de arquivos e pastas: *hoje so tem refresh
 	- Rename
 	- Copy
 	- Delete
 	- Move
-	- Create zip
+	- Create/Extract zip (depending if it is a file/folder or a zip file)
 	- Create folder
 
-- Dropdown esperado de unidades de disco:
-	- Refresh
-	- Hide (mais pra frente vamos implementar isso e colocar no settings pra deshidar todas as unidades escondidas)
+- Ajustes renomear:
+    - Caixa de texto ta ficando muito pequena, ela pode ter um bom espaco na tela ja que ta em overlay, opde expandir o tamanho desse dialogo em largura pra ocupar quase todo o espaco da tela.
+    - Confirm dialog prendeu e perdeu foco nao consigo nem terminar o renomeio de arquivo nem cancelar, parece que a lista de traz q ficou com foco
+    - Nessa overlay, nenhum evento ou nada deve acontecer na listview ou qualquer outro lugar, devemos esperar o usuario terminar concluindo ou cancelando o renomeio
+    - O botao OK do input text dialog pode ter o asset do botao start pois o teclado virtual tambem mostra ele, consegue colocar la
+
+- Ajustes no Dropdown de arquivos e pastas:
+    - desativar copiar
+    - desativar colar
+    - remover opcao recortar
+    - desativar criar zip
+    - desativar extrair zip
+    - desativar Delete
+    - desativar new folder
+
+quero ir testando e ir ativando um por um, mas por enquanto deixa eles desativados..
+
+-- Em progresso
+
+- Implementar nova pasta
+	- a acao de new folder, tem q fazer uma pergunta ou mostrar um dropdown, indicando se eh pra criar a pasta dentro da outra pasta ou no mesmo nivel dela (caso a selecao esteja em uma pasta), pode ser confuso do jeito q ta.
+
+- implementar janela de progresso de operacao com barra de progresso e indicacao de copia, mostrando dados e informacoes como destino, origem e etc. (preparativos pra copia, extracao, mover, colar, etc)
 
 -- Backlog
 
@@ -53,7 +63,7 @@ Ajustes em dropdowns:
 - permitir trocar fontes
 - permitir colocar imagem de fundo.
 - tocar musica em background
-
+- integrar croc?
 
 ---
  uma duvida, da pra fazer o player de musica ficar tocando em background?

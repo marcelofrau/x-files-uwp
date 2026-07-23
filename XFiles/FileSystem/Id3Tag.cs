@@ -188,6 +188,8 @@ namespace XFiles.FileSystem
             else
                 text = Encoding.UTF8.GetString(data, start, len);
 
+            // Strip UTF-8 BOM (\uFEFF) if present — breaks search queries
+            text = text.TrimStart('\uFEFF');
             return text.Trim();
         }
 

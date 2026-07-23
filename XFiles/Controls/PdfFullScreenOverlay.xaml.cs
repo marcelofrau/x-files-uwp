@@ -34,6 +34,7 @@ namespace XFiles.Controls
         private readonly Dictionary<int, WriteableBitmap> _tierCache
             = new Dictionary<int, WriteableBitmap>();
         private bool _upgradePending;
+        public Action OnClosed;
 
         private static class Tiers
         {
@@ -91,6 +92,7 @@ namespace XFiles.Controls
             _tierCache.Clear();
             _filePath = null;
             Log.Information("PdfFullScreenOverlay: closed");
+            OnClosed?.Invoke();
         }
 
         public async void HandleBumper(bool isLeft)

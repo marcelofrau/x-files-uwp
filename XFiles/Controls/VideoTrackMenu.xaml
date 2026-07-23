@@ -32,9 +32,9 @@
                               SelectionChanged="OnOptionSelectionChanged">
                         <ListView.ItemTemplate>
                             <DataTemplate>
-                                <StackPanel Orientation="Horizontal" Padding="16,10">
+                                <StackPanel Orientation="Horizontal" Padding="16,14">
                                     <Image Source="{Binding IconPath}"
-                                           Width="20" Height="20"
+                                           Width="48" Height="48"
                                            VerticalAlignment="Center" />
                                     <TextBlock Text="{Binding Label}"
                                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"

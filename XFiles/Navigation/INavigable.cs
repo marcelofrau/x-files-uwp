@@ -8,8 +8,8 @@ namespace XFiles.Navigation
     {
         bool IsMediaFullscreen { get; }
         bool IsMediaPlayerActive { get; }
-        void OnDPadUp();
-        void OnDPadDown();
+        void OnDPadUp(bool isRepeat = false);
+        void OnDPadDown(bool isRepeat = false);
         void OnDPadLeft();
         void OnDPadRight();
         void OnConfirm();

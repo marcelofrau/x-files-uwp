@@ -27,6 +27,7 @@ namespace XFiles.Controls
     public sealed partial class StartMenu : UserControl
     {
         private TaskCompletionSource<StartMenuItem?> _tcs;
+        public Action OnClosed;
 
         public bool IsOpen => Visibility == Visibility.Visible;
 
@@ -142,6 +143,7 @@ namespace XFiles.Controls
             Overlay.Visibility = Visibility.Collapsed;
             Visibility = Visibility.Collapsed;
             _tcs?.TrySetResult(result);
+            OnClosed?.Invoke();
         }
     }
 }
