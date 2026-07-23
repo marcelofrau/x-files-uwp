@@ -46,6 +46,19 @@ jobs:
             echo "cert_thumbprint=$($cert.Thumbprint)" >> $env:GITHUB_OUTPUT
           }
 
+      - name: Sync version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}" -replace '^v',''
+          $parts = $tag -split '\.'
+          if ($parts.Count -eq 4) {
+            $target = [int]$parts[3]
+            $pre = $target - 1
+            Set-Content -Path "build_counter.txt" -Value $pre -NoNewline
+            Write-Host "Set build_counter.txt to $pre (PreBuildEvent will increment to $target)"
+          }
+
       - name: Setup NuGet
         uses: nuget/setup-nuget@v2
 
