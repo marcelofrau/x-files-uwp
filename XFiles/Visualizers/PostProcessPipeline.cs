@@ -27,12 +27,13 @@ namespace XFiles.Visualizers
         public float FeedbackOpacity { get; set; } = 0.55f;
         public float FeedbackZoom { get; set; } = 1.0008f;
         public float FeedbackDecay { get; set; } = 0f;
+        public float FeedbackOffsetY { get; set; } = 0f;
 
         // Bloom
         public bool BloomEnabled { get; set; } = true;
-        public float BloomAmount { get; set; } = 0.25f;
-        public float BloomBlur { get; set; } = 6f;
-        public float BloomThreshold { get; set; } = 0f;
+        public float BloomAmount { get; set; } = 0.12f;
+        public float BloomBlur { get; set; } = 4f;
+        public float BloomThreshold { get; set; } = 0.05f;
 
         // Vignette
         public bool VignetteEnabled { get; set; } = true;
@@ -99,12 +100,12 @@ namespace XFiles.Visualizers
                 // 2. Feedback trails with ADDITIVE blending on top of content
                 if (_feedbackBuffer != null)
                 {
-                    float opacity = Math.Min(0.90f, FeedbackOpacity + _bassLevel * 0.06f - FeedbackDecay * 0.1f);
-                    opacity = Math.Max(0.1f, opacity);
+                float opacity = Math.Min(0.90f, FeedbackOpacity + _bassLevel * 0.06f - FeedbackDecay * 0.1f);
+                opacity = Math.Max(0f, opacity);
                     float zoom = FeedbackZoom + _beatLevel * 0.008f;
                     var center = new Vector2(_width * 0.5f, _height * 0.5f);
 
-                    Matrix3x2 slideMat = Matrix3x2.CreateTranslation(_cumulativeSlideX, _cumulativeSlideY);
+                    Matrix3x2 slideMat = Matrix3x2.CreateTranslation(_cumulativeSlideX, _cumulativeSlideY + FeedbackOffsetY);
                     Matrix3x2 rotMat = Matrix3x2.CreateRotation(Rotation * _time, center);
                     Matrix3x2 zoomMat = Matrix3x2.CreateScale(zoom, center);
                     Matrix3x2 feedbackMatrix = slideMat * rotMat * zoomMat;

@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Runtime.InteropServices.WindowsRuntime;
+using System.Threading;
 using System.Threading.Tasks;
 using Windows.Media.Core;
 using Windows.Media.Playback;
@@ -27,6 +28,7 @@ namespace XFiles.Controls
         private AudioLevelService _audioLevelService;
         private bool _isPlaying;
         private MetadataGuesser _metadataGuesser;
+        private CancellationTokenSource _metadataCts;
 
         private MediaPlayer Player => MediaPlayerElementControl.MediaPlayer;
         private MediaPlaybackSession Session => Player?.PlaybackSession;
@@ -95,6 +97,28 @@ namespace XFiles.Controls
             Visibility = Visibility.Visible;
         }
 
+        public void ShowPlaceholder(string filePath)
+        {
+            if (string.IsNullOrEmpty(filePath)) return;
+            Stop();
+            Log.Information("MediaPreviewControl: showing placeholder for {Path}", filePath);
+
+            _isAudioMode = true;
+
+            AudioInfoPanel.Visibility = Visibility.Visible;
+            AlbumArtBorder.Visibility = Visibility.Collapsed;
+            DefaultArtPanel.Visibility = Visibility.Visible;
+            TitleText.Text = Path.GetFileNameWithoutExtension(filePath);
+            ArtistText.Text = "";
+            ArtistText.Visibility = Visibility.Collapsed;
+            AlbumText.Text = "";
+            AlbumText.Visibility = Visibility.Collapsed;
+
+            _isPlaying = false;
+            UpdatePlayPauseIcon();
+            Visibility = Visibility.Visible;
+        }
+
         private async Task StartAudioPlayback(string filePath)
         {
             try
@@ -126,12 +150,16 @@ namespace XFiles.Controls
                 _audioLevelService.Stop();
                 VuMeter.DetachService();
             }
+            _metadataCts?.Cancel();
+            _metadataCts = null;
             _currentFilePath = null;
         }
 
         public void Stop()
         {
             _progressTimer.Stop();
+            _metadataCts?.Cancel();
+            _metadataCts = null;
             if (_isAudioMode)
             {
                 _audioLevelService.Stop();
@@ -153,6 +181,7 @@ namespace XFiles.Controls
         }
 
         public event EventHandler PlayerStateChanged;
+        public event EventHandler AudioTrackEnded;
 
         public bool IsPlayerActive => _isPlaying;
 
@@ -205,17 +234,20 @@ namespace XFiles.Controls
         private async Task LoadMetadataAsync(string filePath)
         {
             Log.Information("Metadata: starting async load for {Path}", filePath);
+            _metadataCts?.Cancel();
+            var cts = new CancellationTokenSource();
+            _metadataCts = cts;
             try
             {
                 _metadataGuesser.SetInternetAvailable(true);
-                var match = await _metadataGuesser.ResolveAsync(filePath);
+                var match = await _metadataGuesser.ResolveAsync(filePath, cts.Token);
                 var tag = match?.Metadata;
                 Log.Information("Metadata: source={Source} score={Score:F2} title={Title} artist={Artist} album={Album}",
                     match?.Source, match?.Confidence, tag?.Title, tag?.Artist, tag?.Album);
 
-                if (_currentFilePath != filePath)
+                if (cts.IsCancellationRequested || _currentFilePath != filePath)
                 {
-                    Log.Information("Metadata: stale result for {Path}, discarding", filePath);
+                    Log.Information("Metadata: stale/cancelled result for {Path}, discarding", filePath);
                     return;
                 }
 
@@ -302,6 +334,7 @@ namespace XFiles.Controls
                 UpdatePlayPauseIcon();
                 _progressTimer.Stop();
                 ProgressSlider.Value = 100;
+                AudioTrackEnded?.Invoke(this, EventArgs.Empty);
             });
         }
 

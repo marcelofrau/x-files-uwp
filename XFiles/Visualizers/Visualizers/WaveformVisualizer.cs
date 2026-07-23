@@ -17,6 +17,10 @@ namespace XFiles.Visualizers.Visualizers
         private const float LineThickness = 2.5f;
         private const float GlowThickness = 6f;
         private const float AmplitudeScale = 0.35f;
+        private const float MainOffsetY = 60f;
+        private const int ShadowCount = 4;
+        private const float ShadowSpacing = 28f;
+        private static readonly float[] ShadowOpacity = { 0.35f, 0.25f, 0.17f, 0.10f };
 
         private float[] _smoothWave;
         private int _smoothCount;
@@ -42,6 +46,8 @@ namespace XFiles.Visualizers.Visualizers
             if (_device == null || _width == 0 || _height == 0) return;
             ds.Clear(Color.FromArgb(255, 10, 10, 15));
             DrawRadialGradientBackground(ds);
+            for (int s = ShadowCount - 1; s >= 0; s--)
+                DrawWaveformShadow(ds, s);
             DrawWaveform(ds, 1.0f);
         }
 
@@ -61,7 +67,7 @@ namespace XFiles.Visualizers.Visualizers
         private void DrawWaveform(CanvasDrawingSession ds, float opacity)
         {
             if (_smoothCount < 2) return;
-            float centerX = _width * 0.5f, centerY = _height * 0.5f;
+            float centerX = _width * 0.5f, centerY = _height * 0.5f + MainOffsetY;
             float waveWidth = _width * 0.85f;
             float startX = (_width - waveWidth) * 0.5f;
 
@@ -118,15 +124,49 @@ namespace XFiles.Visualizers.Visualizers
             }
         }
 
+        private void DrawWaveformShadow(CanvasDrawingSession ds, int shadowIndex)
+        {
+            if (_smoothCount < 2) return;
+            float centerX = _width * 0.5f, centerY = _height * 0.5f + MainOffsetY;
+            float waveWidth = _width * 0.85f;
+            float startX = (_width - waveWidth) * 0.5f;
+            float yOffset = -(shadowIndex + 1) * ShadowSpacing;
+            float alpha = ShadowOpacity[shadowIndex];
+            float ampScale = AmplitudeScale * (1f - shadowIndex * 0.12f);
+
+            var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
+            float step = waveWidth / (_smoothCount - 1);
+            for (int i = 0; i < _smoothCount - 1; i++)
+            {
+                float x1 = startX + i * step, x2 = startX + (i + 1) * step;
+                float y1 = centerY + yOffset - _smoothWave[i] * _height * ampScale;
+                float y2 = centerY + yOffset - _smoothWave[i + 1] * _height * ampScale;
+                float t = (float)i / (_smoothCount - 1);
+                byte r = (byte)(Lerp(0, 180, t));
+                byte g = (byte)(Lerp(180, 0, t));
+                byte b = 180;
+                byte a = (byte)(255 * alpha);
+                ds.DrawLine(x1, y1, x2, y2, Color.FromArgb(a, r, g, b), LineThickness * 0.7f, strokeStyle);
+            }
+
+            for (int i = 0; i < _smoothCount - 1; i++)
+            {
+                float x1 = startX + i * step, x2 = startX + (i + 1) * step;
+                float y1 = centerY + yOffset + _smoothWave[i] * _height * ampScale * 0.5f;
+                float y2 = centerY + yOffset + _smoothWave[i + 1] * _height * ampScale * 0.5f;
+                byte a = (byte)(255 * alpha * 0.4f);
+                ds.DrawLine(x1, y1, x2, y2, Color.FromArgb(a, 120, 0, 120), LineThickness * 0.5f, strokeStyle);
+            }
+        }
+
         private static float Lerp(float a, float b, float t) => a + (b - a) * t;
 
         public void ConfigurePipeline(PostProcessPipeline pipeline)
         {
-            pipeline.FeedbackOpacity = 0.45f;
+            pipeline.FeedbackOpacity = 0.30f;
             pipeline.FeedbackZoom = 1.0005f;
-            pipeline.SlideY = -0.8f;
-            pipeline.BloomAmount = 0.35f;
-            pipeline.BloomBlur = 8f;
+            pipeline.BloomAmount = 0.06f;
+            pipeline.BloomBlur = 3f;
         }
     }
 }

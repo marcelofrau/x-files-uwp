@@ -19,17 +19,45 @@ namespace XFiles.Visualizers.Visualizers
         private float _velBass, _velMid, _velTreble;
         private float _smoothBass, _smoothMid, _smoothTreble, _smoothBeat;
         private const float AudioSmooth = 0.35f;
-        private const float SpringK = 180f;
-        private const float Damping = 8f;
-        private const float InputGain = 0.7f;
+        private const float SpringK = 220f;
+        private const float Damping = 12f;
+        private const float InputGain = 0.85f;
 
-        public void Initialize(CanvasDevice device) { _device = device; }
+        // --- Objetos reutiliz�veis (Zero GC Allocations no Draw) ---
+        private CanvasTextFormat _labelFormat;
+        private CanvasTextFormat _scaleTextFormat;
+        private CanvasStrokeStyle _roundCapStroke;
+
+        public void Initialize(CanvasDevice device)
+        {
+            _device = device;
+
+            _labelFormat = new CanvasTextFormat
+            {
+                FontSize = 16f,
+                HorizontalAlignment = CanvasHorizontalAlignment.Center,
+                VerticalAlignment = CanvasVerticalAlignment.Center,
+                FontWeight = Windows.UI.Text.FontWeights.Bold
+            };
+
+            _scaleTextFormat = new CanvasTextFormat
+            {
+                FontSize = 10f,
+                HorizontalAlignment = CanvasHorizontalAlignment.Center,
+                VerticalAlignment = CanvasVerticalAlignment.Center
+            };
+
+            _roundCapStroke = new CanvasStrokeStyle
+            {
+                StartCap = CanvasCapStyle.Round,
+                EndCap = CanvasCapStyle.Round
+            };
+        }
 
         public void Update(AudioData data, TimeSpan elapsed)
         {
             _time = data.Time;
-            float dt = (float)elapsed.TotalSeconds;
-            dt = Math.Min(dt, 0.05f);
+            float dt = Math.Min((float)elapsed.TotalSeconds, 0.05f);
 
             float bass = 0, mid = 0, treble = 0;
             for (int i = 0; i < 6; i++) bass += data.BandLevels[i]; bass /= 6f;
@@ -41,144 +69,174 @@ namespace XFiles.Visualizers.Visualizers
             _smoothTreble += (treble - _smoothTreble) * AudioSmooth;
             _smoothBeat += (data.Beat - _smoothBeat) * 0.4f;
 
-            SimulateNeedle(ref _needleBass, ref _velBass, Math.Min(1f, _smoothBass * InputGain), dt);
-            SimulateNeedle(ref _needleMid, ref _velMid, Math.Min(1f, _smoothMid * InputGain), dt);
-            SimulateNeedle(ref _needleTreble, ref _velTreble, Math.Min(1f, _smoothTreble * InputGain), dt);
+            SimulateNeedle(ref _needleBass, ref _velBass, Math.Min(1.1f, _smoothBass * InputGain), dt);
+            SimulateNeedle(ref _needleMid, ref _velMid, Math.Min(1.1f, _smoothMid * InputGain), dt);
+            SimulateNeedle(ref _needleTreble, ref _velTreble, Math.Min(1.1f, _smoothTreble * InputGain), dt);
         }
 
-        private void SimulateNeedle(ref float pos, ref float vel, float target, float dt)
+        private static void SimulateNeedle(ref float pos, ref float vel, float target, float dt)
         {
             float force = SpringK * (target - pos) - Damping * vel;
             vel += force * dt;
             pos += vel * dt;
-            if (pos < 0f) { pos = 0f; vel = Math.Max(0, vel); }
-            if (pos > 1f) { pos = 1f; vel = Math.Min(0, vel); }
+
+            // Batentes f�sicos do VU meter
+            if (pos < -0.05f) { pos = -0.05f; vel = Math.Max(0, vel * -0.2f); }
+            if (pos > 1.08f) { pos = 1.08f; vel = Math.Min(0, vel * -0.2f); }
         }
 
         public void Draw(CanvasDrawingSession ds)
         {
             if (_device == null || _width == 0 || _height == 0) return;
-            ds.Clear(Color.FromArgb(255, 12, 10, 8));
 
-            float meterW = _width * 0.28f;
-            float meterH = meterW * 0.7f;
-            float spacing = _width * 0.02f;
+            // Gabinete de madeira / chassi escuro
+            ds.Clear(Color.FromArgb(255, 14, 11, 9));
+
+            float meterW = _width * 0.29f;
+            float meterH = meterW * 0.72f;
+            float spacing = _width * 0.025f;
             float totalW = meterW * 3 + spacing * 2;
             float startX = (_width - totalW) * 0.5f;
-            float meterY = _height * 0.35f;
+            float meterY = (_height - meterH) * 0.48f;
 
-            DrawOneMeter(ds, startX, meterY, meterW, meterH, _needleBass, "BASS", 0.0f);
-            DrawOneMeter(ds, startX + meterW + spacing, meterY, meterW, meterH, _needleMid, "MID", 0.33f);
-            DrawOneMeter(ds, startX + (meterW + spacing) * 2, meterY, meterW, meterH, _needleTreble, "TREBLE", 0.66f);
+            // Atualiza tamanho das fontes proporcionalmente
+            _labelFormat.FontSize = meterW * 0.075f;
+            _scaleTextFormat.FontSize = meterW * 0.045f;
+
+            DrawOneMeter(ds, startX, meterY, meterW, meterH, _needleBass, "LOW / BASS");
+            DrawOneMeter(ds, startX + meterW + spacing, meterY, meterW, meterH, _needleMid, "MID");
+            DrawOneMeter(ds, startX + (meterW + spacing) * 2, meterY, meterW, meterH, _needleTreble, "HIGH / TREBLE");
 
             DrawIncandescentGlow(ds);
         }
 
-        private void DrawOneMeter(CanvasDrawingSession ds, float x, float y, float w, float h, float needlePos, string label, float hueBase)
+        private void DrawOneMeter(CanvasDrawingSession ds, float x, float y, float w, float h, float needlePos, string label)
         {
-            float cornerR = w * 0.03f;
+            float cornerR = w * 0.04f;
 
-            Color bgColor = Color.FromArgb(255, 25, 22, 18);
-            ds.FillRoundedRectangle(x, y, w, h, cornerR, cornerR, bgColor);
+            // 1. Moldura Externa (Bezel)
+            ds.FillRoundedRectangle(x, y, w, h, cornerR, cornerR, Color.FromArgb(255, 28, 24, 20));
+            ds.DrawRoundedRectangle(x, y, w, h, cornerR, cornerR, Color.FromArgb(255, 55, 48, 40), 2f);
 
-            Color bezelColor = Color.FromArgb(255, 45, 40, 35);
-            ds.DrawRoundedRectangle(x, y, w, h, cornerR, cornerR, bezelColor, 2f);
+            // 2. Dial Backplate (Fundo estilo Papel Vintage Vintage Cream/Amber)
+            float inset = w * 0.05f;
+            float faceX = x + inset, faceY = y + inset;
+            float faceW = w - inset * 2, faceH = h - inset * 2;
 
-            Color faceColor = Color.FromArgb(255, 200, 195, 180);
-            float inset = w * 0.06f;
-            ds.FillRoundedRectangle(x + inset, y + inset, w - inset * 2, h - inset * 2, cornerR, cornerR, faceColor);
+            // Cor do mostrador com backlight simulado
+            Color faceColor = Color.FromArgb(255, 245, 228, 170);
+            ds.FillRoundedRectangle(faceX, faceY, faceW, faceH, cornerR, cornerR, faceColor);
 
+            // 3. Geometria do Pivô da Agulha (Base Centralizada na parte inferior)
             float pivotX = x + w * 0.5f;
-            float pivotY = y + h * 0.82f;
-            float needleLen = h * 0.6f;
-            float angle = -90f + needlePos * 180f;
-            float rad = angle * (float)Math.PI / 180f;
-            float tipX = pivotX + (float)Math.Cos(rad) * needleLen;
-            float tipY = pivotY + (float)Math.Sin(rad) * needleLen;
+            float pivotY = y + h * 0.78f;
+            float needleLen = h * 0.62f;
 
-            DrawScaleArc(ds, pivotX, pivotY, needleLen * 0.85f, x, w);
+            // Varredura de ângulo realista: 0.0 = -126° | 1.0 = -54° (centro em -90° = straight up)
+            float minAngle = -126f;
+            float maxAngle = -54f;
+            float currentAngle = minAngle + Math.Clamp(needlePos, 0f, 1.1f) * (maxAngle - minAngle);
+            float rad = currentAngle * MathF.PI / 180f;
 
-            var needleStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
-            Color needleColor = needlePos > 0.8f
-                ? Color.FromArgb(255, 200, 30, 20)
-                : Color.FromArgb(255, 30, 30, 30);
-            ds.DrawLine(pivotX, pivotY, tipX, tipY, needleColor, 1.8f, needleStyle);
+            float tipX = pivotX + MathF.Cos(rad) * needleLen;
+            float tipY = pivotY + MathF.Sin(rad) * needleLen;
 
-            float pivotR = w * 0.025f;
-            ds.FillGeometry(CanvasGeometry.CreateCircle(ds, pivotX, pivotY, pivotR), Color.FromArgb(255, 60, 55, 50));
+            // 4. Arco da Escala VU
+            DrawScaleArc(ds, pivotX, pivotY, needleLen * 0.82f);
 
-            if (needlePos > 0.75f)
+            // 5. Alerta Red Zone (Peak Flash no fundo)
+            if (needlePos > 0.85f)
             {
-                float redZone = (needlePos - 0.75f) / 0.25f;
-                float flashAlpha = (byte)Math.Min(255, (int)(redZone * 40 * (0.5f + _smoothBeat * 0.5f)));
-                ds.FillRoundedRectangle(x + inset, y + inset, w - inset * 2, h * 0.25f, cornerR, cornerR,
-                    Color.FromArgb((byte)flashAlpha, 255, 40, 20));
+                float factor = (needlePos - 0.85f) / 0.25f;
+                byte alpha = (byte)Math.Clamp((int)(factor * 35 * (0.6f + _smoothBeat * 0.4f)), 0, 255);
+                ds.FillRoundedRectangle(faceX, faceY, faceW, faceH, cornerR, cornerR, Color.FromArgb(alpha, 255, 30, 10));
             }
 
-            float labelY = y + h - inset - h * 0.08f;
-            var labelStyle = new CanvasTextFormat
+            // 6. Desenho da Agulha
+            Color needleBase = Color.FromArgb(255, 25, 25, 25);
+            ds.DrawLine(pivotX, pivotY, tipX, tipY, needleBase, 3f, _roundCapStroke);
+
+            // Ponta vermelha (último terço da agulha)
+            float redStartT = 0.6f;
+            float redStartX = pivotX + (tipX - pivotX) * redStartT;
+            float redStartY = pivotY + (tipY - pivotY) * redStartT;
+            ds.DrawLine(redStartX, redStartY, tipX, tipY, Color.FromArgb(255, 220, 30, 15), 2f, _roundCapStroke);
+
+            // 7. Capa do Pivô (Pino Preto Analógico)
+            float pivotR = w * 0.045f;
+            using (var geo = CanvasGeometry.CreateCircle(ds, pivotX, y + h * 0.78f, pivotR))
             {
-                FontSize = w * 0.07f,
-                HorizontalAlignment = CanvasHorizontalAlignment.Center,
-                VerticalAlignment = CanvasVerticalAlignment.Center
-            };
-            ds.DrawText(label, pivotX, labelY, Color.FromArgb(200, 60, 55, 50), labelStyle);
+                ds.FillGeometry(geo, Color.FromArgb(255, 35, 32, 30));
+                ds.DrawGeometry(geo, Color.FromArgb(255, 70, 65, 60), 1f);
+            }
+
+            // 8. R�tulo da Banda
+            float labelY = y + h * 0.60f;
+            ds.DrawText(label, pivotX, labelY, Color.FromArgb(220, 60, 50, 40), _labelFormat);
         }
 
-        private void DrawScaleArc(CanvasDrawingSession ds, float cx, float cy, float radius, float meterX, float meterW)
+        private void DrawScaleArc(CanvasDrawingSession ds, float cx, float cy, float radius)
         {
-            int tickCount = 21;
-            var tickStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
+            int tickCount = 18;
+            float minAngle = -132f;
+            float maxAngle = -48f;
 
             for (int i = 0; i <= tickCount; i++)
             {
                 float t = (float)i / tickCount;
-                float angle = (-90f + t * 180f) * (float)Math.PI / 180f;
-                float innerR = radius * 0.88f;
-                float outerR = radius;
-                float x1 = cx + (float)Math.Cos(angle) * innerR;
-                float y1 = cy + (float)Math.Sin(angle) * innerR;
-                float x2 = cx + (float)Math.Cos(angle) * outerR;
-                float y2 = cy + (float)Math.Sin(angle) * outerR;
+                float angleDeg = minAngle + t * (maxAngle - minAngle);
+                float angleRad = angleDeg * MathF.PI / 180f;
 
-                Color tickColor = t > 0.75f
-                    ? Color.FromArgb(180, 200, 30, 20)
-                    : Color.FromArgb(120, 80, 75, 70);
-                float tickW = (i % 5 == 0) ? 1.5f : 0.8f;
-                ds.DrawLine(x1, y1, x2, y2, tickColor, tickW, tickStyle);
+                bool isRedZone = t > 0.72f;
+                float innerR = radius * (i % 3 == 0 ? 0.86f : 0.90f);
+                float outerR = radius;
+
+                float x1 = cx + MathF.Cos(angleRad) * innerR;
+                float y1 = cy + MathF.Sin(angleRad) * innerR;
+                float x2 = cx + MathF.Cos(angleRad) * outerR;
+                float y2 = cy + MathF.Sin(angleRad) * outerR;
+
+                Color tickColor = isRedZone
+                    ? Color.FromArgb(220, 210, 30, 20)
+                    : Color.FromArgb(180, 40, 35, 30);
+
+                float strokeW = (i % 3 == 0) ? 2.0f : 1.0f;
+                ds.DrawLine(x1, y1, x2, y2, tickColor, strokeW, _roundCapStroke);
             }
         }
 
         private void DrawIncandescentGlow(CanvasDrawingSession ds)
         {
-            float glowIntensity = 0.5f + _smoothBeat * 0.5f;
-            byte a = (byte)Math.Min(255, (int)(4 * glowIntensity));
-            Color warmGlow = Color.FromArgb(a, 255, 200, 120);
-            var geo = CanvasGeometry.CreateEllipse(ds, _width * 0.5f, _height * 0.5f, _width * 0.45f, _height * 0.4f);
-            ds.FillGeometry(geo, warmGlow);
+            // Ilumina��o quente por l�mpadas incandescente sobre o chassi
+            float glow = 0.4f + _smoothBeat * 0.3f;
+            byte a = (byte)Math.Clamp((int)(12 * glow), 0, 255);
+            Color warmGlow = Color.FromArgb(a, 255, 180, 80);
+
+            using (var geo = CanvasGeometry.CreateEllipse(ds, _width * 0.5f, _height * 0.5f, _width * 0.48f, _height * 0.42f))
+            {
+                ds.FillGeometry(geo, warmGlow);
+            }
         }
 
         public void Resize(float width, float height) { _width = width; _height = height; }
-        public void Dispose() { _device = null; }
 
-        private static Color HslToRgb(float h, float s, float l)
+        public void Dispose()
         {
-            h -= (float)Math.Floor(h); float hue = h * 360f;
-            float c = (1f - Math.Abs(2f * l - 1f)) * s;
-            float x = c * (1f - Math.Abs((hue / 60f) % 2f - 1f));
-            float m = l - c / 2f;
-            float r, g, b;
-            if (hue < 60) { r = c; g = x; b = 0; }
-            else if (hue < 120) { r = x; g = c; b = 0; }
-            else if (hue < 180) { r = 0; g = c; b = x; }
-            else if (hue < 240) { r = 0; g = x; b = c; }
-            else if (hue < 300) { r = x; g = 0; b = c; }
-            else { r = c; g = 0; b = x; }
-            return Color.FromArgb(255, (byte)((r + m) * 255), (byte)((g + m) * 255), (byte)((b + m) * 255));
+            _labelFormat?.Dispose();
+            _scaleTextFormat?.Dispose();
+            _roundCapStroke?.Dispose();
+            _device = null;
         }
 
         public void ConfigurePipeline(PostProcessPipeline pipeline)
         {
+            pipeline.FeedbackOpacity = 0f;
+            pipeline.FeedbackZoom = 1.0f;
+            pipeline.FeedbackDecay = 0f;
+            pipeline.BloomEnabled = false;
+            pipeline.BloomAmount = 0f;
+            pipeline.BloomBlur = 0f;
+            pipeline.BloomThreshold = 0.65f;
         }
     }
 }

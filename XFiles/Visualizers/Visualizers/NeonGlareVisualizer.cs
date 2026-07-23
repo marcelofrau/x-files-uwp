@@ -22,8 +22,8 @@ namespace XFiles.Visualizers.Visualizers
 
         private const int BarCount = 32;
         private const float BarGapRatio = 0.15f;
-        private const float GlowWidthMul = 2.5f;
-        private const float GlowAlphaMul = 0.25f;
+        private const float GlowWidthMul = 2.0f;
+        private const float GlowAlphaMul = 0.10f;
         private const float BeatFlareDecay = 0.88f;
 
         public void Initialize(CanvasDevice device) { _device = device; }
@@ -100,12 +100,12 @@ namespace XFiles.Visualizers.Visualizers
 
         private void DrawLensFlare(CanvasDrawingSession ds, float cx, float cy, float intensity)
         {
-            float radius = 80f * intensity;
+            float radius = 60f * intensity;
             var flareGeo = CanvasGeometry.CreateEllipse(ds, cx, cy, radius, radius);
-            Color flareColor = Color.FromArgb((byte)(intensity * 100), 255, 200, 255);
+            Color flareColor = Color.FromArgb((byte)(intensity * 25), 255, 200, 255);
             ds.FillGeometry(flareGeo, flareColor);
 
-            float lineLen = radius * 2f;
+            float lineLen = radius * 1.5f;
             var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
             int lineCount = 8;
             for (int i = 0; i < lineCount; i++)
@@ -113,8 +113,8 @@ namespace XFiles.Visualizers.Visualizers
                 float angle = (float)i / lineCount * 2f * (float)Math.PI;
                 float ex = cx + (float)Math.Cos(angle) * lineLen;
                 float ey = cy + (float)Math.Sin(angle) * lineLen;
-                byte a = (byte)(intensity * 60);
-                ds.DrawLine(cx, cy, ex, ey, Color.FromArgb(a, 255, 200, 255), 1.5f, strokeStyle);
+                byte a = (byte)(intensity * 30);
+                ds.DrawLine(cx, cy, ex, ey, Color.FromArgb(a, 255, 200, 255), 1f, strokeStyle);
             }
         }
 
@@ -136,6 +136,9 @@ namespace XFiles.Visualizers.Visualizers
 
         public void ConfigurePipeline(PostProcessPipeline pipeline)
         {
+            pipeline.BloomAmount = 0.01f;
+            pipeline.BloomBlur = 1.5f;
+            pipeline.BloomThreshold = 0.7f;
         }
     }
 }

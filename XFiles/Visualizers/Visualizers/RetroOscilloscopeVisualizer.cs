@@ -14,20 +14,20 @@ namespace XFiles.Visualizers.Visualizers
         private CanvasDevice _device;
         private float _width, _height, _time;
 
-        private float[] _prevWaveform;
-        private int _prevWaveformCount;
+        private float[] _currentWaveform = new float[2048];
+        private int _currentWaveformCount;
+
         private float _smoothBass, _smoothMid, _smoothBeat;
         private const float AudioSmooth = 0.25f;
-        private const int GhostFrames = 4;
-        private float[][] _ghostHistory;
-        private int[] _ghostCounts;
+
+        private const int GhostFrames = 5;
+        private readonly float[][] _ghostHistory = new float[GhostFrames][];
+        private readonly int[] _ghostCounts = new int[GhostFrames];
         private int _ghostIndex;
 
         public void Initialize(CanvasDevice device)
         {
             _device = device;
-            _ghostHistory = new float[GhostFrames][];
-            _ghostCounts = new int[GhostFrames];
             for (int i = 0; i < GhostFrames; i++)
             {
                 _ghostHistory[i] = new float[2048];
@@ -42,22 +42,30 @@ namespace XFiles.Visualizers.Visualizers
             float bass = 0, mid = 0;
             for (int i = 0; i < 6; i++) bass += data.BandLevels[i]; bass /= 6f;
             for (int i = 10; i < 16; i++) mid += data.BandLevels[i]; mid /= 6f;
+
             _smoothBass += (bass - _smoothBass) * AudioSmooth;
             _smoothMid += (mid - _smoothMid) * AudioSmooth;
             _smoothBeat += (data.Beat - _smoothBeat) * 0.4f;
 
-            _prevWaveform = data.Waveform;
-            _prevWaveformCount = data.WaveformCount;
+            // 1. C�PIA SEGURA DOS DADOS DA ONDA (EVITA BUG DE REFER�NCIA)
+            if (data.Waveform != null && data.WaveformCount > 0)
+            {
+                _currentWaveformCount = Math.Min(data.WaveformCount, 2048);
+                Array.Copy(data.Waveform, _currentWaveform, _currentWaveformCount);
 
-            _ghostHistory[_ghostIndex] = data.Waveform;
-            _ghostCounts[_ghostIndex] = data.WaveformCount;
-            _ghostIndex = (_ghostIndex + 1) % GhostFrames;
+                // Copia para o ring buffer de fantasmas
+                _ghostCounts[_ghostIndex] = _currentWaveformCount;
+                Array.Copy(_currentWaveform, _ghostHistory[_ghostIndex], _currentWaveformCount);
+                _ghostIndex = (_ghostIndex + 1) % GhostFrames;
+            }
         }
 
         public void Draw(CanvasDrawingSession ds)
         {
             if (_device == null || _width == 0 || _height == 0) return;
-            ds.Clear(Color.FromArgb(255, 2, 8, 2));
+
+            // Fundo escuro levemente esverdeado (Tubo CRT desligado)
+            ds.Clear(Color.FromArgb(255, 1, 6, 2));
 
             DrawGrid(ds);
             DrawGhostTraces(ds);
@@ -72,152 +80,185 @@ namespace XFiles.Visualizers.Visualizers
 
         private void DrawGrid(CanvasDrawingSession ds)
         {
-            Color gridColor = Color.FromArgb(18, 50, 180, 50);
-            var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Flat, EndCap = CanvasCapStyle.Flat };
+            Color gridColor = Color.FromArgb(25, 40, 220, 40);
+            Color subGridColor = Color.FromArgb(12, 40, 220, 40);
 
+            // Grade reticular principal 10x8 de oscilosc�pio
             float stepX = _width / 10f;
             for (int i = 1; i < 10; i++)
             {
                 float x = i * stepX;
-                ds.DrawLine(x, 0, x, _height, gridColor, 0.5f, strokeStyle);
+                ds.DrawLine(x, 0, x, _height, gridColor, 1f);
             }
 
             float stepY = _height / 8f;
             for (int i = 1; i < 8; i++)
             {
                 float y = i * stepY;
-                ds.DrawLine(0, y, _width, y, gridColor, 0.5f, strokeStyle);
+                ds.DrawLine(0, y, _width, y, gridColor, 1f);
             }
 
-            Color centerColor = Color.FromArgb(35, 50, 180, 50);
-            ds.DrawLine(_width * 0.5f, 0, _width * 0.5f, _height, centerColor, 1f, strokeStyle);
-            ds.DrawLine(0, _height * 0.5f, _width, _height * 0.5f, centerColor, 1f, strokeStyle);
+            // Eixos centrais com marca��es de calibra��o
+            float cx = _width * 0.5f;
+            float cy = _height * 0.5f;
+            Color centerColor = Color.FromArgb(60, 50, 255, 50);
+
+            ds.DrawLine(cx, 0, cx, _height, centerColor, 1.5f);
+            ds.DrawLine(0, cy, _width, cy, centerColor, 1.5f);
+
+            // Ticks de precis�o no centro
+            for (float x = 0; x < _width; x += stepX * 0.2f)
+                ds.DrawLine(x, cy - 3f, x, cy + 3f, subGridColor, 1f);
+
+            for (float y = 0; y < _height; y += stepY * 0.2f)
+                ds.DrawLine(cx - 3f, y, cx + 3f, y, subGridColor, 1f);
         }
 
         private void DrawGhostTraces(CanvasDrawingSession ds)
         {
-            Color phosphorGreen = Color.FromArgb(255, 40, 220, 40);
-            var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
+            Color phosphorGreen = Color.FromArgb(255, 30, 200, 30);
+            float cy = _height * 0.38f;
+            float amplitude = _height * 0.32f;
 
             for (int g = 0; g < GhostFrames; g++)
             {
                 int gi = (_ghostIndex + g) % GhostFrames;
                 float[] wave = _ghostHistory[gi];
                 int count = _ghostCounts[gi];
-                if (wave == null || count <= 0) continue;
+                if (wave == null || count <= 1) continue;
 
                 float age = (float)(GhostFrames - g) / GhostFrames;
-                byte alpha = (byte)Math.Min(255, (int)(30 * (1f - age)));
-                if (alpha < 3) continue;
+                byte alpha = (byte)Math.Clamp(40 * (1f - age), 0, 255);
+                if (alpha < 4) continue;
 
-                float cy = _height * 0.5f;
-                float amplitude = _height * 0.3f;
-                float prevX = 0, prevY = cy;
-                bool first = true;
-
-                int step = Math.Max(1, count / 400);
-                for (int i = 0; i < count; i += step)
+                using (var builder = new CanvasPathBuilder(ds))
                 {
-                    float x = (float)i / count * _width;
-                    float y = cy + wave[i] * amplitude;
-                    if (first) { prevX = x; prevY = y; first = false; continue; }
-                    ds.DrawLine(prevX, prevY, x, y, Color.FromArgb(alpha, phosphorGreen.R, phosphorGreen.G, phosphorGreen.B), 1.5f, strokeStyle);
-                    prevX = x; prevY = y;
+                    int step = Math.Max(1, count / 400);
+                    builder.BeginFigure(0, cy + wave[0] * amplitude);
+
+                    for (int i = step; i < count; i += step)
+                    {
+                        float x = (float)i / count * _width;
+                        float y = cy + wave[i] * amplitude;
+                        builder.AddLine(x, y);
+                    }
+
+                    builder.EndFigure(CanvasFigureLoop.Open);
+
+                    using (var geo = CanvasGeometry.CreatePath(builder))
+                    {
+                        ds.DrawGeometry(geo, Color.FromArgb(alpha, phosphorGreen.R, phosphorGreen.G, phosphorGreen.B), 1.2f);
+                    }
                 }
             }
         }
 
         private void DrawWaveform(CanvasDrawingSession ds)
         {
-            if (_prevWaveform == null || _prevWaveformCount <= 0) return;
+            if (_currentWaveform == null || _currentWaveformCount <= 1) return;
 
-            Color phosphorGreen = Color.FromArgb(255, 40, 255, 40);
-            Color glowGreen = Color.FromArgb(40, 40, 255, 40);
-            var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
+            float cy = _height * 0.38f;
+            float amplitude = _height * 0.32f;
 
-            float cy = _height * 0.5f;
-            float amplitude = _height * 0.3f;
-            float prevX = 0, prevY = cy;
-            bool first = true;
+            Color phosphorGreen = Color.FromArgb(255, 180, 255, 180); // N�cleo brilhante
+            Color glowGreen = Color.FromArgb(120, 30, 240, 30);      // Halos de f�sforo
 
-            int step = Math.Max(1, _prevWaveformCount / 500);
-            for (int i = 0; i < _prevWaveformCount; i += step)
+            using (var builder = new CanvasPathBuilder(ds))
             {
-                float x = (float)i / _prevWaveformCount * _width;
-                float y = cy + _prevWaveform[i] * amplitude;
-                if (first) { prevX = x; prevY = y; first = false; continue; }
+                int step = Math.Max(1, _currentWaveformCount / 600);
+                builder.BeginFigure(0, cy + _currentWaveform[0] * amplitude);
 
-                ds.DrawLine(prevX, prevY, x, y, glowGreen, 5f, strokeStyle);
-                ds.DrawLine(prevX, prevY, x, y, phosphorGreen, 1.8f, strokeStyle);
-                prevX = x; prevY = y;
+                for (int i = step; i < _currentWaveformCount; i += step)
+                {
+                    float x = (float)i / _currentWaveformCount * _width;
+                    float y = cy + _currentWaveform[i] * amplitude;
+                    builder.AddLine(x, y);
+                }
+
+                builder.EndFigure(CanvasFigureLoop.Open);
+
+                using (var geo = CanvasGeometry.CreatePath(builder))
+                {
+                    // Passada de Brilho Externo (Glow)
+                    ds.DrawGeometry(geo, glowGreen, 4.5f);
+                    // Passada do Raio Principal
+                    ds.DrawGeometry(geo, phosphorGreen, 1.8f);
+                }
             }
         }
 
         private void DrawLissajous(CanvasDrawingSession ds)
         {
-            if (_prevWaveform == null || _prevWaveformCount <= 0) return;
+            if (_currentWaveform == null || _currentWaveformCount <= 1) return;
 
-            float cx = _width * 0.5f, cy = _height * 0.5f;
-            float radius = Math.Min(_width, _height) * 0.12f * (0.5f + _smoothBass * 0.8f);
-            Color lissaColor = Color.FromArgb(50, 40, 255, 40);
-            var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
+            float cx = _width * 0.5f;
+            float cy = _height * 0.5f;
+            float radius = Math.Min(_width, _height) * 0.14f * (0.6f + _smoothBass * 0.6f);
 
-            float freqMul = 1f + _smoothBass * 3f;
-            float phase = _time * 0.5f;
-            int pointCount = 200;
-            float prevX = 0, prevY = 0;
-            bool first = true;
+            Color lissaColor = Color.FromArgb((byte)(40 + _smoothBeat * 50), 50, 255, 50);
 
-            for (int i = 0; i <= pointCount; i++)
+            using (var builder = new CanvasPathBuilder(ds))
             {
-                float t = (float)i / pointCount * 2f * (float)Math.PI;
-                float lx = cx + (float)Math.Sin(t * freqMul + phase) * radius;
-                float ly = cy + (float)Math.Cos(t * 2f + phase * 0.7f) * radius;
-                if (first) { prevX = lx; prevY = ly; first = false; continue; }
-                ds.DrawLine(prevX, prevY, lx, ly, lissaColor, 1f, strokeStyle);
-                prevX = lx; prevY = ly;
+                int pointCount = 180;
+                float freqMul = 1f + _smoothMid * 2.5f;
+                float phase = _time * 0.8f;
+
+                for (int i = 0; i <= pointCount; i++)
+                {
+                    float t = (float)i / pointCount * (float)(Math.PI * 2);
+                    float lx = cx + MathF.Sin(t * freqMul + phase) * radius;
+                    float ly = cy + MathF.Cos(t * 2f + phase * 0.6f) * radius;
+
+                    if (i == 0) builder.BeginFigure(lx, ly);
+                    else builder.AddLine(lx, ly);
+                }
+
+                builder.EndFigure(CanvasFigureLoop.Open);
+
+                using (var geo = CanvasGeometry.CreatePath(builder))
+                {
+                    ds.DrawGeometry(geo, lissaColor, 1.2f);
+                }
             }
         }
 
         private void DrawPhosphorGlow(CanvasDrawingSession ds)
         {
-            float intensity = 0.4f + _smoothBeat * 0.4f;
-            byte a = (byte)Math.Min(255, (int)(12 * intensity));
-            Color glow = Color.FromArgb(a, 40, 200, 40);
-            var geo = CanvasGeometry.CreateEllipse(ds, _width * 0.5f, _height * 0.5f, _width * 0.4f, _height * 0.35f);
-            ds.FillGeometry(geo, glow);
+            float intensity = 0.3f + _smoothBeat * 0.4f;
+            byte a = (byte)Math.Clamp(15 * intensity, 0, 255);
+            Color glow = Color.FromArgb(a, 40, 220, 40);
+
+            // Usando com instru��o usando (using) para descarte de mem�ria correto
+            using (var geo = CanvasGeometry.CreateEllipse(ds, _width * 0.5f, _height * 0.5f, _width * 0.45f, _height * 0.40f))
+            {
+                ds.FillGeometry(geo, glow);
+            }
         }
 
         private void DrawVignette(CanvasDrawingSession ds)
         {
-            Color vignette = Color.FromArgb(180, 0, 0, 0);
+            // Vinheta de borda escura simulo vidro curvo de monitor CRT
             float w = _width, h = _height;
-            float stripW = w * 0.15f;
+            float borderX = w * 0.08f;
+            float borderY = h * 0.08f;
 
-            ds.FillRectangle(0, 0, stripW, h, Color.FromArgb(120, 0, 0, 0));
-            ds.FillRectangle(w - stripW, 0, stripW, h, Color.FromArgb(120, 0, 0, 0));
-            ds.FillRectangle(0, 0, w, h * 0.08f, Color.FromArgb(80, 0, 0, 0));
-            ds.FillRectangle(0, h - h * 0.08f, w, h * 0.08f, Color.FromArgb(80, 0, 0, 0));
-        }
+            Color vignetteColor = Color.FromArgb(140, 0, 0, 0);
 
-        private static Color HslToRgb(float h, float s, float l)
-        {
-            h -= (float)Math.Floor(h); float hue = h * 360f;
-            float c = (1f - Math.Abs(2f * l - 1f)) * s;
-            float x = c * (1f - Math.Abs((hue / 60f) % 2f - 1f));
-            float m = l - c / 2f;
-            float r, g, b;
-            if (hue < 60) { r = c; g = x; b = 0; }
-            else if (hue < 120) { r = x; g = c; b = 0; }
-            else if (hue < 180) { r = 0; g = c; b = x; }
-            else if (hue < 240) { r = 0; g = x; b = c; }
-            else if (hue < 300) { r = x; g = 0; b = c; }
-            else { r = c; g = 0; b = x; }
-            return Color.FromArgb(255, (byte)((r + m) * 255), (byte)((g + m) * 255), (byte)((b + m) * 255));
+            ds.FillRectangle(0, 0, borderX, h, vignetteColor);
+            ds.FillRectangle(w - borderX, 0, borderX, h, vignetteColor);
+            ds.FillRectangle(0, 0, w, borderY, vignetteColor);
+            ds.FillRectangle(0, h - borderY, w, borderY, vignetteColor);
         }
 
         public void ConfigurePipeline(PostProcessPipeline pipeline)
         {
+            // Efeito F�sforo de Reten��o CRT (Afterglow)
+            pipeline.FeedbackOpacity = 0.60f;    // Mant�m o feixe de el�trons esmaecendo suavemente
+            pipeline.FeedbackZoom = 1.001f;     // Lev�ssima expans�o do brilho
+            pipeline.FeedbackDecay = 0.04f;
+            pipeline.BloomAmount = 0.12f;       // Brilho intenso de f�sforo verde
+            pipeline.BloomBlur = 5f;
+            pipeline.BloomThreshold = 0.35f;
         }
     }
 }

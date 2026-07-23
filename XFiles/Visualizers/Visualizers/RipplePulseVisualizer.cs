@@ -16,6 +16,8 @@ namespace XFiles.Visualizers.Visualizers
 
         private float _smoothBass, _smoothMid, _smoothTreble, _smoothBeat;
         private const float AudioSmooth = 0.3f;
+        private float[] _waveform;
+        private int _waveformCount;
 
         private const int MaxRipples = 12;
         private float[] _rippleRadius, _rippleAlpha, _rippleHue;
@@ -35,6 +37,8 @@ namespace XFiles.Visualizers.Visualizers
             _smoothMid += (mid - _smoothMid) * AudioSmooth;
             _smoothTreble += (treble - _smoothTreble) * AudioSmooth;
             _smoothBeat += (data.Beat - _smoothBeat) * 0.4f;
+            _waveform = data.Waveform;
+            _waveformCount = data.WaveformCount;
 
             float maxR = Math.Max(_width, _height) * 0.7f;
             float speed = 150f + _smoothBass * 200f;
@@ -102,19 +106,33 @@ namespace XFiles.Visualizers.Visualizers
 
                 Color c = HslToRgb(hue, 0.85f, 0.5f + alpha * 0.3f);
                 byte a = (byte)(alpha * 180);
-                var geo = CanvasGeometry.CreateEllipse(ds, cx, cy, r, r);
-                ds.DrawGeometry(geo, Color.FromArgb(a, c.R, c.G, c.B), 2f + alpha * 2f);
 
-                // Extra-wide glow pass
+                int segCount = 90;
+                float twoPi = (float)(Math.PI * 2.0);
+                float waveAmp = Math.Min(r * 0.15f, 30f) * alpha;
+                var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
+
+                float prevAngle = 0f;
+                float prevWave = _waveform != null && _waveformCount > 0 ? _waveform[0] : 0f;
+                float prevX = cx + (float)Math.Cos(prevAngle) * (r + prevWave * waveAmp);
+                float prevY = cy + (float)Math.Sin(prevAngle) * (r + prevWave * waveAmp);
+
+                for (int s = 1; s <= segCount; s++)
+                {
+                    float angle = (float)s / segCount * twoPi;
+                    int idx = (int)((float)s / segCount * _waveformCount) % Math.Max(1, _waveformCount);
+                    float sample = _waveform != null && _waveformCount > 0 ? _waveform[idx] : 0f;
+                    float drawR = r + sample * waveAmp;
+                    float x = cx + (float)Math.Cos(angle) * drawR;
+                    float y = cy + (float)Math.Sin(angle) * drawR;
+                    ds.DrawLine(prevX, prevY, x, y, Color.FromArgb(a, c.R, c.G, c.B), 2f + alpha * 2f, strokeStyle);
+                    prevX = x; prevY = y;
+                }
+
                 Color gc = HslToRgb(hue, 0.8f, 0.4f);
-                byte ga = (byte)(alpha * 25);
-                var glowGeo = CanvasGeometry.CreateEllipse(ds, cx, cy, r * 1.15f, r * 1.15f);
-                ds.DrawGeometry(glowGeo, Color.FromArgb(ga, gc.R, gc.G, gc.B), 10f);
-
-                // Outer haze pass
-                byte ha = (byte)(alpha * 12);
-                var hazeGeo = CanvasGeometry.CreateEllipse(ds, cx, cy, r * 1.3f, r * 1.3f);
-                ds.DrawGeometry(hazeGeo, Color.FromArgb(ha, gc.R, gc.G, gc.B), 18f);
+                byte ga = (byte)(alpha * 15);
+                float glowR = r * 1.1f;
+                ds.DrawEllipse(cx, cy, glowR, glowR, Color.FromArgb(ga, gc.R, gc.G, gc.B), 8f);
             }
         }
 

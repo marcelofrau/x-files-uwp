@@ -240,3 +240,59 @@ service), but conservatively fetched only when album art is missing from ID3.
 
 **Known limitation**: MusicBrainz doesn't have all obscure recordings. Confidence < 0.5
 means "no usable match" — falls back to local data only.
+
+---
+
+## ADR-011: Metadata cache backed by SQLite
+
+**Context**: Phase 11 introduced `MetadataCache` as individual JSON + `.bin` files per song
+in `LocalFolder/metadata-cache/`, named by SHA256 hash. Problems:
+- Many small files cause filesystem overhead on Xbox.
+- SHA256 filenames are not human-debuggable.
+- No way to query by partial artist/album.
+- No "Clear Cache" option in the UI.
+- Cover art stored as separate `.bin` file = two I/O operations per lookup.
+
+**Decision**: Replace file-per-entry with a single SQLite database (`metadata.db`) using
+`sqlite-net-pcl` (NuGet). Cover art stored as BLOB in the same table. Single DB file at
+`ApplicationData.Current.LocalFolder/metadata.db`.
+
+Schema:
+```sql
+CREATE TABLE entries (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    cache_key   TEXT UNIQUE NOT NULL,
+    artist TEXT, title TEXT, album TEXT,
+    genre TEXT, year TEXT, track_num TEXT,
+    duration INTEGER, confidence REAL, source TEXT,
+    mb_release TEXT, mb_recording TEXT,
+    cover_art BLOB, cover_mime TEXT,
+    timestamp INTEGER NOT NULL
+);
+CREATE INDEX idx_artist ON entries(artist);
+CREATE INDEX idx_title  ON entries(title);
+CREATE INDEX idx_album  ON entries(album);
+```
+
+Added `ClearAsync()` method and a Settings page (Start Menu → Settings → Clear Metadata
+Cache) with entry count display.
+
+**Reason**:
+- SQLite is the standard embedded database for mobile/UWP apps.
+- Single file eliminates filesystem overhead.
+- Indexed queries enable future features (search, recently played, favorites).
+- Cover art BLOB = single I/O per lookup.
+- `ClearAsync()` uses `DELETE FROM entries` — simple and atomic.
+- `sqlite-net-pcl` by praeclarum is the most proven SQLite library for UWP.
+- `SQLiteAsyncConnection` avoids blocking the UI thread.
+
+**Rejected alternatives**:
+- Single JSON index file: no dependency but loads entire index into memory for lookups;
+  cover art as base64 inflates file size.
+- `ApplicationData` composite values: limited to ~8KB per value, no cover art support.
+- LiteDB: simpler API but less tested on UWP/Xbox; SQLite has broader ecosystem.
+
+**New files**:
+- `Metadata/MetadataCacheDb.cs` — `MetadataCacheEntry` model with SQLite attributes.
+- `Settings/XFilesSettings.cs` — wrapper for `ApplicationData.Current.LocalSettings`.
+- `Controls/SettingsPage.xaml(.cs)` — Settings UI with cache stats and clear button.

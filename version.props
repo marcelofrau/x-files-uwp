@@ -3,6 +3,6 @@
   <PropertyGroup Label="VersionConfig">
     <VersionMajor>0</VersionMajor>
     <VersionMinor>9</VersionMinor>
-    <VersionPatch>8</VersionPatch>
+    <VersionPatch>9</VersionPatch>
   </PropertyGroup>
 </Project>

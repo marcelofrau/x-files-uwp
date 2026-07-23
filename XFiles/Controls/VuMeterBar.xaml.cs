@@ -37,6 +37,7 @@ namespace XFiles.Controls
             this.InitializeComponent();
             this.Loaded += OnLoaded;
             this.Unloaded += OnUnloaded;
+            this.SizeChanged += OnSizeChanged;
         }
 
         public void AttachService(AudioLevelService service)
@@ -55,6 +56,22 @@ namespace XFiles.Controls
             ResetAllBars();
         }
 
+        public void EnsureInitialized()
+        {
+            if (!_initialized && _service != null)
+            {
+                Log.Information("VuMeterBar: EnsureInitialized — building bars + starting (service attached before OnLoaded)");
+                BuildBars();
+                _initialized = true;
+                StartRendering();
+            }
+            else if (_initialized && _service != null && (_renderTimer == null || !_renderTimer.IsEnabled))
+            {
+                Log.Information("VuMeterBar: EnsureInitialized — timer not running, restarting");
+                StartRendering();
+            }
+        }
+
         private void OnLoaded(object sender, RoutedEventArgs e)
         {
             Log.Information("VuMeterBar: OnLoaded — building bars");
@@ -68,6 +85,17 @@ namespace XFiles.Controls
         private void OnUnloaded(object sender, RoutedEventArgs e)
         {
             StopRendering();
+        }
+
+        private void OnSizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (_service != null && !_initialized)
+            {
+                Log.Information("VuMeterBar: OnSizeChanged — panel became visible, rebuilding bars");
+                BuildBars();
+                _initialized = true;
+                StartRendering();
+            }
         }
 
         private void BuildBars()

@@ -28,6 +28,8 @@ namespace XFiles.Visualizers
             typeof(Visualizers.CircularRadialSpectrumVisualizer),
             typeof(Visualizers.RetroOscilloscopeVisualizer),
             typeof(Visualizers.InfernoCoreVisualizer),
+            typeof(Visualizers.WaveformTunnelVisualizer),
+            typeof(Visualizers.InfernoCoreVisualizer2),
         };
 
         public static int Count => VisualizerTypes.Length;
@@ -65,6 +67,8 @@ namespace XFiles.Visualizers
                 case AudioFullscreenMode.CircularRadialSpectrum: index = 18; break;
                 case AudioFullscreenMode.RetroOscilloscope: index = 19; break;
                 case AudioFullscreenMode.InfernoCore: index = 20; break;
+                case AudioFullscreenMode.WaveformTunnel: index = 21; break;
+                case AudioFullscreenMode.InfernoCore2: index = 22; break;
                 default: index = -1; break;
             }
             if (index < 0 || index >= VisualizerTypes.Length)

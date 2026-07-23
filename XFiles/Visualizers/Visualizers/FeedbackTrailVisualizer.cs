@@ -21,6 +21,7 @@ namespace XFiles.Visualizers.Visualizers
         private const int TrailSegments = 48;
         private const int PointsPerSegment = 64;
         private float _rotation;
+        private float _driftX, _driftY;
 
         private float[,] _trailX, _trailY;
         private int _trailHead;
@@ -47,7 +48,18 @@ namespace XFiles.Visualizers.Visualizers
             for (int i = 0; i < AudioData.BandCount; i++)
                 _smoothBands[i] += (data.BandLevels[i] - _smoothBands[i]) * AudioSmooth;
 
-            _rotation += (0.2f + _smoothBass * 0.8f + _smoothBeat * 0.5f) * (float)elapsed.TotalSeconds;
+            _rotation += (0.3f + _smoothBass * 1.2f + _smoothBeat * 0.8f) * (float)elapsed.TotalSeconds;
+
+            float driftSpeed = 0.6f + _smoothBass * 1.0f;
+            _driftX += (float)Math.Sin(_time * driftSpeed * 0.7f) * 200f * (float)elapsed.TotalSeconds;
+            _driftY += (float)Math.Cos(_time * driftSpeed * 0.5f) * 160f * (float)elapsed.TotalSeconds;
+            _driftX += (float)Math.Sin(_time * 0.13f) * 80f * (float)elapsed.TotalSeconds;
+            _driftY += (float)Math.Cos(_time * 0.17f) * 60f * (float)elapsed.TotalSeconds;
+            _driftX += (float)Math.Sin(_time * 2.1f + _smoothBass * 3f) * 120f * (float)elapsed.TotalSeconds * _smoothBass;
+            _driftY += (float)Math.Cos(_time * 1.7f + _smoothBeat * 4f) * 100f * (float)elapsed.TotalSeconds * _smoothBeat;
+            float maxDrift = Math.Min(_width, _height) * 0.45f;
+            _driftX = Math.Clamp(_driftX, -maxDrift, maxDrift);
+            _driftY = Math.Clamp(_driftY, -maxDrift, maxDrift);
 
             ComputeCurrentFrame(out float[] frameX, out float[] frameY);
 
@@ -69,7 +81,7 @@ namespace XFiles.Visualizers.Visualizers
             if (_device == null || _width == 0 || _height == 0) return;
             ds.Clear(Color.FromArgb(255, 2, 2, 5));
 
-            float cx = _width * 0.5f, cy = _height * 0.5f;
+            float cx = _width * 0.5f + _driftX, cy = _height * 0.5f + _driftY;
 
             for (int t = TrailDepth - 1; t >= 0; t--)
             {
@@ -79,7 +91,7 @@ namespace XFiles.Visualizers.Visualizers
                 float lum = 0.3f + (1f - age) * 0.4f;
                 Color c = HslToRgb(hue, 0.85f, lum);
                 byte a = (byte)(alpha * 255);
-                float thickness = (1f + (1f - age) * 2.5f) * (1f + _smoothBeat * 0.3f);
+                float thickness = (1f + (1f - age) * 3.5f) * (1f + _smoothBeat * 0.5f);
 
                 var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
                 for (int p = 0; p < PointsPerSegment - 1; p++)
@@ -100,7 +112,7 @@ namespace XFiles.Visualizers.Visualizers
         {
             frameX = new float[PointsPerSegment];
             frameY = new float[PointsPerSegment];
-            float cx = _width * 0.5f, cy = _height * 0.5f;
+            float cx = _width * 0.5f + _driftX, cy = _height * 0.5f + _driftY;
             float minDim = Math.Min(_width, _height);
             float baseRadius = minDim * 0.3f;
 
@@ -110,8 +122,9 @@ namespace XFiles.Visualizers.Visualizers
                 float angle = _rotation + t * 2f * (float)Math.PI;
                 int bandIdx = Math.Min((int)(t * AudioData.BandCount), AudioData.BandCount - 1);
                 float level = _smoothBands[bandIdx];
-                float wobble = (float)Math.Sin(t * 8f + _time * 3f) * 15f * (1f + level);
-                float radius = baseRadius * (0.5f + level * 0.5f) + wobble;
+                float wobble = (float)Math.Sin(t * 8f + _time * 3f) * 25f * (1f + level * 1.5f);
+                float bassPulse = (float)Math.Sin(t * 3f + _time * 2f) * 20f * _smoothBass;
+                float radius = baseRadius * (0.5f + level * 0.5f) + wobble + bassPulse;
                 frameX[p] = cx + (float)Math.Cos(angle) * radius;
                 frameY[p] = cy + (float)Math.Sin(angle) * radius;
             }
@@ -145,6 +158,9 @@ namespace XFiles.Visualizers.Visualizers
 
         public void ConfigurePipeline(PostProcessPipeline pipeline)
         {
+            pipeline.FeedbackOpacity = 0.55f;
+            pipeline.FeedbackZoom = 1.01f;
+            pipeline.FeedbackDecay = 0.02f;
         }
     }
 }

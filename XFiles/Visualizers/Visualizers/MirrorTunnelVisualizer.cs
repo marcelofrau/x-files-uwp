@@ -118,7 +118,7 @@ namespace XFiles.Visualizers.Visualizers
                 float rx1 = cx - ringHalfW, rx2 = cx + ringHalfW, ry2 = cy + ringHalfH;
                 float bottomWidth = rx2 - rx1;
                 float barWidth = bottomWidth / BarCount;
-                float maxBarHeight = minDim * 0.08f;
+                float maxBarHeight = minDim * 0.26f;
 
                 for (int b = 0; b < BarCount; b++)
                 {

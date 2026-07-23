@@ -194,6 +194,10 @@ namespace XFiles.Visualizers.Visualizers
 
         public void ConfigurePipeline(PostProcessPipeline pipeline)
         {
+            pipeline.FeedbackOpacity = 0.35f;
+            pipeline.FeedbackZoom = 1.002f;
+            pipeline.BloomAmount = 0.05f;
+            pipeline.BloomBlur = 3f;
         }
     }
 }

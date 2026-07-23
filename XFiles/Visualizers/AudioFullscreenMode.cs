@@ -27,6 +27,8 @@ namespace XFiles.Visualizers
         AnalogVUMeter,
         CircularRadialSpectrum,
         RetroOscilloscope,
-        InfernoCore
+        InfernoCore,
+        WaveformTunnel,
+        InfernoCore2
     }
 }

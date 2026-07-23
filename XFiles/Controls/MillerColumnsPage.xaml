@@ -667,6 +667,19 @@
                                Foreground="{StaticResource XFilesTextMutedBrush}"
                                VerticalAlignment="Center" />
                 </StackPanel>
+                <!-- View -->
+                <StackPanel x:Name="FooterViewLabel" Orientation="Horizontal" Margin="0,0,14,0" Visibility="Collapsed">
+                    <Image Source="ms-appx:///Assets/GamepadButtons/system/xboxl_view.png"
+                           Width="18" Height="18" Margin="0,0,4,0"
+                           VerticalAlignment="Center" />
+                    <TextBlock x:Name="FooterViewLabelText"
+                               Text="Options"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="12"
+                               Margin="0,3,0,0"
+                               Foreground="{StaticResource XFilesTextMutedBrush}"
+                               VerticalAlignment="Center" />
+                </StackPanel>
                 <!-- Start -->
                 <StackPanel x:Name="FooterStart" Orientation="Horizontal" Margin="0,0,14,0">
                     <Image Source="ms-appx:///Assets/GamepadButtons/system/xboxl_menu.png"
@@ -717,6 +730,7 @@
         <controls:OperationProgressDialog x:Name="OpProgressDialog" />
         <controls:PdfFullScreenOverlay x:Name="PdfFullScreen" />
         <controls:ImageFullScreenOverlay x:Name="ImageFullScreen" />
+        <controls:SettingsPage x:Name="SettingsPageControl" />
 
         <!-- Fullscreen audio overlay -->
         <Grid x:Name="AudioFullScreenPanel" Visibility="Collapsed"
@@ -885,6 +899,42 @@
                        FontSize="28" Foreground="#CC93C43C"
                        TextAlignment="Center"
                        Visibility="Collapsed" />
+
+            <!-- Track info overlay (non-default visualizer modes) -->
+            <Border x:Name="FsTrackInfoBorder" Grid.Row="0" Grid.RowSpan="3"
+                    HorizontalAlignment="Right" VerticalAlignment="Top"
+                    Margin="0,28,28,0"
+                    Background="#991A1D23" CornerRadius="8" Padding="18,14"
+                    Visibility="Collapsed">
+                <Grid MaxWidth="400">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Image x:Name="FsTrackInfoCoverArt"
+                           Grid.Column="0"
+                           Width="80" Height="80"
+                           Stretch="UniformToFill"
+                           Margin="0,0,14,0"
+                           Visibility="Collapsed" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Name="FsTrackInfoTitle"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                                   FontSize="18" Foreground="{StaticResource XFilesForegroundBrush}"
+                                   TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                        <TextBlock x:Name="FsTrackInfoArtist"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                   FontSize="13" Foreground="{StaticResource XFilesTextMutedBrush}"
+                                   TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                                   Margin="0,4,0,0" />
+                        <TextBlock x:Name="FsTrackInfoAlbum"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                   FontSize="11" Foreground="{StaticResource XFilesTextDimBrush}"
+                                   TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                                   Margin="0,2,0,0" />
+                    </StackPanel>
+                </Grid>
+            </Border>
         </Grid>
 
         <!-- Fullscreen video overlay -->
@@ -956,8 +1006,15 @@
                                FontSize="12" Margin="0,2,0,0"
                                Foreground="#99FFFFFF" VerticalAlignment="Center" />
                 </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <Image Source="ms-appx:///Assets/GamepadButtons/system/xboxl_view.png"
+                           Width="16" Height="16" Margin="0,0,4,0" VerticalAlignment="Center" />
+                    <TextBlock Text="Options"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="12" Margin="0,2,0,0"
+                               Foreground="#99FFFFFF" VerticalAlignment="Center" />
+                </StackPanel>
             </StackPanel>
-            <!-- Controls bar -->
             <Grid x:Name="FSControlsBar" Grid.Row="1" Background="#CC1A1D23" Padding="12,8">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -992,6 +1049,9 @@
 
         <!-- Start menu -->
         <controls:StartMenu x:Name="StartMenuControl" />
+
+        <!-- Video track menu (subtitles + audio) -->
+        <controls:VideoTrackMenu x:Name="VideoTrackMenuControl" />
 
         <!-- About overlay -->
         <Grid x:Name="AboutOverlay" Visibility="Collapsed"

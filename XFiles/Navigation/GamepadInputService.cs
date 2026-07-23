@@ -114,6 +114,8 @@ namespace XFiles.Navigation
                 return;
             }
 
+            _dpadNavigatedThisTick = false;
+
             var pressed = reading.Buttons;
             var justPressed = (pressed ^ _prevButtons) & pressed;
             var justReleased = (pressed ^ _prevButtons) & _prevButtons;
@@ -136,21 +138,25 @@ namespace XFiles.Navigation
             {
                 nav.OnDPadUp();
                 _dpadRepeatCooldown = DpadInitialDelay;
+                _dpadNavigatedThisTick = true;
             }
             if ((dpadJustPressed & GamepadButtons.DPadDown) != 0)
             {
                 nav.OnDPadDown();
                 _dpadRepeatCooldown = DpadInitialDelay;
+                _dpadNavigatedThisTick = true;
             }
             if ((dpadJustPressed & GamepadButtons.DPadLeft) != 0)
             {
                 nav.OnDPadLeft();
                 _dpadRepeatCooldown = DpadInitialDelay;
+                _dpadNavigatedThisTick = true;
             }
             if ((dpadJustPressed & GamepadButtons.DPadRight) != 0)
             {
                 nav.OnDPadRight();
                 _dpadRepeatCooldown = DpadInitialDelay;
+                _dpadNavigatedThisTick = true;
             }
 
             // Repeat while held
@@ -162,6 +168,7 @@ namespace XFiles.Navigation
                 else if ((dpadNow & GamepadButtons.DPadLeft) != 0) nav.OnDPadLeft();
                 else if ((dpadNow & GamepadButtons.DPadRight) != 0) nav.OnDPadRight();
                 _dpadRepeatCooldown = DpadRepeatInterval;
+                _dpadNavigatedThisTick = true;
             }
 
             _dpadHeld = dpadNow;
@@ -252,6 +259,7 @@ namespace XFiles.Navigation
         private double _shoulderSeekCooldown;
         private double _dpadRepeatCooldown;
         private GamepadButtons _dpadHeld;
+        private bool _dpadNavigatedThisTick;
         private const double DpadInitialDelay = 300;
         private const double DpadRepeatInterval = 80;
 
@@ -265,6 +273,7 @@ namespace XFiles.Navigation
 
             if (nav.IsMediaFullscreen) return;
             if (nav.IsMediaPlayerActive) return;
+            if (_dpadNavigatedThisTick) return;
 
             if (Math.Abs(y) > Deadzone)
             {

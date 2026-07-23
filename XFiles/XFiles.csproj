@@ -75,6 +75,13 @@
     <PackageReference Include="Win2D.uwp">
       <Version>1.26.0</Version>
     </PackageReference>
+    <!-- SQLite for metadata cache (see docs/DECISIONS.md ADR-011) -->
+    <PackageReference Include="sqlite-net-pcl">
+      <Version>1.9.172</Version>
+    </PackageReference>
+    <PackageReference Include="SQLitePCLRaw.bundle_green">
+      <Version>2.1.10</Version>
+    </PackageReference>
   </ItemGroup>
   <ItemGroup Condition="Exists('..\..\XrayLib\XrayLib\XrayLib.csproj')">
     <ProjectReference Include="..\..\XrayLib\XrayLib\XrayLib.csproj">
@@ -101,6 +108,7 @@
     <Compile Include="FileSystem\FilePreviewService.cs" />
     <Compile Include="FileSystem\ArchiveBrowser.cs" />
     <Compile Include="FileSystem\Id3Tag.cs" />
+    <Compile Include="FileSystem\SubtitleDetector.cs" />
     <Compile Include="FileSystem\Win32FileStream.cs" />
     <Compile Include="FileSystem\ClipboardState.cs" />
     <Compile Include="FileSystem\FileOperations.cs" />
@@ -108,8 +116,11 @@
     <Compile Include="Metadata\FilenameParser.cs" />
     <Compile Include="Metadata\MetadataMatch.cs" />
     <Compile Include="Metadata\MusicBrainzProvider.cs" />
+    <Compile Include="Metadata\DeezerProvider.cs" />
     <Compile Include="Metadata\MetadataCache.cs" />
+    <Compile Include="Metadata\MetadataCacheDb.cs" />
     <Compile Include="Metadata\MetadataGuesser.cs" />
+    <Compile Include="Settings\XFilesSettings.cs" />
     <Compile Include="Log.cs" />
     <Compile Include="ScreenLogger.cs" />
     <Compile Include="Controls\CounterPage.xaml.cs">
@@ -142,11 +153,17 @@
     <Compile Include="Controls\InputDialog.xaml.cs">
       <DependentUpon>InputDialog.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Controls\SettingsPage.xaml.cs">
+      <DependentUpon>SettingsPage.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Controls\OperationProgressDialog.xaml.cs">
       <DependentUpon>OperationProgressDialog.xaml</DependentUpon>
     </Compile>
     <Compile Include="Controls\MediaPreviewControl.xaml.cs">
       <DependentUpon>MediaPreviewControl.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\VideoTrackMenu.xaml.cs">
+      <DependentUpon>VideoTrackMenu.xaml</DependentUpon>
     </Compile>
     <Compile Include="Controls\ImageFullScreenOverlay.xaml.cs">
       <DependentUpon>ImageFullScreenOverlay.xaml</DependentUpon>
@@ -189,6 +206,8 @@
     <Compile Include="Visualizers\Visualizers\CircularRadialSpectrumVisualizer.cs" />
     <Compile Include="Visualizers\Visualizers\RetroOscilloscopeVisualizer.cs" />
     <Compile Include="Visualizers\Visualizers\InfernoCoreVisualizer.cs" />
+    <Compile Include="Visualizers\Visualizers\WaveformTunnelVisualizer.cs" />
+    <Compile Include="Visualizers\Visualizers\InfernoCoreVisualizer2.cs" />
   </ItemGroup>
   <ItemGroup>
     <ApplicationDefinition Include="App.xaml">
@@ -243,11 +262,19 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="Controls\SettingsPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Page Include="Controls\OperationProgressDialog.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Controls\MediaPreviewControl.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\VideoTrackMenu.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
@@ -385,6 +412,9 @@
     <Content Include="Assets\Views\MillerColumnsPage\osd\osd-pause-48.png" />
     <Content Include="Assets\Views\MillerColumnsPage\osd\osd-next-48.png" />
     <Content Include="Assets\Views\MillerColumnsPage\osd\osd-prev-48.png" />
+    <Content Include="Assets\Views\VideoTrackMenu\videotrackmenu-audio-20.png" />
+    <Content Include="Assets\Views\VideoTrackMenu\videotrackmenu-subtitles-20.png" />
+    <Content Include="Assets\Views\VideoTrackMenu\videotrackmenu-checkmark-20.png" />
     <Content Include="Assets\highlight.min.js" />
     <Content Include="Assets\highlight-aco.css" />
     <Content Include="Assets\Inconsolata-Regular.ttf" />

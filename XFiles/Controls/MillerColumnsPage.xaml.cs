@@ -63,6 +63,10 @@ namespace XFiles.Controls
             PreviewCodeView.NavigationCompleted += OnPreviewNavigationCompleted;
 
             MediaPreview.PlayerStateChanged += OnMediaPlayerStateChanged;
+            MediaPreview.AudioTrackEnded += OnMediaPreviewAudioEnded;
+
+            VideoTrackMenuControl.SubtitleSelected += OnVideoSubtitleSelected;
+            VideoTrackMenuControl.AudioTrackSelected += OnVideoAudioTrackSelected;
 
             var v = Package.Current.Id.Version;
             var version = $"{v.Major}.{v.Minor}.{v.Build}.{v.Revision}";
@@ -81,6 +85,12 @@ namespace XFiles.Controls
             UpdateMediaPlayerFocusUI();
         }
 
+        private void OnMediaPreviewAudioEnded(object sender, EventArgs e)
+        {
+            Log.Information("MediaPreview: audio track ended — auto-advancing");
+            NavigatePreviewTrack(1);
+        }
+
         private void UpdateMediaPlayerFocusUI()
         {
             if (_isMediaPlayerActive)
@@ -95,10 +105,12 @@ namespace XFiles.Controls
                 FooterXLabel.Text = "Fullscreen";
                 FooterLTLabel.Text = "-5s";
                 FooterRTLabel.Text = "+5s";
-                FooterLBLabel.Text = "-5s";
-                FooterRBLabel.Text = "+5s";
+                FooterLBLabel.Text = "Prev";
+                FooterRBLabel.Text = "Next";
                 FooterLTRT.Visibility = Visibility.Visible;
                 FooterLBRB.Visibility = Visibility.Visible;
+                FooterViewLabel.Visibility = Visibility.Visible;
+                FooterViewLabelText.Text = "Tracks";
             }
             else
             {
@@ -109,6 +121,7 @@ namespace XFiles.Controls
 
                 FooterLTRT.Visibility = Visibility.Collapsed;
                 FooterLBRB.Visibility = Visibility.Collapsed;
+                FooterViewLabel.Visibility = Visibility.Collapsed;
                 UpdateFooterALabelFromSelection();
                 FooterBLabel.Text = "Back";
                 FooterXLabel.Text = "Refresh";
@@ -303,13 +316,23 @@ namespace XFiles.Controls
                         PreviewImagePanel.Visibility = Visibility.Visible;
                         break;
 
-                    case FilePreviewType.Video:
                     case FilePreviewType.Audio:
-                        string mediaPath = _navigator.Preview.PreviewFilePath;
-                        Log.Information("UpdatePreviewColumn: media type={Type} path={Path}", _navigator.Preview.PreviewType, mediaPath);
+                        string audioPath = _navigator.Preview.PreviewFilePath;
+                        Log.Information("UpdatePreviewColumn: media type={Type} path={Path}", _navigator.Preview.PreviewType, audioPath);
                         PreviewStatus.Text = _navigator.Preview.PreviewFileType;
                         PreviewMediaPanel.Visibility = Visibility.Visible;
-                        _pendingMediaPath = mediaPath;
+                        MediaPreview.ShowPlaceholder(audioPath);
+                        _pendingMediaPath = audioPath;
+                        _mediaLoadTimer.Stop();
+                        _mediaLoadTimer.Start();
+                        break;
+
+                    case FilePreviewType.Video:
+                        string videoPath = _navigator.Preview.PreviewFilePath;
+                        Log.Information("UpdatePreviewColumn: media type={Type} path={Path}", _navigator.Preview.PreviewType, videoPath);
+                        PreviewStatus.Text = _navigator.Preview.PreviewFileType;
+                        PreviewMediaPanel.Visibility = Visibility.Visible;
+                        _pendingMediaPath = videoPath;
                         _mediaLoadTimer.Stop();
                         _mediaLoadTimer.Start();
                         break;
@@ -604,13 +627,6 @@ namespace XFiles.Controls
             StopMarqueeOnIndex(_lastValidSelectedIndex);
 
             if (_updating) return;
-            if (_isMediaPlayerActive)
-            {
-                // Revert selection — ListView's built-in keyboard nav changed it before we could block
-                if (_lastValidSelectedIndex >= 0 && _lastValidSelectedIndex < CurrentList.Items.Count)
-                    CurrentList.SelectedIndex = _lastValidSelectedIndex;
-                return;
-            }
             _lastValidSelectedIndex = CurrentList.SelectedIndex;
             if (CurrentList.SelectedIndex >= 0 && _navigator.Current != null)
             {
@@ -619,13 +635,16 @@ namespace XFiles.Controls
                 // start marquee on new selection
                 StartMarqueeOnIndex(CurrentList.SelectedIndex);
 
-                // Instant loading feedback — clear stale preview immediately
-                HideAllPreviewPanels();
-                var selected = CurrentList.SelectedItem as EntryViewModel;
-                PreviewHeader.Text = selected?.Name ?? "";
-                PreviewStatus.Text = "Loading...";
+                if (!_isMediaPlayerActive)
+                {
+                    // Instant loading feedback — clear stale preview immediately
+                    HideAllPreviewPanels();
+                    var selected = CurrentList.SelectedItem as EntryViewModel;
+                    PreviewHeader.Text = selected?.Name ?? "";
+                    PreviewStatus.Text = "Loading...";
 
-                _ = _navigator.OnSelectionChangedAsync();
+                    _ = _navigator.OnSelectionChangedAsync();
+                }
             }
 
             // Update footer count
@@ -802,11 +821,12 @@ namespace XFiles.Controls
 
         public void OnDPadUp()
         {
+            if (VideoTrackMenuControl.IsOpen) { VideoTrackMenuControl.HandleButton(Windows.System.VirtualKey.GamepadDPadUp); return; }
             if (IsAnyFullscreen) return;
             if (IsAnyOverlayVisible) return;
             if (StartMenuControl.IsOpen) { StartMenuControl.ForwardDPad(Windows.System.VirtualKey.Up); return; }
             if (FileActionSheetControl.IsOpen) { FileActionSheetControl.ForwardDPad(Windows.System.VirtualKey.Up); return; }
-            if (_isMediaPlayerActive) return;
+            if (SettingsPageControl.IsVisible) { SettingsPageControl.HandleDPad(Windows.System.VirtualKey.Up); return; }
             var before = CurrentList.SelectedIndex;
             if (CurrentList.SelectedIndex > 0)
                 CurrentList.SelectedIndex--;
@@ -815,11 +835,12 @@ namespace XFiles.Controls
 
         public void OnDPadDown()
         {
+            if (VideoTrackMenuControl.IsOpen) { VideoTrackMenuControl.HandleButton(Windows.System.VirtualKey.GamepadDPadDown); return; }
             if (IsAnyFullscreen) return;
             if (IsAnyOverlayVisible) return;
             if (StartMenuControl.IsOpen) { StartMenuControl.ForwardDPad(Windows.System.VirtualKey.Down); return; }
             if (FileActionSheetControl.IsOpen) { FileActionSheetControl.ForwardDPad(Windows.System.VirtualKey.Down); return; }
-            if (_isMediaPlayerActive) return;
+            if (SettingsPageControl.IsVisible) { SettingsPageControl.HandleDPad(Windows.System.VirtualKey.Down); return; }
             var before = CurrentList.SelectedIndex;
             if (CurrentList.SelectedIndex < _navigator.Current?.Entries.Count - 1)
                 CurrentList.SelectedIndex++;
@@ -828,6 +849,7 @@ namespace XFiles.Controls
 
         public void OnDPadLeft()
         {
+            if (VideoTrackMenuControl.IsOpen) { VideoTrackMenuControl.HandleButton(Windows.System.VirtualKey.GamepadDPadLeft); return; }
             if (ImageFullScreen.IsOpen) return;
             if (PdfFullScreen.IsOpen) return;
             if (AudioFullScreenPanel.Visibility == Visibility.Visible) return;
@@ -842,6 +864,7 @@ namespace XFiles.Controls
 
         public void OnDPadRight()
         {
+            if (VideoTrackMenuControl.IsOpen) { VideoTrackMenuControl.HandleButton(Windows.System.VirtualKey.GamepadDPadRight); return; }
             if (ImageFullScreen.IsOpen) return;
             if (PdfFullScreen.IsOpen) return;
             if (AudioFullScreenPanel.Visibility == Visibility.Visible) return;
@@ -859,8 +882,10 @@ namespace XFiles.Controls
             if (ErrorOverlay.Visibility == Visibility.Visible) return;
             if (IsAnyOverlayVisible) return;
             if (StartMenuControl.IsOpen) { StartMenuControl.ForwardDPad(Windows.System.VirtualKey.GamepadA); return; }
+            if (SettingsPageControl.IsVisible) { SettingsPageControl.HandleDPad(Windows.System.VirtualKey.GamepadA); return; }
             if (ImageFullScreen.IsOpen) return;
             if (PdfFullScreen.IsOpen) return;
+            if (VideoTrackMenuControl.IsOpen) { VideoTrackMenuControl.HandleButton(Windows.System.VirtualKey.GamepadA); return; }
             if (VideoFullScreenPanel.Visibility == Visibility.Visible) { OnFsVideoInput(); return; }
             if (AudioFullScreenPanel.Visibility == Visibility.Visible) { ToggleAudioFullscreenPlayPause(); return; }
             if (FileActionSheetControl.IsOpen) { FileActionSheetControl.ForwardDPad(Windows.System.VirtualKey.GamepadA); return; }
@@ -906,6 +931,8 @@ namespace XFiles.Controls
                 else if (FilePreviewService.IsAudioFile(ext))
                 {
                     Log.Verbose("OnConfirm: audio file — toggling play/pause");
+                    _mediaLoadTimer.Stop();
+                    _pendingMediaPath = null;
                     if (_isMediaPlayerActive)
                     {
                         MediaPreview.TogglePlayPause();
@@ -925,6 +952,8 @@ namespace XFiles.Controls
                 else if (FilePreviewService.IsVideoFile(ext))
                 {
                     Log.Verbose("OnConfirm: video file — toggling play/pause");
+                    _mediaLoadTimer.Stop();
+                    _pendingMediaPath = null;
                     if (_isMediaPlayerActive)
                     {
                         MediaPreview.TogglePlayPause();
@@ -955,8 +984,10 @@ namespace XFiles.Controls
             if (AboutOverlay.Visibility == Visibility.Visible) { HideAbout(); return; }
             if (PlaceholderOverlay.Visibility == Visibility.Visible) { HidePlaceholder(); return; }
             if (StartMenuControl.IsOpen) { StartMenuControl.ForwardDPad(Windows.System.VirtualKey.GamepadB); return; }
+            if (SettingsPageControl.IsVisible) { SettingsPageControl.HandleDPad(Windows.System.VirtualKey.GamepadB); return; }
             if (ImageFullScreen.IsOpen) { ImageFullScreen.HandleButton(Windows.System.VirtualKey.GamepadB); UpdateFooterALabelFromSelection(); return; }
             if (PdfFullScreen.IsOpen) { PdfFullScreen.HandleButton(Windows.System.VirtualKey.GamepadB); UpdateFooterALabelFromSelection(); return; }
+            if (VideoTrackMenuControl.IsOpen) { VideoTrackMenuControl.HandleButton(Windows.System.VirtualKey.GamepadB); return; }
             if (VideoFullScreenPanel.Visibility == Visibility.Visible) { CloseVideoFullScreen(); UpdateFooterALabelFromSelection(); return; }
             if (AudioFullScreenPanel.Visibility == Visibility.Visible) { CloseAudioFullscreen(); UpdateMediaPlayerFocusUI(); return; }
             if (FileActionSheetControl.IsOpen) { FileActionSheetControl.ForwardDPad(Windows.System.VirtualKey.GamepadB); return; }
@@ -1062,9 +1093,14 @@ namespace XFiles.Controls
             {
                 case StartMenuItem.Settings:
                     Log.Information("Start menu: Settings selected");
-                    ShowPlaceholder("Settings",
-                        "Configure X-Files preferences and behavior.",
-                        "Settings will allow you to customize sorting, display modes, theme colors, file associations, and controller mappings. This screen is under development.");
+                    var cacheCleared = await SettingsPageControl.ShowAsync();
+                    if (cacheCleared)
+                    {
+                        Log.Information("Settings: cache cleared, navigating to root");
+                        await _navigator.LoadRootAsync();
+                        CurrentList.SelectedIndex = 0;
+                        CurrentList.Focus(Windows.UI.Xaml.FocusState.Programmatic);
+                    }
                     break;
                 case StartMenuItem.StartupPreferences:
                     Log.Information("Start menu: Startup and Preferences selected");
@@ -1124,6 +1160,7 @@ namespace XFiles.Controls
             if (ImageFullScreen.IsOpen) { ImageFullScreen.HandleButton((Windows.System.VirtualKey)VK_LT); return; }
             if (PdfFullScreen.IsOpen) return;
             if (VideoFullScreenPanel.Visibility == Visibility.Visible) { HandleContinuousSeek(-5); return; }
+            if (_isMediaPlayerActive) { MediaPreview.Seek(TimeSpan.FromSeconds(-5)); return; }
             var before = CurrentList.SelectedIndex;
             if (CurrentList.SelectedIndex > 0)
                 CurrentList.SelectedIndex = Math.Max(0, CurrentList.SelectedIndex - 8);
@@ -1135,6 +1172,7 @@ namespace XFiles.Controls
             if (ImageFullScreen.IsOpen) { ImageFullScreen.HandleButton((Windows.System.VirtualKey)VK_RT); return; }
             if (PdfFullScreen.IsOpen) return;
             if (VideoFullScreenPanel.Visibility == Visibility.Visible) { HandleContinuousSeek(5); return; }
+            if (_isMediaPlayerActive) { MediaPreview.Seek(TimeSpan.FromSeconds(5)); return; }
             var before = CurrentList.SelectedIndex;
             if (_navigator.Current != null && CurrentList.Items.Count > 0)
                 CurrentList.SelectedIndex = Math.Min(CurrentList.Items.Count - 1, CurrentList.SelectedIndex + 8);
@@ -1147,7 +1185,7 @@ namespace XFiles.Controls
             if (PdfFullScreen.IsOpen) { PdfFullScreen.HandleBumper(true); return; }
             if (AudioFullScreenPanel.Visibility == Visibility.Visible) { NavigateAudioTrack(-1); return; }
             if (VideoFullScreenPanel.Visibility == Visibility.Visible) { HandleContinuousSeek(-5); return; }
-            if (_isMediaPlayerActive) { MediaPreview.Seek(TimeSpan.FromSeconds(-5)); return; }
+            if (_isMediaPlayerActive) { NavigatePreviewTrack(-1); return; }
             JumpByLetter(-1);
         }
 
@@ -1157,7 +1195,7 @@ namespace XFiles.Controls
             if (PdfFullScreen.IsOpen) { PdfFullScreen.HandleBumper(false); return; }
             if (AudioFullScreenPanel.Visibility == Visibility.Visible) { NavigateAudioTrack(1); return; }
             if (VideoFullScreenPanel.Visibility == Visibility.Visible) { HandleContinuousSeek(5); return; }
-            if (_isMediaPlayerActive) { MediaPreview.Seek(TimeSpan.FromSeconds(5)); return; }
+            if (_isMediaPlayerActive) { NavigatePreviewTrack(1); return; }
             JumpByLetter(1);
         }
 
@@ -1206,6 +1244,7 @@ namespace XFiles.Controls
         public void OnSeekRepeat(int seconds)
         {
             if (VideoFullScreenPanel.Visibility == Visibility.Visible) { HandleContinuousSeek(seconds); return; }
+            if (AudioFullScreenPanel.Visibility == Visibility.Visible) { return; }
             if (_isMediaPlayerActive) { MediaPreview.Seek(TimeSpan.FromSeconds(seconds)); return; }
         }
 
@@ -1437,7 +1476,21 @@ namespace XFiles.Controls
 
         public void OnSelectVisualizer()
         {
-            if (_isAudioFullscreen)
+            if (VideoFullScreenPanel.Visibility == Visibility.Visible)
+            {
+                _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                {
+                    if (VideoTrackMenuControl.IsOpen)
+                    {
+                        VideoTrackMenuControl.HandleButton(Windows.System.VirtualKey.GamepadA);
+                    }
+                    else
+                    {
+                        OpenVideoTrackMenu();
+                    }
+                });
+            }
+            else if (_isAudioFullscreen)
             {
                 _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
                 {
@@ -1457,7 +1510,38 @@ namespace XFiles.Controls
         public async Task ShowMediaFullscreenAsync(Uri source, bool isVideo, TimeSpan position)
         {
             if (!isVideo) return;
-            FsVideoPlayer.Source = Windows.Media.Core.MediaSource.CreateFromUri(source);
+            _fsVideoPath = source.LocalPath;
+
+            // Detect external subtitles (VLC-style same-name matching)
+            _fsSubtitles = SubtitleDetector.FindExternalSubtitles(_fsVideoPath);
+            _fsSelectedSubtitleIndex = -1;
+            _fsSelectedAudioIndex = 0;
+            _fsAudioTracks = new List<AudioTrackInfo>();
+            _fsSuppressTrackEvent = false;
+
+            // Build MediaSource with external subtitle tracks
+            var mediaSource = Windows.Media.Core.MediaSource.CreateFromUri(source);
+            foreach (var sub in _fsSubtitles)
+            {
+                try
+                {
+                    var tts = TimedTextSource.CreateFromUri(new Uri(sub.FilePath));
+                    tts.Resolved += OnExternalSubtitleResolved;
+                    mediaSource.ExternalTimedTextSources.Add(tts);
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning("ShowMediaFullscreenAsync: failed to add subtitle '{Path}': {Error}", sub.FilePath, ex.Message);
+                }
+            }
+
+            // Create MediaPlaybackItem so we can access TimedMetadataTracks and AudioTracks later
+            _fsPlaybackItem = new Windows.Media.Playback.MediaPlaybackItem(mediaSource);
+            FsVideoPlayer.Source = _fsPlaybackItem;
+
+            // Subscribe to MediaOpened to enumerate tracks after source is ready
+            FsVideoPlayer.MediaOpened += OnFsVideoMediaOpened;
+
             FsVideoSession.Position = position;
             FsVideoPlayer.Volume = _fsVolume;
             FsVideoPlayer.Play();
@@ -1468,8 +1552,228 @@ namespace XFiles.Controls
             VideoFullScreenPanel.Visibility = Visibility.Visible;
             ShowFsControls();
             ShowFsOsd("PLAY", "ms-appx:///Assets/Views/MillerColumnsPage/osd/osd-play-48.png");
-            Log.Information("ShowMediaFullscreenAsync: started fullscreen video at {Position}", position);
+            Log.Information("ShowMediaFullscreenAsync: started fullscreen video at {Position}, {SubCount} external subs", position, _fsSubtitles.Count);
             await System.Threading.Tasks.Task.CompletedTask;
+        }
+
+        private void OnEmbeddedSubtitleCueEntered(TimedMetadataTrack sender, MediaCueEventArgs args)
+        {
+            if (args.Cue is TimedTextCue ttCue && ttCue.CueStyle == null)
+            {
+                ttCue.CueStyle = new TimedTextStyle
+                {
+                    FontFamily = "Arial",
+                    FontSize = new TimedTextDouble { Unit = TimedTextUnit.Percentage, Value = 100 },
+                    Foreground = Windows.UI.Colors.White,
+                    OutlineColor = Windows.UI.Colors.Black,
+                    OutlineThickness = new TimedTextDouble { Unit = TimedTextUnit.Percentage, Value = 4 },
+                    OutlineRadius = new TimedTextDouble { Unit = TimedTextUnit.Percentage, Value = 2 }
+                };
+            }
+        }
+
+        private void OnExternalSubtitleResolved(TimedTextSource sender, TimedTextSourceResolveResultEventArgs args)
+        {
+            Log.Verbose("OnExternalSubtitleResolved: external subtitle track resolved");
+            if (args.Tracks == null) return;
+            foreach (var track in args.Tracks)
+            {
+                if (track.TimedMetadataKind != TimedMetadataKind.Subtitle) continue;
+                foreach (var cue in track.Cues)
+                {
+                    if (cue is TimedTextCue ttCue)
+                    {
+                        ttCue.CueStyle = new TimedTextStyle
+                        {
+                            FontFamily = "Arial",
+                            FontSize = new TimedTextDouble { Unit = TimedTextUnit.Percentage, Value = 100 },
+                            Foreground = Windows.UI.Colors.White,
+                            OutlineColor = Windows.UI.Colors.Black,
+                            OutlineThickness = new TimedTextDouble { Unit = TimedTextUnit.Percentage, Value = 4 },
+                            OutlineRadius = new TimedTextDouble { Unit = TimedTextUnit.Percentage, Value = 2 }
+                        };
+                    }
+                }
+            }
+        }
+
+        private void OnFsVideoMediaOpened(MediaPlayer sender, object args)
+        {
+            _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+            {
+                FsVideoPlayer.MediaOpened -= OnFsVideoMediaOpened;
+                EnumerateAllTracks();
+            });
+        }
+
+        private void EnumerateAllTracks()
+        {
+            try
+            {
+                if (_fsPlaybackItem == null) return;
+
+                _fsSuppressTrackEvent = true;
+
+                // Enumerate embedded subtitle tracks
+                int embeddedSubCount = 0;
+                for (int i = 0; i < _fsPlaybackItem.TimedMetadataTracks.Count; i++)
+                {
+                    var track = _fsPlaybackItem.TimedMetadataTracks[i];
+                    if (track.TimedMetadataKind == Windows.Media.Core.TimedMetadataKind.Subtitle)
+                    {
+                        string lang = track.Language ?? "Unknown";
+                        string title = track.Label ?? lang;
+                        _fsSubtitles.Add(new SubtitleTrack
+                        {
+                            Language = lang,
+                            Title = title,
+                            IsExternal = false,
+                            EmbeddedIndex = embeddedSubCount,
+                            FilePath = null
+                        });
+                        track.CueEntered += OnEmbeddedSubtitleCueEntered;
+                        embeddedSubCount++;
+                    }
+                }
+
+                Log.Information("EnumerateAllTracks: found {EmbeddedSubs} embedded subtitle tracks", embeddedSubCount);
+
+                // Enumerate audio tracks
+                _fsAudioTracks.Clear();
+                for (int i = 0; i < _fsPlaybackItem.AudioTracks.Count; i++)
+                {
+                    var track = _fsPlaybackItem.AudioTracks[i];
+                    _fsAudioTracks.Add(new AudioTrackInfo
+                    {
+                        Language = track.Language ?? "Unknown",
+                        Title = track.Label ?? track.Language ?? "Unknown",
+                        Index = i
+                    });
+                }
+                _fsSelectedAudioIndex = (int)_fsPlaybackItem.AudioTracks.SelectedIndex;
+
+                Log.Information("EnumerateAllTracks: found {AudioCount} audio tracks", _fsAudioTracks.Count);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("EnumerateAllTracks: {Error}", ex.Message);
+            }
+            finally
+            {
+                _fsSuppressTrackEvent = false;
+            }
+        }
+
+        private void OpenVideoTrackMenu()
+        {
+            if (VideoFullScreenPanel.Visibility != Visibility.Visible) return;
+            if (VideoTrackMenuControl.IsOpen) return;
+
+            // If tracks haven't been enumerated yet (source still opening), try now
+            if (_fsAudioTracks.Count == 0 && _fsSubtitles.Count == 1 && _fsSubtitles[0].IsExternal)
+            {
+                EnumerateAllTracks();
+            }
+
+            VideoTrackMenuControl.Show(_fsSubtitles, _fsAudioTracks, _fsSelectedSubtitleIndex, _fsSelectedAudioIndex);
+            _fsHideTimer.Stop();
+        }
+
+        private void OnVideoSubtitleSelected(object sender, SubtitleTrack track)
+        {
+            if (_fsPlaybackItem == null) return;
+
+            try
+            {
+                // Disable all subtitle tracks first
+                for (uint i = 0; i < _fsPlaybackItem.TimedMetadataTracks.Count; i++)
+                {
+                    _fsPlaybackItem.TimedMetadataTracks.SetPresentationMode(i,
+                        TimedMetadataTrackPresentationMode.Disabled);
+                }
+
+                if (track.IsExternal)
+                {
+                    // Find the external subtitle track by matching the file path
+                    for (uint i = 0; i < _fsPlaybackItem.TimedMetadataTracks.Count; i++)
+                    {
+                        var ttTrack = _fsPlaybackItem.TimedMetadataTracks[(int)i];
+                        if (ttTrack.TimedMetadataKind == TimedMetadataKind.Subtitle)
+                        {
+                            // External subtitles added first, so they come before embedded
+                            int externalIndex = _fsSubtitles.FindIndex(s => s.IsExternal && s.FilePath == track.FilePath);
+                            int trackIndex = externalIndex >= 0 ? externalIndex : (int)i;
+
+                            if (trackIndex == (int)i)
+                            {
+                                _fsPlaybackItem.TimedMetadataTracks.SetPresentationMode(i,
+                                    TimedMetadataTrackPresentationMode.PlatformPresented);
+                                _fsSelectedSubtitleIndex = _fsSubtitles.IndexOf(track);
+                                ShowFsOsd($"Sub: {track.GetDisplayName()}");
+                                Log.Information("OnVideoSubtitleSelected: enabled external subtitle '{Name}'", track.GetDisplayName());
+                                return;
+                            }
+                        }
+                    }
+                }
+                else if (track.EmbeddedIndex >= 0)
+                {
+                    // Enable the embedded track
+                    int count = 0;
+                    for (uint i = 0; i < _fsPlaybackItem.TimedMetadataTracks.Count; i++)
+                    {
+                        var ttTrack = _fsPlaybackItem.TimedMetadataTracks[(int)i];
+                        if (ttTrack.TimedMetadataKind == TimedMetadataKind.Subtitle)
+                        {
+                            if (count == track.EmbeddedIndex)
+                            {
+                                _fsPlaybackItem.TimedMetadataTracks.SetPresentationMode(i,
+                                    TimedMetadataTrackPresentationMode.PlatformPresented);
+                                _fsSelectedSubtitleIndex = _fsSubtitles.IndexOf(track);
+                                ShowFsOsd($"Sub: {track.GetDisplayName()}");
+                                Log.Information("OnVideoSubtitleSelected: enabled embedded subtitle '{Name}'", track.GetDisplayName());
+                                return;
+                            }
+                            count++;
+                        }
+                    }
+                }
+                else
+                {
+                    // "Off" selected — all tracks already disabled above
+                    _fsSelectedSubtitleIndex = -1;
+                    ShowFsOsd("Sub: Off");
+                    Log.Information("OnVideoSubtitleSelected: subtitles disabled");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("OnVideoSubtitleSelected: {Error}", ex.Message);
+            }
+        }
+
+        private void OnVideoAudioTrackSelected(object sender, int trackIndex)
+        {
+            if (_fsPlaybackItem == null) return;
+
+            try
+            {
+                if (trackIndex >= 0 && trackIndex < _fsPlaybackItem.AudioTracks.Count)
+                {
+                    _fsPlaybackItem.AudioTracks.SelectedIndex = trackIndex;
+                    _fsSelectedAudioIndex = trackIndex;
+
+                    string name = trackIndex < _fsAudioTracks.Count
+                        ? _fsAudioTracks[trackIndex].DisplayName
+                        : $"Track {trackIndex + 1}";
+                    ShowFsOsd($"Audio: {name}");
+                    Log.Information("OnVideoAudioTrackSelected: selected audio track {Index} '{Name}'", trackIndex, name);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("OnVideoAudioTrackSelected: {Error}", ex.Message);
+            }
         }
 
         private void CloseVideoFullScreen()
@@ -1479,9 +1783,15 @@ namespace XFiles.Controls
             _fsOsdHideTimer.Stop();
             FsVideoPlayer.Pause();
             FsVideoPlayer.Source = null;
+            _fsPlaybackItem = null;
             _fsVideoPlaying = false;
+            _fsSubtitles?.Clear();
+            _fsAudioTracks?.Clear();
+            _fsSelectedSubtitleIndex = -1;
+            _fsSelectedAudioIndex = -1;
+            VideoTrackMenuControl.Close();
             VideoFullScreenPanel.Visibility = Visibility.Collapsed;
-            Log.Information("CloseVideoFullScreen: stopped");
+            Log.Information("CloseVideoFullScreen: stopped, track state cleared");
         }
 
         private void OnFullscreenProgressTick(object sender, object e)
@@ -1681,7 +1991,9 @@ namespace XFiles.Controls
             (AudioFullscreenMode.AnalogVUMeter, "Analog VU Meter"),
             (AudioFullscreenMode.CircularRadialSpectrum, "Circular Radial Spectrum"),
             (AudioFullscreenMode.RetroOscilloscope, "Retro Oscilloscope"),
-            (AudioFullscreenMode.InfernoCore, "Inferno Core")
+            (AudioFullscreenMode.InfernoCore, "Inferno Core"),
+            (AudioFullscreenMode.WaveformTunnel, "Waveform Tunnel"),
+            (AudioFullscreenMode.InfernoCore2, "Inferno Core 2")
         };
 
         private DispatcherTimer _fsModeOsdTimer;
@@ -1699,6 +2011,10 @@ namespace XFiles.Controls
                     _fsVisualizerMode = candidate;
                     ApplyAudioVisualizerMode();
                     ShowModeOsd(_fsModeOrder.First(m => m.Mode == candidate).Label);
+                    if (candidate != AudioFullscreenMode.Default)
+                        ShowTrackInfoOsd();
+                    else
+                        FsTrackInfoBorder.Visibility = Visibility.Collapsed;
                     return;
                 }
             }
@@ -1758,6 +2074,51 @@ namespace XFiles.Controls
             }
             _fsModeOsdTimer.Stop();
             _fsModeOsdTimer.Start();
+        }
+
+        private DispatcherTimer _fsTrackInfoTimer;
+
+        private void ShowTrackInfoOsd()
+        {
+            if (_fsVisualizerMode == AudioFullscreenMode.Default) return;
+
+            FsTrackInfoTitle.Text = FsTitleText.Text;
+            FsTrackInfoArtist.Text = FsArtistText.Text;
+            FsTrackInfoAlbum.Text = FsAlbumText.Text;
+            FsTrackInfoArtist.Visibility = FsArtistText.Visibility;
+            FsTrackInfoAlbum.Visibility = FsAlbumText.Visibility;
+
+            if (_fsHasAlbumArt && _fsAlbumArtBitmap != null)
+            {
+                FsTrackInfoCoverArt.Source = _fsAlbumArtBitmap;
+                FsTrackInfoCoverArt.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                FsTrackInfoCoverArt.Visibility = Visibility.Collapsed;
+            }
+
+            FsTrackInfoBorder.Visibility = Visibility.Visible;
+            FsTrackInfoBorder.Opacity = 1.0;
+
+            if (_fsTrackInfoTimer == null)
+            {
+                _fsTrackInfoTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(2500) };
+                _fsTrackInfoTimer.Tick += (s, e) =>
+                {
+                    _fsTrackInfoTimer.Stop();
+                    var fade = new Storyboard();
+                    var dur = new Duration(TimeSpan.FromMilliseconds(500));
+                    var anim = new DoubleAnimation { To = 0.0, Duration = dur, EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn } };
+                    Storyboard.SetTarget(anim, FsTrackInfoBorder);
+                    Storyboard.SetTargetProperty(anim, "Opacity");
+                    fade.Children.Add(anim);
+                    fade.Completed += (s2, e2) => FsTrackInfoBorder.Visibility = Visibility.Collapsed;
+                    fade.Begin();
+                };
+            }
+            _fsTrackInfoTimer.Stop();
+            _fsTrackInfoTimer.Start();
         }
 
         private void OnFsHideTimerTick(object sender, object e)
@@ -1825,6 +2186,13 @@ namespace XFiles.Controls
 
         private bool _fsVideoPlaying = false;
         private double _fsVolume = 0.75;
+        private string _fsVideoPath;
+        private List<SubtitleTrack> _fsSubtitles;
+        private List<AudioTrackInfo> _fsAudioTracks;
+        private int _fsSelectedSubtitleIndex = -1;
+        private int _fsSelectedAudioIndex = 0;
+        private bool _fsSuppressTrackEvent;
+        private Windows.Media.Playback.MediaPlaybackItem _fsPlaybackItem;
 
         private double _seekCooldown;
         private double _ltHoldMs;
@@ -1884,7 +2252,9 @@ namespace XFiles.Controls
         private AudioFullscreenMode _fsVisualizerMode;
         private DispatcherTimer _fsVisualizerTimer = new DispatcherTimer();
         private bool _fsHasAlbumArt;
+        private Windows.UI.Xaml.Media.Imaging.BitmapImage _fsAlbumArtBitmap;
         private MetadataGuesser _fsMetadataGuesser = new MetadataGuesser();
+        private int _fsGeneration;
 
         // MediaPlayer/Session helpers for fullscreen video + audio (migrated from MediaElement)
         private Windows.Media.Playback.MediaPlayer FsVideoPlayer => VideoFullScreenPlayer.MediaPlayer;
@@ -1895,13 +2265,13 @@ namespace XFiles.Controls
         public async void OpenAudioFullscreen(string filePath, TimeSpan position)
         {
             Log.Information("OpenAudioFullscreen: {Path}", filePath);
+            int gen = ++_fsGeneration;
             bool wasAlreadyFullscreen = _isAudioFullscreen;
             _audioFullscreenPath = filePath;
             _isAudioFullscreen = true;
 
             MediaPreview.Stop();
 
-            // Use AudioGraph for both playback + VU meter (no duplicate MediaPlayer)
             StopFsAudioAnalysis();
             if (!wasAlreadyFullscreen)
                 _fsVisualizerMode = AudioFullscreenMode.Default;
@@ -1912,14 +2282,18 @@ namespace XFiles.Controls
             FsVuMeter.AttachService(_fsAudioLevelService);
             await _fsAudioLevelService.LoadAndPlay(filePath);
 
-            // Seek to position after load
+            if (gen != _fsGeneration)
+            {
+                Log.Information("OpenAudioFullscreen: stale generation, aborting");
+                return;
+            }
+
             if (position > TimeSpan.Zero)
                 _fsAudioLevelService.Seek(position);
 
             FsPlayPauseIcon.Glyph = "\uE769";
             FsVolumeText.Text = $"Vol {(int)(_audioVolume * 100)}%";
 
-            // Show placeholder immediately — don't wait for metadata
             FsTitleText.Text = System.IO.Path.GetFileNameWithoutExtension(filePath);
             FsArtistText.Text = "";
             FsArtistText.Visibility = Visibility.Collapsed;
@@ -1930,22 +2304,21 @@ namespace XFiles.Controls
             _fsHasAlbumArt = false;
 
             AudioFullScreenPanel.Visibility = Visibility.Visible;
+            FsVuMeter.EnsureInitialized();
             UpdateMediaPlayerFocusUI();
 
-            // Start shared fullscreen progress timer (if not already running)
             if (_fullscreenProgressTimer.IsEnabled == false)
                 _fullscreenProgressTimer.Start();
 
-            // Load metadata async — don't block UI thread
             _ = LoadAudioFullscreenMetadataAsync(filePath);
 
-            // Re-apply current visualizer mode with new audio service
             if (_fsVisualizerMode != AudioFullscreenMode.Default)
                 ApplyAudioVisualizerMode();
         }
 
         private async Task LoadAudioFullscreenMetadataAsync(string filePath)
         {
+            int gen = _fsGeneration;
             try
             {
                 Log.Information("FsMetadata: starting async load for {Path}", filePath);
@@ -1956,7 +2329,7 @@ namespace XFiles.Controls
                 Log.Information("FsMetadata: source={Source} score={Score:F2} title='{Title}' artist='{Artist}' album='{Album}' art={HasArt}",
                     match?.Source, match?.Confidence, tag?.Title, tag?.Artist, tag?.Album, tag?.HasAlbumArt);
 
-                if (_audioFullscreenPath != filePath)
+                if (gen != _fsGeneration || _audioFullscreenPath != filePath)
                 {
                     Log.Information("FsMetadata: stale result for {Path}, discarding", filePath);
                     return;
@@ -1974,6 +2347,7 @@ namespace XFiles.Controls
                         stream.Seek(0);
                         await bitmap.SetSourceAsync(stream);
                     }
+                    _fsAlbumArtBitmap = bitmap;
                     FsAlbumArtBorder.Visibility = Visibility.Visible;
                     FsDefaultArtPanel.Visibility = Visibility.Collapsed;
                     FsAlbumArtImage.Source = bitmap;
@@ -1994,6 +2368,9 @@ namespace XFiles.Controls
 
                 Log.Information("FsMetadata: applied title={Title} artist={Artist} album={Album} art={HasArt}",
                     tag?.Title, tag?.Artist, tag?.Album, hasArt);
+
+                ApplyAudioVisualizerMode();
+                ShowTrackInfoOsd();
             }
             catch (Exception ex)
             {
@@ -2008,6 +2385,7 @@ namespace XFiles.Controls
             FsVisualizerCanvas.Deactivate();
             FsVisualizerCanvas.DetachService();
             FsVisualizerCanvas.Visibility = Visibility.Collapsed;
+            FsTrackInfoBorder.Visibility = Visibility.Collapsed;
             _fsVisualizerMode = AudioFullscreenMode.Default;
             _isAudioFullscreen = false;
             _audioFullscreenPath = null;
@@ -2033,6 +2411,46 @@ namespace XFiles.Controls
                 FsPlayPauseIcon.Glyph = "\uE768";
                 ShowAudioOsd("Pause", "ms-appx:///Assets/Views/MillerColumnsPage/osd/osd-pause-48.png", 1200);
             }
+        }
+
+        private void NavigatePreviewTrack(int direction)
+        {
+            if (string.IsNullOrEmpty(MediaPreview.CurrentFilePath) || _navigator.Current == null) return;
+
+            var audioFiles = _navigator.Current.Entries
+                .Where(e => !e.IsDirectory && FilePreviewService.IsAudioFile(System.IO.Path.GetExtension(e.Name)))
+                .ToList();
+
+            if (audioFiles.Count == 0) return;
+
+            int currentIdx = audioFiles.FindIndex(e =>
+                string.Equals(e.FullPath, MediaPreview.CurrentFilePath, StringComparison.OrdinalIgnoreCase));
+
+            int nextIdx = currentIdx + direction;
+            if (nextIdx < 0) nextIdx = audioFiles.Count - 1;
+            if (nextIdx >= audioFiles.Count) nextIdx = 0;
+
+            var nextFile = audioFiles[nextIdx];
+            Log.Information("NavigatePreviewTrack: {Direction} to {Path}", direction > 0 ? "next" : "prev", nextFile.FullPath);
+
+            int mainIdx = _navigator.Current.Entries.IndexOf(nextFile);
+            if (mainIdx >= 0)
+            {
+                _updating = true;
+                CurrentList.SelectedIndex = mainIdx;
+                _lastValidSelectedIndex = mainIdx;
+                _updating = false;
+
+                if (_navigator.Preview != null)
+                    _navigator.Preview.PreviewFilePath = nextFile.FullPath;
+
+                int totalCount = _navigator.Current?.Entries.Count ?? 0;
+                FooterItemCount.Text = totalCount > 0 ? $"{mainIdx + 1}/{totalCount}" : "";
+            }
+
+            MediaPreview.Stop();
+            MediaPreview.LoadFile(nextFile.FullPath);
+            MediaPreview.TogglePlayPause();
         }
 
         public void NavigateAudioTrack(int direction)
@@ -2119,9 +2537,8 @@ namespace XFiles.Controls
         {
             await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
             {
-                FsPlayPauseIcon.Glyph = "\uE768";
-                FsAudioProgress.Value = 100;
-                Log.Information("FsAudio: ended");
+                Log.Information("FsAudio: ended — auto-advancing");
+                NavigateAudioTrack(1);
             });
         }
 

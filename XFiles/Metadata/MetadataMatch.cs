@@ -4,6 +4,7 @@ namespace XFiles.Metadata
     {
         Cache,
         MusicBrainz,
+        Deezer,
         Filename,
         Id3Only
     }
@@ -16,8 +17,9 @@ namespace XFiles.Metadata
         public string MusicBrainzId;
         public string ReleaseMbid;
         public byte[] CoverArtBytes;
+        public string CoverArtUrl;
 
-        public bool IsUsable => Confidence >= 0.5f;
+        public bool IsUsable => Confidence >= 0.8f;
 
         public static MetadataMatch FromCache(TrackMetadata cached)
         {
@@ -37,6 +39,17 @@ namespace XFiles.Metadata
                 Confidence = confidence,
                 Source = MatchSource.MusicBrainz,
                 MusicBrainzId = mbid
+            };
+        }
+
+        public static MetadataMatch FromDeezer(TrackMetadata meta, float confidence, string coverUrl)
+        {
+            return new MetadataMatch
+            {
+                Metadata = meta,
+                Confidence = confidence,
+                Source = MatchSource.Deezer,
+                CoverArtUrl = coverUrl
             };
         }
 

@@ -100,14 +100,14 @@ namespace XFiles.Visualizers.Visualizers
                     Color circleColor = HslToRgb(hue, sat, lum);
 
                     // Draw glow circle (larger, dimmer)
-                    float glowRadius = circleRadius * 3.5f;
-                    byte glowAlpha = (byte)Math.Min(255, (int)(60 + bandLevel * 80));
+                    float glowRadius = circleRadius * 2.2f;
+                    byte glowAlpha = (byte)Math.Min(255, (int)(12 + bandLevel * 18));
                     var glowGeo = CanvasGeometry.CreateEllipse(ds, orbX, orbY, glowRadius, glowRadius);
                     ds.FillGeometry(glowGeo, Color.FromArgb(glowAlpha, circleColor.R, circleColor.G, circleColor.B));
 
                     // Extra outer haze
-                    float hazeRadius = circleRadius * 6f;
-                    byte hazeAlpha = (byte)Math.Min(255, (int)(20 + bandLevel * 30));
+                    float hazeRadius = circleRadius * 3.5f;
+                    byte hazeAlpha = (byte)Math.Min(255, (int)(4 + bandLevel * 6));
                     var hazeGeo = CanvasGeometry.CreateEllipse(ds, orbX, orbY, hazeRadius, hazeRadius);
                     ds.FillGeometry(hazeGeo, Color.FromArgb(hazeAlpha, circleColor.R, circleColor.G, circleColor.B));
 
@@ -128,12 +128,12 @@ namespace XFiles.Visualizers.Visualizers
                     // Lens flare streaks on bright circles
                     if (bandLevel > 0.5f)
                     {
-                        float flareSz = circleRadius * 3f * bandLevel;
-                        byte flareA = (byte)Math.Min(255, (int)(40 * bandLevel));
+                        float flareSz = circleRadius * 2.5f * bandLevel;
+                        byte flareA = (byte)Math.Min(255, (int)(20 * bandLevel));
                         var fStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
                         Color fColor = Color.FromArgb(flareA, circleColor.R, circleColor.G, circleColor.B);
-                        ds.DrawLine(orbX - flareSz, orbY, orbX + flareSz, orbY, fColor, 1f, fStyle);
-                        ds.DrawLine(orbX, orbY - flareSz, orbX, orbY + flareSz, fColor, 1f, fStyle);
+                        ds.DrawLine(orbX - flareSz, orbY, orbX + flareSz, orbY, fColor, 0.8f, fStyle);
+                        ds.DrawLine(orbX, orbY - flareSz, orbX, orbY + flareSz, fColor, 0.8f, fStyle);
                     }
 
                     // Connecting line to center (faint)
@@ -150,11 +150,11 @@ namespace XFiles.Visualizers.Visualizers
             float centerHue = (_time * 0.1f) % 1.0f;
             Color centerColor = HslToRgb(centerHue, 1f, 0.7f + _smoothBeat * 0.3f);
 
-            var outerGlow2 = CanvasGeometry.CreateEllipse(ds, cx, cy, centerRadius * 5f, centerRadius * 5f);
-            ds.FillGeometry(outerGlow2, Color.FromArgb(15, centerColor.R, centerColor.G, centerColor.B));
+            var outerGlow2 = CanvasGeometry.CreateEllipse(ds, cx, cy, centerRadius * 4f, centerRadius * 4f);
+            ds.FillGeometry(outerGlow2, Color.FromArgb(4, centerColor.R, centerColor.G, centerColor.B));
 
-            var outerGlow = CanvasGeometry.CreateEllipse(ds, cx, cy, centerRadius * 3f, centerRadius * 3f);
-            ds.FillGeometry(outerGlow, Color.FromArgb(30, centerColor.R, centerColor.G, centerColor.B));
+            var outerGlow = CanvasGeometry.CreateEllipse(ds, cx, cy, centerRadius * 2f, centerRadius * 2f);
+            ds.FillGeometry(outerGlow, Color.FromArgb(8, centerColor.R, centerColor.G, centerColor.B));
 
             var centerGeo = CanvasGeometry.CreateEllipse(ds, cx, cy, centerRadius, centerRadius);
             ds.FillGeometry(centerGeo, centerColor);
@@ -163,15 +163,15 @@ namespace XFiles.Visualizers.Visualizers
             ds.FillGeometry(centerCoreGeo, Colors.White);
 
             // Center lens flare streaks
-            float flareLen = centerRadius * 4f * (1f + _smoothBeat * 0.5f);
-            byte flareAlpha = (byte)Math.Min(255, (int)(60 + _smoothBeat * 80));
+            float flareLen = centerRadius * 3f * (1f + _smoothBeat * 0.4f);
+            byte flareAlpha = (byte)Math.Min(255, (int)(30 + _smoothBeat * 40));
             var flareStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
             Color flareColor = Color.FromArgb(flareAlpha, centerColor.R, centerColor.G, centerColor.B);
-            ds.DrawLine(cx - flareLen, cy, cx + flareLen, cy, flareColor, 1.5f, flareStyle);
-            ds.DrawLine(cx, cy - flareLen, cx, cy + flareLen, flareColor, 1.5f, flareStyle);
+            ds.DrawLine(cx - flareLen, cy, cx + flareLen, cy, flareColor, 1f, flareStyle);
+            ds.DrawLine(cx, cy - flareLen, cx, cy + flareLen, flareColor, 1f, flareStyle);
             float flareLen2 = flareLen * 0.7f;
-            ds.DrawLine(cx - flareLen2, cy - flareLen2, cx + flareLen2, cy + flareLen2, Color.FromArgb((byte)(flareAlpha / 2), centerColor.R, centerColor.G, centerColor.B), 1f, flareStyle);
-            ds.DrawLine(cx + flareLen2, cy - flareLen2, cx - flareLen2, cy + flareLen2, Color.FromArgb((byte)(flareAlpha / 2), centerColor.R, centerColor.G, centerColor.B), 1f, flareStyle);
+            ds.DrawLine(cx - flareLen2, cy - flareLen2, cx + flareLen2, cy + flareLen2, Color.FromArgb((byte)(flareAlpha / 3), centerColor.R, centerColor.G, centerColor.B), 0.7f, flareStyle);
+            ds.DrawLine(cx + flareLen2, cy - flareLen2, cx - flareLen2, cy + flareLen2, Color.FromArgb((byte)(flareAlpha / 3), centerColor.R, centerColor.G, centerColor.B), 0.7f, flareStyle);
         }
 
         private static Color HslToRgb(float h, float s, float l)
@@ -192,6 +192,9 @@ namespace XFiles.Visualizers.Visualizers
 
         public void ConfigurePipeline(PostProcessPipeline pipeline)
         {
+            pipeline.BloomAmount = 0.01f;
+            pipeline.BloomBlur = 1.5f;
+            pipeline.BloomThreshold = 0.7f;
         }
     }
 }

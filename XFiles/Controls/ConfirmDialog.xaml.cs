@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using Windows.System;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Input;
@@ -62,6 +63,23 @@ namespace XFiles.Controls
             Overlay.Visibility = Visibility.Collapsed;
             Visibility = Visibility.Collapsed;
             _tcs?.TrySetResult(result);
+        }
+
+        public bool IsDialogVisible => Visibility == Visibility.Visible;
+
+        public void HandleButton(VirtualKey key)
+        {
+            switch (key)
+            {
+                case VirtualKey.GamepadA:
+                case VirtualKey.Enter:
+                    Close(true);
+                    break;
+                case VirtualKey.GamepadB:
+                case VirtualKey.Escape:
+                    Close(false);
+                    break;
+            }
         }
     }
 }

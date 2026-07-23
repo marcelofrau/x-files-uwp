@@ -233,10 +233,16 @@ audio playback, track navigation, or transport controls. 60fps sustained on Xbox
 - [x] `FilenameParser` — extracts artist/album/track# from path patterns (`Artist - Album/01 - Title.mp3`).
 - [x] `MusicBrainzProvider` — async search via MusicBrainz API with 1 req/s IP rate limit.
 - [x] `MusicBrainzProvider.FetchCoverArtAsync()` — album art from Cover Art Archive.
-- [x] `MetadataCache` — JSON cache in `ApplicationData.Current.LocalFolder/metadata-cache/`, 90-day TTL.
+- [x] `MetadataCache` — SQLite database (`metadata.db`) via `sqlite-net-pcl`, 90-day TTL.
+  - Cover art stored as BLOB (single I/O per lookup).
+  - `ClearAsync()` for cache management from Settings page.
+  - Indexed queries on artist/title/album.
+- [x] `MetadataCacheDb.cs` — `MetadataCacheEntry` SQLite model.
 - [x] `MetadataMatch` — match result with confidence score (0.0–1.0) and source tracking.
 - [x] `MetadataGuesser` — orchestrator: ID3 → filename → cache → MusicBrainz → merge → UI.
 - [x] Integration in `MediaPreviewControl` and `MillerColumnsPage` (fullscreen audio).
+- [x] `SettingsPage` — Clear Metadata Cache with entry count display.
+- [x] `XFilesSettings` — wrapper for `ApplicationData.Current.LocalSettings`.
 - [x] `XFiles.csproj` updated with all new files.
 
 **Completion criteria**: selecting an audio file shows metadata from ID3 + filename inference.

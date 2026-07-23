@@ -14,12 +14,11 @@ namespace XFiles.Visualizers.Visualizers
         private CanvasDevice _device;
         private float _width, _height, _time;
 
-        private const int GridX = 6;
-        private const int GridZ = 5;
+        private const int GridX = 8;
+        private const int GridZ = 6;
         private float[] _smoothLevels = new float[GridX * GridZ];
         private float _smoothBass, _smoothBeat, _smoothAvg;
         private const float AudioSmooth = 0.25f;
-        private float _cameraAngle = -0.5f;
 
         public void Initialize(CanvasDevice device) { _device = device; }
 
@@ -42,7 +41,7 @@ namespace XFiles.Visualizers.Visualizers
                 for (int gx = 0; gx < GridX; gx++)
                 {
                     int cellIdx = gz * GridX + gx;
-                    int bandIdx = ((totalCells - 1 - cellIdx) * AudioData.BandCount) / totalCells;
+                    int bandIdx = (cellIdx * AudioData.BandCount) / totalCells;
                     bandIdx = Math.Min(bandIdx, AudioData.BandCount - 1);
                     _smoothLevels[cellIdx] += (data.BandLevels[bandIdx] - _smoothLevels[cellIdx]) * AudioSmooth;
                 }
@@ -63,55 +62,79 @@ namespace XFiles.Visualizers.Visualizers
 
         private void DrawSkyGlow(CanvasDrawingSession ds)
         {
-            float glowAlpha = (byte)Math.Min(255, (int)(12 + _smoothBeat * 25));
+            float cx = _width * 0.5f;
+            float cy = _height * 0.55f;
+            float beatPulse = _smoothBeat;
             float hue = (_time * 0.03f) % 1.0f;
-            Color c = HslToRgb(hue, 0.5f, 0.25f);
-            var geo = CanvasGeometry.CreateEllipse(ds, _width * 0.5f, _height * 0.3f, _width * 0.5f, _height * 0.25f);
-            ds.FillGeometry(geo, Color.FromArgb((byte)glowAlpha, c.R, c.G, c.B));
+
+            // Outer glow — large, soft, beat-driven radius
+            float outerR = _width * 0.35f * (1f + beatPulse * 0.6f);
+            float outerH = _height * 0.2f * (1f + beatPulse * 0.5f);
+            byte outerA = (byte)Math.Min(255, (int)(4 + beatPulse * 20));
+            Color outerC = HslToRgb(hue, 0.5f, 0.2f);
+            var outerGeo = CanvasGeometry.CreateEllipse(ds, cx, cy, outerR, outerH);
+            ds.FillGeometry(outerGeo, Color.FromArgb(outerA, outerC.R, outerC.G, outerC.B));
+
+            // Inner glow — tighter, brighter on beat
+            float innerR = _width * 0.18f * (1f + beatPulse * 0.8f);
+            float innerH = _height * 0.1f * (1f + beatPulse * 0.7f);
+            byte innerA = (byte)Math.Min(255, (int)(3 + beatPulse * 28));
+            Color innerC = HslToRgb((hue + 0.05f) % 1.0f, 0.6f, 0.3f);
+            var innerGeo = CanvasGeometry.CreateEllipse(ds, cx, cy, innerR, innerH);
+            ds.FillGeometry(innerGeo, Color.FromArgb(innerA, innerC.R, innerC.G, innerC.B));
+
+            // Core flash — small, bright white on strong beats
+            if (beatPulse > 0.3f)
+            {
+                float coreR = _width * 0.06f * beatPulse;
+                float coreH = _height * 0.04f * beatPulse;
+                byte coreA = (byte)Math.Min(200, (int)(beatPulse * 120));
+                var coreGeo = CanvasGeometry.CreateEllipse(ds, cx, cy, coreR, coreH);
+                ds.FillGeometry(coreGeo, Color.FromArgb(coreA, 255, 255, 255));
+            }
         }
 
         private void DrawGrid(CanvasDrawingSession ds)
         {
             float cx = _width * 0.5f;
-            float groundY = _height * 0.65f;
-            float tileW = _width * 0.055f;
-            float tileH = tileW * 0.5f;
-            float maxHeight = _height * 0.38f;
-            float gap = tileW * 0.15f;
-            float cosCam = (float)Math.Cos(_cameraAngle);
-            float sinCam = (float)Math.Sin(_cameraAngle);
+            float groundY = _height * 0.68f;
 
-            for (int gz = GridZ - 1; gz >= 0; gz--)
+            float tileW = _width * 0.065f;
+            float tileH = tileW * 0.5f;
+            float halfW = tileW * 0.5f * 1.22f;
+            float halfH = tileH * 0.5f * 1.22f;
+
+            float maxHeight = _height * 0.35f;
+
+            for (int gz = 0; gz < GridZ; gz++)
             {
                 for (int gx = 0; gx < GridX; gx++)
                 {
                     int cellIdx = gz * GridX + gx;
                     float level = _smoothLevels[cellIdx];
-                    float blockH = level * maxHeight;
-                    if (blockH < 2f) blockH = 2f;
+                    float blockH = Math.Max(4f, level * maxHeight);
 
-                    float relX = (gx - GridX * 0.5f) * (1f + gap / tileW);
-                    float relZ = (gz - GridZ * 0.5f) * (1f + gap / tileW);
-                    float rotX = relX * cosCam - relZ * sinCam;
-                    float rotZ = relX * sinCam + relZ * cosCam;
-                    float depth = rotZ + GridZ * 0.5f;
-                    float depthScale = 1f / (1f + depth * 0.07f);
+                    float isoX = (gx - (GridX - 1) * 0.5f) - (gz - (GridZ - 1) * 0.5f);
+                    float isoY = (gx - (GridX - 1) * 0.5f) + (gz - (GridZ - 1) * 0.5f);
 
-                    float sx = cx + rotX * tileW * depthScale;
-                    float sy = groundY + rotZ * tileH * 0.4f * depthScale;
-                    float drawW = tileW * 0.75f * depthScale;
-                    float drawH = tileH * 0.4f * depthScale;
-                    float drawBlockH = blockH * depthScale;
+                    float sx = cx + isoX * halfW;
+                    float sy = groundY + isoY * halfH;
 
-                    float fog = Math.Max(0.2f, 1f - depth * 0.035f);
-                    float bandT = (float)cellIdx / (GridX * GridZ - 1);
+                    float depthFactor = (float)(gx + gz) / (GridX + GridZ - 2);
+                    float fog = Math.Max(0.4f, 1f - (1f - depthFactor) * 0.3f);
+
+                    float gxNorm = (float)gx / (GridX - 1);
+                    float colHue = (0.0f + gxNorm * 0.75f) % 1.0f;
+                    float beatWobble = (float)Math.Sin(_time * 2.5f + gx * 1.1f) * 0.04f;
+                    float hue = (colHue + beatWobble) % 1.0f;
+                    float satBoost = 0.75f + _smoothBeat * 0.25f;
                     Color blockColor = HslToRgb(
-                        (0.65f - bandT * 0.35f + _time * 0.015f) % 1.0f,
-                        0.6f + _smoothBeat * 0.2f,
-                        (0.25f + level * 0.4f) * fog
+                        hue,
+                        satBoost,
+                        (0.32f + level * 0.40f) * fog
                     );
 
-                    DrawVoxelBlock(ds, sx, sy, drawW, drawH, drawBlockH, blockColor);
+                    DrawVoxelBlock(ds, sx, sy, tileW, tileH, blockH, blockColor);
                 }
             }
         }
@@ -122,44 +145,51 @@ namespace XFiles.Visualizers.Visualizers
             float hw = w * 0.5f;
             float hh = h * 0.5f;
 
+            float topY = sy - blockH;
+
             var topGeo = CanvasGeometry.CreatePolygon(ds, new[]
             {
-                new System.Numerics.Vector2(sx, sy - blockH),
-                new System.Numerics.Vector2(sx + hw, sy - blockH + hh),
-                new System.Numerics.Vector2(sx, sy - blockH + h),
-                new System.Numerics.Vector2(sx - hw, sy - blockH + hh)
+                new System.Numerics.Vector2(sx, topY - hh),
+                new System.Numerics.Vector2(sx + hw, topY),
+                new System.Numerics.Vector2(sx, topY + hh),
+                new System.Numerics.Vector2(sx - hw, topY)
             });
+
             Color topColor = Color.FromArgb(255,
-                (byte)Math.Min(255, (int)(color.R * 1.4f)),
-                (byte)Math.Min(255, (int)(color.G * 1.4f)),
-                (byte)Math.Min(255, (int)(color.B * 1.4f)));
+                (byte)Math.Min(255, (int)(color.R * 1.3f)),
+                (byte)Math.Min(255, (int)(color.G * 1.3f)),
+                (byte)Math.Min(255, (int)(color.B * 1.3f)));
             ds.FillGeometry(topGeo, topColor);
 
             var leftGeo = CanvasGeometry.CreatePolygon(ds, new[]
             {
-                new System.Numerics.Vector2(sx, sy - blockH + h),
-                new System.Numerics.Vector2(sx - hw, sy - blockH + hh),
-                new System.Numerics.Vector2(sx - hw, sy + hh),
-                new System.Numerics.Vector2(sx, sy + h)
+                new System.Numerics.Vector2(sx - hw, topY),
+                new System.Numerics.Vector2(sx, topY + hh),
+                new System.Numerics.Vector2(sx, sy + hh),
+                new System.Numerics.Vector2(sx - hw, sy)
             });
+
             Color leftColor = Color.FromArgb(255,
-                (byte)(color.R * 0.55f),
-                (byte)(color.G * 0.55f),
-                (byte)(color.B * 0.55f));
+                (byte)(color.R * 0.70f),
+                (byte)(color.G * 0.70f),
+                (byte)(color.B * 0.70f));
             ds.FillGeometry(leftGeo, leftColor);
 
             var rightGeo = CanvasGeometry.CreatePolygon(ds, new[]
             {
-                new System.Numerics.Vector2(sx, sy - blockH + h),
-                new System.Numerics.Vector2(sx + hw, sy - blockH + hh),
-                new System.Numerics.Vector2(sx + hw, sy + hh),
-                new System.Numerics.Vector2(sx, sy + h)
+                new System.Numerics.Vector2(sx, topY + hh),
+                new System.Numerics.Vector2(sx + hw, topY),
+                new System.Numerics.Vector2(sx + hw, sy),
+                new System.Numerics.Vector2(sx, sy + hh)
             });
+
             Color rightColor = Color.FromArgb(255,
-                (byte)(color.R * 0.35f),
-                (byte)(color.G * 0.35f),
-                (byte)(color.B * 0.35f));
+                (byte)(color.R * 0.45f),
+                (byte)(color.G * 0.45f),
+                (byte)(color.B * 0.45f));
             ds.FillGeometry(rightGeo, rightColor);
+
+            ds.DrawGeometry(topGeo, Color.FromArgb(200, 255, 255, 255), 1.0f);
         }
 
         private static Color HslToRgb(float h, float s, float l)
@@ -183,12 +213,13 @@ namespace XFiles.Visualizers.Visualizers
             pipeline.Rotation = 0f;
             pipeline.SlideX = 0f;
             pipeline.SlideY = 0f;
-            pipeline.FeedbackOpacity = 0.50f;
-            pipeline.FeedbackZoom = 1.0005f;
+            pipeline.FeedbackOpacity = 0f;
+            pipeline.FeedbackZoom = 1.0f;
             pipeline.FeedbackDecay = 0f;
-            pipeline.BloomAmount = 0.2f;
-            pipeline.BloomBlur = 5f;
-            pipeline.BloomThreshold = 0.3f;
+            pipeline.BloomEnabled = false;
+            pipeline.BloomAmount = 0f;
+            pipeline.BloomBlur = 0f;
+            pipeline.BloomThreshold = 0.65f;
         }
     }
 }

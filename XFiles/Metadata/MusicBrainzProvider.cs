@@ -37,7 +37,7 @@ namespace XFiles.Metadata
                 queries.Add((BuildRecordingQuery(artist, cleanTitle, null), artist, cleanTitle, null));
 
             if (!string.IsNullOrWhiteSpace(artist) && !string.IsNullOrWhiteSpace(album))
-                queries.Add((BuildReleaseQuery(artist, album), artist, null, album));
+                queries.Add((BuildReleaseQuery(artist, album), artist, cleanTitle, album));
 
             if (queries.Count == 0) return null;
 
@@ -64,8 +64,8 @@ namespace XFiles.Metadata
             await _rateLimiter.WaitAsync(ct);
             try
             {
-                string url = $"{BaseUrl}recording/?query={Uri.EscapeDataString(query)}&fmt=json&limit=5";
-                Log.Information("MusicBrainz: searching {Query}", query);
+                string url = $"{BaseUrl}recording/?query={Uri.EscapeDataString(query)}&fmt=json&limit=15";
+                Log.Information("MusicBrainz: searching URL={Url} query={Query}", url, query);
 
                 var response = await _http.GetAsync(url, ct);
                 Log.Information("MusicBrainz: HTTP {Status}", response.StatusCode);
@@ -73,9 +73,10 @@ namespace XFiles.Metadata
                 if (!response.IsSuccessStatusCode) return null;
 
                 string json = await response.Content.ReadAsStringAsync();
+                Log.Information("MusicBrainz: response (first 800 chars)={Json}", json.Length > 800 ? json.Substring(0, 800) : json);
                 var root = JsonObject.Parse(json);
                 var items = root.GetNamedArray("recordings", new JsonArray());
-                Log.Information("MusicBrainz: found {Count} recordings for query", items.Count);
+                Log.Information("MusicBrainz: found {Count} recordings for query={Query}", items.Count, query);
                 if (items.Count == 0) return null;
 
                 return FindBestMatch(items, qArtist, qTitle, qAlbum);
@@ -113,6 +114,7 @@ namespace XFiles.Metadata
                     return null;
 
                 string json = await metaResponse.Content.ReadAsStringAsync();
+                Log.Information("CoverArt: metadata JSON (first 500) for {MBID}: {Json}", releaseMbid, json.Length > 500 ? json.Substring(0, 500) : json);
                 var root = JsonObject.Parse(json);
                 var images = root.GetNamedArray("images", new JsonArray());
 
@@ -125,17 +127,43 @@ namespace XFiles.Metadata
                 string imageUrl = null;
                 for (int i = 0; i < images.Count; i++)
                 {
-                    var img = images[i].GetObject();
-                    bool isFront = SafeGetBoolean(img, "front", false);
-                    if (isFront)
+                    try
                     {
-                        imageUrl = img.GetNamedString("image", null);
-                        break;
+                        var imgValue = images[i];
+                        if (imgValue == null || imgValue.ValueType != JsonValueType.Object)
+                        {
+                            Log.Information("CoverArt: image[{Index}] is type {Type}, skipping", i, imgValue?.ValueType);
+                            continue;
+                        }
+                        var img = imgValue.GetObject();
+                        bool isFront = SafeGetBoolean(img, "front", false);
+                        string url = SafeGetString(img, "image");
+                        Log.Information("CoverArt: image[{Index}] front={Front} url={Url}", i, isFront, url ?? "(null)");
+                        if (isFront && !string.IsNullOrEmpty(url))
+                        {
+                            imageUrl = url;
+                            break;
+                        }
+                    }
+                    catch (Exception imgEx)
+                    {
+                        Log.Warning("CoverArt: error parsing image[{Index}]: {Error}", i, imgEx.Message);
                     }
                 }
 
                 if (imageUrl == null && images.Count > 0)
-                    imageUrl = images[0].GetObject().GetNamedString("image", null);
+                {
+                    try
+                    {
+                        var firstValue = images[0];
+                        if (firstValue != null && firstValue.ValueType == JsonValueType.Object)
+                        {
+                            var firstImg = firstValue.GetObject();
+                            imageUrl = SafeGetString(firstImg, "image");
+                        }
+                    }
+                    catch { }
+                }
 
                 if (imageUrl == null)
                 {
@@ -143,10 +171,10 @@ namespace XFiles.Metadata
                     return null;
                 }
 
-                Log.Information("CoverArt: fetching image {URL}", imageUrl);
+                Log.Information("CoverArt: fetching image URL={URL} scheme={Scheme}", imageUrl, imageUrl.StartsWith("https") ? "HTTPS" : "HTTP");
 
                 var imgResponse = await _http.GetAsync(imageUrl, ct);
-                Log.Information("CoverArt: image HTTP {Status} for {MBID}", imgResponse.StatusCode, releaseMbid);
+                Log.Information("CoverArt: image HTTP {Status} for {MBID} finalUrl={FinalUrl}", imgResponse.StatusCode, releaseMbid, imgResponse.RequestMessage?.RequestUri);
 
                 if (!imgResponse.IsSuccessStatusCode)
                     return null;
@@ -358,6 +386,15 @@ namespace XFiles.Metadata
                 if (val.GetString() == "0") return false;
             }
             return defaultValue;
+        }
+
+        private static string SafeGetString(JsonObject obj, string key)
+        {
+            if (!obj.ContainsKey(key)) return null;
+            var val = obj.GetNamedValue(key);
+            if (val.ValueType == JsonValueType.String)
+                return val.GetString();
+            return null;
         }
     }
 }

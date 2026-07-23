@@ -18,6 +18,8 @@ namespace XFiles.Visualizers.Visualizers
         private const float AudioSmooth = 0.25f;
         private float _cubeAngleX, _cubeAngleY, _cubeAngleZ;
         private float _flashIntensity;
+        private float[] _waveform;
+        private int _waveformCount;
 
         private const int PlasmaGrid = 8;
         private float[,,] _plasmaNoise;
@@ -48,12 +50,14 @@ namespace XFiles.Visualizers.Visualizers
 
             if (data.Beat > 0.7f) _flashIntensity = 1.0f;
             _flashIntensity *= 0.88f;
+            _waveform = data.Waveform;
+            _waveformCount = data.WaveformCount;
         }
 
         public void Draw(CanvasDrawingSession ds)
         {
             if (_device == null || _width == 0 || _height == 0) return;
-            ds.Clear(Color.FromArgb(255, 8, 2, 2));
+            ds.Clear(Color.FromArgb(255, 3, 1, 1));
 
             DrawPlasmaBackground(ds);
             DrawCube(ds);
@@ -97,7 +101,7 @@ namespace XFiles.Visualizers.Visualizers
                     hue -= (float)Math.Floor(hue);
                     float fireHue = hue * 0.15f;
                     float sat = 0.8f + plasma * 0.2f;
-                    float brightness = (0.15f + plasma * 0.15f + _smoothBass * 0.1f);
+                    float brightness = (0.04f + plasma * 0.05f + _smoothBass * 0.03f);
 
                     float dx = u - 0.5f, dy = v - 0.5f;
                     float vignette = 1f - (float)Math.Sqrt(dx * dx + dy * dy) * 0.8f;
@@ -113,7 +117,7 @@ namespace XFiles.Visualizers.Visualizers
         {
             float cx = _width * 0.5f, cy = _height * 0.5f;
             float baseSize = Math.Min(_width, _height) * 0.14f;
-            float scale = 1f + _smoothBass * 0.6f + _flashIntensity * 0.3f;
+            float scale = 1f + _smoothBass * 0.9f + _flashIntensity * 0.5f;
             float size = baseSize * scale;
 
             float cosX = (float)Math.Cos(_cubeAngleX), sinX = (float)Math.Sin(_cubeAngleX);
@@ -168,12 +172,32 @@ namespace XFiles.Visualizers.Visualizers
                 byte eg = (byte)Math.Min(255, (int)(edgeColor.G * depthFade));
                 byte eb = (byte)Math.Min(255, (int)(edgeColor.B * depthFade));
 
-                ds.DrawLine(projected[a, 0], projected[a, 1], projected[b, 0], projected[b, 1],
-                    Color.FromArgb(255, er, eg, eb), 2f + _smoothBeat * 1.5f);
+                float ax = projected[a, 0], ay = projected[a, 1];
+                float bx = projected[b, 0], by = projected[b, 1];
+                float edgeLen = (float)Math.Sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay));
+                float edgeAngle = (float)Math.Atan2(by - ay, bx - ax);
+                float perpX = -(float)Math.Sin(edgeAngle);
+                float perpY = (float)Math.Cos(edgeAngle);
+                float waveAmp = Math.Min(edgeLen * 0.15f, 12f) * (1f + _smoothBass * 0.5f);
+
+                int segCount = 12;
+                float prevPx = ax, prevPy = ay;
+                for (int s = 1; s <= segCount; s++)
+                {
+                    float t = (float)s / segCount;
+                    float baseX = ax + (bx - ax) * t;
+                    float baseY = ay + (by - ay) * t;
+                    int wIdx = (int)(t * _waveformCount) % Math.Max(1, _waveformCount);
+                    float sample = _waveform != null && _waveformCount > 0 ? _waveform[wIdx] : 0f;
+                    float waveOffset = sample * waveAmp;
+                    float px = baseX + perpX * waveOffset;
+                    float py = baseY + perpY * waveOffset;
+                    ds.DrawLine(prevPx, prevPy, px, py, Color.FromArgb(255, er, eg, eb), 2f + _smoothBeat * 1.5f);
+                    prevPx = px; prevPy = py;
+                }
 
                 float glowA = 20 + (int)(_smoothBeat * 20);
-                ds.DrawLine(projected[a, 0], projected[a, 1], projected[b, 0], projected[b, 1],
-                    Color.FromArgb((byte)glowA, er, eg, eb), 6f);
+                ds.DrawLine(ax, ay, bx, by, Color.FromArgb((byte)glowA, er, eg, eb), 6f);
             }
 
             for (int i = 0; i < 8; i++)
