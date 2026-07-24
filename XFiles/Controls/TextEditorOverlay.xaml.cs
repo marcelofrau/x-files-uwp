@@ -426,8 +426,6 @@ namespace XFiles.Controls
 
             if (shown)
             {
-                KeyboardBridge.IsEnabled = true;
-                KeyboardBridge.IsTabStop = true;
                 KeyboardBridge.Focus(FocusState.Programmatic);
             }
             else
@@ -451,9 +449,6 @@ namespace XFiles.Controls
                 Log.Warning("TextEditorOverlay: HideVirtualKeyboard failed: {Error}", ex.Message);
             }
 
-            // Disable TextBox so it can't steal focus or intercept events
-            KeyboardBridge.IsEnabled = false;
-            KeyboardBridge.IsTabStop = false;
             KeyboardBridge.Text = "";
 
             Log.Information("TextEditorOverlay: virtual keyboard hidden");

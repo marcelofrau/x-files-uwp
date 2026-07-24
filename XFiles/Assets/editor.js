@@ -13,7 +13,6 @@ var editor = (function () {
     var _highlightEnabled = true;
     var _language = '';
     var _highlightTimeout = null;
-    var _savedCursorPos = 0;
     var _undoStack = [];
     var _redoStack = [];
     var _maxUndo = 0; // 0 = unlimited
@@ -125,11 +124,6 @@ var editor = (function () {
 
         // Update block cursor on selection changes
         document.addEventListener('selectionchange', function () {
-            var sel = window.getSelection();
-            if (sel && sel.rangeCount > 0) {
-                var pos = getCursorPosition();
-                if (pos >= 0) _savedCursorPos = pos;
-            }
             updateBlockCursor();
         });
 
@@ -247,18 +241,8 @@ var editor = (function () {
         }
     }
 
-    function ensureSelection() {
-        var sel = window.getSelection();
-        if (!sel || sel.rangeCount === 0 || (sel.anchorNode === null && sel.focusNode === null)) {
-            setCursorPosition(_savedCursorPos);
-            sel = window.getSelection();
-        }
-        return sel;
-    }
-
     function insertText(text) {
         _dirty = true;
-        ensureSelection();
         document.execCommand('insertText', false, text);
     }
 
@@ -271,15 +255,15 @@ var editor = (function () {
 
     function backspace() {
         _dbg('backspace-before');
-        var sel = ensureSelection();
+        var sel = window.getSelection();
         if (sel && !sel.isCollapsed) {
             deleteSelection();
             _dirty = true;
             _dbg('backspace-selDel');
             return;
         }
+        // Use execCommand for undo support
         _dirty = true;
-        ensureSelection();
         document.execCommand('delete', false, null);
         _dbg('backspace-after');
     }
@@ -296,8 +280,8 @@ var editor = (function () {
     function insertNewline() {
         _dbg('newline-before');
         _dirty = true;
+        // Get current line indent for auto-indent
         var indent = getCurrentLineIndent();
-        ensureSelection();
         document.execCommand('insertText', false, '\n' + indent);
         _dbg('newline-after');
     }
