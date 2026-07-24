@@ -38,7 +38,6 @@ namespace XFiles.FileSystem
 
         private const uint FIND_FIRST_EX_LARGE_FETCH = 0x00000002;
         private const uint FILE_ATTRIBUTE_DIRECTORY = 0x10;
-        private const uint FILE_ATTRIBUTE_HIDDEN = 0x02;
         private const uint FILE_ATTRIBUTE_SYSTEM = 0x04;
         private const int INVALID_HANDLE_VALUE = -1;
 
@@ -152,9 +151,6 @@ namespace XFiles.FileSystem
 
                         string name = findData.cFileName;
                         if (name == "." || name == "..") continue;
-
-                        bool isHidden = (findData.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN) != 0;
-                        if (isHidden) continue;
 
                         bool isDir = (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
                         long size = isDir ? 0 : ((long)findData.nFileSizeHigh << 32) | findData.nFileSizeLow;
