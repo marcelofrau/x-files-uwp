@@ -44,7 +44,10 @@ namespace XFiles.Controls
                 var cache = new MetadataCache();
                 cacheCount = await cache.GetEntryCountAsync();
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Log.Warning("SettingsPage: failed to read cache count: {Error}", ex.Message);
+            }
 
             CacheStatsText.Text = $"{cacheCount} cached entries";
 
@@ -120,7 +123,7 @@ namespace XFiles.Controls
                             {
                                 Label = "Clear Metadata Cache",
                                 Description = $"Remove all 0 Deezer/MusicBrainz lookups and cover art",
-                                IconPath = IconBase + "startmenu-close-48.png",
+                    IconPath = "ms-appx:///Assets/Views/FileActionSheet/fileactionsheet-delete-48.png",
                                 Action = "clear-cache"
                             }
                         };

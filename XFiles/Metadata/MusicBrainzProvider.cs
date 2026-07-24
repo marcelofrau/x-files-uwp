@@ -162,7 +162,10 @@ namespace XFiles.Metadata
                             imageUrl = SafeGetString(firstImg, "image");
                         }
                     }
-                    catch { }
+                    catch (Exception fallbackEx)
+                    {
+                        Log.Warning("CoverArt: error parsing fallback image: {Error}", fallbackEx.Message);
+                    }
                 }
 
                 if (imageUrl == null)
