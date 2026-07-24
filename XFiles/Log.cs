@@ -1,5 +1,7 @@
 using System;
+using System.Diagnostics;
 using System.IO;
+using System.Runtime.CompilerServices;
 using Serilog;
 using Serilog.Core;
 using Serilog.Events;
@@ -25,14 +27,15 @@ namespace XFiles
 
             _logger = new LoggerConfiguration()
                 .MinimumLevel.Verbose()
+                .Enrich.With<CallerEnricher>()
                 .WriteTo.Sink(Screen)
                 .WriteTo.Debug(
-                    outputTemplate: "[{Timestamp:HH:mm:ss.fff} {Level:u3}] {Message:lj}{NewLine}{Exception}")
+                    outputTemplate: "[{Timestamp:HH:mm:ss.fff} {Level:u3}] [{Caller}] {Message:lj}{NewLine}{Exception}")
                 .WriteTo.File(
                     logPath,
                     rollingInterval: RollingInterval.Day,
                     retainedFileCountLimit: 5,
-                    outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff} {Level:u3}] {Message:lj}{NewLine}{Exception}",
+                    outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff} {Level:u3}] [{Caller}] {Message:lj}{NewLine}{Exception}",
                     shared: true)
                 .CreateLogger();
 
@@ -75,11 +78,31 @@ namespace XFiles
         }
     }
 
+    /// <summary>
+    /// Walks the stack to find the first non-Serilog caller method name.
+    /// </summary>
     public class CallerEnricher : ILogEventEnricher
     {
         public void Enrich(LogEvent logEvent, ILogEventPropertyFactory propertyFactory)
         {
-            logEvent.AddPropertyIfAbsent(propertyFactory.CreateProperty("Caller", "Unknown"));
+            string caller = "Unknown";
+            try
+            {
+                var trace = new StackTrace();
+                foreach (var frame in trace.GetFrames())
+                {
+                    var method = frame?.GetMethod();
+                    if (method == null) continue;
+                    var declaringType = method.DeclaringType;
+                    var typeName = declaringType?.FullName ?? "";
+                    // Skip Serilog internals and this Log wrapper class
+                    if (typeName.StartsWith("Serilog") || typeName == "XFiles.Log" || typeName == "XFiles.CallerEnricher") continue;
+                    caller = method.DeclaringType?.Name + "." + method.Name;
+                    break;
+                }
+            }
+            catch { }
+            logEvent.AddPropertyIfAbsent(propertyFactory.CreateProperty("Caller", caller));
         }
     }
 }
