@@ -61,6 +61,11 @@ XAML Views → ViewModels → Navigation (`INavigable`, `ColumnNavigator`) →
 | `docs/ROADMAP.md` | Phased implementation plan with done criteria per phase |
 | `docs/ASSETS-GUIDE.md` | Asset naming, directory structure, personal icon set workflow |
 | `docs/DECISIONS.md` | ADRs — why XAML, why not yazi-core, why SharpCompress, etc. |
+| `docs/text-editor/SPEC.md` | Text editor requirements, file size tiers, scope |
+| `docs/text-editor/ARCHITECTURE.md` | Editor components, data flow, system keyboard integration |
+| `docs/text-editor/INPUT-MAPPING.md` | Gamepad button mapping for Navigate + Input modes |
+| `docs/text-editor/ENCODING.md` | Encoding detection, BOM handling, line endings |
+| `docs/text-editor/EDGE-CASES.md` | EdgeHTML quirks, performance, Xbox-specific issues |
 
 ## Planned Key Files (not all exist yet — see ROADMAP phases)
 
@@ -72,7 +77,9 @@ XAML Views → ViewModels → Navigation (`INavigable`, `ColumnNavigator`) →
 | `XFiles/FileSystem/DirectoryScanner.cs` | P/Invoke `FindFirstFileExFromAppW` + `GetLogicalDrives` |
 | `XFiles/FileSystem/ArchiveBrowser.cs` | SharpCompress-based zip/7z/rar virtual folder |
 | `XFiles/FileSystem/FileOperations.cs` | Copy/Move/Rename/Delete/Extract |
+| `XFiles/FileSystem/TextEditorService.cs` | Text file I/O, encoding detection, file size tiers |
 | `XFiles/ContextMenu/FileActionSheet.xaml` | Y-button context menu |
+| `XFiles/Controls/TextEditorOverlay.xaml` | Fullscreen text editor (WebView + TextBox bridge) |
 | `XFiles/Theming/AppTheme.cs` | JSON-backed theme loader |
 | `XFiles/Theming/RetroTheme.xaml` | Custom ControlTemplate/Style resource dictionary |
 

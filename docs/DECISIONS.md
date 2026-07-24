@@ -296,3 +296,76 @@ Cache) with entry count display.
 - `Metadata/MetadataCacheDb.cs` — `MetadataCacheEntry` model with SQLite attributes.
 - `Settings/XFilesSettings.cs` — wrapper for `ApplicationData.Current.LocalSettings`.
 - `Controls/SettingsPage.xaml(.cs)` — Settings UI with cache stats and clear button.
+
+---
+
+## ADR-012: Text Editor — WebView + contentEditable, System Keyboard
+
+**Context**: post-MVP text editing feature. Need gamepad-oriented text input on Xbox
+without a physical keyboard. Two main questions: (1) editing surface (TextBox vs
+WebView), (2) text input method (custom keyboard vs UWP system keyboard).
+
+### Decision 1: Editing Surface
+
+**Decision**: WebView with `contentEditable` div + highlight.js for syntax highlighting.
+
+**Rejected alternative**: UWP `TextBox` — no syntax highlighting, limited styling.
+
+**Reason**:
+- Syntax highlighting is a key differentiator for a code-aware file browser
+- Reuse existing highlight.js infrastructure from preview (same v9.18.5 ES5,
+  same Aco theme CSS, same Inconsolata font)
+- `contentEditable` in EdgeHTML supports basic text editing operations
+- TextBox used only as hidden bridge for system keyboard input (not editing surface)
+
+### Decision 2: Text Input Method
+
+**Decision**: UWP system virtual keyboard via `CoreInputView.TryShow(CoreInputViewKind.Gamepad)`
+with `InputPane.TryShow()` fallback. Hidden `TextBox` bridges keyboard input to WebView.
+
+**Rejected alternatives**:
+- Custom virtual keyboard (XAML grid): higher maintenance, inconsistent with Xbox UX,
+  would need D-pad navigation reimplementation. System keyboard already handles
+  gamepad navigation natively on Xbox.
+
+**Reason**:
+- Xbox already has a gamepad-optimized virtual keyboard (`CoreInputViewKind.Gamepad`,
+  Windows SDK 26100.3624+)
+- `InputPane.TryShow()` available since 10.0.17763.0 (our MinVersion) as fallback
+- System keyboard handles all character input, shift/caps, emoji — no reimplementation
+- "Best effort" API: shows keyboard only when no hardware keyboard is attached
+  (perfect for Xbox gamepad-only scenario)
+- Hidden TextBox receives keyboard events and syncs to WebView via JavaScript
+
+### Decision 3: Two-Mode Input
+
+**Decision**: Navigate mode (gamepad controls cursor/editing) + Input mode (system
+keyboard visible for typing). Toggle via Select/View button.
+
+**Reason**:
+- Gamepad buttons cannot simultaneously control cursor AND type characters
+- Two clear modes eliminate ambiguity: user always knows what each button does
+- Matches console game UX (navigate inventory vs type in chat)
+- System keyboard only shown when user explicitly wants to type
+
+### Decision 4: File Size Tiers
+
+**Decision**: <512KB = full edit + highlight, 512KB–2MB = edit without highlight,
+>2MB = read-only.
+
+**Reason**:
+- highlight.js re-highlighting on every keystroke is expensive in EdgeHTML
+- Large files in contentEditable cause DOM performance degradation
+- Tiers provide graceful degradation instead of hard cutoff
+- 512KB covers 95%+ of text files a user would edit in a file browser
+
+**New files**:
+- `Controls/TextEditorOverlay.xaml(.cs)` — fullscreen editor overlay
+- `FileSystem/TextEditorService.cs` — file I/O + encoding detection
+- `Assets/editor.html` — WebView template with contentEditable
+- `Assets/editor.js` — cursor/editing/highlight JS functions
+
+**Updated files**:
+- `MillerColumnsPage.xaml(.cs)` — editor overlay integration + input routing
+- `FileActionSheet.xaml(.cs)` — "Edit" action for text files
+- `XFiles.csproj` — new file references

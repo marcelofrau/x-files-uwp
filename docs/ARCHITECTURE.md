@@ -76,6 +76,7 @@ When pressing **B** (or D-pad left): reverse process.
 Moving the selection in the `Current` column immediately triggers:
 - Folder → lists its children (same listing component, no interaction)
 - Text file → first N lines / KB (truncated, with "..." indicator if larger)
+  - **Post-MVP**: text files can be opened in the built-in editor (see `docs/text-editor/`)
 - Image → thumbnail via `BitmapImage` (async decode, simple in-memory cache)
 - `.zip`/`.7z`/`.rar` → internal entry listing via `ArchiveBrowser` (same listing UI,
   treated as "virtual folder")

@@ -266,11 +266,62 @@ Each phase that introduces a new view should include its icons in that phase.
 
 ---
 
+## Phase 12 — Text Editor
+
+See `docs/text-editor/` for complete specification, architecture, and input mapping.
+
+- [ ] `TextEditorService.cs` — file I/O via Win2 P/Invoke, encoding detection (BOM sniffing
+      + UTF-8 validation + Windows-1252 fallback), file size tier logic.
+- [ ] `editor.html` — WebView template: contentEditable div, line numbers gutter,
+      highlight.js integration (reuse existing v9.18.5 ES5), Inconsolata font (base64),
+      theme colors matching BladeTheme.xaml.
+- [ ] `editor.js` — JavaScript editor core: cursor management (char/line/word/page movement),
+      text insertion/deletion, selection anchor, syntax highlight refresh (debounced 150ms),
+      undo/redo stack (bounded by file size), word wrap toggle, line number updates,
+      plain-text paste interception.
+- [ ] `TextEditorOverlay.xaml(.cs)` — fullscreen overlay (same pattern as AudioFullScreenPanel):
+      WebView display surface, hidden TextBox for system keyboard bridge, notification bar
+      for file size warnings, footer legend with editor-specific labels. Exposes `IsOpen`
+      property, `Show(path)` / `Close()` methods.
+- [ ] System keyboard integration: `CoreInputView.TryShow(CoreInputViewKind.Gamepad)` with
+      `InputPane.TryShow()` fallback. TextBox ↔ WebView sync via TextChanged event +
+      InvokeScriptAsync. TextBox.KeyDown intercepts gamepad buttons (B=close keyboard,
+      X=backspace, Y=enter, Start=save).
+- [ ] Two-mode input: Navigate mode (D-pad cursor, stick word-jump, A=anchor, B=backspace,
+      X=delete, Y=enter, bumpers/triggers page/paragraph) + Input mode (system keyboard,
+      gamepad shortcuts). Select/View toggles modes.
+- [ ] `MillerColumnsPage` integration: priority chain addition for TextEditorOverlay.IsOpen,
+      input routing delegation, footer legend updates, IsMediaFullscreen extension.
+- [ ] `FileActionSheet` "Edit" action: added for text files (extensions in
+      `FilePreviewService.TextExtensions`). Icon asset added.
+- [ ] File size tiers: <512KB full edit + highlight; 512KB–2MB edit without highlight
+      (notification bar); >2MB read-only (warning bar).
+- [ ] Encoding: UTF-8 with BOM on save; detect UTF-8/UTF-16 LE/BE/Windows-1252 on load;
+      line ending detection (CRLF/LF/CR) and preservation.
+- [ ] Dirty state tracking: unsaved-changes confirmation on B exit ("Save changes?
+      Yes/No/Cancel"). Save via Start button.
+- [ ] Word wrap toggle: LB + RB simultaneously, brief toast notification.
+- [ ] Right stick scrolls editor viewport (same speed as preview pane).
+- [ ] Footer legend updates when editor is open (new button labels per mode).
+- [ ] Notification bar: "Syntax highlighting disabled — file too large" (512KB–2MB) and
+      "File too large to edit — read-only" (>2MB).
+
+**Completion criteria**: opening a text file via Y-menu "Edit" shows fullscreen editor with
+syntax highlighting. D-pad moves cursor, Select opens/closes system keyboard, B/X/Y
+perform backspace/delete/enter, Start saves. File >512KB opens without highlight with
+notification, >2MB opens read-only. Exit with unsaved changes shows confirmation.
+No regression in existing file browsing, preview, media playback, or archive navigation.
+
+---
+
 ## Post-MVP Backlog (not yet phased)
 
 - Network browsing (SMB/UNC).
 - Hex dump preview for binaries.
-- Simple text editing.
+- Text editor: create new file from scratch.
+- Text editor: find and replace.
+- Text editor: go to line number.
+- Text editor: save with original encoding (not always UTF-8).
 - Multiple simultaneous users/gamepads.
 - Deep nested zips with real streaming (no intermediate `MemoryStream`).
 - Password-protected file support.
