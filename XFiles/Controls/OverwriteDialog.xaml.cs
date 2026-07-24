@@ -7,33 +7,45 @@ using Windows.UI.Xaml.Input;
 
 namespace XFiles.Controls
 {
-    public sealed partial class ConfirmDialog : UserControl
+    /// <summary>
+    /// Conflict dialog for file extraction: Overwrite / Overwrite All / Skip.
+    /// Returns 0=Skip, 1=Overwrite, 2=OverwriteAll.
+    /// </summary>
+    public sealed partial class OverwriteDialog : UserControl
     {
-        private TaskCompletionSource<bool> _tcs;
-        public Action OnClosed;
+        private TaskCompletionSource<int> _tcs;
 
-        public ConfirmDialog()
+        public OverwriteDialog()
         {
             this.InitializeComponent();
         }
 
-        public Task<bool> ShowAsync(string message)
+        /// <summary>
+        /// Show overwrite conflict for the given file.
+        /// Returns 0=Skip, 1=Overwrite, 2=OverwriteAll.
+        /// </summary>
+        public Task<int> ShowAsync(string fileName)
         {
-            MessageText.Text = message;
-            _tcs = new TaskCompletionSource<bool>();
+            MessageText.Text = $"File already exists:\n{fileName}\n\nOverwrite?";
+            _tcs = new TaskCompletionSource<int>();
             Visibility = Visibility.Visible;
             Overlay.Visibility = Visibility.Visible;
             return _tcs.Task;
         }
 
-        private void OnYesClicked(object sender, RoutedEventArgs e)
+        private void OnOverwriteClicked(object sender, RoutedEventArgs e)
         {
-            Close(true);
+            Close(1);
         }
 
-        private void OnNoClicked(object sender, RoutedEventArgs e)
+        private void OnOverwriteAllClicked(object sender, RoutedEventArgs e)
         {
-            Close(false);
+            Close(2);
+        }
+
+        private void OnSkipClicked(object sender, RoutedEventArgs e)
+        {
+            Close(0);
         }
 
         private void OnKeyDown(object sender, KeyRoutedEventArgs e)
@@ -43,12 +55,16 @@ namespace XFiles.Controls
                 case VirtualKey.GamepadA:
                 case VirtualKey.Enter:
                     e.Handled = true;
-                    Close(true);
+                    Close(1); // Overwrite
+                    break;
+                case VirtualKey.GamepadY:
+                    e.Handled = true;
+                    Close(2); // Overwrite All
                     break;
                 case VirtualKey.GamepadB:
                 case VirtualKey.Escape:
                     e.Handled = true;
-                    Close(false);
+                    Close(0); // Skip
                     break;
                 case VirtualKey.GamepadDPadUp:
                 case VirtualKey.GamepadDPadDown:
@@ -65,16 +81,15 @@ namespace XFiles.Controls
 
         private void OnOverlayTapped(object sender, TappedRoutedEventArgs e)
         {
-            Close(false);
+            Close(0); // Skip on tap
         }
 
-        private void Close(bool result)
+        private void Close(int result)
         {
-            Log.Information("ConfirmDialog.Close: result={Result}", result);
+            Log.Information("OverwriteDialog.Close: result={Result}", result);
             Overlay.Visibility = Visibility.Collapsed;
             Visibility = Visibility.Collapsed;
             _tcs?.TrySetResult(result);
-            OnClosed?.Invoke();
         }
 
         public bool IsDialogVisible => Visibility == Visibility.Visible;
@@ -85,11 +100,14 @@ namespace XFiles.Controls
             {
                 case VirtualKey.GamepadA:
                 case VirtualKey.Enter:
-                    Close(true);
+                    Close(1);
+                    break;
+                case VirtualKey.GamepadY:
+                    Close(2);
                     break;
                 case VirtualKey.GamepadB:
                 case VirtualKey.Escape:
-                    Close(false);
+                    Close(0);
                     break;
             }
         }

@@ -69,9 +69,9 @@ namespace XFiles.Controls
         public void HandleDPad(VirtualKey key)
         {
             if (!IsVisible) return;
-            if (ConfirmDialogControl.IsDialogVisible)
+            if (AlertDialogControl.IsDialogVisible)
             {
-                ConfirmDialogControl.HandleButton(key);
+                AlertDialogControl.HandleButton(key);
                 return;
             }
             switch (key)
@@ -101,7 +101,7 @@ namespace XFiles.Controls
             if (item.Action == "clear-cache")
             {
                 Overlay.Visibility = Visibility.Collapsed;
-                bool confirmed = await ConfirmDialogControl.ShowAsync(
+                bool confirmed = await AlertDialogControl.ShowConfirmAsync(
                     $"Clear all {item.Description.ToLowerInvariant()}?");
 
                 if (confirmed)

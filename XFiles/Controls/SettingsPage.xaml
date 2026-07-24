@@ -80,6 +80,6 @@
             </Border>
         </Grid>
 
-        <controls:ConfirmDialog x:Name="ConfirmDialogControl" />
+        <controls:AlertDialog x:Name="AlertDialogControl" />
     </Grid>
 </UserControl>

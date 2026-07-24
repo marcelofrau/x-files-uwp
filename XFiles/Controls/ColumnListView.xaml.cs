@@ -12,6 +12,7 @@ namespace XFiles.Controls
     public class EntryViewModel : INotifyPropertyChanged
     {
         private bool _isSelected;
+        private bool _isHighlighted;
 
         public string Name { get; set; }
         public string FullPath { get; set; }
@@ -29,6 +30,19 @@ namespace XFiles.Controls
 
         public bool IsDrive { get; set; }
         public string ArchiveRootPath { get; set; }
+
+        public bool IsHighlighted
+        {
+            get => _isHighlighted;
+            set
+            {
+                if (_isHighlighted != value)
+                {
+                    _isHighlighted = value;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsHighlighted)));
+                }
+            }
+        }
 
         private static readonly Dictionary<string, string> ExtIcons = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -200,7 +214,7 @@ namespace XFiles.Controls
                 : (IsArchive ? "ms-appx:///Assets/FileTypes/file-archive-24.png"
                               : $"ms-appx:///Assets/FileTypes/{GetFileIcon(Name)}");
 
-        private static string GetFileIcon(string fileName)
+        public static string GetFileIcon(string fileName)
         {
             var ext = System.IO.Path.GetExtension(fileName);
             if (!string.IsNullOrEmpty(ext) && ExtIcons.TryGetValue(ext, out var icon))
@@ -371,6 +385,7 @@ namespace XFiles.Controls
         {
             if (EntryList.SelectedIndex > 0)
                 EntryList.SelectedIndex--;
+            EntryList.ScrollIntoView(EntryList.SelectedItem);
             Log.Verbose("ColumnListView.OnDPadUp: index={Index}", EntryList.SelectedIndex);
         }
 
@@ -378,6 +393,7 @@ namespace XFiles.Controls
         {
             if (EntryList.SelectedIndex < _entries.Count - 1)
                 EntryList.SelectedIndex++;
+            EntryList.ScrollIntoView(EntryList.SelectedItem);
             Log.Verbose("ColumnListView.OnDPadDown: index={Index}", EntryList.SelectedIndex);
         }
 
@@ -409,12 +425,14 @@ namespace XFiles.Controls
         public void OnPageUp()
         {
             EntryList.SelectedIndex = Math.Max(0, EntryList.SelectedIndex - 10);
+            EntryList.ScrollIntoView(EntryList.SelectedItem);
             Log.Verbose("ColumnListView.OnPageUp: index={Index}", EntryList.SelectedIndex);
         }
 
         public void OnPageDown()
         {
             EntryList.SelectedIndex = Math.Min(_entries.Count - 1, EntryList.SelectedIndex + 10);
+            EntryList.ScrollIntoView(EntryList.SelectedItem);
             Log.Verbose("ColumnListView.OnPageDown: index={Index}", EntryList.SelectedIndex);
         }
 

@@ -26,16 +26,20 @@ Ajustes em dropdowns:
     - desativar Delete
     - desativar new folder
 
-quero ir testando e ir ativando um por um, mas por enquanto deixa eles desativados..
-
--- Em progresso
-
 - Implementar nova pasta
-	- a acao de new folder, tem q fazer uma pergunta ou mostrar um dropdown, indicando se eh pra criar a pasta dentro da outra pasta ou no mesmo nivel dela (caso a selecao esteja em uma pasta), pode ser confuso do jeito q ta.
+- implementar extrair zip
+	- dialogo de extracao, com pergunta se cria subpasta ou nao.
+	- smart subfolder, se o zip ja tem subpasta, e usuario tinha pedido pra criar pasta, verificar pra nao ficar uma pasta nova com uma pasta vazia e fazer a extracao de maneira que faça mais sentido de um jeitinho mais esperto..
 
 - implementar janela de progresso de operacao com barra de progresso e indicacao de copia, mostrando dados e informacoes como destino, origem e etc. (preparativos pra copia, extracao, mover, colar, etc)
 
--- Backlog
+-- Em progresso
+
+- implementar zipar pasta/arquivo
+	- perguntar nome do zip sugerindo o mesmo nome do arquivo/pasta .zip
+
+- Implementar excluir arquivo
+- Implementar excluir diretorio
 
 - implementar colar
 	- se selecao tiver em arquivo, colar arquivo na pasta atual (mostrar confirmacao)
@@ -43,17 +47,7 @@ quero ir testando e ir ativando um por um, mas por enquanto deixa eles desativad
 
 - implementar mover -> mostrando qual pasta escolher pra mover.
 
-- implementar zipar pasta/arquivo
-	- perguntar nome do zip sugerindo o mesmo nome do arquivo/pasta .zip
-
-- implementar extrair zip
-	- dialogo de extracao, com pergunta se cria subpasta ou nao.
-	- smart subfolder, se o zip ja tem subpasta, e usuario tinha pedido pra criar pasta, verificar pra nao ficar uma pasta nova com uma pasta vazia e fazer a extracao de maneira que faça mais sentido de um jeitinho mais esperto..
-
-- ainda temos um bug no Dropdown de selecao... ele devia "ganhar" foco e ficar exclusivo em overlay ate que o usuario ou cancele com B, ou escolha uma opcao. mas ainda assim, assim que abre o dropdown, se eu dou dpad down ou up com ele aberto, o dropdown fecha.
-- se zip tem pasta, e navega pra pasta depois volta, depois navega pra pasta de novo, ela ta ficando sem arquivos, pode ter dado algum erro.
-
-- nao ta fazendo preview de musica dentro de zip, talvez esteja faltando conectar esses pontos, ou talvez nao seja possivel
+-- Backlog
 
 --- Ideias
 - background music in the application

@@ -147,8 +147,14 @@
     <Compile Include="Controls\StartMenu.xaml.cs">
       <DependentUpon>StartMenu.xaml</DependentUpon>
     </Compile>
-    <Compile Include="Controls\ConfirmDialog.xaml.cs">
-      <DependentUpon>ConfirmDialog.xaml</DependentUpon>
+    <Compile Include="Controls\AlertDialog.xaml.cs">
+      <DependentUpon>AlertDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\OverwriteDialog.xaml.cs">
+      <DependentUpon>OverwriteDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\DeleteConfirmDialog.xaml.cs">
+      <DependentUpon>DeleteConfirmDialog.xaml</DependentUpon>
     </Compile>
     <Compile Include="Controls\InputDialog.xaml.cs">
       <DependentUpon>InputDialog.xaml</DependentUpon>
@@ -254,7 +260,15 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
-    <Page Include="Controls\ConfirmDialog.xaml">
+    <Page Include="Controls\AlertDialog.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\OverwriteDialog.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\DeleteConfirmDialog.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
@@ -336,6 +350,8 @@
     <Content Include="Assets\FileTypes\folder-orange-24.png" />
     <Content Include="Assets\FileTypes\file-archive-24.png" />
     <Content Include="Assets\FileTypes\file-generic-24.png" />
+    <Content Include="Assets\FileTypes\file-archive-96.png" />
+    <Content Include="Assets\FileTypes\file-generic-96.png" />
     <Content Include="Assets\FileTypes\drive-harddisk-24.png" />
     <Content Include="Assets\FileTypes\filetype-image-png-24.png" />
     <Content Include="Assets\FileTypes\filetype-image-jpeg-24.png" />
@@ -388,6 +404,7 @@
     <Content Include="Assets\Views\FileActionSheet\fileactionsheet-createfolder-48.png" />
     <Content Include="Assets\Views\FileActionSheet\fileactionsheet-createzip-48.png" />
     <Content Include="Assets\Views\FileActionSheet\fileactionsheet-refresh-48.png" />
+    <Content Include="Assets\Views\FileActionSheet\fileactionsheet-extractfolder-100.png" />
     <Content Include="Assets\Views\FileActionSheet\ctx-drive-120.png" />
     <Content Include="Assets\Views\FileActionSheet\ctx-generic-120.png" />
     <Content Include="Assets\Views\FileActionSheet\ctx-archive-120.png" />
@@ -420,6 +437,11 @@
     <Content Include="Assets\Views\VideoTrackMenu\videotrackmenu-checkmark-20.png" />
     <Content Include="Assets\Views\VideoTrackMenu\videotrackmenu-checkmark-48.png" />
     <Content Include="Assets\Views\VideoTrackMenu\videotrackmenu-checkmark-64.png" />
+    <Content Include="Assets\Views\AlertDialog\alert-info-48.png" />
+    <Content Include="Assets\Views\AlertDialog\alert-question-48.png" />
+    <Content Include="Assets\Views\AlertDialog\alert-warning-48.png" />
+    <Content Include="Assets\Views\AlertDialog\alert-error-48.png" />
+    <Content Include="Assets\Views\AlertDialog\alert-success-48.png" />
     <Content Include="Assets\highlight.min.js" />
     <Content Include="Assets\highlight-aco.css" />
     <Content Include="Assets\Inconsolata-Regular.ttf" />

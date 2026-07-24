@@ -9,18 +9,19 @@
                 BorderBrush="#2A2D33"
                 BorderThickness="1"
                 CornerRadius="6"
-                MaxWidth="440"
+                MaxWidth="1100"
+                MinWidth="800"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"
-                Padding="24,20">
+                Padding="32,24">
 
             <StackPanel>
                 <!-- Operation title -->
                 <TextBlock x:Name="TitleText"
                            Foreground="{StaticResource XFilesAccentBrush}"
                            FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
-                           FontSize="15"
-                           Margin="0,0,0,12"
+                           FontSize="18"
+                           Margin="0,0,0,14"
                            Text="" />
 
                 <!-- Source -->
@@ -34,11 +35,11 @@
                     <TextBlock x:Name="SourceText"
                                Foreground="{StaticResource XFilesForegroundBrush}"
                                FontFamily="ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata"
-                               FontSize="12"
+                               FontSize="13"
                                TextTrimming="CharacterEllipsis"
-                               MaxWidth="340"
-                               VerticalAlignment="Center"
-                               Text="" />
+                                 MaxWidth="1050"
+                                VerticalAlignment="Center"
+                                Text="" />
                 </StackPanel>
 
                 <!-- Destination -->
@@ -52,9 +53,9 @@
                     <TextBlock x:Name="DestText"
                                Foreground="{StaticResource XFilesForegroundBrush}"
                                FontFamily="ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata"
-                               FontSize="12"
+                               FontSize="13"
                                TextTrimming="CharacterEllipsis"
-                               MaxWidth="340"
+                               MaxWidth="1580"
                                VerticalAlignment="Center"
                                Text="" />
                 </StackPanel>
@@ -63,14 +64,14 @@
                 <ProgressBar x:Name="ProgressBar"
                              Minimum="0" Maximum="100"
                              Value="0"
-                             Height="6"
-                             Margin="0,0,0,8" />
+                             Height="28"
+                             Margin="0,0,0,10" />
 
                 <!-- Current file -->
                 <TextBlock x:Name="CurrentFileText"
                            Foreground="#99FFFFFF"
                            FontFamily="ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata"
-                           FontSize="11"
+                           FontSize="12"
                            TextTrimming="CharacterEllipsis"
                            Text="" />
 
@@ -78,7 +79,7 @@
                 <TextBlock x:Name="BytesText"
                            Foreground="#66FFFFFF"
                            FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                           FontSize="11"
+                           FontSize="12"
                            Margin="0,4,0,0"
                            Text="" />
 

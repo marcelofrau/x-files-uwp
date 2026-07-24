@@ -1,0 +1,103 @@
+<UserControl
+    x:Class="XFiles.Controls.DeleteConfirmDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Visibility="Collapsed">
+
+    <Grid x:Name="Overlay" Background="#CC0D1117" Tapped="OnOverlayTapped" KeyDown="OnKeyDown"
+          IsHitTestVisible="True">
+        <Border Background="#1A1D23"
+                BorderBrush="#2A2D33"
+                BorderThickness="1"
+                CornerRadius="6"
+                MaxWidth="600"
+                MinWidth="400"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Padding="24,20">
+
+            <StackPanel>
+                <!-- Header: icon + summary -->
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                    <Image Source="ms-appx:///Assets/Views/AlertDialog/alert-warning-48.png"
+                           Width="40" Height="40"
+                           Margin="0,0,14,0"
+                           VerticalAlignment="Center" />
+                    <TextBlock x:Name="SummaryText"
+                               Foreground="{StaticResource XFilesForegroundBrush}"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="15"
+                               TextWrapping="Wrap"
+                               MaxWidth="500"
+                               VerticalAlignment="Center"
+                               Text="" />
+                </StackPanel>
+
+                <!-- File count -->
+                <TextBlock x:Name="CountText"
+                           Foreground="{StaticResource XFilesTextMutedBrush}"
+                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                           FontSize="12"
+                           Margin="0,0,0,8"
+                           Text="" />
+
+                <!-- Scrollable file list -->
+                <Border Background="#0D1117"
+                        BorderBrush="#2A2D33"
+                        BorderThickness="1"
+                        CornerRadius="4"
+                        Padding="0"
+                        MaxHeight="300">
+                    <ScrollViewer x:Name="FileListScroll"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <TextBlock x:Name="FileListText"
+                                   Foreground="{StaticResource XFilesTextMutedBrush}"
+                                   FontFamily="Consolas"
+                                   FontSize="12"
+                                   TextWrapping="NoWrap"
+                                   Padding="12,8"
+                                   Text="" />
+                    </ScrollViewer>
+                </Border>
+
+                <!-- Buttons -->
+                <StackPanel Orientation="Horizontal"
+                            HorizontalAlignment="Right"
+                            Margin="0,16,0,0">
+
+                    <!-- DELETE: A button (red) -->
+                    <Button x:Name="DeleteButton"
+                            Style="{StaticResource ConfirmDialogButton}"
+                            Click="OnDeleteClicked"
+                            Margin="0,0,8,0">
+                        <StackPanel Orientation="Horizontal">
+                            <Image Source="ms-appx:///Assets/GamepadButtons/abxy/a.png"
+                                   Width="18" Height="18" Margin="0,0,6,0"
+                                   VerticalAlignment="Center" />
+                            <TextBlock Text="DELETE"
+                                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                                       Foreground="#FF4444"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+
+                    <!-- CANCEL: B button -->
+                    <Button x:Name="CancelButton"
+                            Style="{StaticResource ConfirmDialogButton}"
+                            Click="OnCancelClicked">
+                        <StackPanel Orientation="Horizontal">
+                            <Image Source="ms-appx:///Assets/GamepadButtons/abxy/b.png"
+                                   Width="18" Height="18" Margin="0,0,6,0"
+                                   VerticalAlignment="Center" />
+                            <TextBlock Text="CANCEL"
+                                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                                       Foreground="{StaticResource XFilesForegroundBrush}"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

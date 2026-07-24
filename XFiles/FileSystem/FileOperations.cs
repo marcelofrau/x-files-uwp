@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
@@ -294,15 +295,69 @@ namespace XFiles.FileSystem
         }
 
         /// <summary>
-        /// Extract archive to destination directory.
+        /// Check if archive has a single root folder containing all entries.
+        /// Returns the root folder name if single-root, or null otherwise.
+        /// E.g. "myarchive.zip" with "folder/file1.txt", "folder/file2.txt" → "folder".
+        /// But "file1.txt", "folder/file2.txt" → null (mixed root).
         /// </summary>
-        public static async Task<OperationResult> ExtractAsync(string archivePath, string destDir, IProgress<OperationProgress> progress = null)
+        public static string GetSingleRootFolder(string archivePath)
         {
-            return await Task.Run(() =>
+            try
+            {
+                using (var stream = Win32FileStream.OpenRead(archivePath))
+                {
+                    if (stream == null) return null;
+
+                    using (var archive = SharpCompress.Archives.ArchiveFactory.Open(stream))
+                    {
+                        string rootFolder = null;
+                        foreach (var entry in archive.Entries)
+                        {
+                            if (entry.IsDirectory) continue;
+                            string key = entry.Key;
+                            int sep = key.IndexOf('/');
+                            if (sep < 0) sep = key.IndexOf('\\');
+                            if (sep < 0) return null; // file at root level
+
+                            string folder = key.Substring(0, sep);
+                            if (rootFolder == null)
+                                rootFolder = folder;
+                            else if (!string.Equals(rootFolder, folder, StringComparison.OrdinalIgnoreCase))
+                                return null; // multiple root folders
+                        }
+                        return rootFolder;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("GetSingleRootFolder error: {Error}", ex.Message);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Extract archive to destination directory.
+        /// conflictCallback receives the conflicting filename and returns:
+        ///   0=Skip, 1=Overwrite, 2=OverwriteAll.
+        /// If null, files are overwritten silently (existing behavior).
+        /// </summary>
+        public static async Task<OperationResult> ExtractAsync(
+            string archivePath, string destDir,
+            IProgress<OperationProgress> progress = null,
+            Func<string, Task<int>> conflictCallback = null)
+        {
+            return await Task.Run(async () =>
             {
                 try
                 {
                     Log.Information("FileOperations.Extract: {Archive} -> {Dest}", archivePath, destDir);
+
+                    if (!Directory.Exists(destDir))
+                    {
+                        Log.Information("FileOperations.Extract: creating dest dir {Dir}", destDir);
+                        Directory.CreateDirectory(destDir);
+                    }
 
                     using (var stream = Win32FileStream.OpenRead(archivePath))
                     {
@@ -320,6 +375,8 @@ namespace XFiles.FileSystem
                                 Overwrite = true
                             };
 
+                            bool overwriteAll = conflictCallback == null;
+
                             foreach (var entry in archive.Entries)
                             {
                                 if (entry.IsDirectory) continue;
@@ -329,6 +386,28 @@ namespace XFiles.FileSystem
                                     FileName = entry.Key,
                                     PercentComplete = -1
                                 });
+
+                                if (!overwriteAll && conflictCallback != null)
+                                {
+                                    string destPath = System.IO.Path.Combine(destDir, entry.Key);
+                                    if (File.Exists(destPath))
+                                    {
+                                        int decision = await conflictCallback(entry.Key);
+                                        switch (decision)
+                                        {
+                                            case 0: // Skip
+                                                Log.Information("Extract: skipping {File}", entry.Key);
+                                                continue;
+                                            case 1: // Overwrite this one
+                                                Log.Information("Extract: overwriting {File}", entry.Key);
+                                                break;
+                                            case 2: // Overwrite all remaining
+                                                Log.Information("Extract: overwrite all remaining");
+                                                overwriteAll = true;
+                                                break;
+                                        }
+                                    }
+                                }
 
                                 entry.WriteToDirectory(destDir, options);
                             }
@@ -401,7 +480,13 @@ namespace XFiles.FileSystem
                 {
                     folderPath = GetUniqueDirectoryPath(folderPath);
                     Log.Information("FileOperations.CreateFolder: {Path}", folderPath);
-                    Directory.CreateDirectory(folderPath);
+                    bool ok = CreateDirectoryFromAppW(folderPath, IntPtr.Zero);
+                    if (!ok)
+                    {
+                        int err = Marshal.GetLastWin32Error();
+                        Log.Warning("FileOperations.CreateFolder: CreateDirectoryFromAppW failed, Win32 error={Error}", err);
+                        return OperationResult.Failed;
+                    }
                     return OperationResult.Success;
                 }
                 catch (Exception ex)
@@ -412,19 +497,38 @@ namespace XFiles.FileSystem
             });
         }
 
-        public static async Task<OperationResult> CreateZipAsync(string sourceFolder, string zipPath)
+        public static async Task<OperationResult> CreateZipAsync(string sourcePath, string zipPath)
         {
             return await Task.Run(() =>
             {
                 try
                 {
                     zipPath = GetUniqueFilePath(zipPath);
-                    Log.Information("FileOperations.CreateZip: {Source} -> {Zip}", sourceFolder, zipPath);
+                    Log.Information("FileOperations.CreateZip: {Source} -> {Zip}", sourcePath, zipPath);
 
                     using (var archive = SharpCompress.Archives.Zip.ZipArchive.Create())
                     {
-                        archive.AddAllFromDirectory(sourceFolder);
+                        MemoryStream singleFileStream = null;
+
+                        if (File.Exists(sourcePath))
+                        {
+                            var fileName = System.IO.Path.GetFileName(sourcePath);
+                            var data = File.ReadAllBytes(sourcePath);
+                            singleFileStream = new MemoryStream(data);
+                            archive.AddEntry(fileName, singleFileStream, data.Length);
+                        }
+                        else if (Directory.Exists(sourcePath))
+                        {
+                            archive.AddAllFromDirectory(sourcePath);
+                        }
+                        else
+                        {
+                            Log.Warning("FileOperations.CreateZip: source not found {Source}", sourcePath);
+                            return OperationResult.Failed;
+                        }
+
                         archive.SaveTo(zipPath, SharpCompress.Common.CompressionType.Deflate);
+                        singleFileStream?.Dispose();
                     }
 
                     return OperationResult.Success;
@@ -435,6 +539,60 @@ namespace XFiles.FileSystem
                     return OperationResult.Failed;
                 }
             });
+        }
+
+        /// <summary>
+        /// Recursively list all files and folders under path.
+        /// Returns (files, folderCount). For a single file, returns just that file.
+        /// </summary>
+        public static async Task<(List<string> entries, int folderCount)> ListRecursiveAsync(string path)
+        {
+            return await Task.Run(() =>
+            {
+                var entries = new List<string>();
+                int folderCount = 0;
+
+                try
+                {
+                    if (File.Exists(path))
+                    {
+                        entries.Add(path);
+                    }
+                    else if (Directory.Exists(path))
+                    {
+                        entries.Add(path + "\\");
+                        folderCount++;
+                        ListDirectoryRecursive(path, entries, ref folderCount);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning("FileOperations.ListRecursiveAsync error: {Error}", ex.Message);
+                }
+
+                return (entries, folderCount);
+            });
+        }
+
+        private static void ListDirectoryRecursive(string dir, List<string> entries, ref int folderCount)
+        {
+            try
+            {
+                foreach (var file in Directory.GetFiles(dir))
+                {
+                    entries.Add(file);
+                }
+                foreach (var sub in Directory.GetDirectories(dir))
+                {
+                    entries.Add(sub + "\\");
+                    folderCount++;
+                    ListDirectoryRecursive(sub, entries, ref folderCount);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("FileOperations.ListDirectoryRecursive: {Dir} error: {Error}", dir, ex.Message);
+            }
         }
     }
 }

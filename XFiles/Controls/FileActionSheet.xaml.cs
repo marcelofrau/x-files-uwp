@@ -20,9 +20,9 @@ namespace XFiles.Controls
         Rename,
         Delete,
         Extract,
+        ExtractToFolder,
+        ExtractHere,
         CreateFolder,
-        CreateInside,
-        CreateNextTo,
         CreateZip,
         Refresh
     }
@@ -56,6 +56,7 @@ namespace XFiles.Controls
         private static readonly string ActionRename = "fileactionsheet-rename-48.png";
         private static readonly string ActionDelete = "fileactionsheet-delete-48.png";
         private static readonly string ActionExtract = "fileactionsheet-extract-48.png";
+        private static readonly string ActionExtractToFolder = "fileactionsheet-extractfolder-100.png";
         private static readonly string ActionCreateFolder = "fileactionsheet-createfolder-48.png";
         private static readonly string ActionCreateZip = "fileactionsheet-createzip-48.png";
         private static readonly string ActionRefresh = "fileactionsheet-refresh-48.png";
@@ -218,47 +219,43 @@ namespace XFiles.Controls
                     LabelBrush = dim
                 });
 
-                // New folder disabled for now
-                // actions.Add(new ActionItem
-                // {
-                //     Action = FileAction.CreateFolder,
-                //     Label = "New Folder",
-                //     IconPath = IconBase + ActionCreateFolder,
-                //     LabelBrush = accent
-                // });
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.CreateFolder,
+                    Label = "New Folder",
+                    IconPath = IconBase + ActionCreateFolder,
+                    LabelBrush = accent
+                });
 
-                // Create ZIP disabled for now
-                // if (isFolder)
-                // {
-                //     actions.Add(new ActionItem
-                //     {
-                //         Action = FileAction.CreateZip,
-                //         Label = "Create ZIP",
-                //         IconPath = IconBase + ActionCreateZip,
-                //         LabelBrush = accent
-                //     });
-                // }
+                if (!isArchiveFile)
+                {
+                    actions.Add(new ActionItem
+                    {
+                        Action = FileAction.CreateZip,
+                        Label = "Create ZIP",
+                        IconPath = IconBase + ActionCreateZip,
+                        LabelBrush = accent
+                    });
+                }
 
-                // Extract disabled for now
-                // else if (isArchiveFile)
-                // {
-                //     actions.Add(new ActionItem
-                //     {
-                //         Action = FileAction.Extract,
-                //         Label = "Extract",
-                //         IconPath = IconBase + ActionExtract,
-                //         LabelBrush = accent
-                //     });
-                // }
+                if (isArchiveFile)
+                {
+                    actions.Add(new ActionItem
+                    {
+                        Action = FileAction.Extract,
+                        Label = "Extract",
+                        IconPath = IconBase + ActionExtract,
+                        LabelBrush = accent
+                    });
+                }
 
-                // Delete disabled for now
-                // actions.Add(new ActionItem
-                // {
-                //     Action = FileAction.Delete,
-                //     Label = "Delete",
-                //     IconPath = IconBase + ActionDelete,
-                //     LabelBrush = red
-                // });
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.Delete,
+                    Label = "Delete",
+                    IconPath = IconBase + ActionDelete,
+                    LabelBrush = red
+                });
             }
 
             ActionList.ItemsSource = actions;
@@ -276,7 +273,7 @@ namespace XFiles.Controls
             return _tcs.Task;
         }
 
-        public Task<FileAction?> ShowLocationChoiceAsync(string folderName)
+        public Task<FileAction?> ShowExtractChoiceAsync(string archiveName)
         {
             _tcs = new TaskCompletionSource<FileAction?>();
 
@@ -286,25 +283,25 @@ namespace XFiles.Controls
 
             actions.Add(new ActionItem
             {
-                Action = FileAction.CreateInside,
-                Label = $"Inside \"{folderName}\"",
-                IconPath = IconBase + ActionCreateFolder,
+                Action = FileAction.ExtractToFolder,
+                Label = $"Extract to \"{archiveName}/\"",
+                IconPath = IconBase + ActionExtractToFolder,
                 LabelBrush = accent
             });
 
             actions.Add(new ActionItem
             {
-                Action = FileAction.CreateNextTo,
-                Label = $"Next to \"{folderName}\"",
-                IconPath = IconBase + ActionCreateFolder,
+                Action = FileAction.ExtractHere,
+                Label = "Extract here",
+                IconPath = IconBase + ActionExtract,
                 LabelBrush = dim
             });
 
             ActionList.ItemsSource = actions;
-            FileNameText.Text = "New folder";
+            FileNameText.Text = archiveName;
 
             FileIconImage.Source = new Windows.UI.Xaml.Media.Imaging.BitmapImage(
-                new Uri(IconBase + ActionCreateFolder));
+                new Uri(IconBase + ArchiveIcon));
 
             Visibility = Visibility.Visible;
             Overlay.Visibility = Visibility.Visible;

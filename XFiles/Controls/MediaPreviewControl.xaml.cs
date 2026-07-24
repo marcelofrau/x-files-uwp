@@ -144,6 +144,10 @@ namespace XFiles.Controls
             catch (Exception ex)
             {
                 Log.Warning("Failed to start audio playback: {Error}", ex.Message);
+                _isPlaying = false;
+                _progressTimer.Stop();
+                UpdatePlayPauseIcon();
+                PlayerStateChanged?.Invoke(this, EventArgs.Empty);
             }
         }
 
@@ -345,10 +349,14 @@ namespace XFiles.Controls
         {
             await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
             {
+                Log.Information("AudioLevelService: media ended — cleaning up graph");
+                _audioLevelService.Stop();
+                VuMeter.DetachService();
                 _isPlaying = false;
                 UpdatePlayPauseIcon();
                 _progressTimer.Stop();
                 ProgressSlider.Value = 100;
+                PlayerStateChanged?.Invoke(this, EventArgs.Empty);
                 AudioTrackEnded?.Invoke(this, EventArgs.Empty);
             });
         }
@@ -357,10 +365,13 @@ namespace XFiles.Controls
         {
             await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
             {
-                Log.Information("AudioLevelService media failed");
+                Log.Information("AudioLevelService media failed — cleaning up");
+                _audioLevelService.Stop();
+                VuMeter.DetachService();
                 _isPlaying = false;
                 _progressTimer.Stop();
                 UpdatePlayPauseIcon();
+                PlayerStateChanged?.Invoke(this, EventArgs.Empty);
             });
         }
 
