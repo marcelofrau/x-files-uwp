@@ -63,6 +63,9 @@ namespace XFiles.Controls
             _mediaLoadTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
             _mediaLoadTimer.Tick += OnMediaLoadTimerTick;
 
+            _previewDebounceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(PreviewDebounceMs) };
+            _previewDebounceTimer.Tick += OnPreviewDebounceTick;
+
             PreviewCodeView.NavigationStarting += OnPreviewNavigationStarting;
             PreviewCodeView.NavigationCompleted += OnPreviewNavigationCompleted;
 
@@ -82,6 +85,10 @@ namespace XFiles.Controls
 
         private bool _isMediaPlayerActive;
         private int _lastValidSelectedIndex = -1;
+
+        // Preview debounce — delays preview update during rapid scrolling
+        private DispatcherTimer _previewDebounceTimer;
+        private const int PreviewDebounceMs = 180;
 
         private long _overlayClosedTick;
         private readonly DisplayRequest _displayRequest = new DisplayRequest();
@@ -180,6 +187,8 @@ namespace XFiles.Controls
             PdfFullScreen.OnClosed = markOverlayClosed;
             VideoTrackMenuControl.OnClosed = markOverlayClosed;
             OpProgressDialog.OnClosed = markOverlayClosed;
+
+            UpdateClipboardIndicator();
         }
 
         private async void OnColumnsChanged()
@@ -611,7 +620,8 @@ namespace XFiles.Controls
                 IsDrive = e.IsDrive,
                 IsArchive = e.IsArchive,
                 SizeBytes = e.SizeBytes,
-                ArchiveRootPath = e.ArchiveRootPath
+                ArchiveRootPath = e.ArchiveRootPath,
+                ArchiveInternalPath = e.ArchiveInternalPath
             }).ToList();
 
             listView.ItemsSource = vms;
@@ -628,6 +638,7 @@ namespace XFiles.Controls
                 IsArchive = e.IsArchive,
                 SizeBytes = e.SizeBytes,
                 ArchiveRootPath = e.ArchiveRootPath,
+                ArchiveInternalPath = e.ArchiveInternalPath,
                 IsHighlighted = (highlightName != null && e.Name == highlightName)
             }).ToList();
 
@@ -644,7 +655,8 @@ namespace XFiles.Controls
                 IsDrive = e.IsDrive,
                 IsArchive = e.IsArchive,
                 SizeBytes = e.SizeBytes,
-                ArchiveRootPath = e.ArchiveRootPath
+                ArchiveRootPath = e.ArchiveRootPath,
+                ArchiveInternalPath = e.ArchiveInternalPath
             }).ToList();
 
             SlideColumn(_slideFromRight);
@@ -729,7 +741,9 @@ namespace XFiles.Controls
                     PreviewHeader.Text = selected?.Name ?? "";
                     PreviewStatus.Text = "Loading...";
 
-                    _ = _navigator.OnSelectionChangedAsync();
+                    // Debounce preview update — skip if scrolling rapidly
+                    _previewDebounceTimer.Stop();
+                    _previewDebounceTimer.Start();
                 }
             }
 
@@ -740,6 +754,12 @@ namespace XFiles.Controls
 
             // Update A button label based on selected item type
             UpdateFooterALabelFromSelection();
+        }
+
+        private void OnPreviewDebounceTick(object sender, object e)
+        {
+            _previewDebounceTimer.Stop();
+            _ = _navigator.OnSelectionChangedAsync();
         }
 
         private void StartMarqueeOnIndex(int index)
@@ -820,10 +840,9 @@ namespace XFiles.Controls
         {
             if (ClipboardState.HasItems)
             {
-                var label = ClipboardState.IsCut ? "Cut" : "Copied";
                 var count = ClipboardState.Count;
                 var item = count == 1 ? "1 item" : $"{count} items";
-                FooterClipboardIndicator.Text = $"📋 {label}: {item}";
+                FooterClipboardIndicator.Text = $"\U0001F4CB Copied: {item}";
                 FooterClipboardIndicator.Visibility = Visibility.Visible;
             }
             else
@@ -831,6 +850,12 @@ namespace XFiles.Controls
                 FooterClipboardIndicator.Text = "";
                 FooterClipboardIndicator.Visibility = Visibility.Collapsed;
             }
+            UpdateFooterXLabel();
+        }
+
+        private void UpdateFooterXLabel()
+        {
+            FooterXLabel.Text = ClipboardState.HasItems ? "Paste" : "Refresh";
         }
 
         // --- Input handling ---
@@ -863,6 +888,7 @@ namespace XFiles.Controls
         }
 
         public bool IsMediaFullscreen => ImageFullScreen.IsOpen || PdfFullScreen.IsOpen
+            || TextEditorOverlayControl.IsOpen
             || VideoFullScreenPanel.Visibility == Visibility.Visible
             || AudioFullScreenPanel.Visibility == Visibility.Visible;
 
@@ -872,7 +898,9 @@ namespace XFiles.Controls
 
         public void OnDPadUp(bool isRepeat = false)
         {
+            if (TextEditorOverlayControl.IsOpen) { TextEditorOverlayControl.HandleDPadUp(); return; }
             if (VideoTrackMenuControl.IsOpen) { VideoTrackMenuControl.HandleButton(Windows.System.VirtualKey.GamepadDPadUp); return; }
+            if (FolderBrowserDialogControl.IsOpen) { FolderBrowserDialogControl.HandleDPad(Windows.System.VirtualKey.GamepadDPadUp); return; }
             if (IsAnyFullscreen) { Log.Information("OnDPadUp: blocked by fullscreen (repeat={R})", isRepeat); return; }
             if (IsAnyOverlayVisible) { Log.Information("OnDPadUp: blocked by overlay (repeat={R})", isRepeat); return; }
             if (StartMenuControl.IsOpen) { StartMenuControl.ForwardDPad(Windows.System.VirtualKey.Up); return; }
@@ -898,7 +926,9 @@ namespace XFiles.Controls
 
         public void OnDPadDown(bool isRepeat = false)
         {
+            if (TextEditorOverlayControl.IsOpen) { TextEditorOverlayControl.HandleDPadDown(); return; }
             if (VideoTrackMenuControl.IsOpen) { VideoTrackMenuControl.HandleButton(Windows.System.VirtualKey.GamepadDPadDown); return; }
+            if (FolderBrowserDialogControl.IsOpen) { FolderBrowserDialogControl.HandleDPad(Windows.System.VirtualKey.GamepadDPadDown); return; }
             if (IsAnyFullscreen) { Log.Information("OnDPadDown: blocked by fullscreen (repeat={R})", isRepeat); return; }
             if (IsAnyOverlayVisible) { Log.Information("OnDPadDown: blocked by overlay (repeat={R})", isRepeat); return; }
             if (StartMenuControl.IsOpen) { StartMenuControl.ForwardDPad(Windows.System.VirtualKey.Down); return; }
@@ -924,6 +954,7 @@ namespace XFiles.Controls
 
         public void OnDPadLeft()
         {
+            if (TextEditorOverlayControl.IsOpen) { TextEditorOverlayControl.HandleDPadLeft(); return; }
             if (VideoTrackMenuControl.IsOpen) { VideoTrackMenuControl.HandleButton(Windows.System.VirtualKey.GamepadDPadLeft); return; }
             if (ImageFullScreen.IsOpen) return;
             if (PdfFullScreen.IsOpen) return;
@@ -939,6 +970,7 @@ namespace XFiles.Controls
 
         public void OnDPadRight()
         {
+            if (TextEditorOverlayControl.IsOpen) { TextEditorOverlayControl.HandleDPadRight(); return; }
             if (VideoTrackMenuControl.IsOpen) { VideoTrackMenuControl.HandleButton(Windows.System.VirtualKey.GamepadDPadRight); return; }
             if (ImageFullScreen.IsOpen) return;
             if (PdfFullScreen.IsOpen) return;
@@ -954,11 +986,13 @@ namespace XFiles.Controls
 
         public void OnConfirm()
         {
+            if (TextEditorOverlayControl.IsOpen) { TextEditorOverlayControl.HandleButton(Windows.System.VirtualKey.GamepadA); return; }
             if (ErrorOverlay.Visibility == Visibility.Visible) { Log.Information("OnConfirm: blocked by ErrorOverlay"); return; }
             if (InputDialogControl.Visibility == Visibility.Visible) { Log.Information("OnConfirm: → InputDialog"); InputDialogControl.HandleButton(Windows.System.VirtualKey.GamepadA); return; }
             if (AlertDialogControl.Visibility == Visibility.Visible) { Log.Information("OnConfirm: → ConfirmDialog"); AlertDialogControl.HandleButton(Windows.System.VirtualKey.GamepadA); return; }
             if (OverwriteDialogControl.IsDialogVisible) { Log.Information("OnConfirm: → OverwriteDialog"); OverwriteDialogControl.HandleButton(Windows.System.VirtualKey.GamepadA); return; }
-            if (DeleteConfirmDialogControl.IsDialogVisible) { Log.Information("OnConfirm: → DeleteConfirmDialog"); DeleteConfirmDialogControl.HandleButton(Windows.System.VirtualKey.GamepadA); return; }
+            if (FileOperationConfirmDialogControl.IsDialogVisible) { Log.Information("OnConfirm: → FileOperationConfirmDialog"); FileOperationConfirmDialogControl.HandleButton(Windows.System.VirtualKey.GamepadA); return; }
+            if (FolderBrowserDialogControl.IsOpen) { Log.Information("OnConfirm: → FolderBrowserDialog"); FolderBrowserDialogControl.HandleButton(Windows.System.VirtualKey.GamepadA); return; }
             if (IsAnyOverlayVisible) { Log.Information("OnConfirm: blocked by overlay"); return; }
             if (StartMenuControl.IsOpen) { Log.Information("OnConfirm: → StartMenu"); StartMenuControl.ForwardDPad(Windows.System.VirtualKey.GamepadA); return; }
             if (SettingsPageControl.IsVisible) { Log.Information("OnConfirm: → Settings"); SettingsPageControl.HandleDPad(Windows.System.VirtualKey.GamepadA); return; }
@@ -1010,6 +1044,12 @@ namespace XFiles.Controls
                 }
                 else if (FilePreviewService.IsAudioFile(ext))
                 {
+                    if (selected.SizeBytes == 0)
+                    {
+                        Log.Warning("OnConfirm: empty audio file, blocking play");
+                        _ = AlertDialogControl.ShowAsync($"\"{selected.Name}\" is empty (0 bytes).", AlertType.Error);
+                        return;
+                    }
                     Log.Verbose("OnConfirm: audio file — toggling play/pause");
                     _mediaLoadTimer.Stop();
                     _pendingMediaPath = null;
@@ -1031,6 +1071,12 @@ namespace XFiles.Controls
                 }
                 else if (FilePreviewService.IsVideoFile(ext))
                 {
+                    if (selected.SizeBytes == 0)
+                    {
+                        Log.Warning("OnConfirm: empty video file, blocking play");
+                        _ = AlertDialogControl.ShowAsync($"\"{selected.Name}\" is empty (0 bytes).", AlertType.Error);
+                        return;
+                    }
                     Log.Verbose("OnConfirm: video file — toggling play/pause");
                     _mediaLoadTimer.Stop();
                     _pendingMediaPath = null;
@@ -1067,13 +1113,20 @@ namespace XFiles.Controls
                 return;
             }
 
+            if (TextEditorOverlayControl.IsOpen)
+            {
+                Log.Information("OnBack: → TextEditorOverlay");
+                TextEditorOverlayControl.HandleButton(Windows.System.VirtualKey.GamepadB);
+                return;
+            }
             if (ErrorOverlay.Visibility == Visibility.Visible) { Log.Information("OnBack: → HideError"); HideError(); return; }
             if (AboutOverlay.Visibility == Visibility.Visible) { Log.Information("OnBack: → HideAbout"); HideAbout(); return; }
             if (PlaceholderOverlay.Visibility == Visibility.Visible) { Log.Information("OnBack: → HidePlaceholder"); HidePlaceholder(); return; }
             if (InputDialogControl.Visibility == Visibility.Visible) { Log.Information("OnBack: → InputDialog cancel"); InputDialogControl.HandleButton(Windows.System.VirtualKey.GamepadB); return; }
             if (AlertDialogControl.Visibility == Visibility.Visible) { Log.Information("OnBack: → ConfirmDialog cancel"); AlertDialogControl.HandleButton(Windows.System.VirtualKey.GamepadB); return; }
             if (OverwriteDialogControl.IsDialogVisible) { Log.Information("OnBack: → OverwriteDialog skip"); OverwriteDialogControl.HandleButton(Windows.System.VirtualKey.GamepadB); return; }
-            if (DeleteConfirmDialogControl.IsDialogVisible) { Log.Information("OnBack: → DeleteConfirmDialog cancel"); DeleteConfirmDialogControl.HandleButton(Windows.System.VirtualKey.GamepadB); return; }
+            if (FileOperationConfirmDialogControl.IsDialogVisible) { Log.Information("OnBack: → FileOperationConfirmDialog cancel"); FileOperationConfirmDialogControl.HandleButton(Windows.System.VirtualKey.GamepadB); return; }
+            if (FolderBrowserDialogControl.IsOpen) { Log.Information("OnBack: → FolderBrowserDialog cancel"); FolderBrowserDialogControl.HandleButton(Windows.System.VirtualKey.GamepadB); return; }
             if (IsAnyOverlayVisible) { Log.Information("OnBack: blocked by overlay"); return; }
             if (StartMenuControl.IsOpen) { Log.Information("OnBack: → StartMenu"); StartMenuControl.ForwardDPad(Windows.System.VirtualKey.GamepadB); return; }
             if (SettingsPageControl.IsVisible) { Log.Information("OnBack: → Settings close"); SettingsPageControl.HandleDPad(Windows.System.VirtualKey.GamepadB); return; }
@@ -1083,7 +1136,7 @@ namespace XFiles.Controls
             if (VideoFullScreenPanel.Visibility == Visibility.Visible) { Log.Information("OnBack: → CloseVideoFullScreen"); CloseVideoFullScreen(); UpdateFooterALabelFromSelection(); return; }
             if (AudioFullScreenPanel.Visibility == Visibility.Visible) { Log.Information("OnBack: → CloseAudioFullscreen"); CloseAudioFullscreen(); UpdateMediaPlayerFocusUI(); return; }
             if (FileActionSheetControl.IsOpen) { Log.Information("OnBack: → FileActionSheet cancel"); FileActionSheetControl.ForwardDPad(Windows.System.VirtualKey.GamepadB); return; }
-            if (OpProgressDialog.IsOpen) { Log.Information("OnBack: → OpProgressDialog close"); OpProgressDialog.Close(); return; }
+            if (OpProgressDialog.IsOpen) { Log.Information("OnBack: → OpProgressDialog cancel"); OpProgressDialog.Cancel(); return; }
             if (_isMediaPlayerActive)
             {
                 Log.Information("OnBack: → StopPlayer");
@@ -1100,6 +1153,7 @@ namespace XFiles.Controls
 
         public void OnContextMenu()
         {
+            if (TextEditorOverlayControl.IsOpen) { TextEditorOverlayControl.HandleButton(Windows.System.VirtualKey.GamepadY); return; }
             if (IsAnyFullscreen) return;
             if (ErrorOverlay.Visibility == Visibility.Visible) return;
             if (IsAnyOverlayVisible) return;
@@ -1112,6 +1166,7 @@ namespace XFiles.Controls
 
         public void OnRefresh()
         {
+            if (TextEditorOverlayControl.IsOpen) { TextEditorOverlayControl.HandleButton(Windows.System.VirtualKey.GamepadX); return; }
             if (IsAnyFullscreen) return;
             if (FileActionSheetControl.IsOpen) return;
             if (StartMenuControl.IsOpen) return;
@@ -1155,8 +1210,21 @@ namespace XFiles.Controls
             });
         }
 
+        public void OnPaste()
+        {
+            if (TextEditorOverlayControl.IsOpen) { TextEditorOverlayControl.HandleButton(Windows.System.VirtualKey.GamepadX); return; }
+            if (IsAnyFullscreen) return;
+            if (FileActionSheetControl.IsOpen) return;
+            if (StartMenuControl.IsOpen) return;
+            if (IsAnyOverlayVisible) return;
+            if (!FileSystem.ClipboardState.HasItems) return;
+
+            _ = HandlePasteAsync();
+        }
+
         public void OnSettings()
         {
+            if (TextEditorOverlayControl.IsOpen) return;
             if (ErrorOverlay.Visibility == Visibility.Visible) return;
             if (IsAnyOverlayVisible) return;
             if (StartMenuControl.IsOpen) { StartMenuControl.ForwardDPad(Windows.System.VirtualKey.GamepadA); return; }
@@ -1234,7 +1302,8 @@ namespace XFiles.Controls
             || InputDialogControl.Visibility == Visibility.Visible
             || AlertDialogControl.Visibility == Visibility.Visible
             || OverwriteDialogControl.IsDialogVisible
-            || DeleteConfirmDialogControl.IsDialogVisible
+            || FileOperationConfirmDialogControl.IsDialogVisible
+            || FolderBrowserDialogControl.IsOpen
             || OpProgressDialog.IsOpen;
 
         private bool IsAnyFullscreen =>
@@ -1451,6 +1520,21 @@ namespace XFiles.Controls
 
         public void OnLeftStickMove(float x, float y)
         {
+            if (TextEditorOverlayControl.IsOpen) { TextEditorOverlayControl.HandleLeftStick(x, y); return; }
+            if (FolderBrowserDialogControl.IsOpen)
+            {
+                FolderBrowserDialogControl.HandleStick(y);
+                return;
+            }
+            if (FileOperationConfirmDialogControl.IsDialogVisible)
+            {
+                FileOperationConfirmDialogControl.HandleStick(x, y);
+                return;
+            }
+            if (OpProgressDialog.IsOpen)
+            {
+                return;
+            }
             if (ImageFullScreen.IsOpen)
             {
                 ImageFullScreen.HandleRightStick(x, y);
@@ -1477,6 +1561,21 @@ namespace XFiles.Controls
 
         public void OnRightStickMove(float x, float y)
         {
+            if (TextEditorOverlayControl.IsOpen) { TextEditorOverlayControl.HandleStick(x, y); return; }
+            if (FolderBrowserDialogControl.IsOpen)
+            {
+                FolderBrowserDialogControl.HandleStick(y);
+                return;
+            }
+            if (FileOperationConfirmDialogControl.IsDialogVisible)
+            {
+                FileOperationConfirmDialogControl.HandleStick(x, y);
+                return;
+            }
+            if (OpProgressDialog.IsOpen)
+            {
+                return;
+            }
             if (ImageFullScreen.IsOpen)
             {
                 ImageFullScreen.HandleRightStick(x, y);
@@ -1656,6 +1755,7 @@ namespace XFiles.Controls
 
             // Subscribe to MediaOpened to enumerate tracks after source is ready
             FsVideoPlayer.MediaOpened += OnFsVideoMediaOpened;
+            FsVideoPlayer.MediaEnded += OnFsVideoMediaEnded;
 
             FsVideoSession.Position = position;
             FsVideoPlayer.Volume = _fsVolume;
@@ -1720,6 +1820,48 @@ namespace XFiles.Controls
                 FsVideoPlayer.MediaOpened -= OnFsVideoMediaOpened;
                 EnumerateAllTracks();
             });
+        }
+
+        private async void OnFsVideoMediaEnded(MediaPlayer sender, object args)
+        {
+            await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+            {
+                Log.Information("FsVideo: media ended — auto-advancing");
+                NavigateFullscreenVideo(1);
+            });
+        }
+
+        private void NavigateFullscreenVideo(int direction)
+        {
+            if (string.IsNullOrEmpty(_fsVideoPath) || _navigator.Current == null) return;
+
+            var videoFiles = _navigator.Current.Entries
+                .Where(e => !e.IsDirectory && FilePreviewService.IsVideoFile(System.IO.Path.GetExtension(e.Name)))
+                .ToList();
+
+            if (videoFiles.Count == 0) { CloseVideoFullScreen(); return; }
+
+            int currentIdx = videoFiles.FindIndex(e =>
+                string.Equals(e.FullPath, _fsVideoPath, StringComparison.OrdinalIgnoreCase));
+
+            int nextIdx = currentIdx + direction;
+            if (nextIdx < 0) nextIdx = videoFiles.Count - 1;
+            if (nextIdx >= videoFiles.Count) nextIdx = 0;
+
+            var nextFile = videoFiles[nextIdx];
+            Log.Information("NavigateFullscreenVideo: {Direction} to {Path}", direction > 0 ? "next" : "prev", nextFile.FullPath);
+
+            // Update selection in main list
+            int mainIdx = _navigator.Current.Entries.IndexOf(nextFile);
+            if (mainIdx >= 0)
+            {
+                _updating = true;
+                CurrentList.SelectedIndex = mainIdx;
+                _updating = false;
+            }
+
+            // Play next video in fullscreen
+            _ = ShowMediaFullscreenAsync(new Uri(nextFile.FullPath), true, TimeSpan.Zero);
         }
 
         private void EnumerateAllTracks()
@@ -1899,6 +2041,7 @@ namespace XFiles.Controls
             _fsHideTimer.Stop();
             _fsOsdHideTimer.Stop();
             FsVideoPlayer.Pause();
+            FsVideoPlayer.MediaEnded -= OnFsVideoMediaEnded;
             FsVideoPlayer.Source = null;
             _fsPlaybackItem = null;
             _fsVideoPlaying = false;
@@ -1910,6 +2053,19 @@ namespace XFiles.Controls
             VideoFullScreenPanel.Visibility = Visibility.Collapsed;
             Log.Information("CloseVideoFullScreen: stopped, track state cleared");
             UpdateDisplayRequest();
+        }
+
+        private async System.Threading.Tasks.Task HandleEditAsync(FileEntry entry)
+        {
+            if (entry == null || string.IsNullOrEmpty(entry.FullPath))
+            {
+                Log.Warning("HandleEditAsync: null/empty entry");
+                return;
+            }
+            Log.Information("HandleEditAsync: opening {Path} (ext={Ext})", entry.Name, System.IO.Path.GetExtension(entry.FullPath));
+            TextEditorOverlayControl.Show(entry.FullPath);
+            Log.Information("HandleEditAsync: Show() returned, overlay visible={Vis}", TextEditorOverlayControl.IsOpen);
+            await System.Threading.Tasks.Task.CompletedTask;
         }
 
         private void OnFullscreenProgressTick(object sender, object e)
@@ -2686,7 +2842,8 @@ namespace XFiles.Controls
                     IsDrive = selected.IsDrive,
                     IsArchive = selected.IsArchive,
                     SizeBytes = selected.SizeBytes,
-                    ArchiveRootPath = selected.ArchiveRootPath
+                    ArchiveRootPath = selected.ArchiveRootPath,
+                    ArchiveInternalPath = selected.ArchiveInternalPath
                 };
             }
             else
@@ -2719,9 +2876,6 @@ namespace XFiles.Controls
                 case FileAction.Copy:
                     await HandleCopyAsync(entry);
                     break;
-                case FileAction.Cut:
-                    await HandleCutAsync(entry);
-                    break;
                 case FileAction.Paste:
                     await HandlePasteAsync();
                     break;
@@ -2737,6 +2891,9 @@ namespace XFiles.Controls
                 case FileAction.Extract:
                     await HandleExtractAsync(entry);
                     break;
+                case FileAction.ExtractFile:
+                    await HandleExtractFileAsync(entry);
+                    break;
                 case FileAction.CreateFolder:
                     await HandleCreateFolderAsync(entry);
                     break;
@@ -2746,6 +2903,9 @@ namespace XFiles.Controls
                 case FileAction.Refresh:
                     OnRefresh();
                     break;
+                case FileAction.Edit:
+                    await HandleEditAsync(entry);
+                    break;
             }
         }
 
@@ -2753,14 +2913,6 @@ namespace XFiles.Controls
         {
             Log.Information("HandleCopyAsync: {File} → clipboard", entry.FullPath);
             ClipboardState.Copy(new[] { entry });
-            UpdateClipboardIndicator();
-            await Task.CompletedTask;
-        }
-
-        private async Task HandleCutAsync(FileEntry entry)
-        {
-            Log.Information("HandleCutAsync: {File} → clipboard", entry.FullPath);
-            ClipboardState.Cut(new[] { entry });
             UpdateClipboardIndicator();
             await Task.CompletedTask;
         }
@@ -2778,30 +2930,42 @@ namespace XFiles.Controls
             }
 
             var entries = ClipboardState.Entries;
-            Log.Information("HandlePasteAsync: {Count} items → {Dest}, isCut={IsCut}",
-                entries.Count, destDir, ClipboardState.IsCut);
+            Log.Information("HandlePasteAsync: {Count} items → {Dest}",
+                entries.Count, destDir);
 
+            int fileIndex = 0;
             foreach (var entry in entries)
             {
+                fileIndex++;
+                bool sameDir = string.Equals(
+                    System.IO.Path.GetDirectoryName(entry.FullPath)?.TrimEnd('\\'),
+                    destDir.TrimEnd('\\'),
+                    StringComparison.OrdinalIgnoreCase);
+
                 var progress = new Progress<FileOperations.OperationProgress>(p =>
                 {
+                    p.FileIndex = fileIndex;
+                    p.FileTotal = entries.Count;
                     Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
                         OpProgressDialog.UpdateProgress(p));
                 });
 
-                var opTitle = ClipboardState.IsCut ? "Moving" : "Copying";
-                OpProgressDialog.Show(opTitle, entry.Name, destDir);
+                OpProgressDialog.Show("Copying", entry.Name, destDir,
+                    fileIndex, entries.Count);
 
-                FileOperations.OperationResult result;
-                if (ClipboardState.IsCut)
+                var result = await FileOperations.CopyAsync(
+                    entry.FullPath, destDir, progress, sameDir, OpProgressDialog.CancelToken);
+
+                if (result == FileOperations.OperationResult.Cancelled)
                 {
-                    result = await FileOperations.MoveAsync(entry.FullPath, destDir, progress);
-                }
-                else
-                {
-                    result = await FileOperations.CopyAsync(entry.FullPath, destDir, progress);
+                    Log.Information("HandlePasteAsync: cancelled at file {Index}/{Total}", fileIndex, entries.Count);
+                    OpProgressDialog.Cancel();
+                    await Task.Delay(1500);
+                    OpProgressDialog.Close();
+                    break;
                 }
 
+                OpProgressDialog.TrackCompleted(entry.Name);
                 OpProgressDialog.Complete();
                 await Task.Delay(400);
                 OpProgressDialog.Close();
@@ -2809,12 +2973,9 @@ namespace XFiles.Controls
                 if (result != FileOperations.OperationResult.Success)
                 {
                     Log.Warning("HandlePasteAsync: {File} failed", entry.Name);
-                    CurrentStatus.Text = $"{opTitle} failed: {entry.Name}";
+                    _ = AlertDialogControl.ShowAsync($"Copy failed: \"{entry.Name}\".", AlertType.Error);
                 }
             }
-
-            if (ClipboardState.IsCut)
-                ClipboardState.Clear();
 
             UpdateClipboardIndicator();
             await _navigator.RefreshCurrentAsync();
@@ -2823,9 +2984,42 @@ namespace XFiles.Controls
         private async Task HandleMoveAsync(FileEntry entry)
         {
             Log.Information("HandleMoveAsync: {File}", entry.FullPath);
-            var destDir = await InputDialogControl.ShowAsync("Move to (full path)", _navigator.Current?.Path ?? "");
-            if (string.IsNullOrEmpty(destDir)) return;
 
+            // 1. Choose destination folder
+            UpdateFooterALabel("Select");
+            var destDir = await FolderBrowserDialogControl.ShowAsync(_navigator.Current?.Path ?? null);
+            UpdateFooterALabelFromSelection();
+
+            if (string.IsNullOrEmpty(destDir))
+            {
+                Log.Verbose("HandleMoveAsync: cancelled at folder browser");
+                return;
+            }
+
+            // Don't move to same directory
+            if (string.Equals(
+                System.IO.Path.GetDirectoryName(entry.FullPath)?.TrimEnd('\\'),
+                destDir.TrimEnd('\\'),
+                StringComparison.OrdinalIgnoreCase))
+            {
+                Log.Information("HandleMoveAsync: same directory, skipping");
+                _ = AlertDialogControl.ShowAsync("Source and destination are the same folder.", AlertType.Error);
+                return;
+            }
+
+            // 2. Build file list for confirmation
+            var (files, folderCount) = await FileOperations.ListRecursiveAsync(entry.FullPath);
+            UpdateFooterALabel("Confirm");
+            bool confirmed = await FileOperationConfirmDialogControl.ShowMoveAsync(entry.Name, destDir, files, folderCount);
+            UpdateFooterALabelFromSelection();
+
+            if (!confirmed)
+            {
+                Log.Verbose("HandleMoveAsync: confirmation cancelled");
+                return;
+            }
+
+            // 3. Execute move with progress
             var progress = new Progress<FileOperations.OperationProgress>(p =>
             {
                 Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
@@ -2833,7 +3027,17 @@ namespace XFiles.Controls
             });
 
             OpProgressDialog.Show("Moving", entry.Name, destDir);
-            var result = await FileOperations.MoveAsync(entry.FullPath, destDir, progress);
+            var result = await FileOperations.MoveAsync(entry.FullPath, destDir, progress, OpProgressDialog.CancelToken);
+
+            if (result == FileOperations.OperationResult.Cancelled)
+            {
+                Log.Information("HandleMoveAsync: cancelled");
+                OpProgressDialog.Cancel();
+                await Task.Delay(1500);
+                OpProgressDialog.Close();
+                return;
+            }
+
             OpProgressDialog.Complete();
             await Task.Delay(400);
             OpProgressDialog.Close();
@@ -2846,7 +3050,7 @@ namespace XFiles.Controls
             else
             {
                 Log.Warning("HandleMoveAsync: failed");
-                CurrentStatus.Text = $"Move failed: {entry.Name}";
+                _ = AlertDialogControl.ShowAsync($"Failed to move \"{entry.Name}\".", AlertType.Error);
             }
         }
 
@@ -2898,7 +3102,7 @@ namespace XFiles.Controls
             else
             {
                 Log.Warning("HandleRenameAsync: failed");
-                CurrentStatus.Text = $"Rename failed: {entry.Name}";
+                _ = AlertDialogControl.ShowAsync($"Failed to rename \"{entry.Name}\".", AlertType.Error);
             }
         }
 
@@ -2908,7 +3112,7 @@ namespace XFiles.Controls
 
             // Build file list for confirmation dialog
             var (files, folderCount) = await FileOperations.ListRecursiveAsync(entry.FullPath);
-            bool confirmed = await DeleteConfirmDialogControl.ShowAsync(
+            bool confirmed = await FileOperationConfirmDialogControl.ShowAsync(
                 entry.Name, entry.IsDirectory, files, folderCount);
             if (!confirmed)
             {
@@ -2934,7 +3138,7 @@ namespace XFiles.Controls
             else
             {
                 Log.Warning("HandleDeleteAsync: failed");
-                CurrentStatus.Text = $"Delete failed: {entry.Name}";
+                _ = AlertDialogControl.ShowAsync($"Failed to delete \"{entry.Name}\".", AlertType.Error);
             }
         }
 
@@ -3000,7 +3204,17 @@ namespace XFiles.Controls
             });
 
             OpProgressDialog.Show("Extracting", entry.Name, destDir);
-            var result = await FileOperations.ExtractAsync(entry.FullPath, destDir, progress, conflictCallback);
+            var result = await FileOperations.ExtractAsync(entry.FullPath, destDir, progress, conflictCallback, OpProgressDialog.CancelToken);
+
+            if (result == FileOperations.OperationResult.Cancelled)
+            {
+                Log.Information("HandleExtractAsync: cancelled");
+                OpProgressDialog.Cancel();
+                await Task.Delay(1500);
+                OpProgressDialog.Close();
+                return;
+            }
+
             OpProgressDialog.Complete();
             await Task.Delay(400);
             OpProgressDialog.Close();
@@ -3013,7 +3227,72 @@ namespace XFiles.Controls
             else
             {
                 Log.Warning("HandleExtractAsync: failed");
-                CurrentStatus.Text = $"Extract failed: {entry.Name}";
+                _ = AlertDialogControl.ShowAsync($"Failed to extract \"{entry.Name}\".", AlertType.Error);
+            }
+        }
+
+        private async Task HandleExtractFileAsync(FileEntry entry)
+        {
+            Log.Information("HandleExtractFileAsync: {Archive}|{Internal}",
+                entry.ArchiveRootPath, entry.ArchiveInternalPath);
+
+            if (string.IsNullOrEmpty(entry.ArchiveRootPath) || string.IsNullOrEmpty(entry.ArchiveInternalPath))
+            {
+                Log.Warning("HandleExtractFileAsync: missing archive path info");
+                return;
+            }
+
+            var destDir = System.IO.Path.GetDirectoryName(entry.ArchiveRootPath);
+            if (string.IsNullOrEmpty(destDir)) return;
+
+            var fileName = System.IO.Path.GetFileName(entry.ArchiveInternalPath);
+
+            // Conflict callback: shows OverwriteDialog on UI thread, returns 0=skip/1=overwrite/2=all
+            var conflictCallback = new Func<string, Task<int>>(conflictFileName =>
+            {
+                var tcs = new TaskCompletionSource<int>();
+                _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, async () =>
+                {
+                    try
+                    {
+                        int decision = await OverwriteDialogControl.ShowAsync(conflictFileName);
+                        tcs.TrySetResult(decision);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warning("OverwriteDialog error: {Error}", ex.Message);
+                        tcs.TrySetResult(0);
+                    }
+                });
+                return tcs.Task;
+            });
+
+            OpProgressDialog.Show("Extracting", fileName, destDir);
+            var result = await FileOperations.ExtractFileAsync(
+                entry.ArchiveRootPath, entry.ArchiveInternalPath, destDir, conflictCallback, OpProgressDialog.CancelToken);
+
+            if (result == FileOperations.OperationResult.Cancelled)
+            {
+                Log.Information("HandleExtractFileAsync: cancelled");
+                OpProgressDialog.Cancel();
+                await Task.Delay(1500);
+                OpProgressDialog.Close();
+                return;
+            }
+
+            OpProgressDialog.Complete();
+            await Task.Delay(400);
+            OpProgressDialog.Close();
+
+            if (result == FileOperations.OperationResult.Success)
+            {
+                Log.Information("HandleExtractFileAsync: success — selecting {File}", fileName);
+                await _navigator.RefreshCurrentAsync(selectName: fileName);
+            }
+            else
+            {
+                Log.Warning("HandleExtractFileAsync: failed");
+                _ = AlertDialogControl.ShowAsync($"Failed to extract \"{fileName}\".", AlertType.Error);
             }
         }
 
@@ -3078,7 +3357,17 @@ namespace XFiles.Controls
             var zipPath = System.IO.Path.Combine(currentPath, zipName);
 
             OpProgressDialog.Show("Creating ZIP", entry.Name, zipPath);
-            var result = await FileOperations.CreateZipAsync(entry.FullPath, zipPath);
+            var result = await FileOperations.CreateZipAsync(entry.FullPath, zipPath, null, OpProgressDialog.CancelToken);
+
+            if (result == FileOperations.OperationResult.Cancelled)
+            {
+                Log.Information("HandleCreateZipAsync: cancelled");
+                OpProgressDialog.Cancel();
+                await Task.Delay(1500);
+                OpProgressDialog.Close();
+                return;
+            }
+
             OpProgressDialog.Complete();
             await Task.Delay(400);
             OpProgressDialog.Close();
@@ -3091,7 +3380,7 @@ namespace XFiles.Controls
             else
             {
                 Log.Warning("HandleCreateZipAsync: failed");
-                CurrentStatus.Text = $"Create ZIP failed: {zipName}";
+                _ = AlertDialogControl.ShowAsync($"Failed to create ZIP \"{zipName}\".", AlertType.Error);
             }
         }
 

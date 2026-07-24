@@ -30,6 +30,7 @@ namespace XFiles.Controls
 
         public bool IsDrive { get; set; }
         public string ArchiveRootPath { get; set; }
+        public string ArchiveInternalPath { get; set; }
 
         public bool IsHighlighted
         {
@@ -419,6 +420,7 @@ namespace XFiles.Controls
         public void OnContextMenu() { }
 
         public void OnRefresh() { }
+        public void OnPaste() { }
 
         public void OnSettings() { }
 

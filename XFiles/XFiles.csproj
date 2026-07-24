@@ -110,6 +110,7 @@
     <Compile Include="FileSystem\Id3Tag.cs" />
     <Compile Include="FileSystem\SubtitleDetector.cs" />
     <Compile Include="FileSystem\Win32FileStream.cs" />
+    <Compile Include="FileSystem\Win32FileWriteStream.cs" />
     <Compile Include="FileSystem\ClipboardState.cs" />
     <Compile Include="FileSystem\FileOperations.cs" />
     <Compile Include="Metadata\TrackMetadata.cs" />
@@ -153,8 +154,11 @@
     <Compile Include="Controls\OverwriteDialog.xaml.cs">
       <DependentUpon>OverwriteDialog.xaml</DependentUpon>
     </Compile>
-    <Compile Include="Controls\DeleteConfirmDialog.xaml.cs">
-      <DependentUpon>DeleteConfirmDialog.xaml</DependentUpon>
+    <Compile Include="Controls\FileOperationConfirmDialog.xaml.cs">
+      <DependentUpon>FileOperationConfirmDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\FolderBrowserDialog.xaml.cs">
+      <DependentUpon>FolderBrowserDialog.xaml</DependentUpon>
     </Compile>
     <Compile Include="Controls\InputDialog.xaml.cs">
       <DependentUpon>InputDialog.xaml</DependentUpon>
@@ -177,6 +181,10 @@
     <Compile Include="Controls\PdfFullScreenOverlay.xaml.cs">
       <DependentUpon>PdfFullScreenOverlay.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Controls\TextEditorOverlay.xaml.cs">
+      <DependentUpon>TextEditorOverlay.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="FileSystem\TextEditorService.cs" />
     <Compile Include="Services\PdfPreviewService.cs" />
     <Compile Include="Audio\IMemoryBufferAccess.cs" />
     <Compile Include="Audio\AudioLevelService.cs" />
@@ -268,7 +276,11 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
-    <Page Include="Controls\DeleteConfirmDialog.xaml">
+    <Page Include="Controls\FileOperationConfirmDialog.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\FolderBrowserDialog.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
@@ -297,6 +309,10 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Controls\PdfFullScreenOverlay.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\TextEditorOverlay.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
@@ -444,6 +460,7 @@
     <Content Include="Assets\Views\AlertDialog\alert-success-48.png" />
     <Content Include="Assets\highlight.min.js" />
     <Content Include="Assets\highlight-aco.css" />
+    <Content Include="Assets\editor.js" />
     <Content Include="Assets\Inconsolata-Regular.ttf" />
     <Content Include="Assets\Fonts\Oxanium-Bold.ttf" />
     <Content Include="Assets\Fonts\Oxanium-Regular.ttf" />

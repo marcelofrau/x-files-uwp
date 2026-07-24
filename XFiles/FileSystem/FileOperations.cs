@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using SharpCompress.Archives;
+using SharpCompress.Common;
 
 namespace XFiles.FileSystem
 {
@@ -31,6 +34,105 @@ namespace XFiles.FileSystem
         [DllImport("api-ms-win-core-file-fromapp-l1-1-0.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern bool CreateDirectoryFromAppW(string lpPathName, IntPtr lpSecurityAttributes);
 
+        [DllImport("api-ms-win-core-file-l1-1-0.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool GetFileAttributesExFromAppW(string lpFileName, int fInfoLevelId, out WIN32_FILE_ATTRIBUTE_DATA lpFileInformation);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct WIN32_FILE_ATTRIBUTE_DATA
+        {
+            public uint dwFileAttributes;
+            public System.Runtime.InteropServices.ComTypes.FILETIME ftCreationTime;
+            public System.Runtime.InteropServices.ComTypes.FILETIME ftLastAccessTime;
+            public System.Runtime.InteropServices.ComTypes.FILETIME ftLastWriteTime;
+            public uint nFileSizeHigh;
+            public uint nFileSizeLow;
+        }
+
+        private const uint INVALID_FILE_ATTRIBUTES = 0xFFFFFFFF;
+
+        [DllImport("api-ms-win-core-file-fromapp-l1-1-0.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr FindFirstFileExFromAppW(
+            string lpFileName,
+            int fInfoLevelId,
+            out WIN32_FIND_DATA lpFindFileData,
+            int fSearchOp,
+            IntPtr lpSearchFilter,
+            uint dwAdditionalFlags);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool FindNextFileW(IntPtr hFindFile, out WIN32_FIND_DATA lpFindFileData);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool FindClose(IntPtr hFindFile);
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct WIN32_FIND_DATA
+        {
+            public uint dwFileAttributes;
+            public System.Runtime.InteropServices.ComTypes.FILETIME ftCreationTime;
+            public System.Runtime.InteropServices.ComTypes.FILETIME ftLastAccessTime;
+            public System.Runtime.InteropServices.ComTypes.FILETIME ftLastWriteTime;
+            public uint nFileSizeHigh;
+            public uint nFileSizeLow;
+            public uint dwReserved0;
+            public uint dwReserved1;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
+            public string cFileName;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 14)]
+            public string cAlternateFileName;
+        }
+
+        private static List<string> EnumerateFilesRecursive(string dir)
+        {
+            var files = new List<string>();
+            try
+            {
+                var findData = new WIN32_FIND_DATA();
+                IntPtr hFind = FindFirstFileExFromAppW(
+                    dir + "\\*", 0, out findData, 0, IntPtr.Zero, 0);
+                if (hFind == new IntPtr(-1)) return files;
+
+                do
+                {
+                    if (findData.cFileName == "." || findData.cFileName == "..") continue;
+                    string fullPath = dir + "\\" + findData.cFileName;
+                    if ((findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+                    {
+                        files.AddRange(EnumerateFilesRecursive(fullPath));
+                    }
+                    else
+                    {
+                        files.Add(fullPath);
+                    }
+                }
+                while (FindNextFileW(hFind, out findData));
+
+                FindClose(hFind);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("EnumerateFilesRecursive: {Dir} error: {Error}", dir, ex.Message);
+            }
+            return files;
+        }
+        private const uint FILE_ATTRIBUTE_DIRECTORY = 0x10;
+
+        /// <summary>
+        /// P/Invoke-based path existence check. Works in UWP with broadFileSystemAccess
+        /// where System.IO.File.Exists / Directory.Exists may fail.
+        /// Returns: "file", "directory", or null.
+        /// </summary>
+        private static string CheckPathType(string path)
+        {
+            if (GetFileAttributesExFromAppW(path, 0, out var attr))
+            {
+                if ((attr.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+                    return "directory";
+                return "file";
+            }
+            return null;
+        }
+
         #endregion
 
         public enum OperationResult
@@ -46,22 +148,33 @@ namespace XFiles.FileSystem
             public double PercentComplete { get; set; }
             public long BytesCopied { get; set; }
             public long TotalBytes { get; set; }
+            public int FileIndex { get; set; }
+            public int FileTotal { get; set; }
         }
 
         /// <summary>
         /// Copy file from source to destination directory.
+        /// If sameDir is true, uses "Copy N" naming to avoid overwriting in same directory.
         /// </summary>
-        public static async Task<OperationResult> CopyAsync(string sourcePath, string destDir, IProgress<OperationProgress> progress = null)
+        public static async Task<OperationResult> CopyAsync(string sourcePath, string destDir, IProgress<OperationProgress> progress = null, bool sameDir = false, CancellationToken token = default)
         {
+            // Directory: delegate to CopyDirectoryAsync
+            var pathType = CheckPathType(sourcePath);
+            if (pathType == "directory")
+            {
+                return await CopyDirectoryAsync(sourcePath, destDir, progress, sameDir, token);
+            }
+
             return await Task.Run(() =>
             {
                 try
                 {
+                    if (token.IsCancellationRequested) return OperationResult.Cancelled;
+
                     string fileName = Path.GetFileName(sourcePath);
                     string destPath = Path.Combine(destDir, fileName);
 
-                    // Handle name collision — append (1), (2), etc.
-                    destPath = GetUniqueFilePath(destPath);
+                    destPath = sameDir ? GetCopyName(destPath) : GetUniqueFilePath(destPath);
 
                     Log.Information("FileOperations.Copy: {Source} -> {Dest}", sourcePath, destPath);
 
@@ -93,8 +206,9 @@ namespace XFiles.FileSystem
 
         /// <summary>
         /// Copy directory recursively from source to destination.
+        /// If sameDir is true, uses "Copy N" naming to avoid overwriting in same directory.
         /// </summary>
-        public static async Task<OperationResult> CopyDirectoryAsync(string sourceDir, string destDir, IProgress<OperationProgress> progress = null)
+        public static async Task<OperationResult> CopyDirectoryAsync(string sourceDir, string destDir, IProgress<OperationProgress> progress = null, bool sameDir = false, CancellationToken token = default)
         {
             return await Task.Run(() =>
             {
@@ -102,12 +216,12 @@ namespace XFiles.FileSystem
                 {
                     string dirName = Path.GetFileName(sourceDir.TrimEnd('\\', '/'));
                     string destPath = Path.Combine(destDir, dirName);
-                    destPath = GetUniqueDirectoryPath(destPath);
+                    destPath = sameDir ? GetCopyName(destPath) : GetUniqueDirectoryPath(destPath);
 
                     Log.Information("FileOperations.CopyDirectory: {Source} -> {Dest}", sourceDir, destPath);
                     CreateDirectoryFromAppW(destPath, IntPtr.Zero);
 
-                    return CopyDirectoryRecursive(sourceDir, destPath, progress);
+                    return CopyDirectoryRecursive(sourceDir, destPath, progress, token);
                 }
                 catch (Exception ex)
                 {
@@ -117,50 +231,88 @@ namespace XFiles.FileSystem
             });
         }
 
-        private static OperationResult CopyDirectoryRecursive(string sourceDir, string destDir, IProgress<OperationProgress> progress)
+        private static OperationResult CopyDirectoryRecursive(string sourceDir, string destDir, IProgress<OperationProgress> progress, CancellationToken token = default)
         {
-            foreach (string file in Directory.GetFiles(sourceDir))
+            try
             {
-                string destFile = Path.Combine(destDir, Path.GetFileName(file));
-                bool ok = CopyFileFromAppW(file, destFile, false);
-                if (!ok)
+                var findData = new WIN32_FIND_DATA();
+                IntPtr hFind = FindFirstFileExFromAppW(
+                    sourceDir + "\\*", 0, out findData, 0, IntPtr.Zero, 0);
+                if (hFind == new IntPtr(-1)) return OperationResult.Success;
+
+                do
                 {
-                    Log.Warning("FileOperations.CopyDirectory: failed to copy {File}", file);
-                    return OperationResult.Failed;
+                    if (token.IsCancellationRequested) { FindClose(hFind); return OperationResult.Cancelled; }
+
+                    if (findData.cFileName == "." || findData.cFileName == "..") continue;
+                    string fullPath = sourceDir + "\\" + findData.cFileName;
+
+                    if ((findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+                    {
+                        string destSubDir = destDir + "\\" + findData.cFileName;
+                        CreateDirectoryFromAppW(destSubDir, IntPtr.Zero);
+                        var result = CopyDirectoryRecursive(fullPath, destSubDir, progress, token);
+                        if (result != OperationResult.Success) { FindClose(hFind); return result; }
+                    }
+                    else
+                    {
+                        string destFile = destDir + "\\" + findData.cFileName;
+                        bool ok = CopyFileFromAppW(fullPath, destFile, false);
+                        if (!ok)
+                        {
+                            Log.Warning("FileOperations.CopyDirectory: failed to copy {File}", fullPath);
+                            FindClose(hFind);
+                            return OperationResult.Failed;
+                        }
+
+                        progress?.Report(new OperationProgress
+                        {
+                            FileName = findData.cFileName,
+                            PercentComplete = -1
+                        });
+                    }
                 }
+                while (FindNextFileW(hFind, out findData));
 
-                progress?.Report(new OperationProgress
-                {
-                    FileName = Path.GetFileName(file),
-                    PercentComplete = -1
-                });
+                FindClose(hFind);
             }
-
-            foreach (string dir in Directory.GetDirectories(sourceDir))
+            catch (Exception ex)
             {
-                string destSubDir = Path.Combine(destDir, Path.GetFileName(dir));
-                CreateDirectoryFromAppW(destSubDir, IntPtr.Zero);
-                var result = CopyDirectoryRecursive(dir, destSubDir, progress);
-                if (result != OperationResult.Success) return result;
+                Log.Warning("FileOperations.CopyDirectoryRecursive: {Dir} error: {Error}", sourceDir, ex.Message);
+                return OperationResult.Failed;
             }
 
             return OperationResult.Success;
         }
 
         /// <summary>
-        /// Move file from source to destination directory.
+        /// Move file or directory from source to destination directory.
         /// </summary>
-        public static async Task<OperationResult> MoveAsync(string sourcePath, string destDir, IProgress<OperationProgress> progress = null)
+        public static async Task<OperationResult> MoveAsync(string sourcePath, string destDir, IProgress<OperationProgress> progress = null, CancellationToken token = default)
         {
+            var pathType = CheckPathType(sourcePath);
+            if (pathType == "directory")
+            {
+                return await MoveDirectoryAsync(sourcePath, destDir, progress, token);
+            }
+
             return await Task.Run(() =>
             {
                 try
                 {
+                    if (token.IsCancellationRequested) return OperationResult.Cancelled;
+
                     string fileName = Path.GetFileName(sourcePath);
                     string destPath = Path.Combine(destDir, fileName);
                     destPath = GetUniqueFilePath(destPath);
 
                     Log.Information("FileOperations.Move: {Source} -> {Dest}", sourcePath, destPath);
+
+                    progress?.Report(new OperationProgress
+                    {
+                        FileName = fileName,
+                        PercentComplete = 0
+                    });
 
                     bool ok = MoveFileFromAppW(sourcePath, destPath);
                     if (!ok)
@@ -175,7 +327,13 @@ namespace XFiles.FileSystem
                         {
                             return OperationResult.Failed;
                         }
-                        DeleteFileFromAppW(sourcePath);
+                        bool deleted = DeleteFileFromAppW(sourcePath);
+                        if (!deleted)
+                        {
+                            int delErr = Marshal.GetLastWin32Error();
+                            Log.Warning("FileOperations.Move: copy succeeded but delete failed (source still exists): error {Error}", delErr);
+                            return OperationResult.Failed;
+                        }
                     }
 
                     progress?.Report(new OperationProgress
@@ -192,6 +350,132 @@ namespace XFiles.FileSystem
                     return OperationResult.Failed;
                 }
             });
+        }
+
+        /// <summary>
+        /// Move directory recursively from source to destination.
+        /// </summary>
+        public static async Task<OperationResult> MoveDirectoryAsync(string sourceDir, string destDir, IProgress<OperationProgress> progress = null, CancellationToken token = default)
+        {
+            return await Task.Run(() =>
+            {
+                try
+                {
+                    string dirName = Path.GetFileName(sourceDir.TrimEnd('\\', '/'));
+                    string destPath = Path.Combine(destDir, dirName);
+                    destPath = GetUniqueDirectoryPath(destPath);
+
+                    Log.Information("FileOperations.MoveDirectory: {Source} -> {Dest}", sourceDir, destPath);
+
+                    progress?.Report(new OperationProgress
+                    {
+                        FileName = dirName,
+                        PercentComplete = 0
+                    });
+
+                    // Try native move first (same volume)
+                    bool ok = MoveFileFromAppW(sourceDir, destPath);
+                    if (ok)
+                    {
+                        progress?.Report(new OperationProgress
+                        {
+                            FileName = dirName,
+                            PercentComplete = 100
+                        });
+                        return OperationResult.Success;
+                    }
+
+                    // Fallback: move each file individually with progress
+                    Log.Information("FileOperations.MoveDirectory: native move failed, using per-file fallback");
+                    CreateDirectoryFromAppW(destPath, IntPtr.Zero);
+
+                    var result = MoveDirectoryRecursive(sourceDir, destPath, progress, token);
+                    if (result == OperationResult.Success)
+                    {
+                        // Source should be empty after moving all files — remove it
+                        bool removed = RemoveDirectoryFromAppW(sourceDir);
+                        if (!removed)
+                        {
+                            int rmErr = Marshal.GetLastWin32Error();
+                            Log.Warning("FileOperations.MoveDirectory: files moved but source directory cleanup failed: {Dir} error {Error}", sourceDir, rmErr);
+                        }
+                    }
+
+                    return result;
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning("FileOperations.MoveDirectory exception: {Error}", ex.Message);
+                    return OperationResult.Failed;
+                }
+            });
+        }
+
+        private static OperationResult MoveDirectoryRecursive(string sourceDir, string destDir, IProgress<OperationProgress> progress, CancellationToken token = default)
+        {
+            try
+            {
+                var findData = new WIN32_FIND_DATA();
+                IntPtr hFind = FindFirstFileExFromAppW(
+                    sourceDir + "\\*", 0, out findData, 0, IntPtr.Zero, 0);
+                if (hFind == new IntPtr(-1)) return OperationResult.Success;
+
+                do
+                {
+                    if (token.IsCancellationRequested) { FindClose(hFind); return OperationResult.Cancelled; }
+
+                    if (findData.cFileName == "." || findData.cFileName == "..") continue;
+                    string fullPath = sourceDir + "\\" + findData.cFileName;
+
+                    if ((findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+                    {
+                        string destSubDir = destDir + "\\" + findData.cFileName;
+                        CreateDirectoryFromAppW(destSubDir, IntPtr.Zero);
+                        var result = MoveDirectoryRecursive(fullPath, destSubDir, progress, token);
+                        if (result != OperationResult.Success) { FindClose(hFind); return result; }
+                    }
+                    else
+                    {
+                        string destFile = destDir + "\\" + findData.cFileName;
+                        bool ok = MoveFileFromAppW(fullPath, destFile);
+                        if (!ok)
+                        {
+                            // Fallback: copy + delete
+                            ok = CopyFileFromAppW(fullPath, destFile, false);
+                            if (!ok)
+                            {
+                                Log.Warning("FileOperations.MoveDirectoryRecursive: failed to move {File}", fullPath);
+                                FindClose(hFind);
+                                return OperationResult.Failed;
+                            }
+                            bool deleted = DeleteFileFromAppW(fullPath);
+                            if (!deleted)
+                            {
+                                int delErr = Marshal.GetLastWin32Error();
+                                Log.Warning("FileOperations.MoveDirectoryRecursive: copy succeeded but delete failed for {File}: error {Error}", fullPath, delErr);
+                                FindClose(hFind);
+                                return OperationResult.Failed;
+                            }
+                        }
+
+                        progress?.Report(new OperationProgress
+                        {
+                            FileName = findData.cFileName,
+                            PercentComplete = -1
+                        });
+                    }
+                }
+                while (FindNextFileW(hFind, out findData));
+
+                FindClose(hFind);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("FileOperations.MoveDirectoryRecursive: {Dir} error: {Error}", sourceDir, ex.Message);
+                return OperationResult.Failed;
+            }
+
+            return OperationResult.Success;
         }
 
         /// <summary>
@@ -237,7 +521,8 @@ namespace XFiles.FileSystem
                 {
                     Log.Information("FileOperations.Delete: {Path}", path);
 
-                    if (File.Exists(path))
+                    var pathType = CheckPathType(path);
+                    if (pathType == "file")
                     {
                         bool ok = DeleteFileFromAppW(path);
                         if (!ok)
@@ -247,7 +532,7 @@ namespace XFiles.FileSystem
                             return OperationResult.Failed;
                         }
                     }
-                    else if (Directory.Exists(path))
+                    else if (pathType == "directory")
                     {
                         bool ok = RemoveDirectoryFromAppW(path);
                         if (!ok)
@@ -279,9 +564,32 @@ namespace XFiles.FileSystem
                 {
                     Log.Information("FileOperations.DeleteDirectory: {Path}", path);
 
-                    if (Directory.Exists(path))
+                    // Recursively delete contents via P/Invoke, then remove the directory itself
+                    var files = EnumerateFilesRecursive(path);
+                    foreach (var file in files)
                     {
-                        Directory.Delete(path, true);
+                        bool ok = DeleteFileFromAppW(file);
+                        if (!ok)
+                        {
+                            int err = Marshal.GetLastWin32Error();
+                            Log.Warning("FileOperations.DeleteDirectory: failed to delete file {File}, error {Error}", file, err);
+                            return OperationResult.Failed;
+                        }
+                    }
+
+                    // Remove subdirectories bottom-up
+                    RemoveDirectoriesRecursive(path);
+
+                    // Remove the root directory
+                    if (CheckPathType(path) == "directory")
+                    {
+                        bool ok = RemoveDirectoryFromAppW(path);
+                        if (!ok)
+                        {
+                            int err = Marshal.GetLastWin32Error();
+                            Log.Warning("FileOperations.DeleteDirectory: failed to remove root {Path}, error {Error}", path, err);
+                            return OperationResult.Failed;
+                        }
                     }
 
                     return OperationResult.Success;
@@ -292,6 +600,35 @@ namespace XFiles.FileSystem
                     return OperationResult.Failed;
                 }
             });
+        }
+
+        private static void RemoveDirectoriesRecursive(string dir)
+        {
+            try
+            {
+                var findData = new WIN32_FIND_DATA();
+                IntPtr hFind = FindFirstFileExFromAppW(
+                    dir + "\\*", 0, out findData, 0, IntPtr.Zero, 0);
+                if (hFind == new IntPtr(-1)) return;
+
+                do
+                {
+                    if (findData.cFileName == "." || findData.cFileName == "..") continue;
+                    if ((findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+                    {
+                        string subDir = dir + "\\" + findData.cFileName;
+                        RemoveDirectoriesRecursive(subDir);
+                        RemoveDirectoryFromAppW(subDir);
+                    }
+                }
+                while (FindNextFileW(hFind, out findData));
+
+                FindClose(hFind);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("RemoveDirectoriesRecursive: {Dir} error: {Error}", dir, ex.Message);
+            }
         }
 
         /// <summary>
@@ -345,7 +682,8 @@ namespace XFiles.FileSystem
         public static async Task<OperationResult> ExtractAsync(
             string archivePath, string destDir,
             IProgress<OperationProgress> progress = null,
-            Func<string, Task<int>> conflictCallback = null)
+            Func<string, Task<int>> conflictCallback = null,
+            CancellationToken token = default)
         {
             return await Task.Run(async () =>
             {
@@ -353,10 +691,10 @@ namespace XFiles.FileSystem
                 {
                     Log.Information("FileOperations.Extract: {Archive} -> {Dest}", archivePath, destDir);
 
-                    if (!Directory.Exists(destDir))
+                    if (CheckPathType(destDir) == null)
                     {
                         Log.Information("FileOperations.Extract: creating dest dir {Dir}", destDir);
-                        Directory.CreateDirectory(destDir);
+                        CreateDirectoryFromAppW(destDir, IntPtr.Zero);
                     }
 
                     using (var stream = Win32FileStream.OpenRead(archivePath))
@@ -369,16 +707,12 @@ namespace XFiles.FileSystem
 
                         using (var archive = SharpCompress.Archives.ArchiveFactory.Open(stream))
                         {
-                            var options = new SharpCompress.Common.ExtractionOptions
-                            {
-                                ExtractFullPath = true,
-                                Overwrite = true
-                            };
-
                             bool overwriteAll = conflictCallback == null;
 
                             foreach (var entry in archive.Entries)
                             {
+                                if (token.IsCancellationRequested) return OperationResult.Cancelled;
+
                                 if (entry.IsDirectory) continue;
 
                                 progress?.Report(new OperationProgress
@@ -390,7 +724,7 @@ namespace XFiles.FileSystem
                                 if (!overwriteAll && conflictCallback != null)
                                 {
                                     string destPath = System.IO.Path.Combine(destDir, entry.Key);
-                                    if (File.Exists(destPath))
+                                    if (CheckPathType(destPath) == "file")
                                     {
                                         int decision = await conflictCallback(entry.Key);
                                         switch (decision)
@@ -409,7 +743,34 @@ namespace XFiles.FileSystem
                                     }
                                 }
 
-                                entry.WriteToDirectory(destDir, options);
+                                // Ensure parent directory exists (SharpCompress entry.Key may include subdirs)
+                                string entryDestPath = System.IO.Path.Combine(destDir, entry.Key);
+                                string entryParentDir = System.IO.Path.GetDirectoryName(entryDestPath);
+                                if (entryParentDir != null && CheckPathType(entryParentDir) == null)
+                                {
+                                    CreateDirectoryFromAppW(entryParentDir, IntPtr.Zero);
+                                }
+
+                                // Extract via OpenEntryStream + Win32FileWriteStream (no WriteToDirectory)
+                                using (var entryStream = entry.OpenEntryStream())
+                                {
+                                    if (entryStream == null)
+                                    {
+                                        Log.Warning("Extract: cannot open entry stream {File}", entry.Key);
+                                        continue;
+                                    }
+
+                                    using (var writeStream = Win32FileWriteStream.Create(entryDestPath))
+                                    {
+                                        if (writeStream == null)
+                                        {
+                                            Log.Warning("Extract: cannot create dest file {Path}", entryDestPath);
+                                            continue;
+                                        }
+
+                                        entryStream.CopyTo(writeStream);
+                                    }
+                                }
                             }
                         }
                     }
@@ -430,32 +791,181 @@ namespace XFiles.FileSystem
             });
         }
 
+        public static async Task<OperationResult> ExtractFileAsync(
+            string archivePath, string internalPath, string destDir,
+            Func<string, Task<int>> conflictCallback = null,
+            CancellationToken token = default)
+        {
+            return await Task.Run(async () =>
+            {
+                try
+                {
+                    if (token.IsCancellationRequested) return OperationResult.Cancelled;
+
+                    Log.Information("FileOperations.ExtractFile: {Archive}|{Internal} -> {Dest}",
+                        archivePath, internalPath, destDir);
+
+                    if (CheckPathType(destDir) == null)
+                        CreateDirectoryFromAppW(destDir, IntPtr.Zero);
+
+                    using (var stream = Win32FileStream.OpenRead(archivePath))
+                    {
+                        if (stream == null)
+                        {
+                            Log.Warning("ExtractFile: cannot open archive {Path}", archivePath);
+                            return OperationResult.Failed;
+                        }
+
+                        using (var archive = SharpCompress.Archives.ArchiveFactory.Open(stream))
+                        {
+                            string normalizedInternal = internalPath.Replace('\\', '/').Trim('/');
+                            var entry = archive.Entries.FirstOrDefault(e =>
+                                e.Key.Replace('\\', '/').Trim('/') == normalizedInternal);
+
+                            if (entry == null || entry.IsDirectory)
+                            {
+                                Log.Warning("ExtractFile: entry not found or is directory: {Internal}", internalPath);
+                                return OperationResult.Failed;
+                            }
+
+                            string fileName = Path.GetFileName(entry.Key);
+                            string destPath = Path.Combine(destDir, fileName);
+
+                            if (CheckPathType(destPath) == "file" && conflictCallback != null)
+                            {
+                                int decision = await conflictCallback(fileName);
+                                if (decision == 0)
+                                {
+                                    Log.Information("ExtractFile: skipping {File}", fileName);
+                                    return OperationResult.Success;
+                                }
+                            }
+
+                            // Extract via OpenEntryStream + Win32FileWriteStream (no WriteToDirectory)
+                            using (var entryStream = entry.OpenEntryStream())
+                            {
+                                if (entryStream == null)
+                                {
+                                    Log.Warning("ExtractFile: cannot open entry stream {File}", internalPath);
+                                    return OperationResult.Failed;
+                                }
+
+                                using (var writeStream = Win32FileWriteStream.Create(destPath))
+                                {
+                                    if (writeStream == null)
+                                    {
+                                        Log.Warning("ExtractFile: cannot create dest file {Path}", destPath);
+                                        return OperationResult.Failed;
+                                    }
+
+                                    entryStream.CopyTo(writeStream);
+                                }
+                            }
+
+                            Log.Information("ExtractFile: extracted {File} -> {Dest}", fileName, destPath);
+                        }
+                    }
+
+                    return OperationResult.Success;
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning("FileOperations.ExtractFile exception: {Error}", ex.Message);
+                    return OperationResult.Failed;
+                }
+            });
+        }
+
         private static string GetUniqueFilePath(string path)
         {
-            if (!File.Exists(path)) return path;
+            if (CheckPathType(path) != "file") return path;
 
             string dir = Path.GetDirectoryName(path);
             string nameNoExt = Path.GetFileNameWithoutExtension(path);
             string ext = Path.GetExtension(path);
 
-            for (int i = 1; ; i++)
+            // Detect "file (N)" pattern — increment N instead of nesting
+            var match = System.Text.RegularExpressions.Regex.Match(nameNoExt, @"^(.+?)\s*\((\d+)\)$");
+            string baseName;
+            int startIdx;
+            if (match.Success)
             {
-                string candidate = Path.Combine(dir, $"{nameNoExt} ({i}){ext}");
-                if (!File.Exists(candidate)) return candidate;
+                baseName = match.Groups[1].Value;
+                startIdx = int.Parse(match.Groups[2].Value) + 1;
+            }
+            else
+            {
+                baseName = nameNoExt;
+                startIdx = 1;
+            }
+
+            for (int i = startIdx; ; i++)
+            {
+                string candidate = Path.Combine(dir, $"{baseName} ({i}){ext}");
+                if (CheckPathType(candidate) == null) return candidate;
             }
         }
 
         private static string GetUniqueDirectoryPath(string path)
         {
-            if (!Directory.Exists(path)) return path;
+            if (CheckPathType(path) != "directory") return path;
 
             string parent = Path.GetDirectoryName(path);
             string name = Path.GetFileName(path);
 
-            for (int i = 1; ; i++)
+            // Detect "folder (N)" pattern — increment N instead of nesting
+            var match = System.Text.RegularExpressions.Regex.Match(name, @"^(.+?)\s*\((\d+)\)$");
+            string baseName;
+            int startIdx;
+            if (match.Success)
             {
-                string candidate = Path.Combine(parent, $"{name} ({i})");
-                if (!Directory.Exists(candidate)) return candidate;
+                baseName = match.Groups[1].Value;
+                startIdx = int.Parse(match.Groups[2].Value) + 1;
+            }
+            else
+            {
+                baseName = name;
+                startIdx = 1;
+            }
+
+            for (int i = startIdx; ; i++)
+            {
+                string candidate = Path.Combine(parent, $"{baseName} ({i})");
+                if (CheckPathType(candidate) == null) return candidate;
+            }
+        }
+
+        /// <summary>
+        /// Generate a copy name like "file (Copy 1).ext" or "folder (Copy 1)".
+        /// Used when pasting in the same directory to avoid overwriting.
+        /// </summary>
+        public static string GetCopyName(string path)
+        {
+            if (CheckPathType(path) == null) return path;
+
+            string dir = Path.GetDirectoryName(path);
+            string nameNoExt = Path.GetFileNameWithoutExtension(path);
+            string ext = Path.GetExtension(path);
+
+            // Detect "file (Copy N)" pattern — increment N instead of nesting
+            var match = System.Text.RegularExpressions.Regex.Match(nameNoExt, @"^(.+?)\s*\(Copy\s+(\d+)\)$");
+            string baseName;
+            int startIdx;
+            if (match.Success)
+            {
+                baseName = match.Groups[1].Value;
+                startIdx = int.Parse(match.Groups[2].Value) + 1;
+            }
+            else
+            {
+                baseName = nameNoExt;
+                startIdx = 1;
+            }
+
+            for (int i = startIdx; ; i++)
+            {
+                string candidate = Path.Combine(dir, $"{baseName} (Copy {i}){ext}");
+                if (CheckPathType(candidate) == null) return candidate;
             }
         }
 
@@ -497,29 +1007,63 @@ namespace XFiles.FileSystem
             });
         }
 
-        public static async Task<OperationResult> CreateZipAsync(string sourcePath, string zipPath)
+        public static async Task<OperationResult> CreateZipAsync(string sourcePath, string zipPath, IProgress<OperationProgress> progress = null, CancellationToken token = default)
         {
             return await Task.Run(() =>
             {
                 try
                 {
+                    if (token.IsCancellationRequested) return OperationResult.Cancelled;
+
                     zipPath = GetUniqueFilePath(zipPath);
                     Log.Information("FileOperations.CreateZip: {Source} -> {Zip}", sourcePath, zipPath);
 
                     using (var archive = SharpCompress.Archives.Zip.ZipArchive.Create())
                     {
-                        MemoryStream singleFileStream = null;
-
-                        if (File.Exists(sourcePath))
+                        var pathType = CheckPathType(sourcePath);
+                        if (pathType == "file")
                         {
                             var fileName = System.IO.Path.GetFileName(sourcePath);
-                            var data = File.ReadAllBytes(sourcePath);
-                            singleFileStream = new MemoryStream(data);
-                            archive.AddEntry(fileName, singleFileStream, data.Length);
+                            var data = ReadAllBytesWin32(sourcePath);
+                            if (data == null)
+                            {
+                                Log.Warning("FileOperations.CreateZip: cannot read {Path}", sourcePath);
+                                return OperationResult.Failed;
+                            }
+                            archive.AddEntry(fileName, new MemoryStream(data), data.Length);
+
+                            progress?.Report(new OperationProgress
+                            {
+                                FileName = fileName,
+                                PercentComplete = -1
+                            });
                         }
-                        else if (Directory.Exists(sourcePath))
+                        else if (pathType == "directory")
                         {
-                            archive.AddAllFromDirectory(sourcePath);
+                            var files = EnumerateFilesRecursive(sourcePath);
+                            int fileIndex = 0;
+                            foreach (var file in files)
+                            {
+                                if (token.IsCancellationRequested) return OperationResult.Cancelled;
+
+                                var entryName = file.Substring(sourcePath.Length + 1);
+                                var entryData = ReadAllBytesWin32(file);
+                                if (entryData == null)
+                                {
+                                    Log.Warning("FileOperations.CreateZip: cannot read {Path}", file);
+                                    continue;
+                                }
+                                archive.AddEntry(entryName, new MemoryStream(entryData), entryData.Length);
+
+                                fileIndex++;
+                                progress?.Report(new OperationProgress
+                                {
+                                    FileName = entryName,
+                                    PercentComplete = -1,
+                                    FileIndex = fileIndex,
+                                    FileTotal = files.Count
+                                });
+                            }
                         }
                         else
                         {
@@ -527,8 +1071,23 @@ namespace XFiles.FileSystem
                             return OperationResult.Failed;
                         }
 
-                        archive.SaveTo(zipPath, SharpCompress.Common.CompressionType.Deflate);
-                        singleFileStream?.Dispose();
+                        // Save to MemoryStream first (avoids SharpCompress SaveTo using System.IO)
+                        using (var zipStream = new MemoryStream())
+                        {
+                            archive.SaveTo(zipStream, new SharpCompress.Writers.WriterOptions(SharpCompress.Common.CompressionType.Deflate));
+                            zipStream.Position = 0;
+
+                            // Write to disk via P/Invoke
+                            using (var writeStream = Win32FileWriteStream.Create(zipPath))
+                            {
+                                if (writeStream == null)
+                                {
+                                    Log.Warning("FileOperations.CreateZip: cannot create zip file {Path}", zipPath);
+                                    return OperationResult.Failed;
+                                }
+                                zipStream.CopyTo(writeStream);
+                            }
+                        }
                     }
 
                     return OperationResult.Success;
@@ -539,6 +1098,28 @@ namespace XFiles.FileSystem
                     return OperationResult.Failed;
                 }
             });
+        }
+
+        /// <summary>
+        /// Read all bytes from a file using Win32 P/Invoke (Xbox-safe).
+        /// </summary>
+        private static byte[] ReadAllBytesWin32(string filePath)
+        {
+            using (var stream = Win32FileStream.OpenRead(filePath))
+            {
+                if (stream == null) return null;
+                byte[] data = new byte[stream.Length];
+                int offset = 0;
+                int remaining = data.Length;
+                while (remaining > 0)
+                {
+                    int read = stream.Read(data, offset, remaining);
+                    if (read == 0) break;
+                    offset += read;
+                    remaining -= read;
+                }
+                return data;
+            }
         }
 
         /// <summary>
@@ -554,11 +1135,12 @@ namespace XFiles.FileSystem
 
                 try
                 {
-                    if (File.Exists(path))
+                    var pathType = CheckPathType(path);
+                    if (pathType == "file")
                     {
                         entries.Add(path);
                     }
-                    else if (Directory.Exists(path))
+                    else if (pathType == "directory")
                     {
                         entries.Add(path + "\\");
                         folderCount++;
@@ -578,16 +1160,29 @@ namespace XFiles.FileSystem
         {
             try
             {
-                foreach (var file in Directory.GetFiles(dir))
+                var findData = new WIN32_FIND_DATA();
+                IntPtr hFind = FindFirstFileExFromAppW(
+                    dir + "\\*", 0, out findData, 0, IntPtr.Zero, 0);
+                if (hFind == new IntPtr(-1)) return;
+
+                do
                 {
-                    entries.Add(file);
+                    if (findData.cFileName == "." || findData.cFileName == "..") continue;
+                    string fullPath = dir + "\\" + findData.cFileName;
+                    if ((findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+                    {
+                        entries.Add(fullPath + "\\");
+                        folderCount++;
+                        ListDirectoryRecursive(fullPath, entries, ref folderCount);
+                    }
+                    else
+                    {
+                        entries.Add(fullPath);
+                    }
                 }
-                foreach (var sub in Directory.GetDirectories(dir))
-                {
-                    entries.Add(sub + "\\");
-                    folderCount++;
-                    ListDirectoryRecursive(sub, entries, ref folderCount);
-                }
+                while (FindNextFileW(hFind, out findData));
+
+                FindClose(hFind);
             }
             catch (Exception ex)
             {

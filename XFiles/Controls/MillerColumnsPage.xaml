@@ -811,10 +811,12 @@
         <controls:AlertDialog x:Name="AlertDialogControl" />
         <controls:InputDialog x:Name="InputDialogControl" />
         <controls:OverwriteDialog x:Name="OverwriteDialogControl" />
-        <controls:DeleteConfirmDialog x:Name="DeleteConfirmDialogControl" />
+        <controls:FileOperationConfirmDialog x:Name="FileOperationConfirmDialogControl" />
+        <controls:FolderBrowserDialog x:Name="FolderBrowserDialogControl" />
         <controls:OperationProgressDialog x:Name="OpProgressDialog" />
         <controls:PdfFullScreenOverlay x:Name="PdfFullScreen" />
         <controls:ImageFullScreenOverlay x:Name="ImageFullScreen" />
+        <controls:TextEditorOverlay x:Name="TextEditorOverlayControl" />
         <controls:SettingsPage x:Name="SettingsPageControl" />
 
         <!-- Fullscreen audio overlay -->

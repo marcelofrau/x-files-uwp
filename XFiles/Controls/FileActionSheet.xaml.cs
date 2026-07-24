@@ -20,11 +20,13 @@ namespace XFiles.Controls
         Rename,
         Delete,
         Extract,
+        ExtractFile,
         ExtractToFolder,
         ExtractHere,
         CreateFolder,
         CreateZip,
-        Refresh
+        Refresh,
+        Edit
     }
 
     public class ActionItem
@@ -60,6 +62,7 @@ namespace XFiles.Controls
         private static readonly string ActionCreateFolder = "fileactionsheet-createfolder-48.png";
         private static readonly string ActionCreateZip = "fileactionsheet-createzip-48.png";
         private static readonly string ActionRefresh = "fileactionsheet-refresh-48.png";
+        private static readonly string ActionEdit = "ctx-text-120.png";
 
         private static readonly HashSet<string> ImageExts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -76,7 +79,7 @@ namespace XFiles.Controls
             ".mp3",".flac",".ogg",".wav",".aac",".m4a",".wma"
         };
 
-        private static readonly HashSet<string> TextExts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        internal static readonly HashSet<string> TextExts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             ".txt",".log",".out",".err",".md",".json",".xml",".cs",".js",".ts",
             ".py",".c",".cpp",".h",".java",".csproj",".sln",".yaml",".yml",
@@ -144,17 +147,21 @@ namespace XFiles.Controls
             }
             else if (isInArchive)
             {
-                // Extract disabled for now
-                // if (isArchiveFile)
-                // {
-                //     actions.Add(new ActionItem
-                //     {
-                //         Action = FileAction.Extract,
-                //         Label = "Extract",
-                //         IconPath = IconBase + ActionExtract,
-                //         LabelBrush = accent
-                //     });
-                // }
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.Extract,
+                    Label = "Extract All",
+                    IconPath = IconBase + ActionExtractToFolder,
+                    LabelBrush = accent
+                });
+
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.ExtractFile,
+                    Label = "Extract File",
+                    IconPath = IconBase + ActionExtract,
+                    LabelBrush = dim
+                });
 
                 actions.Add(new ActionItem
                 {
@@ -174,42 +181,44 @@ namespace XFiles.Controls
                     LabelBrush = accent
                 });
 
-                // Clipboard actions disabled for now — enable one by one later
-                // if (ClipboardState.HasItems)
-                // {
-                //     actions.Add(new ActionItem
-                //     {
-                //         Action = FileAction.Paste,
-                //         Label = ClipboardState.IsCut ? "Paste (move)" : "Paste (copy)",
-                //         IconPath = IconBase + ActionCopy,
-                //         LabelBrush = accent
-                //     });
-                // }
+                var ext = System.IO.Path.GetExtension(entry.Name);
+                if (!entry.IsDirectory && TextExts.Contains(ext))
+                {
+                    actions.Add(new ActionItem
+                    {
+                        Action = FileAction.Edit,
+                        Label = "Edit",
+                        IconPath = IconBase + ActionEdit,
+                        LabelBrush = accent
+                    });
+                }
 
-                // actions.Add(new ActionItem
-                // {
-                //     Action = FileAction.Copy,
-                //     Label = "Copy",
-                //     IconPath = IconBase + ActionCopy,
-                //     LabelBrush = accent
-                // });
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.Copy,
+                    Label = "Copy",
+                    IconPath = IconBase + ActionCopy,
+                    LabelBrush = accent
+                });
 
-                // actions.Add(new ActionItem
-                // {
-                //     Action = FileAction.Cut,
-                //     Label = "Cut",
-                //     IconPath = IconBase + ActionMove,
-                //     LabelBrush = dim
-                // });
+                if (ClipboardState.HasItems)
+                {
+                    actions.Add(new ActionItem
+                    {
+                        Action = FileAction.Paste,
+                        Label = "Paste",
+                        IconPath = IconBase + ActionCopy,
+                        LabelBrush = accent
+                    });
+                }
 
-                // Move disabled for now
-                // actions.Add(new ActionItem
-                // {
-                //     Action = FileAction.Move,
-                //     Label = "Move",
-                //     IconPath = IconBase + ActionMove,
-                //     LabelBrush = accent
-                // });
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.Move,
+                    Label = "Move",
+                    IconPath = IconBase + ActionMove,
+                    LabelBrush = accent
+                });
 
                 actions.Add(new ActionItem
                 {

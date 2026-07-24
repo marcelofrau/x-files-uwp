@@ -1,5 +1,5 @@
 <UserControl
-    x:Class="XFiles.Controls.DeleteConfirmDialog"
+    x:Class="XFiles.Controls.FileOperationConfirmDialog"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Visibility="Collapsed">
@@ -66,18 +66,22 @@
                             HorizontalAlignment="Right"
                             Margin="0,16,0,0">
 
-                    <!-- DELETE: A button (red) -->
+                    <!-- DELETE: A button (red background) -->
                     <Button x:Name="DeleteButton"
                             Style="{StaticResource ConfirmDialogButton}"
                             Click="OnDeleteClicked"
-                            Margin="0,0,8,0">
+                            Margin="0,0,8,0"
+                            Background="#FF4444"
+                            BorderBrush="#FF4444"
+                            x:FieldModifier="public">
                         <StackPanel Orientation="Horizontal">
                             <Image Source="ms-appx:///Assets/GamepadButtons/abxy/a.png"
                                    Width="18" Height="18" Margin="0,0,6,0"
                                    VerticalAlignment="Center" />
-                            <TextBlock Text="DELETE"
+                            <TextBlock x:Name="DeleteButtonText"
+                                       Text="DELETE"
                                        FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
-                                       Foreground="#FF4444"
+                                       Foreground="White"
                                        VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>

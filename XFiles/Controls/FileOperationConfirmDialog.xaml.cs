@@ -9,14 +9,15 @@ using Windows.UI.Xaml.Input;
 namespace XFiles.Controls
 {
     /// <summary>
-    /// Delete confirmation dialog with scrollable file list.
-    /// Returns true=delete, false=cancel.
+    /// File operation confirmation dialog with scrollable file list.
+    /// Used for both delete and move operations.
+    /// Returns true=confirm, false=cancel.
     /// </summary>
-    public sealed partial class DeleteConfirmDialog : UserControl
+    public sealed partial class FileOperationConfirmDialog : UserControl
     {
         private TaskCompletionSource<bool> _tcs;
 
-        public DeleteConfirmDialog()
+        public FileOperationConfirmDialog()
         {
             this.InitializeComponent();
         }
@@ -37,6 +38,32 @@ namespace XFiles.Controls
             CountText.Text = $"{fileCount} file(s), {folderCount} folder(s)";
 
             FileListText.Text = string.Join("\n", files);
+
+            DeleteButton.Background = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x44, 0x44, 0x44));
+            DeleteButtonText.Text = "DELETE";
+
+            _tcs = new TaskCompletionSource<bool>();
+            Visibility = Visibility.Visible;
+            Overlay.Visibility = Visibility.Visible;
+
+            FileListScroll.ScrollToVerticalOffset(0);
+            return _tcs.Task;
+        }
+
+        /// <summary>
+        /// Show move confirmation with file list.
+        /// </summary>
+        public Task<bool> ShowMoveAsync(string itemName, string destPath, List<string> files, int folderCount)
+        {
+            SummaryText.Text = $"Move '{itemName}' to '{destPath}'?";
+
+            int fileCount = files.Count - folderCount;
+            CountText.Text = $"{fileCount} file(s), {folderCount} folder(s)";
+
+            FileListText.Text = string.Join("\n", files);
+
+            DeleteButton.Background = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x1B, 0x6E, 0xD1));
+            DeleteButtonText.Text = "MOVE";
 
             _tcs = new TaskCompletionSource<bool>();
             Visibility = Visibility.Visible;
@@ -60,12 +87,10 @@ namespace XFiles.Controls
         {
             switch (e.Key)
             {
-                case VirtualKey.GamepadA:
                 case VirtualKey.Enter:
                     e.Handled = true;
                     Close(true);
                     break;
-                case VirtualKey.GamepadB:
                 case VirtualKey.Escape:
                     e.Handled = true;
                     Close(false);
@@ -96,6 +121,23 @@ namespace XFiles.Controls
             FileListScroll.ScrollToVerticalOffset(offset);
         }
 
+        /// <summary>
+        /// Scroll the file list based on analog stick Y input.
+        /// Called by MillerColumnsPage.OnLeftStickMove/OnRightStickMove.
+        /// </summary>
+        public void HandleStick(float x, float y)
+        {
+            if (Math.Abs(y) < 0.15f) return; // deadzone
+
+            double maxScroll = FileListScroll.ExtentHeight - FileListScroll.ViewportHeight;
+            if (maxScroll <= 0) return;
+
+            double speed = 8.0;
+            double offset = FileListScroll.VerticalOffset - (y * speed);
+            offset = Math.Max(0, Math.Min(offset, maxScroll));
+            FileListScroll.ScrollToVerticalOffset(offset);
+        }
+
         private void OnOverlayTapped(object sender, TappedRoutedEventArgs e)
         {
             Close(false);
@@ -103,7 +145,7 @@ namespace XFiles.Controls
 
         private void Close(bool result)
         {
-            Log.Information("DeleteConfirmDialog.Close: result={Result}", result);
+            Log.Information("FileOperationConfirmDialog.Close: result={Result}", result);
             Overlay.Visibility = Visibility.Collapsed;
             Visibility = Visibility.Collapsed;
             _tcs?.TrySetResult(result);

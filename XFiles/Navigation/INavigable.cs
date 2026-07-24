@@ -16,6 +16,7 @@ namespace XFiles.Navigation
         void OnBack();
         void OnContextMenu();
         void OnRefresh();
+        void OnPaste();
         void OnSettings();
         void OnPageUp();
         void OnPageDown();

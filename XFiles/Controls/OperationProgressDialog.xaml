@@ -5,7 +5,8 @@
     Visibility="Collapsed">
 
     <Grid x:Name="Overlay" Background="#CC0D1117">
-        <Border Background="#1A1D23"
+        <Border x:Name="MainBorder"
+                Background="#1A1D23"
                 BorderBrush="#2A2D33"
                 BorderThickness="1"
                 CornerRadius="6"
@@ -37,9 +38,9 @@
                                FontFamily="ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata"
                                FontSize="13"
                                TextTrimming="CharacterEllipsis"
-                                 MaxWidth="1050"
-                                VerticalAlignment="Center"
-                                Text="" />
+                               MaxWidth="1050"
+                               VerticalAlignment="Center"
+                               Text="" />
                 </StackPanel>
 
                 <!-- Destination -->
@@ -60,7 +61,30 @@
                                Text="" />
                 </StackPanel>
 
-                <!-- Progress bar -->
+                <!-- Overall progress bar (multi-file) -->
+                <StackPanel x:Name="OverallProgressPanel" Visibility="Collapsed">
+                    <TextBlock x:Name="OverallLabel"
+                               Foreground="#66FFFFFF"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="11"
+                               Margin="0,0,0,4"
+                               Text="Overall" />
+                    <ProgressBar x:Name="OverallProgressBar"
+                                 Minimum="0" Maximum="100"
+                                 Value="0"
+                                 Height="10"
+                                 Margin="0,0,0,10"
+                                 Foreground="{StaticResource XFilesAccentBrush}"
+                                 Background="#2A2D33" />
+                </StackPanel>
+
+                <!-- Per-file progress bar -->
+                <TextBlock x:Name="FileLabel"
+                           Foreground="#66FFFFFF"
+                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                           FontSize="11"
+                           Margin="0,0,0,4"
+                           Text="File" />
                 <ProgressBar x:Name="ProgressBar"
                              Minimum="0" Maximum="100"
                              Value="0"
@@ -84,7 +108,8 @@
                            Text="" />
 
                 <!-- Cancel hint -->
-                <StackPanel Orientation="Horizontal"
+                <StackPanel x:Name="CancelHint"
+                            Orientation="Horizontal"
                             HorizontalAlignment="Center"
                             Margin="0,16,0,0">
                     <Image Source="ms-appx:///Assets/GamepadButtons/abxy/b.png"
@@ -95,6 +120,31 @@
                                FontSize="11"
                                Foreground="{StaticResource XFilesTextMutedBrush}"
                                VerticalAlignment="Center" />
+                </StackPanel>
+
+                <!-- Cancelled summary (shown after cancel) -->
+                <StackPanel x:Name="SummaryPanel" Visibility="Collapsed"
+                            Margin="0,16,0,0">
+                    <Border Background="#1A2A1A"
+                            BorderBrush="#3393C43C"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="16,12">
+                        <StackPanel>
+                            <TextBlock x:Name="SummaryTitle"
+                                       Foreground="{StaticResource XFilesAccentBrush}"
+                                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                                       FontSize="14"
+                                       Margin="0,0,0,8"
+                                       Text="Operation Cancelled" />
+                            <TextBlock x:Name="SummaryText"
+                                       Foreground="{StaticResource XFilesForegroundBrush}"
+                                       FontFamily="ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Text="" />
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
             </StackPanel>
         </Border>

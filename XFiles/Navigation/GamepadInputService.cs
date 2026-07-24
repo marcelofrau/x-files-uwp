@@ -217,11 +217,19 @@ namespace XFiles.Navigation
                 nav.OnContextMenu();
             }
 
-            // X — refresh
+            // X — paste (if clipboard has items) or refresh
             if ((justPressed & GamepadButtons.X) != 0)
             {
-                Log.Information("Button: X (Refresh)");
-                nav.OnRefresh();
+                if (FileSystem.ClipboardState.HasItems)
+                {
+                    Log.Information("Button: X (Paste)");
+                    nav.OnPaste();
+                }
+                else
+                {
+                    Log.Information("Button: X (Refresh)");
+                    nav.OnRefresh();
+                }
             }
 
             // Start/Select — settings
@@ -286,41 +294,78 @@ namespace XFiles.Navigation
             _prevButtons = pressed;
         }
 
-        private double _stickCooldown;
+        private double _stickAccumY;
+        private double _stickAccumX;
         private double _shoulderSeekCooldown;
         private double _dpadRepeatCooldown;
         private GamepadButtons _dpadHeld;
         private bool _dpadNavigatedThisTick;
         private const double DpadInitialDelay = 300;
         private const double DpadRepeatInterval = 80;
+        private const double StickDeadzone = 0.18;
+        private const double StickMinSpeed = 6.0;   // items/sec at deadzone edge
+        private const double StickMaxSpeed = 28.0;   // items/sec at full deflection
 
         private void HandleLeftStick(double x, double y, INavigable nav)
         {
-            if (_stickCooldown > 0)
-            {
-                _stickCooldown -= 16;
-                return;
-            }
-
             if (nav.IsMediaFullscreen) return;
             if (nav.IsMediaPlayerActive) return;
             if (_dpadNavigatedThisTick) return;
 
-            if (Math.Abs(y) > Deadzone)
+            double magY = Math.Abs(y);
+            double magX = Math.Abs(x);
+
+            // Vertical navigation (list scrolling)
+            if (magY > StickDeadzone)
             {
-                if (y > Deadzone)
-                    nav.OnDPadUp();
-                else
-                    nav.OnDPadDown();
-                _stickCooldown = 100;
+                double deflection = (magY - StickDeadzone) / (1.0 - StickDeadzone);
+                deflection = Math.Min(1.0, deflection);
+                double speed = StickMinSpeed + deflection * (StickMaxSpeed - StickMinSpeed);
+
+                _stickAccumY += speed / 60.0; // 60 ticks/sec (16ms)
+                int steps = (int)_stickAccumY;
+                if (steps != 0)
+                {
+                    _stickAccumY -= steps;
+                    if (y > 0)
+                    {
+                        for (int i = 0; i < steps; i++) nav.OnDPadUp();
+                    }
+                    else
+                    {
+                        for (int i = 0; i < steps; i++) nav.OnDPadDown();
+                    }
+                }
             }
-            else if (Math.Abs(x) > Deadzone)
+            else
             {
-                if (x < -Deadzone)
-                    nav.OnDPadLeft();
-                else
-                    nav.OnDPadRight();
-                _stickCooldown = 100;
+                _stickAccumY = 0;
+            }
+
+            // Horizontal navigation (column drill in/out)
+            if (magX > StickDeadzone && magY < StickDeadzone)
+            {
+                double deflection = (magX - StickDeadzone) / (1.0 - StickDeadzone);
+                double speed = StickMinSpeed + Math.Min(1.0, deflection) * (StickMaxSpeed - StickMinSpeed);
+
+                _stickAccumX += speed / 60.0;
+                int steps = (int)_stickAccumX;
+                if (steps != 0)
+                {
+                    _stickAccumX -= steps;
+                    if (x < 0)
+                    {
+                        for (int i = 0; i < steps; i++) nav.OnDPadLeft();
+                    }
+                    else
+                    {
+                        for (int i = 0; i < steps; i++) nav.OnDPadRight();
+                    }
+                }
+            }
+            else
+            {
+                _stickAccumX = 0;
             }
         }
 

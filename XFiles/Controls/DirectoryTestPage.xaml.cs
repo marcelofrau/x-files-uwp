@@ -214,6 +214,7 @@ namespace XFiles.Controls
         public void OnScrollVertical(double delta) { }
 
         public void OnRefresh() { }
+        public void OnPaste() { }
 
         public void OnSettings() { }
 
