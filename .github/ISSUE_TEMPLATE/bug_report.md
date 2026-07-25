@@ -1,7 +1,7 @@
 ---
 name: Bug Report
-about: Report a bug or unexpected behavior
-title: ''
+about: Report a bug to help improve X-Files
+title: "[BUG] "
 labels: bug
 assignees: ''
 ---
@@ -9,34 +9,40 @@ assignees: ''
 **Describe the bug**
 A clear description of what the bug is.
 
-**To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Press '...'
-3. See error
+**Steps to reproduce**
+1. 
+2. 
+3. 
 
 **Expected behavior**
 What you expected to happen.
 
+**Actual behavior**
+What actually happened.
+
+**Logs (important for debugging)**
+
+Sharing logs helps fix bugs faster. To export logs from X-Files:
+
+1. Open the **Start Menu** (Xbox button on gamepad)
+2. Navigate to **View Logs** and press **A**
+3. Press **Y** to share logs — the app will compress and upload them automatically
+4. A **QR code** will appear on screen
+
+Then, to share your logs in this issue, **one of the following**:
+
+- **Paste the QR code image** — take a photo of the QR code or use your phone's screenshot, then drag the image into this issue
+- **Paste the link** — the upload URL is shown in the footer bar at the bottom of the Logs screen. Copy it and paste it here
+
+Logs are retained for several days, so there's no rush. If the upload fails, you can retry by pressing **Y** again.
+
 **Screenshots**
 If applicable, add screenshots to help explain the problem.
-Drag and drop images here.
 
-**Logs**
-Logs help diagnose issues. To find them on Xbox:
-- Device Portal: `http://<xbox-ip>/Services/Package/Logs`
-- Local: `ApplicationData.Current.LocalFolder/logs/`
-
-Paste the relevant log section below (or attach the `.log` file):
-```
-(paste logs here)
-```
-
-**Environment**
-- Device: [e.g. Xbox Series X, Xbox Series S]
-- OS: [e.g. Xbox OS 10.0.25398.xxxx]
-- XFiles version: [e.g. 0.1.0]
-- Controller: [e.g. Xbox Wireless Controller, Elite Series 2]
+**Device info**
+- Xbox model: [e.g. Xbox Series S, Xbox Series X]
+- OS version: [e.g. Xbox OS 2411]
+- App version: [e.g. v0.0.705]
 
 **Additional context**
-Any other information that might help diagnose the issue.
+Any other context about the problem.

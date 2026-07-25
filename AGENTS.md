@@ -36,11 +36,12 @@ plan. Do not skip ahead to later phases without completing/documenting earlier o
   (XAML vs Win2D, SharpCompress vs native 7z libs, no network browsing in MVP) were already
   debated and decided; don't re-litigate without new information.
 - **Log everything. Every operation, every action, every exception must be logged.** Use
-  the central `Log` static class (Serilog). Levels: `Information` for significant actions,
-  `Debug` for internal state, `Verbose` for high-volume events (input, per-tick).
-  High-frequency hot paths use `#if` flags (e.g. `GAMEPAD_POLL_DEBUG`) — compiled out
-  by default, enabled in csproj for debugging. Never swallow exceptions — always log them.
-  See `docs/LOGGING.md`.
+  the central `Log` static class (Serilog). Levels: `Log.Info()` for significant actions,
+  `Log.Dbg()` for internal state, `Log.Verb()` for high-volume events (input, per-tick),
+  `Log.Warn()` for recoverable failures, `Log.Err()` for exceptions. Prefix messages with
+  class/method name (e.g. `Log.Dbg("FileOperations.Copy: ...")`). High-frequency hot paths
+  use `#if` flags (e.g. `GAMEPAD_POLL_DEBUG`) — compiled out by default, enabled in csproj
+  for debugging. Never swallow exceptions — always log them. See `docs/LOGGING.md`.
 
 ## Architecture at a Glance
 See `docs/ARCHITECTURE.md` for the full picture. Layers (top → bottom):
