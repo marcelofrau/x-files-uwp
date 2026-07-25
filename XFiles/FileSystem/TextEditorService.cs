@@ -88,7 +88,7 @@ namespace XFiles.FileSystem
                     byte[] rawBytes = ReadFileWin32(filePath, 0);
                     if (rawBytes == null || rawBytes.Length == 0)
                     {
-                        Log.Warning("TextEditorService.Load: cannot read {Path}", filePath);
+                        Log.Warn("TextEditorService.Load: cannot read {Path}", filePath);
                         return null;
                     }
 
@@ -112,7 +112,7 @@ namespace XFiles.FileSystem
 
                     LineEndingStyle lineEnding = DetectLineEnding(text);
 
-                    Log.Information("TextEditorService.Load: {Path} — {Size} bytes, {Encoding}, tier={Tier}, binary={Binary}, lineEnding={LineEnding}",
+                    Log.Info("TextEditorService.Load: {Path} — {Size} bytes, {Encoding}, tier={Tier}, binary={Binary}, lineEnding={LineEnding}",
                         filePath, fileSize, encodingName, tier, isBinary, lineEnding);
 
                     return new TextEditorLoadResult
@@ -128,7 +128,7 @@ namespace XFiles.FileSystem
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning("TextEditorService.Load exception", ex);
+                    Log.Warn("TextEditorService.Load exception", ex);
                     return null;
                 }
             });
@@ -164,17 +164,17 @@ namespace XFiles.FileSystem
                     bool ok = WriteFileWin32(filePath, output);
                     if (ok)
                     {
-                        Log.Information("TextEditorService.Save: {Path} — {Bytes} bytes written (UTF-8 BOM)", filePath, output.Length);
+                        Log.Info("TextEditorService.Save: {Path} — {Bytes} bytes written (UTF-8 BOM)", filePath, output.Length);
                     }
                     else
                     {
-                        Log.Warning("TextEditorService.Save: write failed for {Path}", filePath);
+                        Log.Warn("TextEditorService.Save: write failed for {Path}", filePath);
                     }
                     return ok;
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning("TextEditorService.Save exception", ex);
+                    Log.Warn("TextEditorService.Save exception", ex);
                     return false;
                 }
             });
@@ -449,7 +449,7 @@ namespace XFiles.FileSystem
             if (hFile == INVALID_HANDLE_VALUE)
             {
                 int err = Marshal.GetLastWin32Error();
-                Log.Warning("TextEditorService: CreateFileFromAppW failed for '{Path}' (error {Error})", filePath, err);
+                Log.Warn("TextEditorService: CreateFileFromAppW failed for '{Path}' (error {Error})", filePath, err);
                 return null;
             }
 
@@ -458,7 +458,7 @@ namespace XFiles.FileSystem
                 long fileSize;
                 if (!GetFileSizeEx(hFile, out fileSize))
                 {
-                    Log.Warning("TextEditorService: GetFileSizeEx failed for '{Path}'", filePath);
+                    Log.Warn("TextEditorService: GetFileSizeEx failed for '{Path}'", filePath);
                     return null;
                 }
 
@@ -505,7 +505,7 @@ namespace XFiles.FileSystem
             if (hFile == INVALID_HANDLE_VALUE)
             {
                 int err = Marshal.GetLastWin32Error();
-                Log.Warning("TextEditorService: CreateFileFromAppW write failed for '{Path}' (error {Error})", filePath, err);
+                Log.Warn("TextEditorService: CreateFileFromAppW write failed for '{Path}' (error {Error})", filePath, err);
                 return false;
             }
 
@@ -520,7 +520,7 @@ namespace XFiles.FileSystem
                     if (!WriteFile(hFile, data, bytesToWrite, out bytesWritten, IntPtr.Zero) || bytesWritten == 0)
                     {
                         int err = Marshal.GetLastWin32Error();
-                        Log.Warning("TextEditorService: WriteFile failed for '{Path}' (error {Error})", filePath, err);
+                        Log.Warn("TextEditorService: WriteFile failed for '{Path}' (error {Error})", filePath, err);
                         return false;
                     }
 

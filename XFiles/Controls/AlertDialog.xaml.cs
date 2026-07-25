@@ -154,7 +154,7 @@ namespace XFiles.Controls
 
         private void Close(bool result)
         {
-            Log.Debug("AlertDialog.Close: result={Result}", result);
+            Log.Dbg("AlertDialog.Close: result={Result}", result);
             Overlay.Visibility = Visibility.Collapsed;
             Visibility = Visibility.Collapsed;
             _tcs?.TrySetResult(result);

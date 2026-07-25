@@ -115,7 +115,7 @@ namespace XFiles.Navigation
             }
             catch (OperationCanceledException)
             {
-                Log.Information("DrillInAsync: scan cancelled for {Path}", path);
+                Log.Info("DrillInAsync: scan cancelled for {Path}", path);
                 return;
             }
             finally
@@ -135,7 +135,7 @@ namespace XFiles.Navigation
         private async Task DrillIntoArchiveAsync(FileEntry archiveEntry)
         {
             ++_previewGeneration;
-            Log.Information("ColumnNavigator: drilling into archive {Path}", archiveEntry.FullPath);
+            Log.Info("ColumnNavigator: drilling into archive {Path}", archiveEntry.FullPath);
 
             // Push current state to history
             _history.Push(new ColumnState
@@ -171,7 +171,7 @@ namespace XFiles.Navigation
         private async Task DrillIntoArchiveSubdirectoryAsync(FileEntry dirEntry)
         {
             ++_previewGeneration;
-            Log.Information("ColumnNavigator: drilling into archive subdirectory {Archive}|{Internal}",
+            Log.Info("ColumnNavigator: drilling into archive subdirectory {Archive}|{Internal}",
                 dirEntry.ArchiveRootPath, dirEntry.ArchiveInternalPath);
 
             // Push current state to history
@@ -354,7 +354,7 @@ namespace XFiles.Navigation
             }
             catch (OperationCanceledException)
             {
-                Log.Information("RefreshCurrentAsync: scan cancelled");
+                Log.Info("RefreshCurrentAsync: scan cancelled");
                 return;
             }
             finally

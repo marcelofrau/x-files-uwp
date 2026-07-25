@@ -266,7 +266,7 @@ namespace XFiles.FileSystem
             }
                 catch (Exception ex)
                 {
-                    Log.Warning("FilePreviewService: image decode/bitmap failed", ex);
+                    Log.Warn("FilePreviewService: image decode/bitmap failed", ex);
                     result.Type = FilePreviewType.Error;
                     result.ErrorMessage = $"Cannot create image bitmap: {ex.Message}";
                 }
@@ -316,7 +316,7 @@ namespace XFiles.FileSystem
             {
                 result.Type = FilePreviewType.Error;
                 result.ErrorMessage = $"Cannot load preview: {ex.Message}";
-                Log.Warning("FilePreviewService: error previewing archive entry '{Archive}|{Internal}': {Error}",
+                Log.Warn("FilePreviewService: error previewing archive entry '{Archive}|{Internal}': {Error}",
                     archivePath, internalPath, ex.Message);
             }
 
@@ -379,7 +379,7 @@ namespace XFiles.FileSystem
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning("FilePreviewService: image decode/bitmap failed", ex);
+                    Log.Warn("FilePreviewService: image decode/bitmap failed", ex);
                     return ((SoftwareBitmap)null, 0, 0, $"Cannot decode image: {ex.Message}");
                 }
             });
@@ -418,7 +418,7 @@ namespace XFiles.FileSystem
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning("FilePreviewService: image decode/bitmap failed", ex);
+                    Log.Warn("FilePreviewService: image decode/bitmap failed", ex);
                     result.Type = FilePreviewType.Error;
                     result.ErrorMessage = $"Cannot create image bitmap: {ex.Message}";
                     tcs.SetResult(false);
@@ -521,7 +521,7 @@ namespace XFiles.FileSystem
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning("FilePreviewService: image decode/bitmap failed", ex);
+                    Log.Warn("FilePreviewService: image decode/bitmap failed", ex);
                     return ((SoftwareBitmap)null, 0, 0, $"Cannot decode image: {ex.Message}");
                 }
             });
@@ -566,7 +566,7 @@ namespace XFiles.FileSystem
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning("FilePreviewService: image decode/bitmap failed", ex);
+                    Log.Warn("FilePreviewService: image decode/bitmap failed", ex);
                     result.Type = FilePreviewType.Error;
                     result.ErrorMessage = $"Cannot create image bitmap: {ex.Message}";
                     tcs.SetResult(false);
@@ -605,7 +605,7 @@ namespace XFiles.FileSystem
             if (hFile == INVALID_HANDLE_VALUE)
             {
                 int err = Marshal.GetLastWin32Error();
-                Log.Warning("FilePreviewService: CreateFileFromAppW failed for '{Path}' (error {Error})", filePath, err);
+                Log.Warn("FilePreviewService: CreateFileFromAppW failed for '{Path}' (error {Error})", filePath, err);
                 return null;
             }
 
@@ -614,7 +614,7 @@ namespace XFiles.FileSystem
                 long fileSize;
                 if (!GetFileSizeEx(hFile, out fileSize))
                 {
-                    Log.Warning("FilePreviewService: GetFileSizeEx failed for '{Path}'", filePath);
+                    Log.Warn("FilePreviewService: GetFileSizeEx failed for '{Path}'", filePath);
                     return null;
                 }
 

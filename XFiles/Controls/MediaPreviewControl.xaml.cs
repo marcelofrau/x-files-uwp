@@ -80,12 +80,12 @@ namespace XFiles.Controls
         {
             if (string.IsNullOrEmpty(filePath)) return;
             Stop();
-            Log.Information("MediaPreviewControl: loading {Path}", filePath);
+            Log.Info("MediaPreviewControl: loading {Path}", filePath);
 
             _currentFilePath = filePath;
             string ext = Path.GetExtension(filePath);
             _isAudioMode = FilePreviewService.IsAudioFile(ext);
-            Log.Debug("MediaPreviewControl: ext={Ext} isAudio={IsAudio}", ext, _isAudioMode);
+            Log.Dbg("MediaPreviewControl: ext={Ext} isAudio={IsAudio}", ext, _isAudioMode);
 
             if (_isAudioMode)
             {
@@ -116,7 +116,7 @@ namespace XFiles.Controls
         {
             if (string.IsNullOrEmpty(filePath)) return;
             Stop();
-            Log.Debug("MediaPreviewControl: showing placeholder for {Path}", filePath);
+            Log.Dbg("MediaPreviewControl: showing placeholder for {Path}", filePath);
 
             _isAudioMode = true;
 
@@ -143,7 +143,7 @@ namespace XFiles.Controls
             }
             catch (Exception ex)
             {
-                Log.Warning("Failed to start audio playback", ex);
+                Log.Warn("Failed to start audio playback", ex);
                 _isPlaying = false;
                 _progressTimer.Stop();
                 UpdatePlayPauseIcon();
@@ -252,7 +252,7 @@ namespace XFiles.Controls
 
         private async Task LoadMetadataAsync(string filePath)
         {
-            Log.Debug("Metadata: starting async load for {Path}", filePath);
+            Log.Dbg("Metadata: starting async load for {Path}", filePath);
             _metadataCts?.Cancel();
             var cts = new CancellationTokenSource();
             _metadataCts = cts;
@@ -261,12 +261,12 @@ namespace XFiles.Controls
                 _metadataGuesser.SetInternetAvailable(true);
                 var match = await _metadataGuesser.ResolveAsync(filePath, cts.Token);
                 var tag = match?.Metadata;
-                Log.Debug("Metadata: source={Source} score={Score:F2} title={Title} artist={Artist} album={Album}",
+                Log.Dbg("Metadata: source={Source} score={Score:F2} title={Title} artist={Artist} album={Album}",
                     match?.Source, match?.Confidence, tag?.Title, tag?.Artist, tag?.Album);
 
                 if (cts.IsCancellationRequested || _currentFilePath != filePath)
                 {
-                    Log.Information("Metadata: stale/cancelled result for {Path}, discarding", filePath);
+                    Log.Info("Metadata: stale/cancelled result for {Path}, discarding", filePath);
                     return;
                 }
 
@@ -291,12 +291,12 @@ namespace XFiles.Controls
                     AlbumText.Visibility = Visibility.Visible;
                 }
 
-                Log.Debug("Metadata: applied title={Title} artist={Artist} album={Album} art={HasArt}",
+                Log.Dbg("Metadata: applied title={Title} artist={Artist} album={Album} art={HasArt}",
                     tag?.Title, tag?.Artist, tag?.Album, hasArt);
             }
             catch (Exception ex)
             {
-                Log.Warning("Metadata: failed to load for {Path}", filePath, ex);
+                Log.Warn("Metadata: failed to load for {Path}", filePath, ex);
             }
         }
 
@@ -315,7 +315,7 @@ namespace XFiles.Controls
             }
             catch (Exception ex)
             {
-                Log.Warning("Failed to load album art", ex);
+                Log.Warn("Failed to load album art", ex);
                 AlbumArtBorder.Visibility = Visibility.Collapsed;
                 DefaultArtPanel.Visibility = Visibility.Visible;
             }
@@ -336,7 +336,7 @@ namespace XFiles.Controls
         {
             await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
             {
-                Log.Information("AudioLevelService: media opened — starting playback state");
+                Log.Info("AudioLevelService: media opened — starting playback state");
                 _isPlaying = true;
                 UpdatePlayPauseIcon();
                 _progressTimer.Start();
@@ -349,7 +349,7 @@ namespace XFiles.Controls
         {
             await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
             {
-                Log.Information("AudioLevelService: media ended — cleaning up graph");
+                Log.Info("AudioLevelService: media ended — cleaning up graph");
                 _audioLevelService.Stop();
                 VuMeter.DetachService();
                 _isPlaying = false;
@@ -365,7 +365,7 @@ namespace XFiles.Controls
         {
             await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
             {
-                Log.Information("AudioLevelService media failed — cleaning up");
+                Log.Info("AudioLevelService media failed — cleaning up");
                 _audioLevelService.Stop();
                 VuMeter.DetachService();
                 _isPlaying = false;
@@ -379,7 +379,7 @@ namespace XFiles.Controls
         {
             await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
             {
-                Log.Verbose("Media opened: {Duration}", Session.NaturalDuration);
+                Log.Verb("Media opened: {Duration}", Session.NaturalDuration);
                 _isPlaying = false;
                 UpdatePlayPauseIcon();
                 _progressTimer.Stop();
@@ -426,7 +426,7 @@ namespace XFiles.Controls
 
             _currentAudioIndex = (int)_currentPlaybackItem.AudioTracks.SelectedIndex;
 
-            Log.Debug("EnumeratePreviewTracks: {SubCount} subtitle, {AudioCount} audio",
+            Log.Dbg("EnumeratePreviewTracks: {SubCount} subtitle, {AudioCount} audio",
                 _currentSubtitleTracks.Count, _currentAudioTracks.Count);
         }
 
@@ -445,7 +445,7 @@ namespace XFiles.Controls
         {
             await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
             {
-                Log.Information("Media preview failed: {Error} {HResult}", args.Error.ToString(), args.ExtendedErrorCode);
+                Log.Info("Media preview failed: {Error} {HResult}", args.Error.ToString(), args.ExtendedErrorCode);
                 _isPlaying = false;
                 _progressTimer.Stop();
                 UpdatePlayPauseIcon();

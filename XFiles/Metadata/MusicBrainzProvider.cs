@@ -65,18 +65,18 @@ namespace XFiles.Metadata
             try
             {
                 string url = $"{BaseUrl}recording/?query={Uri.EscapeDataString(query)}&fmt=json&limit=15";
-                Log.Information("MusicBrainz: searching URL={Url} query={Query}", url, query);
+                Log.Info("MusicBrainz: searching URL={Url} query={Query}", url, query);
 
                 var response = await _http.GetAsync(url, ct);
-                Log.Debug("MusicBrainz: HTTP {Status}", response.StatusCode);
+                Log.Dbg("MusicBrainz: HTTP {Status}", response.StatusCode);
 
                 if (!response.IsSuccessStatusCode) return null;
 
                 string json = await response.Content.ReadAsStringAsync();
-                Log.Debug("MusicBrainz: response (first 800 chars)={Json}", json.Length > 800 ? json.Substring(0, 800) : json);
+                Log.Dbg("MusicBrainz: response (first 800 chars)={Json}", json.Length > 800 ? json.Substring(0, 800) : json);
                 var root = JsonObject.Parse(json);
                 var items = root.GetNamedArray("recordings", new JsonArray());
-                Log.Debug("MusicBrainz: found {Count} recordings for query={Query}", items.Count, query);
+                Log.Dbg("MusicBrainz: found {Count} recordings for query={Query}", items.Count, query);
                 if (items.Count == 0) return null;
 
                 return FindBestMatch(items, qArtist, qTitle, qAlbum);
@@ -84,7 +84,7 @@ namespace XFiles.Metadata
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                Log.Warning("MusicBrainz: search failed", ex);
+                Log.Warn("MusicBrainz: search failed", ex);
                 return null;
             }
             finally
@@ -98,29 +98,29 @@ namespace XFiles.Metadata
         {
             if (string.IsNullOrWhiteSpace(releaseMbid))
             {
-                Log.Debug("CoverArt: no release MBID, skipping");
+                Log.Dbg("CoverArt: no release MBID, skipping");
                 return null;
             }
 
             try
             {
                 string metaUrl = $"{CoverArtUrl}{releaseMbid}";
-                Log.Debug("CoverArt: fetching metadata for {MBID}", releaseMbid);
+                Log.Dbg("CoverArt: fetching metadata for {MBID}", releaseMbid);
 
                 var metaResponse = await _http.GetAsync(metaUrl, ct);
-                Log.Debug("CoverArt: metadata HTTP {Status} for {MBID}", metaResponse.StatusCode, releaseMbid);
+                Log.Dbg("CoverArt: metadata HTTP {Status} for {MBID}", metaResponse.StatusCode, releaseMbid);
 
                 if (!metaResponse.IsSuccessStatusCode)
                     return null;
 
                 string json = await metaResponse.Content.ReadAsStringAsync();
-                Log.Debug("CoverArt: metadata JSON (first 500) for {MBID}: {Json}", releaseMbid, json.Length > 500 ? json.Substring(0, 500) : json);
+                Log.Dbg("CoverArt: metadata JSON (first 500) for {MBID}: {Json}", releaseMbid, json.Length > 500 ? json.Substring(0, 500) : json);
                 var root = JsonObject.Parse(json);
                 var images = root.GetNamedArray("images", new JsonArray());
 
                 if (images.Count == 0)
                 {
-                    Log.Debug("CoverArt: no images for {MBID}", releaseMbid);
+                    Log.Dbg("CoverArt: no images for {MBID}", releaseMbid);
                     return null;
                 }
 
@@ -132,13 +132,13 @@ namespace XFiles.Metadata
                         var imgValue = images[i];
                         if (imgValue == null || imgValue.ValueType != JsonValueType.Object)
                         {
-                            Log.Debug("CoverArt: image[{Index}] is type {Type}, skipping", i, imgValue?.ValueType);
+                            Log.Dbg("CoverArt: image[{Index}] is type {Type}, skipping", i, imgValue?.ValueType);
                             continue;
                         }
                         var img = imgValue.GetObject();
                         bool isFront = SafeGetBoolean(img, "front", false);
                         string url = SafeGetString(img, "image");
-                        Log.Debug("CoverArt: image[{Index}] front={Front} url={Url}", i, isFront, url ?? "(null)");
+                        Log.Dbg("CoverArt: image[{Index}] front={Front} url={Url}", i, isFront, url ?? "(null)");
                         if (isFront && !string.IsNullOrEmpty(url))
                         {
                             imageUrl = url;
@@ -147,7 +147,7 @@ namespace XFiles.Metadata
                     }
                     catch (Exception imgEx)
                     {
-                        Log.Warning("CoverArt: error parsing image[{Index}]", imgEx, i);
+                        Log.Warn("CoverArt: error parsing image[{Index}]", imgEx, i);
                     }
                 }
 
@@ -164,32 +164,32 @@ namespace XFiles.Metadata
                     }
                     catch (Exception fallbackEx)
                     {
-                        Log.Warning("CoverArt: error parsing fallback image", fallbackEx);
+                        Log.Warn("CoverArt: error parsing fallback image", fallbackEx);
                     }
                 }
 
                 if (imageUrl == null)
                 {
-                    Log.Debug("CoverArt: no usable image URL for {MBID}", releaseMbid);
+                    Log.Dbg("CoverArt: no usable image URL for {MBID}", releaseMbid);
                     return null;
                 }
 
-                Log.Debug("CoverArt: fetching image URL={URL} scheme={Scheme}", imageUrl, imageUrl.StartsWith("https") ? "HTTPS" : "HTTP");
+                Log.Dbg("CoverArt: fetching image URL={URL} scheme={Scheme}", imageUrl, imageUrl.StartsWith("https") ? "HTTPS" : "HTTP");
 
                 var imgResponse = await _http.GetAsync(imageUrl, ct);
-                Log.Debug("CoverArt: image HTTP {Status} for {MBID} finalUrl={FinalUrl}", imgResponse.StatusCode, releaseMbid, imgResponse.RequestMessage?.RequestUri);
+                Log.Dbg("CoverArt: image HTTP {Status} for {MBID} finalUrl={FinalUrl}", imgResponse.StatusCode, releaseMbid, imgResponse.RequestMessage?.RequestUri);
 
                 if (!imgResponse.IsSuccessStatusCode)
                     return null;
 
                 byte[] bytes = await imgResponse.Content.ReadAsByteArrayAsync();
-                Log.Debug("CoverArt: downloaded {Size} bytes for {MBID}", bytes.Length, releaseMbid);
+                Log.Dbg("CoverArt: downloaded {Size} bytes for {MBID}", bytes.Length, releaseMbid);
                 return bytes;
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                Log.Warning("CoverArt: exception for {MBID}", ex, releaseMbid);
+                Log.Warn("CoverArt: exception for {MBID}", ex, releaseMbid);
                 return null;
             }
         }
@@ -221,7 +221,7 @@ namespace XFiles.Metadata
             MetadataMatch bestMatch = null;
             float bestScore = 0f;
 
-            Log.Information("MusicBrainz: evaluating {Count} candidates for title='{Title}' artist='{Artist}' album='{Album}'",
+            Log.Info("MusicBrainz: evaluating {Count} candidates for title='{Title}' artist='{Artist}' album='{Album}'",
                 items.Count, queryTitle, queryArtist, queryAlbum);
 
             for (int i = 0; i < items.Count; i++)
@@ -249,14 +249,14 @@ namespace XFiles.Metadata
                     releaseMbid = firstRelease.GetNamedString("id", "");
                 }
 
-                Log.Debug("MusicBrainz: [{Index}] title='{MbTitle}' artist='{MbArtist}' album='{MbAlbum}' release={Release}",
+                Log.Dbg("MusicBrainz: [{Index}] title='{MbTitle}' artist='{MbArtist}' album='{MbAlbum}' release={Release}",
                     i, mbTitle, mbArtist, mbAlbum, releaseMbid);
 
                 float score = CalculateMatchScore(
                     queryArtist, queryTitle, queryAlbum,
                     mbArtist, mbTitle, mbAlbum);
 
-                Log.Debug("MusicBrainz: [{Index}] score={Score:F2}", i, score);
+                Log.Dbg("MusicBrainz: [{Index}] score={Score:F2}", i, score);
 
                 if (score > bestScore)
                 {
@@ -279,10 +279,10 @@ namespace XFiles.Metadata
             }
 
             if (bestMatch != null)
-                Log.Debug("MusicBrainz: best match score={Score:F2} title='{Title}' artist='{Artist}' release={Release}",
+                Log.Dbg("MusicBrainz: best match score={Score:F2} title='{Title}' artist='{Artist}' release={Release}",
                     bestMatch.Confidence, bestMatch.Metadata.Title, bestMatch.Metadata.Artist, bestMatch.ReleaseMbid);
             else
-                Log.Debug("MusicBrainz: no match found among {Count} candidates", items.Count);
+                Log.Dbg("MusicBrainz: no match found among {Count} candidates", items.Count);
 
             return bestMatch;
         }

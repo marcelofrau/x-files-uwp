@@ -23,7 +23,7 @@ namespace XFiles.Navigation
 
         public GamepadInputService()
         {
-            Log.Information("GamepadInputService creating — poll interval=33ms (~30fps), deadzone={Deadzone}", Deadzone);
+            Log.Info("GamepadInputService creating — poll interval=33ms (~30fps), deadzone={Deadzone}", Deadzone);
 
             _timer = new DispatcherTimer
             {
@@ -35,30 +35,30 @@ namespace XFiles.Navigation
 
             Gamepad.GamepadAdded += OnGamepadAdded;
             Gamepad.GamepadRemoved += OnGamepadRemoved;
-            Log.Information("GamepadInputService created — GamepadAdded/Removed hooks registered");
+            Log.Info("GamepadInputService created — GamepadAdded/Removed hooks registered");
         }
 
         public void Start()
         {
-            Log.Information("GamepadInputService.Start()");
+            Log.Info("GamepadInputService.Start()");
             _timer.Start();
         }
 
         public void Stop()
         {
-            Log.Information("GamepadInputService.Stop()");
+            Log.Info("GamepadInputService.Stop()");
             _timer.Stop();
         }
 
         private void OnGamepadAdded(object sender, Gamepad e)
         {
-            Log.Information("Gamepad.GamepadAdded event fired");
+            Log.Info("Gamepad.GamepadAdded event fired");
             RefreshGamepad();
         }
 
         private void OnGamepadRemoved(object sender, Gamepad e)
         {
-            Log.Information("Gamepad.GamepadRemoved event fired");
+            Log.Info("Gamepad.GamepadRemoved event fired");
             RefreshGamepad();
         }
 
@@ -101,7 +101,7 @@ namespace XFiles.Navigation
             }
             catch (Exception ex)
             {
-                Log.Warning("GetCurrentReading failed — refreshing gamepad", ex);
+                Log.Warn("GetCurrentReading failed — refreshing gamepad", ex);
                 RefreshGamepad();
                 return;
             }
@@ -125,7 +125,7 @@ namespace XFiles.Navigation
 #if GAMEPAD_POLL_DEBUG
             if (_tickCount % 300 == 0)
             {
-                Log.Verbose("Tick {Tick}: buttons={Buttons}, LStick=({LX:F2},{LY:F2}), RStick=({RX:F2},{RY:F2})",
+                Log.Verb("Tick {Tick}: buttons={Buttons}, LStick=({LX:F2},{LY:F2}), RStick=({RX:F2},{RY:F2})",
                     _tickCount, pressed, reading.LeftThumbstickX, reading.LeftThumbstickY,
                     reading.RightThumbstickX, reading.RightThumbstickY);
             }
@@ -140,35 +140,35 @@ namespace XFiles.Navigation
 #if GAMEPAD_POLL_DEBUG
             if (dpadNow != 0 || dpadJustPressed != 0 || dpadJustReleased != 0)
             {
-                Log.Verbose("DPAD state: now={Now} justPressed={JP} justReleased={JR} held={Held} cooldown={Cd}",
+                Log.Verb("DPAD state: now={Now} justPressed={JP} justReleased={JR} held={Held} cooldown={Cd}",
                     dpadNow, dpadJustPressed, dpadJustReleased, _dpadHeld, _dpadRepeatCooldown);
             }
 #endif
 
             if ((dpadJustPressed & GamepadButtons.DPadUp) != 0)
             {
-                Log.Verbose("DPAD: initial press Up");
+                Log.Verb("DPAD: initial press Up");
                 nav.OnDPadUp(isRepeat: false);
                 _dpadRepeatCooldown = DpadInitialDelay;
                 _dpadNavigatedThisTick = true;
             }
             if ((dpadJustPressed & GamepadButtons.DPadDown) != 0)
             {
-                Log.Verbose("DPAD: initial press Down");
+                Log.Verb("DPAD: initial press Down");
                 nav.OnDPadDown(isRepeat: false);
                 _dpadRepeatCooldown = DpadInitialDelay;
                 _dpadNavigatedThisTick = true;
             }
             if ((dpadJustPressed & GamepadButtons.DPadLeft) != 0)
             {
-                Log.Verbose("DPAD: initial press Left");
+                Log.Verb("DPAD: initial press Left");
                 nav.OnDPadLeft();
                 _dpadRepeatCooldown = DpadInitialDelay;
                 _dpadNavigatedThisTick = true;
             }
             if ((dpadJustPressed & GamepadButtons.DPadRight) != 0)
             {
-                Log.Verbose("DPAD: initial press Right");
+                Log.Verb("DPAD: initial press Right");
                 nav.OnDPadRight();
                 _dpadRepeatCooldown = DpadInitialDelay;
                 _dpadNavigatedThisTick = true;
@@ -181,28 +181,28 @@ namespace XFiles.Navigation
                 if ((dpadNow & GamepadButtons.DPadUp) != 0)
                 {
 #if GAMEPAD_POLL_DEBUG
-                    Log.Information("DPAD: repeat Up (cooldown={Cd})", _dpadRepeatCooldown);
+                    Log.Info("DPAD: repeat Up (cooldown={Cd})", _dpadRepeatCooldown);
 #endif
                     nav.OnDPadUp(isRepeat: true);
                 }
                 else if ((dpadNow & GamepadButtons.DPadDown) != 0)
                 {
 #if GAMEPAD_POLL_DEBUG
-                    Log.Information("DPAD: repeat Down (cooldown={Cd})", _dpadRepeatCooldown);
+                    Log.Info("DPAD: repeat Down (cooldown={Cd})", _dpadRepeatCooldown);
 #endif
                     nav.OnDPadDown(isRepeat: true);
                 }
                 else if ((dpadNow & GamepadButtons.DPadLeft) != 0)
                 {
 #if GAMEPAD_POLL_DEBUG
-                    Log.Information("DPAD: repeat Left (cooldown={Cd})", _dpadRepeatCooldown);
+                    Log.Info("DPAD: repeat Left (cooldown={Cd})", _dpadRepeatCooldown);
 #endif
                     nav.OnDPadLeft();
                 }
                 else if ((dpadNow & GamepadButtons.DPadRight) != 0)
                 {
 #if GAMEPAD_POLL_DEBUG
-                    Log.Information("DPAD: repeat Right (cooldown={Cd})", _dpadRepeatCooldown);
+                    Log.Info("DPAD: repeat Right (cooldown={Cd})", _dpadRepeatCooldown);
 #endif
                     nav.OnDPadRight();
                 }
@@ -215,17 +215,17 @@ namespace XFiles.Navigation
             // A, B, Y — just pressed only
             if ((justPressed & GamepadButtons.A) != 0)
             {
-                Log.Verbose("Button: A (Confirm)");
+                Log.Verb("Button: A (Confirm)");
                 nav.OnConfirm();
             }
             if ((justPressed & GamepadButtons.B) != 0)
             {
-                Log.Verbose("Button: B (Back)");
+                Log.Verb("Button: B (Back)");
                 nav.OnBack();
             }
             if ((justPressed & GamepadButtons.Y) != 0)
             {
-                Log.Verbose("Button: Y (Context)");
+                Log.Verb("Button: Y (Context)");
                 nav.OnContextMenu();
             }
 
@@ -234,12 +234,12 @@ namespace XFiles.Navigation
             {
                 if (FileSystem.ClipboardState.HasItems)
                 {
-                    Log.Verbose("Button: X (Paste)");
+                    Log.Verb("Button: X (Paste)");
                     nav.OnPaste();
                 }
                 else
                 {
-                    Log.Verbose("Button: X (Refresh)");
+                    Log.Verb("Button: X (Refresh)");
                     nav.OnRefresh();
                 }
             }

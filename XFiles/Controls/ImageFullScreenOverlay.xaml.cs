@@ -53,7 +53,7 @@ namespace XFiles.Controls
             ZoomText.Visibility = Visibility.Collapsed;
             Visibility = Visibility.Visible;
             _renderTimer.Start();
-            Log.Information("ImageFullScreenOverlay: opened");
+            Log.Info("ImageFullScreenOverlay: opened");
         }
 
         public void Close()
@@ -61,7 +61,7 @@ namespace XFiles.Controls
             _renderTimer.Stop();
             Visibility = Visibility.Collapsed;
             FullImage.Source = null;
-            Log.Information("ImageFullScreenOverlay: closed");
+            Log.Info("ImageFullScreenOverlay: closed");
             OnClosed?.Invoke();
         }
 

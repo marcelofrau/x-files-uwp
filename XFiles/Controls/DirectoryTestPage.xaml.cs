@@ -28,25 +28,25 @@ namespace XFiles.Controls
 
         public DirectoryTestPage()
         {
-            Log.Debug("DirectoryTestPage.ctor");
+            Log.Dbg("DirectoryTestPage.ctor");
             this.InitializeComponent();
             this.KeyDown += OnKeyDown;
             this.PointerPressed += OnPointerPressed;
             this.Loaded += (s, e) =>
             {
-                Log.Verbose("DirectoryTestPage loaded — setting focus");
+                Log.Verb("DirectoryTestPage loaded — setting focus");
                 this.Focus(FocusState.Programmatic);
                 if (App.GamepadInput != null)
                 {
                     App.GamepadInput.ActiveNavigable = this;
-                    Log.Debug("DirectoryTestPage: set as ActiveNavigable");
+                    Log.Dbg("DirectoryTestPage: set as ActiveNavigable");
                 }
             };
 
             // DoubleTapped = open folder (primary navigation gesture)
             EntryList.DoubleTapped += (s, e) =>
             {
-                Log.Verbose("EntryList.DoubleTapped");
+                Log.Verb("EntryList.DoubleTapped");
                 OpenSelected();
             };
 
@@ -56,7 +56,7 @@ namespace XFiles.Controls
 
         private async void LoadEntriesAsync()
         {
-            Log.Information("LoadEntriesAsync: path={Path}", _currentPath ?? "(root)");
+            Log.Info("LoadEntriesAsync: path={Path}", _currentPath ?? "(root)");
 
             // Show loading indicator
             LoadingPanel.Visibility = Visibility.Visible;
@@ -69,7 +69,7 @@ namespace XFiles.Controls
             }
             catch (Exception ex)
             {
-                Log.Error("LoadEntriesAsync: scan failed for '{Path}'", ex, _currentPath ?? "(root)");
+                Log.Err("LoadEntriesAsync: scan failed for '{Path}'", ex, _currentPath ?? "(root)");
                 PathText.Text = $"ERROR: {ex.Message}";
                 EntryList.ItemsSource = null;
                 LoadingPanel.Visibility = Visibility.Collapsed;
@@ -98,7 +98,7 @@ namespace XFiles.Controls
 
             EntryList.ItemsSource = viewModels;
             StatusText = $"{entries.Count} items";
-            Log.Information("LoadEntriesAsync: displaying {Count} entries", entries.Count);
+            Log.Info("LoadEntriesAsync: displaying {Count} entries", entries.Count);
 
             if (EntryList.Items.Count > 0)
                 EntryList.SelectedIndex = 0;
@@ -106,7 +106,7 @@ namespace XFiles.Controls
 
         private void NavigateTo(string path)
         {
-            Log.Information("NavigateTo: '{Path}' (from '{From}')", path, _currentPath ?? "(root)");
+            Log.Info("NavigateTo: '{Path}' (from '{From}')", path, _currentPath ?? "(root)");
             _pathHistory.Push(_currentPath);
             _currentPath = path;
             LoadEntriesAsync();
@@ -117,12 +117,12 @@ namespace XFiles.Controls
             if (_pathHistory.Count > 0)
             {
                 _currentPath = _pathHistory.Pop();
-                Log.Debug("NavigateBack: to '{Path}'", _currentPath ?? "(root)");
+                Log.Dbg("NavigateBack: to '{Path}'", _currentPath ?? "(root)");
                 LoadEntriesAsync();
             }
             else
             {
-                Log.Verbose("NavigateBack: already at root, nothing to do");
+                Log.Verb("NavigateBack: already at root, nothing to do");
             }
         }
 
@@ -130,7 +130,7 @@ namespace XFiles.Controls
         {
             if (EntryList.SelectedItem is EntryViewModel selected)
             {
-                Log.Information("OpenSelected: '{Name}' (isDir={IsDir}, path='{Path}')",
+                Log.Info("OpenSelected: '{Name}' (isDir={IsDir}, path='{Path}')",
                     selected.Name, selected.IsDirectory, selected.FullPath);
                 if (selected.IsDirectory)
                 {
@@ -139,13 +139,13 @@ namespace XFiles.Controls
             }
             else
             {
-                Log.Verbose("OpenSelected: nothing selected");
+                Log.Verb("OpenSelected: nothing selected");
             }
         }
 
         private void OnKeyDown(object sender, KeyRoutedEventArgs e)
         {
-            Log.Verbose("OnKeyDown: key={Key}", e.Key);
+            Log.Verb("OnKeyDown: key={Key}", e.Key);
             // GamepadInputService handles all gamepad input via polling.
             // OnKeyDown left empty to avoid double-processing DPAD keys.
         }
@@ -153,7 +153,7 @@ namespace XFiles.Controls
         private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
         {
             var props = e.GetCurrentPoint(this).Properties;
-            Log.Verbose("OnPointerPressed: left={Left}, right={Right}, middle={Middle}",
+            Log.Verb("OnPointerPressed: left={Left}, right={Right}, middle={Middle}",
                 props.IsLeftButtonPressed, props.IsRightButtonPressed, props.IsMiddleButtonPressed);
             if (props.IsRightButtonPressed)
             {
@@ -165,7 +165,7 @@ namespace XFiles.Controls
         private void EntryList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (EntryList.SelectedItem is EntryViewModel selected)
-                Log.Verbose("SelectionChanged: '{Name}'", selected.Name);
+                Log.Verb("SelectionChanged: '{Name}'", selected.Name);
         }
 
         // --- INavigable ---

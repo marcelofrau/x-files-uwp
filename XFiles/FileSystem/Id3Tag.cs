@@ -74,31 +74,31 @@ namespace XFiles.FileSystem
             byte[] header = ReadFileBytes(filePath, 10);
             if (header == null || header.Length < 10)
             {
-                Log.Warning("Id3Tag: failed to read header from {Path} (bytes={Bytes})", filePath, header?.Length);
+                Log.Warn("Id3Tag: failed to read header from {Path} (bytes={Bytes})", filePath, header?.Length);
                 return null;
             }
             if (header[0] != 'I' || header[1] != 'D' || header[2] != '3')
             {
-                Log.Verbose("Id3Tag: no ID3v2 header in {Path} (first bytes: {B0} {B1} {B2})", filePath, header[0], header[1], header[2]);
+                Log.Verb("Id3Tag: no ID3v2 header in {Path} (first bytes: {B0} {B1} {B2})", filePath, header[0], header[1], header[2]);
                 return null;
             }
 
             int id3Version = header[3]; // 3 = ID3v2.3, 4 = ID3v2.4
             int tagSize = SynchsafeToInt(header, 6);
-            Log.Information("Id3Tag: ID3v2.{Version}, tagSize={Size}, reading {Read} bytes from {Path}",
+            Log.Info("Id3Tag: ID3v2.{Version}, tagSize={Size}, reading {Read} bytes from {Path}",
                 id3Version, tagSize, tagSize + 10, filePath);
             if (tagSize <= 0 || tagSize > MaxTagSize) return null;
 
             byte[] tagData = ReadFileBytes(filePath, tagSize + 10);
             if (tagData == null)
             {
-                Log.Warning("Id3Tag: ReadFileBytes returned null for {Path}", filePath);
+                Log.Warn("Id3Tag: ReadFileBytes returned null for {Path}", filePath);
                 return null;
             }
-            Log.Debug("Id3Tag: read {Length} bytes, parsing frames from offset 10", tagData.Length);
+            Log.Dbg("Id3Tag: read {Length} bytes, parsing frames from offset 10", tagData.Length);
 
             var tag = ParseTag(tagData, tagSize, id3Version);
-            Log.Debug("Id3Tag: title={Title} artist={Artist} album={Album} genre={Genre} year={Year} track={Track} dur={Dur}s art={HasArt} in {Path}",
+            Log.Dbg("Id3Tag: title={Title} artist={Artist} album={Album} genre={Genre} year={Year} track={Track} dur={Dur}s art={HasArt} in {Path}",
                 tag?.Title, tag?.Artist, tag?.Album, tag?.Genre, tag?.Year, tag?.TrackNumber, tag?.DurationSeconds, tag?.AlbumArt != null, filePath);
             return tag;
         }
@@ -121,7 +121,7 @@ namespace XFiles.FileSystem
                     : (data[pos + 4] << 24) | (data[pos + 5] << 16) | (data[pos + 6] << 8) | data[pos + 7];
 
 #if ID3_PARSE_DEBUG
-                Log.Verbose("Id3Tag: frame[{Count}] id={Id} size={Size} at pos={Pos}", frameCount, frameId, frameSize, pos);
+                Log.Verb("Id3Tag: frame[{Count}] id={Id} size={Size} at pos={Pos}", frameCount, frameId, frameSize, pos);
 #endif
 
                 if (frameSize <= 0 || pos + 10 + frameSize > end) break;
@@ -150,7 +150,7 @@ namespace XFiles.FileSystem
                 frameCount++;
             }
 
-            Log.Information("Id3Tag: parsed {Count} frames, end={End}", frameCount, end);
+            Log.Info("Id3Tag: parsed {Count} frames, end={End}", frameCount, end);
             return tag;
         }
 

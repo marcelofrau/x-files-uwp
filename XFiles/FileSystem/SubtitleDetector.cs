@@ -72,7 +72,7 @@ namespace XFiles.FileSystem
             }
             catch (Exception ex)
             {
-                Log.Warning("SubtitleDetector.FindExternalSubtitles failed for '{Path}'", videoPath, ex);
+                Log.Warn("SubtitleDetector.FindExternalSubtitles failed for '{Path}'", videoPath, ex);
             }
 
             // Sort: named languages first (alphabetical), then "Default", then "Unknown"

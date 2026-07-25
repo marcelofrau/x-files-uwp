@@ -74,7 +74,7 @@ namespace XFiles.FileSystem
 
         private static List<FileEntry> ScanRoot()
         {
-            Log.Verbose("Scanning root — enumerating logical drives via GetLogicalDrives");
+            Log.Verb("Scanning root — enumerating logical drives via GetLogicalDrives");
             var entries = new List<FileEntry>();
 
             uint drives = GetLogicalDrives();
@@ -90,7 +90,7 @@ namespace XFiles.FileSystem
                         IsDirectory = true,
                         IsDrive = true
                     });
-                    Log.Verbose("  Drive found: {Drive}", driveLetter);
+                    Log.Verb("  Drive found: {Drive}", driveLetter);
                 }
             }
 
@@ -103,20 +103,20 @@ namespace XFiles.FileSystem
                     FullPath = localPath,
                     IsDirectory = true
                 });
-                Log.Verbose("  [App Data] entry added: {Path}", localPath);
+                Log.Verb("  [App Data] entry added: {Path}", localPath);
             }
             catch (Exception ex)
             {
-                Log.Warning("Failed to get LocalFolder — skipping [App Data] entry", ex);
+                Log.Warn("Failed to get LocalFolder — skipping [App Data] entry", ex);
             }
 
-            Log.Information("Root scan complete — {Count} entries total", entries.Count);
+            Log.Info("Root scan complete — {Count} entries total", entries.Count);
             return entries;
         }
 
         private static async Task<List<FileEntry>> ScanDirectoryAsync(string path, CancellationToken token)
         {
-            Log.Verbose("Scanning directory: {Path}", path);
+            Log.Verb("Scanning directory: {Path}", path);
             var entries = new List<FileEntry>();
 
             string parent = Directory.GetParent(path)?.FullName;
@@ -136,7 +136,7 @@ namespace XFiles.FileSystem
                 if (hFind == new IntPtr(INVALID_HANDLE_VALUE))
                 {
                     int err = Marshal.GetLastWin32Error();
-                    Log.Warning("FindFirstFileExFromAppW failed for '{Path}' (error {Error}) — '..' entry only", path, err);
+                    Log.Warn("FindFirstFileExFromAppW failed for '{Path}' (error {Error}) — '..' entry only", path, err);
                     return;
                 }
 
@@ -179,7 +179,7 @@ namespace XFiles.FileSystem
                 entries.AddRange(files);
             });
 
-            Log.Verbose("Scan '{Path}' complete — {Total} entries", path, entries.Count);
+            Log.Verb("Scan '{Path}' complete — {Total} entries", path, entries.Count);
             return entries;
         }
 

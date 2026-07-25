@@ -80,7 +80,7 @@ namespace XFiles.Controls
             PageText.Text = $"{_currentPage + 1} / {_pageCount}";
             await LoadBasePageAsync(_currentPage);
 
-            Log.Information("PdfFullScreenOverlay: opened '{Path}', page {Page}/{Total}",
+            Log.Info("PdfFullScreenOverlay: opened '{Path}', page {Page}/{Total}",
                 filePath, _currentPage + 1, _pageCount);
         }
 
@@ -91,7 +91,7 @@ namespace XFiles.Controls
             FullImage.Source = null;
             _tierCache.Clear();
             _filePath = null;
-            Log.Information("PdfFullScreenOverlay: closed");
+            Log.Info("PdfFullScreenOverlay: closed");
             OnClosed?.Invoke();
         }
 
@@ -203,7 +203,7 @@ namespace XFiles.Controls
             }
             else if (!string.IsNullOrEmpty(result.ErrorMessage))
             {
-                Log.Warning("PdfFullScreenOverlay: load error: {Error}", result.ErrorMessage);
+                Log.Warn("PdfFullScreenOverlay: load error: {Error}", result.ErrorMessage);
             }
         }
 
@@ -229,7 +229,7 @@ namespace XFiles.Controls
                 FullImage.Source = highResBitmap;
                 _currentTier = targetTier;
                 _upgradePending = false;
-                Log.Debug("PdfFullScreenOverlay: tier {From}→{To} (cached), zoom {Zoom:F2}",
+                Log.Dbg("PdfFullScreenOverlay: tier {From}→{To} (cached), zoom {Zoom:F2}",
                     _currentTier, targetTier, _zoomLevel);
                 return;
             }
@@ -243,7 +243,7 @@ namespace XFiles.Controls
                 _tierCache[targetTier] = result.Bitmap;
                 FullImage.Source = result.Bitmap;
                 _currentTier = targetTier;
-                Log.Debug("PdfFullScreenOverlay: tier {From}→{To} (rendered), zoom {Zoom:F2}",
+                Log.Dbg("PdfFullScreenOverlay: tier {From}→{To} (rendered), zoom {Zoom:F2}",
                     _currentTier, targetTier, _zoomLevel);
             }
 

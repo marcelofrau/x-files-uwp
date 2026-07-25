@@ -167,12 +167,12 @@ namespace XFiles.FileSystem
                     .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
                     .ToList();
 
-                Log.Debug("ArchiveBrowser.ListEntries: archive={Archive} internal={Internal} count={Count}",
+                Log.Dbg("ArchiveBrowser.ListEntries: archive={Archive} internal={Internal} count={Count}",
                     archivePath, internalPath ?? "", entries.Count);
             }
             catch (Exception ex)
             {
-                Log.Debug("ArchiveBrowser.ListEntries failed: {Error}", ex.Message);
+                Log.Dbg("ArchiveBrowser.ListEntries failed: {Error}", ex.Message);
             }
 
             return entries;
@@ -259,12 +259,12 @@ namespace XFiles.FileSystem
 
                 dirs = dirs.OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase).ToList();
 
-                Log.Debug("ArchiveBrowser.ListDirectories: archive={Archive} internal={Internal} count={Count}",
+                Log.Dbg("ArchiveBrowser.ListDirectories: archive={Archive} internal={Internal} count={Count}",
                     archivePath, internalPath ?? "", dirs.Count);
             }
             catch (Exception ex)
             {
-                Log.Debug("ArchiveBrowser.ListDirectories failed: {Error}", ex.Message);
+                Log.Dbg("ArchiveBrowser.ListDirectories failed: {Error}", ex.Message);
             }
 
             return dirs;
@@ -291,16 +291,16 @@ namespace XFiles.FileSystem
 
                 if (entry == null)
                 {
-                    Log.Warning("ArchiveBrowser.OpenEntryStream: entry not found: {Path}", internalEntryPath);
+                    Log.Warn("ArchiveBrowser.OpenEntryStream: entry not found: {Path}", internalEntryPath);
                     return null;
                 }
 
-                Log.Information("ArchiveBrowser.OpenEntryStream: {Path} size={Size}", internalEntryPath, entry.Size);
+                Log.Info("ArchiveBrowser.OpenEntryStream: {Path} size={Size}", internalEntryPath, entry.Size);
                 return entry.OpenEntryStream();
             }
             catch (Exception ex)
             {
-                Log.Debug("ArchiveBrowser.OpenEntryStream failed: {Error}", ex.Message);
+                Log.Dbg("ArchiveBrowser.OpenEntryStream failed: {Error}", ex.Message);
                 return null;
             }
         }
@@ -358,19 +358,19 @@ namespace XFiles.FileSystem
                     var stream = Win32FileStream.OpenRead(archivePath);
                     if (stream == null)
                     {
-                        Log.Warning("ArchiveBrowser: file not found or unreadable: {Path}", archivePath);
+                        Log.Warn("ArchiveBrowser: file not found or unreadable: {Path}", archivePath);
                         return null;
                     }
 
                     // SharpCompress takes ownership of the stream (reads on demand, not all-at-once)
                     var archive = ArchiveFactory.Open(stream);
                     _archiveCache[archivePath] = archive;
-                    Log.Information("ArchiveBrowser: opened archive {Path} ({Size} bytes)", archivePath, stream.Length);
+                    Log.Info("ArchiveBrowser: opened archive {Path} ({Size} bytes)", archivePath, stream.Length);
                     return archive;
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning("ArchiveBrowser: failed to open {Path}", archivePath, ex);
+                    Log.Warn("ArchiveBrowser: failed to open {Path}", archivePath, ex);
                     return null;
                 }
             }

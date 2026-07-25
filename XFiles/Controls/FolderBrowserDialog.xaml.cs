@@ -42,7 +42,7 @@ namespace XFiles.Controls
 
         private async void LoadDirectory(string path)
         {
-            Log.Information("FolderBrowserDialog.LoadDirectory: {Path}", path ?? "(root)");
+            Log.Info("FolderBrowserDialog.LoadDirectory: {Path}", path ?? "(root)");
             _currentPath = path;
 
             string dirName = string.IsNullOrEmpty(path)
@@ -73,7 +73,7 @@ namespace XFiles.Controls
             }
             catch (Exception ex)
             {
-                Log.Error("FolderBrowserDialog.LoadDirectory: scan failed", ex);
+                Log.Err("FolderBrowserDialog.LoadDirectory: scan failed", ex);
                 CurrentPathText.Text = $"ERROR: {ex.Message}";
                 _entries.Clear();
                 _entries.Add(moveHereEntry);
@@ -202,7 +202,7 @@ namespace XFiles.Controls
         private void ConfirmSelection()
         {
             var destDir = _currentPath;
-            Log.Information("FolderBrowserDialog: confirmed destination '{Dest}'", destDir ?? "(root)");
+            Log.Info("FolderBrowserDialog: confirmed destination '{Dest}'", destDir ?? "(root)");
             Close(destDir);
         }
 

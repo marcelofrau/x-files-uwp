@@ -18,7 +18,7 @@ namespace XFiles.Controls
 
         public Task<string> ShowAsync(string title, string defaultValue)
         {
-            Log.Information("InputDialog.ShowAsync: title=\"{Title}\" default=\"{Default}\"", title, defaultValue);
+            Log.Info("InputDialog.ShowAsync: title=\"{Title}\" default=\"{Default}\"", title, defaultValue);
             TitleText.Text = title;
             InputBox.Text = defaultValue ?? "";
             _tcs = new TaskCompletionSource<string>();
@@ -42,13 +42,13 @@ namespace XFiles.Controls
                 case Windows.System.VirtualKey.Enter:
                 case Windows.System.VirtualKey.GamepadMenu:
                     e.Handled = true;
-                    Log.Debug("InputDialog: key {Key} → confirm", e.Key);
+                    Log.Dbg("InputDialog: key {Key} → confirm", e.Key);
                     Close(InputBox.Text);
                     break;
                 case Windows.System.VirtualKey.Escape:
                 case Windows.System.VirtualKey.GamepadB:
                     e.Handled = true;
-                    Log.Debug("InputDialog: key {Key} → cancel", e.Key);
+                    Log.Dbg("InputDialog: key {Key} → cancel", e.Key);
                     Close(null);
                     break;
             }
@@ -61,13 +61,13 @@ namespace XFiles.Controls
                 case Windows.System.VirtualKey.GamepadA:
                 case Windows.System.VirtualKey.Enter:
                     e.Handled = true;
-                    Log.Debug("InputDialog: overlay key {Key} → confirm", e.Key);
+                    Log.Dbg("InputDialog: overlay key {Key} → confirm", e.Key);
                     Close(InputBox.Text);
                     break;
                 case Windows.System.VirtualKey.GamepadB:
                 case Windows.System.VirtualKey.Escape:
                     e.Handled = true;
-                    Log.Debug("InputDialog: overlay key {Key} → cancel", e.Key);
+                    Log.Dbg("InputDialog: overlay key {Key} → cancel", e.Key);
                     Close(null);
                     break;
                 case Windows.System.VirtualKey.GamepadDPadUp:
@@ -85,19 +85,19 @@ namespace XFiles.Controls
 
         private void OnOkClicked(object sender, RoutedEventArgs e)
         {
-            Log.Debug("InputDialog: OK button → confirm");
+            Log.Dbg("InputDialog: OK button → confirm");
             Close(InputBox.Text);
         }
 
         private void OnOverlayTapped(object sender, TappedRoutedEventArgs e)
         {
-            Log.Debug("InputDialog: overlay tapped → cancel");
+            Log.Dbg("InputDialog: overlay tapped → cancel");
             Close(null);
         }
 
         private void Close(string result)
         {
-            Log.Debug("InputDialog.Close: result={Result}", result == null ? "null" : $"\"{result}\"");
+            Log.Dbg("InputDialog.Close: result={Result}", result == null ? "null" : $"\"{result}\"");
             Overlay.Visibility = Visibility.Collapsed;
             Visibility = Visibility.Collapsed;
             _tcs?.TrySetResult(result);
@@ -106,7 +106,7 @@ namespace XFiles.Controls
 
         public void HandleButton(Windows.System.VirtualKey key)
         {
-            Log.Debug("InputDialog.HandleButton: key={Key}", key);
+            Log.Dbg("InputDialog.HandleButton: key={Key}", key);
             switch (key)
             {
                 case Windows.System.VirtualKey.GamepadA:

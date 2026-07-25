@@ -144,7 +144,7 @@ namespace XFiles.Audio
         {
             if (!await _loadLock.WaitAsync(0))
             {
-                Log.Information("AudioLevelService: load already in progress, queuing {Path}", filePath);
+                Log.Info("AudioLevelService: load already in progress, queuing {Path}", filePath);
                 _pendingLoadPath = filePath;
                 _pendingCreateDeviceOutput = createDeviceOutput;
                 return;
@@ -172,7 +172,7 @@ namespace XFiles.Audio
         {
             Stop();
             _currentFilePath = filePath;
-            Log.Information("AudioLevelService: loading {Path}", filePath);
+            Log.Info("AudioLevelService: loading {Path}", filePath);
 
             StorageFile storageFile = null;
 
@@ -182,11 +182,11 @@ namespace XFiles.Audio
                 var fileName = Path.GetFileName(filePath);
                 var folder = await StorageFolder.GetFolderFromPathAsync(dir);
                 storageFile = await folder.GetFileAsync(fileName);
-                Log.Information("AudioLevelService: StorageFile acquired via folder+GetFileAsync");
+                Log.Info("AudioLevelService: StorageFile acquired via folder+GetFileAsync");
             }
             catch (Exception ex)
             {
-                Log.Warning("AudioLevelService: folder+GetFileAsync failed", ex);
+                Log.Warn("AudioLevelService: folder+GetFileAsync failed", ex);
             }
 
             if (storageFile == null)
@@ -194,11 +194,11 @@ namespace XFiles.Audio
                 try
                 {
                     storageFile = await StorageFile.GetFileFromPathAsync(filePath);
-                    Log.Information("AudioLevelService: StorageFile acquired via GetFileFromPathAsync");
+                    Log.Info("AudioLevelService: StorageFile acquired via GetFileFromPathAsync");
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning("AudioLevelService: GetFileFromPathAsync failed", ex);
+                    Log.Warn("AudioLevelService: GetFileFromPathAsync failed", ex);
                 }
             }
 
@@ -208,7 +208,7 @@ namespace XFiles.Audio
             }
             else
             {
-                Log.Information("AudioLevelService: no StorageFile — falling back to stream via MediaSourceAudioInputNode");
+                Log.Info("AudioLevelService: no StorageFile — falling back to stream via MediaSourceAudioInputNode");
                 await LoadViaStream(filePath, createDeviceOutput);
             }
         }
@@ -227,7 +227,7 @@ namespace XFiles.Audio
             _sampleRate = (int)localGraph.EncodingProperties.SampleRate;
             InitBandMappings(_sampleRate);
 
-            Log.Information("AudioLevelService: graph enc={Enc} rate={Rate} ch={Ch}",
+            Log.Info("AudioLevelService: graph enc={Enc} rate={Rate} ch={Ch}",
                 localGraph.EncodingProperties.Subtype, _sampleRate, _channels);
 
             var deviceResult = await localGraph.CreateDeviceOutputNodeAsync();
@@ -240,11 +240,11 @@ namespace XFiles.Audio
 
             if (createDeviceOutput)
             {
-                Log.Information("AudioLevelService: playback mode (device output connected)");
+                Log.Info("AudioLevelService: playback mode (device output connected)");
             }
             else
             {
-                Log.Information("AudioLevelService: analysis mode (device output for clock only)");
+                Log.Info("AudioLevelService: analysis mode (device output for clock only)");
             }
 
             _frameOutputNode = localGraph.CreateFrameOutputNode();
@@ -261,7 +261,7 @@ namespace XFiles.Audio
                 var fileResult = await _graph.CreateFileInputNodeAsync(storageFile);
                 if (fileResult.Status != AudioFileNodeCreationStatus.Success)
                 {
-                    Log.Warning("AudioLevelService: file node failed: {Status}", fileResult.Status);
+                    Log.Warn("AudioLevelService: file node failed: {Status}", fileResult.Status);
                     MediaFailed?.Invoke(this, EventArgs.Empty);
                     Stop();
                     return;
@@ -276,7 +276,7 @@ namespace XFiles.Audio
 
                 _quantumLogCounter = 0;
 
-                Log.Information("AudioLevelService: file loaded dur={Dur:F1}s — starting playback",
+                Log.Info("AudioLevelService: file loaded dur={Dur:F1}s — starting playback",
                     _fileInputNode.Duration.TotalSeconds);
 
                 _fileInputNode.Start();
@@ -287,7 +287,7 @@ namespace XFiles.Audio
             }
             catch (Exception ex)
             {
-                Log.Warning("AudioLevelService: LoadViaStorageFile failed", ex);
+                Log.Warn("AudioLevelService: LoadViaStorageFile failed", ex);
                 MediaFailed?.Invoke(this, EventArgs.Empty);
                 Stop();
             }
@@ -310,7 +310,7 @@ namespace XFiles.Audio
                 var nodeResult = await _graph.CreateMediaSourceAudioInputNodeAsync(mediaSource);
                 if (nodeResult.Status != MediaSourceAudioInputNodeCreationStatus.Success)
                 {
-                    Log.Warning("AudioLevelService: MediaSourceAudioInputNode failed: {Status}", nodeResult.Status);
+                    Log.Warn("AudioLevelService: MediaSourceAudioInputNode failed: {Status}", nodeResult.Status);
                     stream.Dispose();
                     fileStream.Dispose();
                     MediaFailed?.Invoke(this, EventArgs.Empty);
@@ -326,7 +326,7 @@ namespace XFiles.Audio
 
                 _quantumLogCounter = 0;
 
-                Log.Information("AudioLevelService: stream loaded dur={Dur:F1}s — starting playback",
+                Log.Info("AudioLevelService: stream loaded dur={Dur:F1}s — starting playback",
                     _mediaSourceNode.Duration.TotalSeconds);
 
                 _mediaSourceNode.Start();
@@ -337,7 +337,7 @@ namespace XFiles.Audio
             }
             catch (Exception ex)
             {
-                Log.Warning("AudioLevelService: LoadViaStream failed", ex);
+                Log.Warn("AudioLevelService: LoadViaStream failed", ex);
                 MediaFailed?.Invoke(this, EventArgs.Empty);
                 Stop();
             }
@@ -345,7 +345,7 @@ namespace XFiles.Audio
 
         private void OnFileCompleted(AudioFileInputNode sender, object args)
         {
-            Log.Information("AudioLevelService: file completed");
+            Log.Info("AudioLevelService: file completed");
             MediaEnded?.Invoke(this, EventArgs.Empty);
         }
 
@@ -356,11 +356,11 @@ namespace XFiles.Audio
             {
                 _graph.Stop();
                 _isGraphRunning = false;
-                Log.Information("AudioLevelService: paused");
+                Log.Info("AudioLevelService: paused");
             }
             catch (Exception ex)
             {
-                Log.Warning("AudioLevelService: pause failed", ex);
+                Log.Warn("AudioLevelService: pause failed", ex);
             }
         }
 
@@ -371,11 +371,11 @@ namespace XFiles.Audio
             {
                 _graph.Start();
                 _isGraphRunning = true;
-                Log.Information("AudioLevelService: resumed");
+                Log.Info("AudioLevelService: resumed");
             }
             catch (Exception ex)
             {
-                Log.Warning("AudioLevelService: resume failed", ex);
+                Log.Warn("AudioLevelService: resume failed", ex);
             }
         }
 
@@ -403,7 +403,7 @@ namespace XFiles.Audio
             }
             catch (Exception ex)
             {
-                Log.Warning("AudioLevelService: Seek failed", ex);
+                Log.Warn("AudioLevelService: Seek failed", ex);
             }
         }
 
@@ -448,7 +448,7 @@ namespace XFiles.Audio
             _energyHistory = 0f;
             _waveformCount = 0;
 
-            Log.Information("AudioLevelService: stopped");
+            Log.Info("AudioLevelService: stopped");
         }
 
         private unsafe void OnQuantumStarted(AudioGraph sender, object args)
@@ -475,14 +475,14 @@ namespace XFiles.Audio
                 {
                     float sum = 0f;
                     for (int i = 0; i < BandCount; i++) sum += _bandLevels[i];
-                    Log.Information("AudioLevelService: quantum#{Cnt} rate={Rate} ch={Ch} bandsSum={Sum:F4} lvl0={L0:F4} lvl5={L5:F4}",
+                    Log.Info("AudioLevelService: quantum#{Cnt} rate={Rate} ch={Ch} bandsSum={Sum:F4} lvl0={L0:F4} lvl5={L5:F4}",
                         _quantumLogCounter, _sampleRate, _channels, sum, _bandLevels[0], _bandLevels[5]);
                 }
 #endif
             }
             catch (Exception ex)
             {
-                Log.Warning("AudioLevelService: ProcessFrame error", ex);
+                Log.Warn("AudioLevelService: ProcessFrame error", ex);
             }
             finally
             {
@@ -619,7 +619,7 @@ namespace XFiles.Audio
             }
             catch (Exception ex)
             {
-                Log.Warning("AudioLevelService: SetVolume failed", ex);
+                Log.Warn("AudioLevelService: SetVolume failed", ex);
             }
         }
 

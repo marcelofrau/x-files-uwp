@@ -290,13 +290,13 @@ namespace XFiles.Controls
 
         public ColumnListView()
         {
-            Log.Debug("ColumnListView.ctor");
+            Log.Dbg("ColumnListView.ctor");
             this.InitializeComponent();
         }
 
         public async void LoadAsync(string path)
         {
-            Log.Information("ColumnListView.LoadAsync: path={Path}", path ?? "(root)");
+            Log.Info("ColumnListView.LoadAsync: path={Path}", path ?? "(root)");
             CurrentPath = path;
 
             List<FileEntry> entries;
@@ -306,7 +306,7 @@ namespace XFiles.Controls
             }
             catch (Exception ex)
             {
-                Log.Error("ColumnListView.LoadAsync: scan failed for '{Path}'", ex, path ?? "(root)");
+                Log.Err("ColumnListView.LoadAsync: scan failed for '{Path}'", ex, path ?? "(root)");
                 StatusText = $"ERROR: {ex.Message}";
                 EntryList.ItemsSource = null;
                 _entries.Clear();
@@ -329,7 +329,7 @@ namespace XFiles.Controls
 
             EntryList.ItemsSource = _entries;
             StatusText = $"{_entries.Count} items";
-            Log.Debug("ColumnListView.LoadAsync: displaying {Count} entries", _entries.Count);
+            Log.Dbg("ColumnListView.LoadAsync: displaying {Count} entries", _entries.Count);
 
             if (EntryList.Items.Count > 0)
                 EntryList.SelectedIndex = 0;
@@ -340,14 +340,14 @@ namespace XFiles.Controls
         private void EntryList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (EntryList.SelectedItem is EntryViewModel selected)
-                Log.Verbose("ColumnListView.SelectionChanged: '{Name}'", selected.Name);
+                Log.Verb("ColumnListView.SelectionChanged: '{Name}'", selected.Name);
         }
 
         private void EntryList_ItemClick(object sender, ItemClickEventArgs e)
         {
             if (e.ClickedItem is EntryViewModel clicked)
             {
-                Log.Information("ColumnListView.ItemClick: '{Name}' (isDir={IsDir})",
+                Log.Info("ColumnListView.ItemClick: '{Name}' (isDir={IsDir})",
                     clicked.Name, clicked.IsDirectory);
                 ItemOpened?.Invoke(this, ToFileEntry(clicked));
             }
@@ -387,7 +387,7 @@ namespace XFiles.Controls
             if (EntryList.SelectedIndex > 0)
                 EntryList.SelectedIndex--;
             EntryList.ScrollIntoView(EntryList.SelectedItem);
-            Log.Verbose("ColumnListView.OnDPadUp: index={Index}", EntryList.SelectedIndex);
+            Log.Verb("ColumnListView.OnDPadUp: index={Index}", EntryList.SelectedIndex);
         }
 
         public void OnDPadDown(bool isRepeat = false)
@@ -395,7 +395,7 @@ namespace XFiles.Controls
             if (EntryList.SelectedIndex < _entries.Count - 1)
                 EntryList.SelectedIndex++;
             EntryList.ScrollIntoView(EntryList.SelectedItem);
-            Log.Verbose("ColumnListView.OnDPadDown: index={Index}", EntryList.SelectedIndex);
+            Log.Verb("ColumnListView.OnDPadDown: index={Index}", EntryList.SelectedIndex);
         }
 
         public void OnDPadLeft() { }
@@ -405,7 +405,7 @@ namespace XFiles.Controls
         {
             if (EntryList.SelectedItem is EntryViewModel selected)
             {
-                Log.Debug("ColumnListView.OnConfirm: '{Name}' (isDir={IsDir})",
+                Log.Dbg("ColumnListView.OnConfirm: '{Name}' (isDir={IsDir})",
                     selected.Name, selected.IsDirectory);
                 ItemOpened?.Invoke(this, ToFileEntry(selected));
             }
@@ -413,7 +413,7 @@ namespace XFiles.Controls
 
         public void OnBack()
         {
-            Log.Debug("ColumnListView.OnBack");
+            Log.Dbg("ColumnListView.OnBack");
             BackRequested?.Invoke(this, EventArgs.Empty);
         }
 
@@ -428,14 +428,14 @@ namespace XFiles.Controls
         {
             EntryList.SelectedIndex = Math.Max(0, EntryList.SelectedIndex - 10);
             EntryList.ScrollIntoView(EntryList.SelectedItem);
-            Log.Verbose("ColumnListView.OnPageUp: index={Index}", EntryList.SelectedIndex);
+            Log.Verb("ColumnListView.OnPageUp: index={Index}", EntryList.SelectedIndex);
         }
 
         public void OnPageDown()
         {
             EntryList.SelectedIndex = Math.Min(_entries.Count - 1, EntryList.SelectedIndex + 10);
             EntryList.ScrollIntoView(EntryList.SelectedItem);
-            Log.Verbose("ColumnListView.OnPageDown: index={Index}", EntryList.SelectedIndex);
+            Log.Verb("ColumnListView.OnPageDown: index={Index}", EntryList.SelectedIndex);
         }
 
         public void OnSeekBack() { }

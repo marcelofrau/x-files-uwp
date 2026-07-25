@@ -389,7 +389,7 @@ namespace XFiles.Controls
 
         private void Close(FileAction? result)
         {
-            Log.Debug("FileActionSheet.Close: result={Result}", result?.ToString() ?? "null");
+            Log.Dbg("FileActionSheet.Close: result={Result}", result?.ToString() ?? "null");
             Overlay.Visibility = Visibility.Collapsed;
             Visibility = Visibility.Collapsed;
             _tcs?.TrySetResult(result);

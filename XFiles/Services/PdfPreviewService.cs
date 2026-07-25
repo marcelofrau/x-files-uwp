@@ -27,7 +27,7 @@ namespace XFiles.FileSystem
         public static void ClearCache()
         {
             _documentCache.Clear();
-            Log.Information("PdfPreviewService: document cache cleared");
+            Log.Info("PdfPreviewService: document cache cleared");
         }
 
         private static async Task<PdfDocument> GetOrLoadDocumentAsync(string filePath)
@@ -141,7 +141,7 @@ namespace XFiles.FileSystem
                             }
                             catch (Exception ex)
                             {
-                                Log.Warning("PdfPreviewService: bitmap render failed", ex);
+                                Log.Warn("PdfPreviewService: bitmap render failed", ex);
                                 result.ErrorMessage = $"Bitmap error: {ex.Message}";
                                 tcs.SetResult(false);
                             }
@@ -153,7 +153,7 @@ namespace XFiles.FileSystem
             catch (Exception ex)
             {
                 result.ErrorMessage = $"PDF load error: {ex.Message}";
-                Log.Warning("PdfPreviewService: error loading '{Path}'", ex, filePath);
+                Log.Warn("PdfPreviewService: error loading '{Path}'", ex, filePath);
             }
 
             return result;
