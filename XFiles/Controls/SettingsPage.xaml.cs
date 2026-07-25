@@ -48,7 +48,7 @@ namespace XFiles.Controls
             }
             catch (Exception ex)
             {
-                Log.Warning("SettingsPage: failed to read cache count", ex);
+                Log.Warn("SettingsPage: failed to read cache count", ex);
             }
 
             string currentLevel = await XFilesSettings.GetLogLevelAsync();
@@ -125,7 +125,7 @@ namespace XFiles.Controls
                         var cache = new MetadataCache();
                         int cleared = await cache.ClearAsync();
                         CacheStatsText.Text = $"Cleared {cleared} entries";
-                        Log.Information("SettingsPage: cleared {Count} cache entries", cleared);
+                        Log.Info("SettingsPage: cleared {Count} cache entries", cleared);
                         _cacheWasCleared = true;
 
                         var items = new List<SettingsMenuItem>
@@ -150,7 +150,7 @@ namespace XFiles.Controls
                     catch (Exception ex)
                     {
                         CacheStatsText.Text = "Failed to clear cache";
-                        Log.Warning("SettingsPage: clear cache failed", ex);
+                        Log.Warn("SettingsPage: clear cache failed", ex);
                     }
                 }
 
@@ -167,7 +167,7 @@ namespace XFiles.Controls
 
                 await XFilesSettings.SetLogLevelAsync(newLevel);
                 Log.SetLogLevel(newLevel);
-                Log.Information("SettingsPage: log level changed to {Level}", newLevel);
+                Log.Info("SettingsPage: log level changed to {Level}", newLevel);
 
                 // Refresh the item description
                 var items = new List<SettingsMenuItem>
