@@ -28,6 +28,8 @@ namespace XFiles.Controls
         private Uri _currentSourceUri;
         private AudioLevelService _audioLevelService;
         private bool _isPlaying;
+        private bool _isLoadingPlayback;
+        private bool _hasEnded;
         private MetadataGuesser _metadataGuesser;
         private CancellationTokenSource _metadataCts;
 
@@ -65,7 +67,9 @@ namespace XFiles.Controls
             this.InitializeComponent();
             _audioLevelService = new AudioLevelService();
             _metadataGuesser = new MetadataGuesser();
+#if AUDIO_ANALYSIS
             VuMeter.AttachService(_audioLevelService);
+#endif
             _progressTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
             _progressTimer.Tick += OnProgressTimerTick;
             _audioLevelService.MediaOpened += OnAudioMediaOpened;
@@ -80,6 +84,7 @@ namespace XFiles.Controls
         {
             if (string.IsNullOrEmpty(filePath)) return;
             Stop();
+            _hasEnded = false;
             Log.Info("MediaPreviewControl: loading {Path}", filePath);
 
             _currentFilePath = filePath;
@@ -138,7 +143,9 @@ namespace XFiles.Controls
         {
             try
             {
+#if AUDIO_ANALYSIS
                 VuMeter.AttachService(_audioLevelService);
+#endif
                 await _audioLevelService.LoadAndPlay(filePath);
             }
             catch (Exception ex)
@@ -148,6 +155,10 @@ namespace XFiles.Controls
                 _progressTimer.Stop();
                 UpdatePlayPauseIcon();
                 PlayerStateChanged?.Invoke(this, EventArgs.Empty);
+            }
+            finally
+            {
+                _isLoadingPlayback = false;
             }
         }
 
@@ -167,7 +178,9 @@ namespace XFiles.Controls
             if (_isAudioMode)
             {
                 _audioLevelService.Stop();
+#if AUDIO_ANALYSIS
                 VuMeter.DetachService();
+#endif
             }
             _metadataCts?.Cancel();
             _metadataCts = null;
@@ -182,7 +195,9 @@ namespace XFiles.Controls
             if (_isAudioMode)
             {
                 _audioLevelService.Stop();
+#if AUDIO_ANALYSIS
                 VuMeter.DetachService();
+#endif
             }
             else
             {
@@ -201,6 +216,7 @@ namespace XFiles.Controls
 
         public event EventHandler PlayerStateChanged;
         public event EventHandler AudioTrackEnded;
+        public event EventHandler VideoTrackEnded;
 
         public bool IsPlayerActive => _isPlaying;
 
@@ -209,8 +225,10 @@ namespace XFiles.Controls
             if (_isAudioMode)
             {
                 if (string.IsNullOrEmpty(_currentFilePath)) return;
-                if (!_audioLevelService.IsFileLoaded)
+                if (!_audioLevelService.IsFileLoaded && !_isLoadingPlayback)
                 {
+                    _isLoadingPlayback = true;
+                    _hasEnded = false;
                     _isPlaying = true;
                     UpdatePlayPauseIcon();
                     _progressTimer.Start();
@@ -218,8 +236,10 @@ namespace XFiles.Controls
                     _ = StartAudioPlayback(_currentFilePath);
                     return;
                 }
+                if (_isLoadingPlayback) return;
                 _audioLevelService.TogglePlayPause();
                 _isPlaying = _audioLevelService.IsPlaying;
+                if (_isPlaying) _hasEnded = false;
             }
             else
             {
@@ -232,6 +252,7 @@ namespace XFiles.Controls
                 else
                 {
                     Player.Play();
+                    _hasEnded = false;
                     _isPlaying = true;
                 }
             }
@@ -349,9 +370,11 @@ namespace XFiles.Controls
         {
             await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
             {
-                Log.Info("AudioLevelService: media ended — cleaning up graph");
+                Log.Info("MediaPreview: {File} — audio ended, cleaning up, firing AudioTrackEnded", _currentFilePath ?? "(null)");
                 _audioLevelService.Stop();
+#if AUDIO_ANALYSIS
                 VuMeter.DetachService();
+#endif
                 _isPlaying = false;
                 UpdatePlayPauseIcon();
                 _progressTimer.Stop();
@@ -367,7 +390,9 @@ namespace XFiles.Controls
             {
                 Log.Info("AudioLevelService media failed — cleaning up");
                 _audioLevelService.Stop();
+#if AUDIO_ANALYSIS
                 VuMeter.DetachService();
+#endif
                 _isPlaying = false;
                 _progressTimer.Stop();
                 UpdatePlayPauseIcon();
@@ -434,10 +459,12 @@ namespace XFiles.Controls
         {
             await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
             {
+                Log.Info("MediaPreview: {File} — video ended, firing VideoTrackEnded", _currentFilePath ?? "(null)");
                 _isPlaying = false;
                 UpdatePlayPauseIcon();
                 _progressTimer.Stop();
                 ProgressSlider.Value = 100;
+                VideoTrackEnded?.Invoke(this, EventArgs.Empty);
             });
         }
 
@@ -454,7 +481,7 @@ namespace XFiles.Controls
 
         private void OnProgressTimerTick(object sender, object e)
         {
-            UpdateProgress();
+            _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Low, () => UpdateProgress());
         }
 
         private void UpdateProgress()
@@ -479,8 +506,25 @@ namespace XFiles.Controls
 
             if (total.TotalSeconds > 0)
             {
-                ProgressSlider.Value = (current.TotalSeconds / total.TotalSeconds) * 100;
+                double pct = Math.Max(0, Math.Min(100, (current.TotalSeconds / total.TotalSeconds) * 100));
+                ProgressSlider.Value = pct;
                 TimeText.Text = $"{FormatTime(current)} / {FormatTime(total)}";
+
+                // End-of-playback detection: fires once when position reaches end
+                if (_isPlaying && !_hasEnded && current >= total - TimeSpan.FromSeconds(0.5))
+                {
+                    _hasEnded = true;
+                    Log.Info("MediaPreview: {File} — position reached end ({Current}/{Total}), firing ended event", _currentFilePath ?? "(null)", current, total);
+                    _isPlaying = false;
+                    UpdatePlayPauseIcon();
+                    _progressTimer.Stop();
+                    ProgressSlider.Value = 100;
+                    PlayerStateChanged?.Invoke(this, EventArgs.Empty);
+                    if (_isAudioMode)
+                        AudioTrackEnded?.Invoke(this, EventArgs.Empty);
+                    else
+                        VideoTrackEnded?.Invoke(this, EventArgs.Empty);
+                }
             }
         }
 

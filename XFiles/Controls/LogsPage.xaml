@@ -64,7 +64,7 @@
                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                FontSize="12"
                                LineHeight="16"
-                               Margin="0,3,0,0"
+                               Margin="0,0,0,0"
                                Foreground="#000000"
                                TextAlignment="Center"
                                VerticalAlignment="Center"
@@ -144,6 +144,7 @@
                         <TextBlock Text="Close"
                                    FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                    FontSize="11" Foreground="#80FFFFFF"
+                                   Margin="0,3,0,0"
                                    VerticalAlignment="Center" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,12,0">
@@ -153,12 +154,13 @@
                         <TextBlock Text="Share Log"
                                    FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                    FontSize="11" Foreground="#80FFFFFF"
+                                   Margin="0,3,0,0"
                                    VerticalAlignment="Center" />
                     </StackPanel>
                     <TextBlock Text="|"
                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                FontSize="11" Foreground="#40FFFFFF"
-                               Margin="0,0,12,0"
+                               Margin="0,3,12,0"
                                VerticalAlignment="Center" />
                     <StackPanel Orientation="Horizontal" Margin="0,0,12,0">
                         <Image Source="ms-appx:///Assets/GamepadButtons/dpads/dpad-all-directions.png"
@@ -167,6 +169,7 @@
                         <TextBlock Text="Navigate"
                                    FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                    FontSize="11" Foreground="#80FFFFFF"
+                                   Margin="0,3,0,0"
                                    VerticalAlignment="Center" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,12,0">
@@ -176,11 +179,13 @@
                         <TextBlock Text="Scroll"
                                    FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                    FontSize="11" Foreground="#80FFFFFF"
+                                   Margin="0,3,0,0"
                                    VerticalAlignment="Center" />
                     </StackPanel>
                     <TextBlock x:Name="FooterStatusText"
                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                FontSize="11" Foreground="#60FFFFFF"
+                               Margin="0,3,0,0"
                                VerticalAlignment="Center"
                                Text="" />
                 </StackPanel>

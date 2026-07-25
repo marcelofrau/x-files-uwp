@@ -26,6 +26,9 @@ namespace XFiles.Controls
         private bool _initialized;
         private int _renderTickLogCounter;
         private readonly double[] _segmentYPositions = new double[SegmentsPerBar];
+        private readonly float[] _prevLevels = new float[BarCount];
+        private readonly float[] _prevPeaks = new float[BarCount];
+        private readonly int[] _prevLitSegments = new int[BarCount];
 
         private static readonly SolidColorBrush DimBrush = new SolidColorBrush(ColorFromHex("#1A1D23"));
         private static readonly SolidColorBrush GreenBrush = new SolidColorBrush(ColorFromHex("#93C43C"));
@@ -177,7 +180,8 @@ namespace XFiles.Controls
         {
             if (_service == null || !_service.IsAnalyzing)
             {
-                ResetAllBars();
+                if (_prevLitSegments[0] != 0 || _prevPeaks[0] != 0f)
+                    ResetAllBars();
                 return;
             }
 
@@ -202,6 +206,12 @@ namespace XFiles.Controls
                 int litSegments = (int)(level * SegmentsPerBar);
                 litSegments = Math.Max(0, Math.Min(SegmentsPerBar, litSegments));
 
+                if (litSegments == _prevLitSegments[b] && peak == _prevPeaks[b])
+                    continue;
+
+                _prevLitSegments[b] = litSegments;
+                _prevPeaks[b] = peak;
+
                 for (int s = 0; s < SegmentsPerBar; s++)
                 {
                     bool isLit = s < litSegments;
@@ -217,7 +227,6 @@ namespace XFiles.Controls
                     }
                 }
 
-                // Peak indicator positioning
                 if (peak > 0.01f)
                 {
                     int peakSegment = (int)(peak * SegmentsPerBar);
@@ -253,6 +262,9 @@ namespace XFiles.Controls
 
             for (int b = 0; b < BarCount; b++)
             {
+                _prevLitSegments[b] = 0;
+                _prevPeaks[b] = 0f;
+
                 for (int s = 0; s < SegmentsPerBar; s++)
                 {
                     if (_segments[b] != null && _segments[b][s] != null)

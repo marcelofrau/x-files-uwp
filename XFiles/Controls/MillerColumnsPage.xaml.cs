@@ -71,6 +71,7 @@ namespace XFiles.Controls
 
             MediaPreview.PlayerStateChanged += OnMediaPlayerStateChanged;
             MediaPreview.AudioTrackEnded += OnMediaPreviewAudioEnded;
+            MediaPreview.VideoTrackEnded += OnMediaPreviewVideoEnded;
 
             VideoTrackMenuControl.SubtitleSelected += OnVideoSubtitleSelected;
             VideoTrackMenuControl.AudioTrackSelected += OnVideoAudioTrackSelected;
@@ -84,7 +85,6 @@ namespace XFiles.Controls
         }
 
         private bool _isMediaPlayerActive;
-        private int _lastValidSelectedIndex = -1;
 
         // Preview debounce — delays preview update during rapid scrolling
         private DispatcherTimer _previewDebounceTimer;
@@ -121,8 +121,14 @@ namespace XFiles.Controls
 
         private void OnMediaPreviewAudioEnded(object sender, EventArgs e)
         {
-            Log.Info("MediaPreview: audio track ended — auto-advancing");
+            Log.Info("MillerColumns: {File} — audio ended event received, calling NavigatePreviewTrack(1)", MediaPreview.CurrentFilePath ?? "(null)");
             NavigatePreviewTrack(1);
+        }
+
+        private void OnMediaPreviewVideoEnded(object sender, EventArgs e)
+        {
+            Log.Info("MillerColumns: {File} — video ended event received, calling NavigatePreviewVideoTrack(1)", MediaPreview.CurrentFilePath ?? "(null)");
+            NavigatePreviewVideoTrack(1);
         }
 
         private void UpdateMediaPlayerFocusUI()
@@ -229,6 +235,23 @@ namespace XFiles.Controls
 
                 // Quick reference panel (right) — shown at root
                 QuickRefPanel.Visibility = atRoot ? Visibility.Visible : Visibility.Collapsed;
+
+                // Navigation breadcrumb path in header — truncate middle if too long
+                string breadcrumb = _navigator.GetBreadcrumbPath();
+                const int MaxPathChars = 150;
+                if (breadcrumb.Length > MaxPathChars)
+                {
+                    // Keep drive + first 2 folders as head: "E:\tests\Music"
+                    var parts = breadcrumb.Split('\\');
+                    int headEnd = Math.Min(parts.Length, 3); // drive letter + 2 folders
+                    string head = string.Join("\\", parts, 0, headEnd);
+                    // Tail: as much of the end as fits
+                    int tailLen = MaxPathChars - head.Length - 3; // 3 for "..."
+                    if (tailLen > 20)
+                        breadcrumb = head + "..." + breadcrumb.Substring(breadcrumb.Length - tailLen);
+                    // else: too short to truncate meaningfully, leave as-is
+                }
+                PathText.Text = breadcrumb;
 
                 // Parent column
                 if (!atRoot)
@@ -720,26 +743,24 @@ namespace XFiles.Controls
             Log.Dbg("SelectionChanged: index={Index} item=\"{Item}\" count={Count} updating={Updating}",
                 CurrentList.SelectedIndex, itemName, items?.Count ?? 0, _updating);
 
-            // stop marquee on previous selection
-            StopMarqueeOnIndex(_lastValidSelectedIndex);
-
             if (_updating) return;
-
-            _lastValidSelectedIndex = CurrentList.SelectedIndex;
             if (CurrentList.SelectedIndex >= 0 && _navigator.Current != null)
             {
                 _navigator.Current.SelectedIndex = CurrentList.SelectedIndex;
 
-                // start marquee on new selection
-                StartMarqueeOnIndex(CurrentList.SelectedIndex);
-
                 if (!_isMediaPlayerActive)
                 {
-                    // Instant loading feedback — clear stale preview immediately
-                    HideAllPreviewPanels();
                     var selected = CurrentList.SelectedItem as EntryViewModel;
-                    PreviewHeader.Text = selected?.Name ?? "";
-                    PreviewStatus.Text = "Loading...";
+
+                    // At root: keep debounce for HDD spin-up, but don't update visual elements
+                    // (PreviewHeader/PreviewStatus would bleed through the semi-transparent QuickRefPanel)
+                    if (_navigator.Parent != null)
+                    {
+                        // Instant loading feedback — clear stale preview immediately
+                        HideAllPreviewPanels();
+                        PreviewHeader.Text = selected?.Name ?? "";
+                        PreviewStatus.Text = "Loading...";
+                    }
 
                     // Debounce preview update — skip if scrolling rapidly
                     _previewDebounceTimer.Stop();
@@ -760,42 +781,6 @@ namespace XFiles.Controls
         {
             _previewDebounceTimer.Stop();
             _ = _navigator.OnSelectionChangedAsync();
-        }
-
-        private void StartMarqueeOnIndex(int index)
-        {
-            if (index < 0) return;
-            var container = CurrentList.ContainerFromIndex(index) as ContentPresenter;
-            if (container == null) return;
-            var marquee = FindMarqueeTextBlock(container);
-            if (marquee != null) marquee.Marquee = true;
-        }
-
-        private void StopMarqueeOnIndex(int index)
-        {
-            if (index < 0) return;
-            var container = CurrentList.ContainerFromIndex(index) as ContentPresenter;
-            if (container == null) return;
-            var marquee = FindMarqueeTextBlock(container);
-            if (marquee != null)
-            {
-                marquee.Marquee = false;
-                marquee.StopMarquee();
-            }
-        }
-
-        private static MarqueeTextBlock FindMarqueeTextBlock(DependencyObject parent)
-        {
-            int count = VisualTreeHelper.GetChildrenCount(parent);
-            for (int i = 0; i < count; i++)
-            {
-                var child = VisualTreeHelper.GetChild(parent, i);
-                if (child is MarqueeTextBlock m)
-                    return m;
-                var result = FindMarqueeTextBlock(child);
-                if (result != null) return result;
-            }
-            return null;
         }
 
         private void UpdateFooterALabel(string label)
@@ -863,8 +848,18 @@ namespace XFiles.Controls
         private void OnKeyDown(object sender, KeyRoutedEventArgs e)
         {
             // GamepadInputService handles all gamepad input via polling.
-            // OnKeyDown only handles keyboard-specific keys that GamepadInputService doesn't cover.
-            // Gamepad DPAD produces VirtualKey.Up/Down/Left/Right which would duplicate input.
+            // Mark gamepad navigation keys as handled to suppress XAML's
+            // built-in XY focus navigation sound (the "click" on DPad/A).
+            switch (e.Key)
+            {
+                case Windows.System.VirtualKey.GamepadDPadUp:
+                case Windows.System.VirtualKey.GamepadDPadDown:
+                case Windows.System.VirtualKey.GamepadDPadLeft:
+                case Windows.System.VirtualKey.GamepadDPadRight:
+                case Windows.System.VirtualKey.GamepadA:
+                    e.Handled = true;
+                    break;
+            }
         }
 
         private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
@@ -1156,8 +1151,8 @@ namespace XFiles.Controls
             if (IsAnyOverlayVisible) { Log.Dbg("OnBack: blocked by overlay"); return; }
             if (StartMenuControl.IsOpen) { Log.Dbg("OnBack: → StartMenu"); StartMenuControl.ForwardDPad(Windows.System.VirtualKey.GamepadB); return; }
             if (SettingsPageControl.IsVisible) { Log.Dbg("OnBack: → Settings close"); SettingsPageControl.HandleDPad(Windows.System.VirtualKey.GamepadB); return; }
-            if (LogsPageControl.IsVisible) { Log.Dbg("OnBack: → LogsPage close"); LogsPageControl.HandleDPad(Windows.System.VirtualKey.GamepadB); return; }
             if (ShareDialogControl.IsVisible) { Log.Dbg("OnBack: → ShareDialog close"); ShareDialogControl.HandleDPad(Windows.System.VirtualKey.GamepadB); return; }
+            if (LogsPageControl.IsVisible) { Log.Dbg("OnBack: → LogsPage close"); LogsPageControl.HandleDPad(Windows.System.VirtualKey.GamepadB); return; }
             if (ImageFullScreen.IsOpen) { Log.Info("OnBack: → ImageFullScreen close"); ImageFullScreen.HandleButton(Windows.System.VirtualKey.GamepadB); UpdateFooterALabelFromSelection(); return; }
             if (PdfFullScreen.IsOpen) { Log.Info("OnBack: → PdfFullScreen close"); PdfFullScreen.HandleButton(Windows.System.VirtualKey.GamepadB); UpdateFooterALabelFromSelection(); return; }
             if (VideoTrackMenuControl.IsOpen) { Log.Info("OnBack: → VideoTrackMenu close"); VideoTrackMenuControl.HandleButton(Windows.System.VirtualKey.GamepadB); return; }
@@ -2123,29 +2118,32 @@ namespace XFiles.Controls
 
         private void OnFullscreenProgressTick(object sender, object e)
         {
-            // Fullscreen video progress
-            if (VideoFullScreenPanel.Visibility == Visibility.Visible)
+            _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Low, () =>
             {
-                var total = FsVideoSession.NaturalDuration;
-                if (total.TotalSeconds > 0)
+                // Fullscreen video progress
+                if (VideoFullScreenPanel.Visibility == Visibility.Visible)
                 {
-                    var current = FsVideoSession.Position;
-                    FSProgress.Value = (current.TotalSeconds / total.TotalSeconds) * 100;
-                    FSTimeText.Text = $"{FormatFsTime(current)} / {FormatFsTime(total)}";
+                    var total = FsVideoSession.NaturalDuration;
+                    if (total.TotalSeconds > 0)
+                    {
+                        var current = FsVideoSession.Position;
+                        FSProgress.Value = Math.Max(0, Math.Min(100, (current.TotalSeconds / total.TotalSeconds) * 100));
+                        FSTimeText.Text = $"{FormatFsTime(current)} / {FormatFsTime(total)}";
+                    }
                 }
-            }
-            // Fullscreen audio progress
-            else if (AudioFullScreenPanel.Visibility == Visibility.Visible && _fsAudioLevelService != null && _fsAudioLevelService.IsFileLoaded)
-            {
-                var total = _fsAudioLevelService.Duration;
-                if (total.TotalSeconds > 0)
+                // Fullscreen audio progress
+                else if (AudioFullScreenPanel.Visibility == Visibility.Visible && _fsAudioLevelService != null && _fsAudioLevelService.IsFileLoaded)
                 {
-                    var current = _fsAudioLevelService.Position;
-                    FsAudioProgress.Value = (current.TotalSeconds / total.TotalSeconds) * 100;
-                    FsCurrentTimeText.Text = FormatFsTime(current);
-                    FsTotalTimeText.Text = FormatFsTime(total);
+                    var total = _fsAudioLevelService.Duration;
+                    if (total.TotalSeconds > 0)
+                    {
+                        var current = _fsAudioLevelService.Position;
+                        FsAudioProgress.Value = Math.Max(0, Math.Min(100, (current.TotalSeconds / total.TotalSeconds) * 100));
+                        FsCurrentTimeText.Text = FormatFsTime(current);
+                        FsTotalTimeText.Text = FormatFsTime(total);
+                    }
                 }
-            }
+            });
         }
 
         private static string FormatFsTime(TimeSpan ts)
@@ -2559,7 +2557,7 @@ namespace XFiles.Controls
             _mediaLoadTimer.Stop();
             if (!string.IsNullOrEmpty(_pendingMediaPath))
             {
-                if (!MediaPreview.IsFileLoaded(_pendingMediaPath))
+                if (!MediaPreview.IsFileLoaded(_pendingMediaPath) && !MediaPreview.IsPlayerActive)
                 {
                     Log.Info("OnMediaLoadTimerTick: loading {Path}", _pendingMediaPath);
                     MediaPreview.LoadFile(_pendingMediaPath);
@@ -2604,7 +2602,9 @@ namespace XFiles.Controls
             _fsAudioLevelService.MediaOpened += OnFsAudioOpened;
             _fsAudioLevelService.MediaEnded += OnFsAudioEnded;
             _fsAudioLevelService.MediaFailed += OnFsAudioFailed;
+#if AUDIO_ANALYSIS
             FsVuMeter.AttachService(_fsAudioLevelService);
+#endif
             await _fsAudioLevelService.LoadAndPlay(filePath);
 
             if (gen != _fsGeneration)
@@ -2742,16 +2742,26 @@ namespace XFiles.Controls
 
         private void NavigatePreviewTrack(int direction)
         {
-            if (string.IsNullOrEmpty(MediaPreview.CurrentFilePath) || _navigator.Current == null) return;
+            if (string.IsNullOrEmpty(MediaPreview.CurrentFilePath) || _navigator.Current == null)
+            {
+                Log.Warn("NavigatePreviewTrack: early exit — filePath={FilePath} current={Current}", MediaPreview.CurrentFilePath ?? "(null)", _navigator.Current != null);
+                return;
+            }
 
             var audioFiles = _navigator.Current.Entries
                 .Where(e => !e.IsDirectory && FilePreviewService.IsAudioFile(System.IO.Path.GetExtension(e.Name)))
                 .ToList();
 
-            if (audioFiles.Count == 0) return;
+            if (audioFiles.Count == 0)
+            {
+                Log.Warn("NavigatePreviewTrack: no audio files in current directory ({Total} entries total)", _navigator.Current.Entries.Count);
+                return;
+            }
 
             int currentIdx = audioFiles.FindIndex(e =>
                 string.Equals(e.FullPath, MediaPreview.CurrentFilePath, StringComparison.OrdinalIgnoreCase));
+
+            Log.Info("NavigatePreviewTrack: {Count} audio files, currentIdx={Idx}, direction={Dir}", audioFiles.Count, currentIdx, direction > 0 ? "next" : "prev");
 
             int nextIdx = currentIdx + direction;
             if (nextIdx < 0) nextIdx = audioFiles.Count - 1;
@@ -2765,7 +2775,55 @@ namespace XFiles.Controls
             {
                 _updating = true;
                 CurrentList.SelectedIndex = mainIdx;
-                _lastValidSelectedIndex = mainIdx;
+                _updating = false;
+
+                if (_navigator.Preview != null)
+                    _navigator.Preview.PreviewFilePath = nextFile.FullPath;
+
+                int totalCount = _navigator.Current?.Entries.Count ?? 0;
+                FooterItemCount.Text = totalCount > 0 ? $"{mainIdx + 1}/{totalCount}" : "";
+            }
+
+            MediaPreview.Stop();
+            MediaPreview.LoadFile(nextFile.FullPath);
+            MediaPreview.TogglePlayPause();
+        }
+
+        private void NavigatePreviewVideoTrack(int direction)
+        {
+            if (string.IsNullOrEmpty(MediaPreview.CurrentFilePath) || _navigator.Current == null)
+            {
+                Log.Warn("NavigatePreviewVideoTrack: early exit — filePath={FilePath} current={Current}", MediaPreview.CurrentFilePath ?? "(null)", _navigator.Current != null);
+                return;
+            }
+
+            var videoFiles = _navigator.Current.Entries
+                .Where(e => !e.IsDirectory && FilePreviewService.IsVideoFile(System.IO.Path.GetExtension(e.Name)))
+                .ToList();
+
+            if (videoFiles.Count == 0)
+            {
+                Log.Warn("NavigatePreviewVideoTrack: no video files in current directory ({Total} entries total)", _navigator.Current.Entries.Count);
+                return;
+            }
+
+            int currentIdx = videoFiles.FindIndex(e =>
+                string.Equals(e.FullPath, MediaPreview.CurrentFilePath, StringComparison.OrdinalIgnoreCase));
+
+            Log.Info("NavigatePreviewVideoTrack: {Count} video files, currentIdx={Idx}, direction={Dir}", videoFiles.Count, currentIdx, direction > 0 ? "next" : "prev");
+
+            int nextIdx = currentIdx + direction;
+            if (nextIdx < 0) nextIdx = videoFiles.Count - 1;
+            if (nextIdx >= videoFiles.Count) nextIdx = 0;
+
+            var nextFile = videoFiles[nextIdx];
+            Log.Info("NavigatePreviewVideoTrack: {Direction} to {Path}", direction > 0 ? "next" : "prev", nextFile.FullPath);
+
+            int mainIdx = _navigator.Current.Entries.IndexOf(nextFile);
+            if (mainIdx >= 0)
+            {
+                _updating = true;
+                CurrentList.SelectedIndex = mainIdx;
                 _updating = false;
 
                 if (_navigator.Preview != null)
@@ -2816,7 +2874,9 @@ namespace XFiles.Controls
             _fsAudioLevelService.MediaOpened += OnFsAudioOpened;
             _fsAudioLevelService.MediaEnded += OnFsAudioEnded;
             _fsAudioLevelService.MediaFailed += OnFsAudioFailed;
+#if AUDIO_ANALYSIS
             FsVuMeter.AttachService(_fsAudioLevelService);
+#endif
             _ = _fsAudioLevelService.LoadAndPlay(nextFile.FullPath);
 
             // Re-apply current visualizer mode with new audio service
@@ -2840,7 +2900,9 @@ namespace XFiles.Controls
 
         private void StopFsAudioAnalysis()
         {
+#if AUDIO_ANALYSIS
             FsVuMeter.DetachService();
+#endif
             if (_fsAudioLevelService != null)
             {
                 _fsAudioLevelService.MediaOpened -= OnFsAudioOpened;

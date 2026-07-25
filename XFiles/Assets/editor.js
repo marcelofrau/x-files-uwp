@@ -117,6 +117,11 @@ var editor = (function () {
             document.execCommand('insertText', false, text);
         });
 
+        // Disable EdgeHTML context menu (shows on Start button / long-press)
+        editorEl.addEventListener('contextmenu', function (e) {
+            e.preventDefault();
+        });
+
         // Track dirty state on input (listen on contentEditable div, not <code>)
         editorEl.addEventListener('input', function () {
             _logBuffer.push('[input-event] pos=' + getCursorPosition() + ' dirty=' + _dirty);

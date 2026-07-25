@@ -33,14 +33,14 @@
 
                 <!-- Album art -->
                 <Grid Grid.Row="0" HorizontalAlignment="Center" VerticalAlignment="Center"
-                      Margin="0,20,0,0">
-                    <Border x:Name="AlbumArtBorder" CornerRadius="4" Width="200" Height="200"
+                      Margin="0,10,0,0">
+                    <Border x:Name="AlbumArtBorder" CornerRadius="4" Width="180" Height="180"
                             Visibility="Collapsed">
                         <Image x:Name="AlbumArtImage" Stretch="UniformToFill" />
                     </Border>
-                    <Grid x:Name="DefaultArtPanel" Width="200" Height="200"
+                    <Grid x:Name="DefaultArtPanel" Width="180" Height="180"
                           Visibility="Collapsed" Background="#1A1D23">
-                        <FontIcon Glyph="&#xE8D6;" FontSize="64" HorizontalAlignment="Center"
+                        <FontIcon Glyph="&#xE8D6;" FontSize="48" HorizontalAlignment="Center"
                                   VerticalAlignment="Center"
                                   Foreground="{StaticResource XFilesAccentDimBrush}" />
                     </Grid>
@@ -48,28 +48,28 @@
 
                 <!-- VU Meter -->
                 <controls:VuMeterBar x:Name="VuMeter" Grid.Row="1"
-                                     Height="80" Margin="0,12,0,0"
+                                     Height="80" Margin="0,6,0,0"
                                      HorizontalAlignment="Center"
                                      VerticalAlignment="Center" />
 
                 <!-- Metadata text -->
                 <StackPanel Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Top"
-                            Margin="0,12,0,0" MaxWidth="300">
+                            Margin="0,4,0,0" MaxWidth="300">
                     <TextBlock x:Name="TitleText" TextAlignment="Center"
                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
-                               FontSize="16"
+                               FontSize="13"
                                Foreground="{StaticResource XFilesForegroundBrush}"
                                TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
-                               Margin="0,0,0,6" />
+                               Margin="0,0,0,4" />
                     <TextBlock x:Name="ArtistText" TextAlignment="Center"
                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                               FontSize="13"
+                               FontSize="11"
                                Foreground="{StaticResource XFilesTextMutedBrush}"
                                TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
-                               Margin="0,0,0,4" />
+                               Margin="0,0,0,3" />
                     <TextBlock x:Name="AlbumText" TextAlignment="Center"
                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                               FontSize="11"
+                               FontSize="10"
                                Foreground="{StaticResource XFilesTextDimBrush}"
                                TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
                 </StackPanel>

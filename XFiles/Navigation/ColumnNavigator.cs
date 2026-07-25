@@ -27,6 +27,38 @@ namespace XFiles.Navigation
         public ColumnState Current => _current;
         public ColumnState Preview => _preview;
 
+        /// <summary>
+        /// Returns the full filesystem path from root to current column.
+        /// At root returns empty string. Otherwise builds e.g. "E:\Users\Documents".
+        /// Skips the virtual "(Drives)" root label.
+        /// </summary>
+        public string GetBreadcrumbPath()
+        {
+            if (_history.Count == 0)
+                return "";
+
+            // Stack enumerator pops from top (most recent) first — reverse to get root→current order
+            var labels = new List<string>();
+            foreach (var state in _history)
+            {
+                if (!string.IsNullOrEmpty(state.Label) && state.Label != "(Drives)")
+                    labels.Add(state.Label.TrimEnd('\\'));
+            }
+            labels.Reverse();
+
+            string path = string.Join(@"\", labels);
+            if (!string.IsNullOrEmpty(_current?.Label) && _current.Label != "(Drives)")
+            {
+                string currentLabel = _current.Label.TrimEnd('\\');
+                if (path.Length > 0)
+                    path = path + @"\" + currentLabel;
+                else
+                    path = currentLabel;
+            }
+
+            return path;
+        }
+
         public event Action ColumnsChanged;
         public event Action PreviewChanged;
         public event Action<bool> LoadingChanged;

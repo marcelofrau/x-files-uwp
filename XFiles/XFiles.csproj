@@ -34,8 +34,9 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
     <DebugSymbols>true</DebugSymbols>
     <OutputPath>bin\x64\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_UWP;XRAY_ENABLED</DefineConstants>
-    <!-- Debug flags: append to DefineConstants above to enable verbose logging for specific subsystems
+    <DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_UWP;AUDIO_ANALYSIS</DefineConstants>
+    <!-- Debug flags: uncomment in DefineConstants above to enable
+         AUDIO_ANALYSIS    — FFT processing + VU meter (comment out to test stutter without analysis overhead)
          GAMEPAD_POLL_DEBUG  — GamepadInputService polling (sticks, dpad state, button repeats)
          VUMETER_DEBUG      — VuMeterBar per-tick audio sample levels
          AUDIO_LEVEL_DEBUG  — AudioLevelService per-quantum processing data
@@ -52,7 +53,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
     <OutputPath>bin\x64\Release\</OutputPath>
-    <DefineConstants>TRACE;NETFX_CORE;WINDOWS_UWP</DefineConstants>
+    <DefineConstants>TRACE;NETFX_CORE;WINDOWS_UWP;AUDIO_ANALYSIS</DefineConstants>
     <Optimize>true</Optimize>
     <NoWarn>;2008</NoWarn>
     <DebugType>pdbonly</DebugType>
@@ -206,7 +207,6 @@
     <Compile Include="Audio\IMemoryBufferAccess.cs" />
     <Compile Include="Audio\AudioLevelService.cs" />
     <Compile Include="Audio\FftHelper.cs" />
-    <Compile Include="Controls\MarqueeTextBlock.cs" />
     <Compile Include="Controls\VuMeterBar.xaml.cs">
       <DependentUpon>VuMeterBar.xaml</DependentUpon>
     </Compile>
