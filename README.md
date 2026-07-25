@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/Stack-C%23%20%2F%20UWP%20%2F%20XAML-512BD4?style=flat-square&logo=dotnet" alt="Stack" />
   <img src="https://img.shields.io/badge/License-GPL--3.0-green?style=flat-square" alt="License" />
   <img src="https://img.shields.io/badge/Status-Active%20Development-yellow?style=flat-square" alt="Status" />
-  <img src="https://img.shields.io/badge/Version-0.9.9-orange?style=flat-square" alt="Version" />
+  <img src="https://img.shields.io/badge/Version-1.0.0-brightgreen?style=flat-square" alt="Version" />
 </p>
 
 <p align="center">
