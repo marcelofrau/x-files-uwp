@@ -1,9 +1,8 @@
 using System;
-using System.Diagnostics;
 using System.IO;
-using System.Runtime.CompilerServices;
+using System.Linq;
+using System.Runtime.InteropServices;
 using Serilog;
-using Serilog.Context;
 using Serilog.Core;
 using Serilog.Events;
 using Windows.Storage;
@@ -12,8 +11,37 @@ namespace XFiles
 {
     public static class Log
     {
+        private const uint GENERIC_READ = 0x80000000;
+        private const uint FILE_SHARE_READ = 0x00000001;
+        private const uint FILE_SHARE_WRITE = 0x00000002;
+        private const uint FILE_SHARE_DELETE = 0x00000004;
+        private const uint OPEN_EXISTING = 3;
+        private const uint FILE_ATTRIBUTE_NORMAL = 128;
+        private static readonly IntPtr INVALID_HANDLE_VALUE = new IntPtr(-1);
+
+        [DllImport("api-ms-win-core-file-fromapp-l1-1-0.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr CreateFileFromAppW(
+            string fileName, uint desiredAccess, uint shareMode,
+            IntPtr securityAttributes, uint creationDisposition,
+            uint flagsAndAttributes, IntPtr templateFile);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool ReadFile(
+            IntPtr hFile, byte[] lpBuffer, uint nNumberOfBytesToRead,
+            out uint lpNumberOfBytesRead, IntPtr lpOverlapped);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool GetFileSizeEx(IntPtr hFile, out long lpFileSize);
+
+        [DllImport("kernel32.dll")]
+        private static extern bool CloseHandle(IntPtr hObject);
+
         private static Logger _logger;
         private static LoggingLevelSwitch _levelSwitch;
+        private static string _currentLogFile;
+        private const int MaxArchivedSessions = 10;
+        private const string ActiveLogFile = "xfiles.log";
+
         public static Logger Logger => _logger;
         public static ScreenLogger Screen { get; private set; }
 
@@ -23,7 +51,10 @@ namespace XFiles
                 ApplicationData.Current.LocalFolder.Path, "logs");
             Directory.CreateDirectory(logsDir);
 
-            string logPath = Path.Combine(logsDir, "xfiles-.log");
+            ArchivePreviousSession(logsDir);
+            CleanupOldLogs(logsDir);
+
+            _currentLogFile = Path.Combine(logsDir, ActiveLogFile);
 
             Screen = new ScreenLogger();
             _levelSwitch = new LoggingLevelSwitch(LogEventLevel.Information);
@@ -32,16 +63,53 @@ namespace XFiles
                 .MinimumLevel.ControlledBy(_levelSwitch)
                 .WriteTo.Sink(Screen)
                 .WriteTo.Debug(
-                    outputTemplate: "[{Timestamp:HH:mm:ss.fff} {Level:u3}] [{Caller}] {Message:lj}{NewLine}{Exception}")
+                    outputTemplate: "[{Timestamp:HH:mm:ss.fff} {Level:u3}] {Message:lj}{NewLine}{Exception}")
                 .WriteTo.File(
-                    logPath,
-                    rollingInterval: RollingInterval.Day,
-                    retainedFileCountLimit: 5,
-                    outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff} {Level:u3}] [{Caller}] {Message:lj}{NewLine}{Exception}",
+                    _currentLogFile,
+                    outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff} {Level:u3}] {Message:lj}{NewLine}{Exception}",
                     shared: true)
                 .CreateLogger();
 
-            _logger.Information("Log system initialized. Directory: {LogsDir}", logsDir);
+            _logger.Information("Log system initialized. File: {File}", _currentLogFile);
+        }
+
+        private static void ArchivePreviousSession(string logsDir)
+        {
+            try
+            {
+                string activeFile = Path.Combine(logsDir, ActiveLogFile);
+                if (File.Exists(activeFile) && new FileInfo(activeFile).Length > 0)
+                {
+                    string archiveName = $"xfiles-{DateTime.Now:yyyyMMdd-HHmmss}-prev.log";
+                    string archivePath = Path.Combine(logsDir, archiveName);
+                    File.Move(activeFile, archivePath);
+                }
+
+                string legacyFile = Path.Combine(logsDir, "xfiles-.log");
+                if (File.Exists(legacyFile) && new FileInfo(legacyFile).Length > 0)
+                {
+                    string archiveName = $"xfiles-{DateTime.Now:yyyyMMdd-HHmmss}-legacy.log";
+                    string archivePath = Path.Combine(logsDir, archiveName);
+                    File.Move(legacyFile, archivePath);
+                }
+            }
+            catch { }
+        }
+
+        private static void CleanupOldLogs(string logsDir)
+        {
+            try
+            {
+                var files = Directory.GetFiles(logsDir, "xfiles-*.log")
+                    .OrderByDescending(f => new FileInfo(f).LastWriteTime)
+                    .Skip(MaxArchivedSessions)
+                    .ToArray();
+                foreach (var f in files)
+                {
+                    try { File.Delete(f); } catch { }
+                }
+            }
+            catch { }
         }
 
         public static void SetLogLevel(string level)
@@ -59,100 +127,145 @@ namespace XFiles
             return _levelSwitch?.MinimumLevel.ToString() ?? "Information";
         }
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        private static string GetCaller()
+        public static void Verb(string message, params object[] args)
         {
+            if (_logger == null) return;
+            _logger.Verbose(message, args);
+        }
+
+        public static void Dbg(string message, params object[] args)
+        {
+            if (_logger == null) return;
+            _logger.Debug(message, args);
+        }
+
+        public static void Info(string message, params object[] args)
+        {
+            if (_logger == null) return;
+            _logger.Information(message, args);
+        }
+
+        public static void Warn(string message, params object[] args)
+        {
+            if (_logger == null) return;
+            _logger.Warning(message, args);
+        }
+
+        public static void Warn(string message, Exception ex, params object[] args)
+        {
+            if (_logger == null) return;
+            _logger.Warning(ex, message, args);
+        }
+
+        public static void Err(string message, Exception ex = null, params object[] args)
+        {
+            if (_logger == null) return;
+            if (ex != null)
+                _logger.Error(ex, message, args);
+            else
+                _logger.Error(message, args);
+        }
+
+        public static string GetLogsDirectory()
+        {
+            return Path.Combine(ApplicationData.Current.LocalFolder.Path, "logs");
+        }
+
+        public static string GetCurrentLogPath()
+        {
+            return _currentLogFile;
+        }
+
+        private static bool Win32FileExists(string path)
+        {
+            IntPtr h = CreateFileFromAppW(path, GENERIC_READ,
+                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                IntPtr.Zero, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, IntPtr.Zero);
+            if (h == INVALID_HANDLE_VALUE) return false;
+            CloseHandle(h);
+            return true;
+        }
+
+        private static string ReadFileWin32(string path)
+        {
+            IntPtr hFile = CreateFileFromAppW(path, GENERIC_READ,
+                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                IntPtr.Zero, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, IntPtr.Zero);
+            if (hFile == INVALID_HANDLE_VALUE)
+                return $"[Could not open: {Marshal.GetLastWin32Error()}]";
+
             try
             {
-                var frame = new StackFrame(2, false);
-                var method = frame.GetMethod();
-                if (method != null)
-                {
-                    var typeName = method.DeclaringType?.Name ?? "";
-                    if (!string.IsNullOrEmpty(typeName) && typeName != "Log")
-                        return $"{typeName}.{method.Name}";
-                }
+                if (!GetFileSizeEx(hFile, out long fileSize))
+                    return "[Could not get file size]";
 
-                var trace = new StackTrace(2, false);
-                var frames = trace.GetFrames();
-                if (frames != null)
+                int size = (int)Math.Min(fileSize, 4 * 1024 * 1024);
+                if (size <= 0) return string.Empty;
+
+                byte[] buf = new byte[size];
+                uint totalRead = 0;
+                while (totalRead < size)
                 {
-                    foreach (var f in frames)
-                    {
-                        var m = f?.GetMethod();
-                        if (m == null) continue;
-                        var tn = m.DeclaringType?.FullName ?? "";
-                        if (tn.StartsWith("Serilog") || tn == "XFiles.Log") continue;
-                        var cn = m.DeclaringType?.Name;
-                        if (string.IsNullOrEmpty(cn)) continue;
-                        return $"{cn}.{m.Name}";
-                    }
+                    uint chunk = (uint)(size - totalRead);
+                    if (!ReadFile(hFile, buf, chunk, out uint bytesRead, IntPtr.Zero) || bytesRead == 0)
+                        break;
+                    totalRead += bytesRead;
                 }
+                return System.Text.Encoding.UTF8.GetString(buf, 0, (int)totalRead);
+            }
+            finally
+            {
+                CloseHandle(hFile);
+            }
+        }
+
+        public static string GetAllLogContent()
+        {
+            string logPath = GetCurrentLogPath();
+            if (logPath == null) return "No log files found.";
+            try
+            {
+                return ReadFileWin32(logPath);
             }
             catch (Exception ex)
             {
-                return $"Error:{ex.Message}";
+                return $"[Could not read: {ex.Message}]";
             }
-            return "Unknown";
         }
 
-        public static void Verbose(string message, params object[] args)
+        public static string GetAllSessionsContent()
         {
-            if (_logger == null) return;
-            using (LogContext.PushProperty("Caller", GetCaller()))
-                _logger.Verbose(message, args);
-        }
-
-        public static void Debug(string message, params object[] args)
-        {
-            if (_logger == null) return;
-            using (LogContext.PushProperty("Caller", GetCaller()))
-                _logger.Debug(message, args);
-        }
-
-        public static void Information(string message, params object[] args)
-        {
-            if (_logger == null) return;
-            using (LogContext.PushProperty("Caller", GetCaller()))
-                _logger.Information(message, args);
-        }
-
-        public static void Warning(string message, params object[] args)
-        {
-            if (_logger == null) return;
-            using (LogContext.PushProperty("Caller", GetCaller()))
-                _logger.Warning(message, args);
-        }
-
-        public static void Warning(string message, Exception ex, params object[] args)
-        {
-            if (_logger == null) return;
-            using (LogContext.PushProperty("Caller", GetCaller()))
-                _logger.Warning(ex, message, args);
-        }
-
-        public static void Error(string message, Exception ex = null, params object[] args)
-        {
-            if (_logger == null) return;
-            using (LogContext.PushProperty("Caller", GetCaller()))
+            string logsDir = GetLogsDirectory();
+            if (!Directory.Exists(logsDir)) return "No logs directory found.";
+            var files = Directory.GetFiles(logsDir, "xfiles*.log")
+                .OrderByDescending(f => new FileInfo(f).LastWriteTime)
+                .ToArray();
+            if (files.Length == 0) return "No log files found.";
+            Log.Info("GetAllSessionsContent: found {Count} log files in {Dir}", files.Length, logsDir);
+            var sb = new System.Text.StringBuilder();
+            foreach (var file in files)
             {
-                if (ex != null)
-                    _logger.Error(ex, message, args);
-                else
-                    _logger.Error(message, args);
+                string name = Path.GetFileName(file);
+                Log.Info("GetAllSessionsContent: reading {File}", name);
+                sb.AppendLine($"=== {name} ===");
+                try
+                {
+                    sb.AppendLine(ReadFileWin32(file));
+                }
+                catch (Exception ex)
+                {
+                    sb.AppendLine($"[Could not read: {ex.Message}]");
+                }
+                sb.AppendLine();
             }
-        }
-
-        public static void Fatal(string message, Exception ex = null, params object[] args)
-        {
-            if (_logger == null) return;
-            using (LogContext.PushProperty("Caller", GetCaller()))
+            string result = sb.ToString();
+            const int MaxShareBytes = 3 * 1024 * 1024;
+            if (result.Length > MaxShareBytes)
             {
-                if (ex != null)
-                    _logger.Fatal(ex, message, args);
-                else
-                    _logger.Fatal(message, args);
+                Log.Info("GetAllSessionsContent: truncating {Total} chars to {Max} chars", result.Length, MaxShareBytes);
+                result = result.Substring(0, MaxShareBytes);
             }
+            return result;
         }
 
         public static void CloseAndFlush()
