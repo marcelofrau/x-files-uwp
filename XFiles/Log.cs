@@ -64,23 +64,35 @@ namespace XFiles
         {
             try
             {
+                var frame = new StackFrame(2, false);
+                var method = frame.GetMethod();
+                if (method != null)
+                {
+                    var typeName = method.DeclaringType?.Name ?? "";
+                    if (!string.IsNullOrEmpty(typeName) && typeName != "Log")
+                        return $"{typeName}.{method.Name}";
+                }
+
                 var trace = new StackTrace(2, false);
                 var frames = trace.GetFrames();
                 if (frames != null)
                 {
-                    foreach (var frame in frames)
+                    foreach (var f in frames)
                     {
-                        var method = frame?.GetMethod();
-                        if (method == null) continue;
-                        var typeName = method.DeclaringType?.FullName ?? "";
-                        if (typeName.StartsWith("Serilog") || typeName == "XFiles.Log") continue;
-                        var callerType = method.DeclaringType?.Name;
-                        if (string.IsNullOrEmpty(callerType)) continue;
-                        return $"{callerType}.{method.Name}";
+                        var m = f?.GetMethod();
+                        if (m == null) continue;
+                        var tn = m.DeclaringType?.FullName ?? "";
+                        if (tn.StartsWith("Serilog") || tn == "XFiles.Log") continue;
+                        var cn = m.DeclaringType?.Name;
+                        if (string.IsNullOrEmpty(cn)) continue;
+                        return $"{cn}.{m.Name}";
                     }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                return $"Error:{ex.Message}";
+            }
             return "Unknown";
         }
 
