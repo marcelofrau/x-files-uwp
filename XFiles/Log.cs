@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.CompilerServices;
 using Serilog;
 using Serilog.Context;
 using Serilog.Core;
@@ -58,6 +59,7 @@ namespace XFiles
             return _levelSwitch?.MinimumLevel.ToString() ?? "Information";
         }
 
+        [MethodImpl(MethodImplOptions.NoInlining)]
         private static string GetCaller()
         {
             try
@@ -72,7 +74,9 @@ namespace XFiles
                         if (method == null) continue;
                         var typeName = method.DeclaringType?.FullName ?? "";
                         if (typeName.StartsWith("Serilog") || typeName == "XFiles.Log") continue;
-                        return $"{method.DeclaringType?.Name}.{method.Name}";
+                        var callerType = method.DeclaringType?.Name;
+                        if (string.IsNullOrEmpty(callerType)) continue;
+                        return $"{callerType}.{method.Name}";
                     }
                 }
             }
