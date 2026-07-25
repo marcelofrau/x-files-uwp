@@ -186,7 +186,7 @@ namespace XFiles.Audio
             }
             catch (Exception ex)
             {
-                Log.Warning("AudioLevelService: folder+GetFileAsync failed: {Error}", ex.Message);
+                Log.Warning("AudioLevelService: folder+GetFileAsync failed", ex);
             }
 
             if (storageFile == null)
@@ -198,7 +198,7 @@ namespace XFiles.Audio
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning("AudioLevelService: GetFileFromPathAsync failed: {Error}", ex.Message);
+                    Log.Warning("AudioLevelService: GetFileFromPathAsync failed", ex);
                 }
             }
 
@@ -287,7 +287,7 @@ namespace XFiles.Audio
             }
             catch (Exception ex)
             {
-                Log.Warning("AudioLevelService: LoadViaStorageFile failed: {Error}", ex.Message);
+                Log.Warning("AudioLevelService: LoadViaStorageFile failed", ex);
                 MediaFailed?.Invoke(this, EventArgs.Empty);
                 Stop();
             }
@@ -337,7 +337,7 @@ namespace XFiles.Audio
             }
             catch (Exception ex)
             {
-                Log.Warning("AudioLevelService: LoadViaStream failed: {Error}", ex.Message);
+                Log.Warning("AudioLevelService: LoadViaStream failed", ex);
                 MediaFailed?.Invoke(this, EventArgs.Empty);
                 Stop();
             }
@@ -360,7 +360,7 @@ namespace XFiles.Audio
             }
             catch (Exception ex)
             {
-                Log.Warning("AudioLevelService: pause failed: {Error}", ex.Message);
+                Log.Warning("AudioLevelService: pause failed", ex);
             }
         }
 
@@ -375,7 +375,7 @@ namespace XFiles.Audio
             }
             catch (Exception ex)
             {
-                Log.Warning("AudioLevelService: resume failed: {Error}", ex.Message);
+                Log.Warning("AudioLevelService: resume failed", ex);
             }
         }
 
@@ -403,7 +403,7 @@ namespace XFiles.Audio
             }
             catch (Exception ex)
             {
-                Log.Warning("AudioLevelService: Seek failed: {Error}", ex.Message);
+                Log.Warning("AudioLevelService: Seek failed", ex);
             }
         }
 
@@ -470,6 +470,7 @@ namespace XFiles.Audio
                 ProcessFrame(frame);
 
                 _quantumLogCounter++;
+#if AUDIO_LEVEL_DEBUG
                 if (_quantumLogCounter <= 5 || (_quantumLogCounter % 1000 == 0 && _quantumLogCounter <= 10000))
                 {
                     float sum = 0f;
@@ -477,10 +478,11 @@ namespace XFiles.Audio
                     Log.Information("AudioLevelService: quantum#{Cnt} rate={Rate} ch={Ch} bandsSum={Sum:F4} lvl0={L0:F4} lvl5={L5:F4}",
                         _quantumLogCounter, _sampleRate, _channels, sum, _bandLevels[0], _bandLevels[5]);
                 }
+#endif
             }
             catch (Exception ex)
             {
-                Log.Warning("AudioLevelService: ProcessFrame error: {Error}", ex.Message);
+                Log.Warning("AudioLevelService: ProcessFrame error", ex);
             }
             finally
             {
@@ -617,7 +619,7 @@ namespace XFiles.Audio
             }
             catch (Exception ex)
             {
-                Log.Warning("AudioLevelService: SetVolume failed: {Error}", ex.Message);
+                Log.Warning("AudioLevelService: SetVolume failed", ex);
             }
         }
 

@@ -39,4 +39,20 @@ namespace XFiles.Metadata
 
         public long Timestamp { get; set; }
     }
+
+    public class SchemaVersionEntry
+    {
+        [PrimaryKey]
+        public int Id { get; set; }
+
+        public int Version { get; set; }
+    }
+
+    public class AppSettingEntry
+    {
+        [PrimaryKey]
+        public string Key { get; set; }
+
+        public string Value { get; set; }
+    }
 }

@@ -229,7 +229,7 @@ namespace XFiles.Controls
                 FullImage.Source = highResBitmap;
                 _currentTier = targetTier;
                 _upgradePending = false;
-                Log.Information("PdfFullScreenOverlay: tier {From}→{To} (cached), zoom {Zoom:F2}",
+                Log.Debug("PdfFullScreenOverlay: tier {From}→{To} (cached), zoom {Zoom:F2}",
                     _currentTier, targetTier, _zoomLevel);
                 return;
             }
@@ -243,7 +243,7 @@ namespace XFiles.Controls
                 _tierCache[targetTier] = result.Bitmap;
                 FullImage.Source = result.Bitmap;
                 _currentTier = targetTier;
-                Log.Information("PdfFullScreenOverlay: tier {From}→{To} (rendered), zoom {Zoom:F2}",
+                Log.Debug("PdfFullScreenOverlay: tier {From}→{To} (rendered), zoom {Zoom:F2}",
                     _currentTier, targetTier, _zoomLevel);
             }
 

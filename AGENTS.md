@@ -36,10 +36,11 @@ plan. Do not skip ahead to later phases without completing/documenting earlier o
   (XAML vs Win2D, SharpCompress vs native 7z libs, no network browsing in MVP) were already
   debated and decided; don't re-litigate without new information.
 - **Log everything. Every operation, every action, every exception must be logged.** Use
-  the central `Log` static class (Serilog). Default level is `Verbose`/`Trace`. Never
-  swallow exceptions — always log them. Log directory scans, input events, navigation,
-  file operations, app lifecycle. Logs rotate daily, keeping last 5 files, stored in
-  `ApplicationData.Current.LocalFolder/logs/`. See `docs/LOGGING.md`.
+  the central `Log` static class (Serilog). Levels: `Information` for significant actions,
+  `Debug` for internal state, `Verbose` for high-volume events (input, per-tick).
+  High-frequency hot paths use `#if` flags (e.g. `GAMEPAD_POLL_DEBUG`) — compiled out
+  by default, enabled in csproj for debugging. Never swallow exceptions — always log them.
+  See `docs/LOGGING.md`.
 
 ## Architecture at a Glance
 See `docs/ARCHITECTURE.md` for the full picture. Layers (top → bottom):
@@ -61,6 +62,7 @@ XAML Views → ViewModels → Navigation (`INavigable`, `ColumnNavigator`) →
 | `docs/ROADMAP.md` | Phased implementation plan with done criteria per phase |
 | `docs/ASSETS-GUIDE.md` | Asset naming, directory structure, personal icon set workflow |
 | `docs/DECISIONS.md` | ADRs — why XAML, why not yazi-core, why SharpCompress, etc. |
+| `docs/LOGGING.md` | Log levels, debug flags (`#if`), architecture, conventions |
 | `docs/text-editor/SPEC.md` | Text editor requirements, file size tiers, scope |
 | `docs/text-editor/ARCHITECTURE.md` | Editor components, data flow, system keyboard integration |
 | `docs/text-editor/INPUT-MAPPING.md` | Gamepad button mapping for Navigate + Input modes |

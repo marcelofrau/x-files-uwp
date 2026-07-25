@@ -167,12 +167,12 @@ namespace XFiles.FileSystem
                     .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
                     .ToList();
 
-                Log.Information("ArchiveBrowser.ListEntries: archive={Archive} internal={Internal} count={Count}",
+                Log.Debug("ArchiveBrowser.ListEntries: archive={Archive} internal={Internal} count={Count}",
                     archivePath, internalPath ?? "", entries.Count);
             }
             catch (Exception ex)
             {
-                Log.Warning("ArchiveBrowser.ListEntries failed: {Error}", ex.Message);
+                Log.Debug("ArchiveBrowser.ListEntries failed: {Error}", ex.Message);
             }
 
             return entries;
@@ -259,12 +259,12 @@ namespace XFiles.FileSystem
 
                 dirs = dirs.OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase).ToList();
 
-                Log.Information("ArchiveBrowser.ListDirectories: archive={Archive} internal={Internal} count={Count}",
+                Log.Debug("ArchiveBrowser.ListDirectories: archive={Archive} internal={Internal} count={Count}",
                     archivePath, internalPath ?? "", dirs.Count);
             }
             catch (Exception ex)
             {
-                Log.Warning("ArchiveBrowser.ListDirectories failed: {Error}", ex.Message);
+                Log.Debug("ArchiveBrowser.ListDirectories failed: {Error}", ex.Message);
             }
 
             return dirs;
@@ -300,7 +300,7 @@ namespace XFiles.FileSystem
             }
             catch (Exception ex)
             {
-                Log.Warning("ArchiveBrowser.OpenEntryStream failed: {Error}", ex.Message);
+                Log.Debug("ArchiveBrowser.OpenEntryStream failed: {Error}", ex.Message);
                 return null;
             }
         }
@@ -370,7 +370,7 @@ namespace XFiles.FileSystem
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning("ArchiveBrowser: failed to open {Path}: {Error}", archivePath, ex.Message);
+                    Log.Warning("ArchiveBrowser: failed to open {Path}", archivePath, ex);
                     return null;
                 }
             }

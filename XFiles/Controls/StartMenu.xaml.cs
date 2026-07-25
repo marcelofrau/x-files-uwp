@@ -12,7 +12,6 @@ namespace XFiles.Controls
     public enum StartMenuItem
     {
         Settings,
-        StartupPreferences,
         About,
         CloseApplication
     }
@@ -49,12 +48,6 @@ namespace XFiles.Controls
                     Item = StartMenuItem.Settings,
                     Label = "Settings",
                     IconPath = IconBase + "startmenu-settings-48.png"
-                },
-                new MenuItem
-                {
-                    Item = StartMenuItem.StartupPreferences,
-                    Label = "Startup and Preferences",
-                    IconPath = IconBase + "startmenu-startup-48.png"
                 },
                 new MenuItem
                 {

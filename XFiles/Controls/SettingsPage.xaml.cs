@@ -7,6 +7,7 @@ using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
 using XFiles.Metadata;
+using XFiles.Settings;
 
 namespace XFiles.Controls
 {
@@ -25,6 +26,7 @@ namespace XFiles.Controls
         public Action OnClosed;
 
         private static readonly string IconBase = "ms-appx:///Assets/Views/StartMenu/";
+        private static readonly string[] LogLevels = { "Verbose", "Debug", "Info", "Warning", "Error" };
 
         public SettingsPage()
         {
@@ -46,8 +48,10 @@ namespace XFiles.Controls
             }
             catch (Exception ex)
             {
-                Log.Warning("SettingsPage: failed to read cache count: {Error}", ex.Message);
+                Log.Warning("SettingsPage: failed to read cache count", ex);
             }
+
+            string currentLevel = await XFilesSettings.GetLogLevelAsync();
 
             CacheStatsText.Text = $"{cacheCount} cached entries";
 
@@ -55,10 +59,17 @@ namespace XFiles.Controls
             {
                 new SettingsMenuItem
                 {
-                    Label = "Clear Metadata Cache",
-                    Description = $"Remove all {cacheCount} MusicBrainz lookups and cover art",
+                    Label = "Clear Cache",
+                    Description = $"Remove all {cacheCount} cached metadata and cover art entries",
                     IconPath = IconBase + "startmenu-close-48.png",
                     Action = "clear-cache"
+                },
+                new SettingsMenuItem
+                {
+                    Label = "Log Level",
+                    Description = $"Current: {currentLevel}",
+                    IconPath = IconBase + "startmenu-settings-48.png",
+                    Action = "log-level"
                 }
             };
 
@@ -105,7 +116,7 @@ namespace XFiles.Controls
             {
                 Overlay.Visibility = Visibility.Collapsed;
                 bool confirmed = await AlertDialogControl.ShowConfirmAsync(
-                    $"Clear all {item.Description.ToLowerInvariant()}?");
+                    $"Clear all cached metadata and cover art?");
 
                 if (confirmed)
                 {
@@ -121,10 +132,17 @@ namespace XFiles.Controls
                         {
                             new SettingsMenuItem
                             {
-                                Label = "Clear Metadata Cache",
-                                Description = $"Remove all 0 Deezer/MusicBrainz lookups and cover art",
-                    IconPath = "ms-appx:///Assets/Views/FileActionSheet/fileactionsheet-delete-48.png",
+                                Label = "Clear Cache",
+                                Description = "Remove all 0 cached metadata and cover art entries",
+                                IconPath = "ms-appx:///Assets/Views/FileActionSheet/fileactionsheet-delete-48.png",
                                 Action = "clear-cache"
+                            },
+                            new SettingsMenuItem
+                            {
+                                Label = "Log Level",
+                                Description = $"Current: {Log.GetCurrentLevel()}",
+                                IconPath = IconBase + "startmenu-settings-48.png",
+                                Action = "log-level"
                             }
                         };
                         SettingsList.ItemsSource = items;
@@ -132,11 +150,45 @@ namespace XFiles.Controls
                     catch (Exception ex)
                     {
                         CacheStatsText.Text = "Failed to clear cache";
-                        Log.Warning("SettingsPage: clear cache failed: {Error}", ex.Message);
+                        Log.Warning("SettingsPage: clear cache failed", ex);
                     }
                 }
 
                 Overlay.Visibility = Visibility.Visible;
+                SettingsList.Focus(FocusState.Programmatic);
+            }
+            else if (item.Action == "log-level")
+            {
+                string current = await XFilesSettings.GetLogLevelAsync();
+                int idx = Array.IndexOf(LogLevels, current);
+                if (idx < 0) idx = 2; // default to Info
+                int next = (idx + 1) % LogLevels.Length;
+                string newLevel = LogLevels[next];
+
+                await XFilesSettings.SetLogLevelAsync(newLevel);
+                Log.SetLogLevel(newLevel);
+                Log.Information("SettingsPage: log level changed to {Level}", newLevel);
+
+                // Refresh the item description
+                var items = new List<SettingsMenuItem>
+                {
+                    new SettingsMenuItem
+                    {
+                        Label = "Clear Cache",
+                        Description = "Remove cached metadata and cover art entries",
+                        IconPath = IconBase + "startmenu-close-48.png",
+                        Action = "clear-cache"
+                    },
+                    new SettingsMenuItem
+                    {
+                        Label = "Log Level",
+                        Description = $"Current: {newLevel}",
+                        IconPath = IconBase + "startmenu-settings-48.png",
+                        Action = "log-level"
+                    }
+                };
+                SettingsList.ItemsSource = items;
+                SettingsList.SelectedIndex = 1;
                 SettingsList.Focus(FocusState.Programmatic);
             }
         }

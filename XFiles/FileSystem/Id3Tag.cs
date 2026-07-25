@@ -95,10 +95,10 @@ namespace XFiles.FileSystem
                 Log.Warning("Id3Tag: ReadFileBytes returned null for {Path}", filePath);
                 return null;
             }
-            Log.Information("Id3Tag: read {Length} bytes, parsing frames from offset 10", tagData.Length);
+            Log.Debug("Id3Tag: read {Length} bytes, parsing frames from offset 10", tagData.Length);
 
             var tag = ParseTag(tagData, tagSize, id3Version);
-            Log.Information("Id3Tag: title={Title} artist={Artist} album={Album} genre={Genre} year={Year} track={Track} dur={Dur}s art={HasArt} in {Path}",
+            Log.Debug("Id3Tag: title={Title} artist={Artist} album={Album} genre={Genre} year={Year} track={Track} dur={Dur}s art={HasArt} in {Path}",
                 tag?.Title, tag?.Artist, tag?.Album, tag?.Genre, tag?.Year, tag?.TrackNumber, tag?.DurationSeconds, tag?.AlbumArt != null, filePath);
             return tag;
         }
@@ -120,7 +120,9 @@ namespace XFiles.FileSystem
                     ? SynchsafeToInt(data, pos + 4)
                     : (data[pos + 4] << 24) | (data[pos + 5] << 16) | (data[pos + 6] << 8) | data[pos + 7];
 
+#if ID3_PARSE_DEBUG
                 Log.Verbose("Id3Tag: frame[{Count}] id={Id} size={Size} at pos={Pos}", frameCount, frameId, frameSize, pos);
+#endif
 
                 if (frameSize <= 0 || pos + 10 + frameSize > end) break;
 

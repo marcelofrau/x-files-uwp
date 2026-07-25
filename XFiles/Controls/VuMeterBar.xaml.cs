@@ -60,14 +60,14 @@ namespace XFiles.Controls
         {
             if (!_initialized && _service != null)
             {
-                Log.Information("VuMeterBar: EnsureInitialized — building bars + starting (service attached before OnLoaded)");
+                Log.Debug("VuMeterBar: EnsureInitialized — building bars + starting (service attached before OnLoaded)");
                 BuildBars();
                 _initialized = true;
                 StartRendering();
             }
             else if (_initialized && _service != null && (_renderTimer == null || !_renderTimer.IsEnabled))
             {
-                Log.Information("VuMeterBar: EnsureInitialized — timer not running, restarting");
+                Log.Debug("VuMeterBar: EnsureInitialized — timer not running, restarting");
                 StartRendering();
             }
         }
@@ -77,7 +77,7 @@ namespace XFiles.Controls
             Log.Information("VuMeterBar: OnLoaded — building bars");
             BuildBars();
             _initialized = true;
-            Log.Information("VuMeterBar: bars built, service attached={HasService}", _service != null);
+            Log.Debug("VuMeterBar: bars built, service attached={HasService}", _service != null);
             if (_service != null)
                 StartRendering();
         }
@@ -182,12 +182,14 @@ namespace XFiles.Controls
             }
 
             _renderTickLogCounter++;
+#if VUMETER_DEBUG
             if (_renderTickLogCounter == 1 || _renderTickLogCounter % 300 == 0)
             {
                 float sampleLevel = _service.BandLevels.Length > 5 ? _service.BandLevels[5] : 0f;
                 Log.Information("VuMeterBar: tick#{Tick} service={Svc} analyzing={Analyzing} sampleLevel[5]={Level:F3}",
                     _renderTickLogCounter, _service != null, _service?.IsAnalyzing, sampleLevel);
             }
+#endif
 
             float[] levels = _service.BandLevels;
             float[] peaks = _service.BandPeaks;

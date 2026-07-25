@@ -141,6 +141,7 @@ namespace XFiles.FileSystem
                             }
                             catch (Exception ex)
                             {
+                                Log.Warning("PdfPreviewService: bitmap render failed", ex);
                                 result.ErrorMessage = $"Bitmap error: {ex.Message}";
                                 tcs.SetResult(false);
                             }
@@ -152,8 +153,7 @@ namespace XFiles.FileSystem
             catch (Exception ex)
             {
                 result.ErrorMessage = $"PDF load error: {ex.Message}";
-                Log.Warning("PdfPreviewService: error loading '{Path}': {Error}",
-                    filePath, ex.Message);
+                Log.Warning("PdfPreviewService: error loading '{Path}'", ex, filePath);
             }
 
             return result;

@@ -1,51 +1,55 @@
-using Windows.Storage;
+using System.Threading.Tasks;
+using XFiles.Metadata;
 
 namespace XFiles.Settings
 {
     public static class XFilesSettings
     {
-        private static ApplicationDataContainer LocalSettings => ApplicationData.Current.LocalSettings;
-
-        public static bool FirstRunShown
+        public static async Task<bool> GetBoolAsync(string key, bool defaultValue = false)
         {
-            get => GetBool("FirstRunShown", false);
-            set => SetBool("FirstRunShown", value);
+            string val = await MetadataCache.GetSettingAsync(key, null);
+            if (val == null) return defaultValue;
+            return val == "true";
         }
 
-        public static int GetInt(string key, int defaultValue = 0)
+        public static async Task SetBoolAsync(string key, bool value)
         {
-            if (LocalSettings.Values.ContainsKey(key) && LocalSettings.Values[key] is int val)
-                return val;
-            return defaultValue;
+            await MetadataCache.SetSettingAsync(key, value ? "true" : "false");
         }
 
-        public static void SetInt(string key, int value)
+        public static async Task<int> GetIntAsync(string key, int defaultValue = 0)
         {
-            LocalSettings.Values[key] = value;
+            string val = await MetadataCache.GetSettingAsync(key, null);
+            if (val == null) return defaultValue;
+            return int.TryParse(val, out int result) ? result : defaultValue;
         }
 
-        public static bool GetBool(string key, bool defaultValue = false)
+        public static async Task SetIntAsync(string key, int value)
         {
-            if (LocalSettings.Values.ContainsKey(key) && LocalSettings.Values[key] is bool val)
-                return val;
-            return defaultValue;
+            await MetadataCache.SetSettingAsync(key, value.ToString());
         }
 
-        public static void SetBool(string key, bool value)
+        public static async Task<string> GetStringAsync(string key, string defaultValue = "")
         {
-            LocalSettings.Values[key] = value;
+            return await MetadataCache.GetSettingAsync(key, defaultValue);
         }
 
-        public static string GetString(string key, string defaultValue = "")
+        public static async Task SetStringAsync(string key, string value)
         {
-            if (LocalSettings.Values.ContainsKey(key) && LocalSettings.Values[key] is string val)
-                return val;
-            return defaultValue;
+            await MetadataCache.SetSettingAsync(key, value);
         }
 
-        public static void SetString(string key, string value)
-        {
-            LocalSettings.Values[key] = value;
-        }
+        // Convenience properties
+        public static async Task<bool> GetFirstRunShownAsync()
+            => await GetBoolAsync("FirstRunShown", false);
+
+        public static async Task SetFirstRunShownAsync(bool value)
+            => await SetBoolAsync("FirstRunShown", value);
+
+        public static async Task<string> GetLogLevelAsync()
+            => await GetStringAsync("LogLevel", "Info");
+
+        public static async Task SetLogLevelAsync(string level)
+            => await SetStringAsync("LogLevel", level);
     }
 }

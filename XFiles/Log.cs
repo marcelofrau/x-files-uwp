@@ -1,8 +1,8 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Runtime.CompilerServices;
 using Serilog;
+using Serilog.Context;
 using Serilog.Core;
 using Serilog.Events;
 using Windows.Storage;
@@ -12,6 +12,7 @@ namespace XFiles
     public static class Log
     {
         private static Logger _logger;
+        private static LoggingLevelSwitch _levelSwitch;
         public static Logger Logger => _logger;
         public static ScreenLogger Screen { get; private set; }
 
@@ -24,10 +25,10 @@ namespace XFiles
             string logPath = Path.Combine(logsDir, "xfiles-.log");
 
             Screen = new ScreenLogger();
+            _levelSwitch = new LoggingLevelSwitch(LogEventLevel.Information);
 
             _logger = new LoggerConfiguration()
-                .MinimumLevel.Verbose()
-                .Enrich.With<CallerEnricher>()
+                .MinimumLevel.ControlledBy(_levelSwitch)
                 .WriteTo.Sink(Screen)
                 .WriteTo.Debug(
                     outputTemplate: "[{Timestamp:HH:mm:ss.fff} {Level:u3}] [{Caller}] {Message:lj}{NewLine}{Exception}")
@@ -42,32 +43,100 @@ namespace XFiles
             _logger.Information("Log system initialized. Directory: {LogsDir}", logsDir);
         }
 
+        public static void SetLogLevel(string level)
+        {
+            if (_levelSwitch == null) return;
+            if (Enum.TryParse<LogEventLevel>(level, true, out var logLevel))
+            {
+                _levelSwitch.MinimumLevel = logLevel;
+                _logger?.Information("Log level changed to {Level}", logLevel);
+            }
+        }
+
+        public static string GetCurrentLevel()
+        {
+            return _levelSwitch?.MinimumLevel.ToString() ?? "Information";
+        }
+
+        private static string GetCaller()
+        {
+            try
+            {
+                var trace = new StackTrace(2, false);
+                var frames = trace.GetFrames();
+                if (frames != null)
+                {
+                    foreach (var frame in frames)
+                    {
+                        var method = frame?.GetMethod();
+                        if (method == null) continue;
+                        var typeName = method.DeclaringType?.FullName ?? "";
+                        if (typeName.StartsWith("Serilog") || typeName == "XFiles.Log") continue;
+                        return $"{method.DeclaringType?.Name}.{method.Name}";
+                    }
+                }
+            }
+            catch { }
+            return "Unknown";
+        }
+
         public static void Verbose(string message, params object[] args)
-            => _logger?.Verbose(message, args);
+        {
+            if (_logger == null) return;
+            using (LogContext.PushProperty("Caller", GetCaller()))
+                _logger.Verbose(message, args);
+        }
 
         public static void Debug(string message, params object[] args)
-            => _logger?.Debug(message, args);
+        {
+            if (_logger == null) return;
+            using (LogContext.PushProperty("Caller", GetCaller()))
+                _logger.Debug(message, args);
+        }
 
         public static void Information(string message, params object[] args)
-            => _logger?.Information(message, args);
+        {
+            if (_logger == null) return;
+            using (LogContext.PushProperty("Caller", GetCaller()))
+                _logger.Information(message, args);
+        }
 
         public static void Warning(string message, params object[] args)
-            => _logger?.Warning(message, args);
+        {
+            if (_logger == null) return;
+            using (LogContext.PushProperty("Caller", GetCaller()))
+                _logger.Warning(message, args);
+        }
+
+        public static void Warning(string message, Exception ex, params object[] args)
+        {
+            if (_logger == null) return;
+            using (LogContext.PushProperty("Caller", GetCaller()))
+                _logger.Warning(ex, message, args);
+        }
 
         public static void Error(string message, Exception ex = null, params object[] args)
         {
-            if (ex != null)
-                _logger?.Error(ex, message, args);
-            else
-                _logger?.Error(message, args);
+            if (_logger == null) return;
+            using (LogContext.PushProperty("Caller", GetCaller()))
+            {
+                if (ex != null)
+                    _logger.Error(ex, message, args);
+                else
+                    _logger.Error(message, args);
+            }
         }
 
         public static void Fatal(string message, Exception ex = null, params object[] args)
         {
-            if (ex != null)
-                _logger?.Fatal(ex, message, args);
-            else
-                _logger?.Fatal(message, args);
+            if (_logger == null) return;
+            using (LogContext.PushProperty("Caller", GetCaller()))
+            {
+                if (ex != null)
+                    _logger.Fatal(ex, message, args);
+                else
+                    _logger.Fatal(message, args);
+            }
         }
 
         public static void CloseAndFlush()
@@ -75,34 +144,6 @@ namespace XFiles
             _logger?.Information("Log system shutting down");
             _logger?.Dispose();
             _logger = null;
-        }
-    }
-
-    /// <summary>
-    /// Walks the stack to find the first non-Serilog caller method name.
-    /// </summary>
-    public class CallerEnricher : ILogEventEnricher
-    {
-        public void Enrich(LogEvent logEvent, ILogEventPropertyFactory propertyFactory)
-        {
-            string caller = "Unknown";
-            try
-            {
-                var trace = new StackTrace();
-                foreach (var frame in trace.GetFrames())
-                {
-                    var method = frame?.GetMethod();
-                    if (method == null) continue;
-                    var declaringType = method.DeclaringType;
-                    var typeName = declaringType?.FullName ?? "";
-                    // Skip Serilog internals and this Log wrapper class
-                    if (typeName.StartsWith("Serilog") || typeName == "XFiles.Log" || typeName == "XFiles.CallerEnricher") continue;
-                    caller = method.DeclaringType?.Name + "." + method.Name;
-                    break;
-                }
-            }
-            catch { }
-            logEvent.AddPropertyIfAbsent(propertyFactory.CreateProperty("Caller", caller));
         }
     }
 }

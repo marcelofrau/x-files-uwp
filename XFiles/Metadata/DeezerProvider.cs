@@ -38,7 +38,7 @@ namespace XFiles.Metadata
                         return;
                     }
                 }
-                Log.Information("Deezer: rate limit reached, waiting 500ms");
+                Log.Debug("Deezer: rate limit reached, waiting 500ms");
                 await Task.Delay(500, ct);
             }
         }
@@ -79,12 +79,12 @@ namespace XFiles.Metadata
                 Log.Information("Deezer: searching query={Query} url={Url}", query, url);
 
                 var response = await _http.GetAsync(url, ct);
-                Log.Information("Deezer: HTTP {Status}", response.StatusCode);
+                Log.Debug("Deezer: HTTP {Status}", response.StatusCode);
 
                 if (!response.IsSuccessStatusCode) return null;
 
                 string json = await response.Content.ReadAsStringAsync();
-                Log.Information("Deezer: response (first 600 chars)={Json}", json.Length > 600 ? json.Substring(0, 600) : json);
+                Log.Debug("Deezer: response (first 600 chars)={Json}", json.Length > 600 ? json.Substring(0, 600) : json);
 
                 var root = JsonObject.Parse(json);
 
@@ -96,7 +96,7 @@ namespace XFiles.Metadata
                 }
 
                 var items = root.GetNamedArray("data", new JsonArray());
-                Log.Information("Deezer: found {Count} results for query={Query}", items.Count, query);
+                Log.Debug("Deezer: found {Count} results for query={Query}", items.Count, query);
 
                 if (items.Count == 0) return null;
 
@@ -105,7 +105,7 @@ namespace XFiles.Metadata
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                Log.Warning("Deezer: search failed: {Error}", ex.Message);
+                Log.Warning("Deezer: search failed", ex);
                 return null;
             }
         }
@@ -114,26 +114,26 @@ namespace XFiles.Metadata
         {
             if (string.IsNullOrWhiteSpace(coverUrl))
             {
-                Log.Information("Deezer: no cover URL, skipping");
+                Log.Debug("Deezer: no cover URL, skipping");
                 return null;
             }
 
             try
             {
-                Log.Information("Deezer: fetching cover art URL={Url}", coverUrl);
+                Log.Debug("Deezer: fetching cover art URL={Url}", coverUrl);
                 var response = await _http.GetAsync(coverUrl, ct);
-                Log.Information("Deezer: cover art HTTP {Status}", response.StatusCode);
+                Log.Debug("Deezer: cover art HTTP {Status}", response.StatusCode);
 
                 if (!response.IsSuccessStatusCode) return null;
 
                 byte[] bytes = await response.Content.ReadAsByteArrayAsync();
-                Log.Information("Deezer: downloaded {Size} bytes cover art", bytes.Length);
+                Log.Debug("Deezer: downloaded {Size} bytes cover art", bytes.Length);
                 return bytes;
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                Log.Warning("Deezer: cover art fetch failed: {Error}", ex.Message);
+                Log.Warning("Deezer: cover art fetch failed", ex);
                 return null;
             }
         }
@@ -174,11 +174,11 @@ namespace XFiles.Metadata
 
                     string releaseDate = SafeGetString(obj, "release_date");
 
-                    Log.Information("Deezer: [{Index}] title='{DzTitle}' artist='{DzArtist}' album='{DzAlbum}' cover={HasCover}",
+                    Log.Debug("Deezer: [{Index}] title='{DzTitle}' artist='{DzArtist}' album='{DzAlbum}' cover={HasCover}",
                         i, dzTitle, dzArtist, dzAlbum, !string.IsNullOrEmpty(coverUrl));
 
                     float score = CalculateMatchScore(queryArtist, queryTitle, queryAlbum, dzArtist, dzTitle, dzAlbum);
-                    Log.Information("Deezer: [{Index}] score={Score:F2}", i, score);
+                    Log.Debug("Deezer: [{Index}] score={Score:F2}", i, score);
 
                     if (score > bestScore)
                     {
@@ -216,15 +216,15 @@ namespace XFiles.Metadata
                 }
                 catch (Exception itemEx)
                 {
-                    Log.Warning("Deezer: error parsing item[{Index}]: {Error}", i, itemEx.Message);
+                    Log.Warning("Deezer: error parsing item[{Index}]", itemEx, i);
                 }
             }
 
             if (bestMatch != null)
-                Log.Information("Deezer: best match score={Score:F2} title='{Title}' artist='{Artist}' album='{Album}' cover={HasCover}",
+                Log.Debug("Deezer: best match score={Score:F2} title='{Title}' artist='{Artist}' album='{Album}' cover={HasCover}",
                     bestMatch.Confidence, bestMatch.Metadata.Title, bestMatch.Metadata.Artist, bestMatch.Metadata.Album, !string.IsNullOrEmpty(bestMatch.CoverArtUrl));
             else
-                Log.Information("Deezer: no match found among {Count} candidates", items.Count);
+                Log.Debug("Deezer: no match found among {Count} candidates", items.Count);
 
             return bestMatch;
         }

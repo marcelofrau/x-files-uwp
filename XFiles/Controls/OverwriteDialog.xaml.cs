@@ -86,7 +86,7 @@ namespace XFiles.Controls
 
         private void Close(int result)
         {
-            Log.Information("OverwriteDialog.Close: result={Result}", result);
+            Log.Debug("OverwriteDialog.Close: result={Result}", result);
             Overlay.Visibility = Visibility.Collapsed;
             Visibility = Visibility.Collapsed;
             _tcs?.TrySetResult(result);

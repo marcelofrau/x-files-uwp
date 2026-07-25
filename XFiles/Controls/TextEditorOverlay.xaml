@@ -20,7 +20,7 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="12" />
                     <RowDefinition Height="Auto" />
-                    <RowDefinition Height="8" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
@@ -43,23 +43,24 @@
                            TextAlignment="Center"
                            Text="" />
 
-                <!-- Dirty badge (yellow dot) -->
-                <Ellipse x:Name="DirtyBadge"
-                         Grid.Row="3"
-                         Width="6" Height="6"
-                         Fill="#F1C40F"
-                         HorizontalAlignment="Center"
-                         VerticalAlignment="Center"
-                         Visibility="Collapsed" />
-
-                <!-- Status indicator -->
-                <TextBlock x:Name="StatusText"
-                           Grid.Row="4"
-                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                           FontSize="11"
-                           Foreground="#93C43C"
-                           TextAlignment="Center"
-                           Text="" />
+                <!-- Status badge -->
+                <Border x:Name="StatusBadge"
+                        Grid.Row="3"
+                        CornerRadius="4"
+                        Padding="10,2"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Visibility="Collapsed">
+                    <TextBlock x:Name="StatusText"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="12"
+                               LineHeight="16"
+                               Margin="0,3,0,0"
+                               Foreground="#000000"
+                               TextAlignment="Center"
+                               VerticalAlignment="Center"
+                               Text="" />
+                </Border>
 
                 <!-- Encoding / line ending info -->
                 <StackPanel x:Name="FileInfoPanel"
@@ -128,21 +129,36 @@
                            Text="Saved" />
             </Border>
 
-            <!-- Unsaved changes dialog -->
+            <!-- Unsaved changes dialog overlay -->
+            <Grid x:Name="UnsavedOverlay" Background="#CC0D1117"
+                  HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                  Visibility="Collapsed" Tapped="OnUnsavedOverlayTapped">
             <Border x:Name="UnsavedDialog"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
-                    Background="#E61A1D23"
+                    Background="#1A1D23"
+                    BorderBrush="#2A2D33"
+                    BorderThickness="1"
                     CornerRadius="6"
-                    Padding="24,20"
-                    Visibility="Collapsed">
+                    MaxWidth="440"
+                    Padding="24,20">
                 <StackPanel>
-                    <TextBlock x:Name="UnsavedDialogTitle"
-                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                               FontSize="16"
-                               Foreground="#D4D4D4"
-                               Text="Unsaved changes"
-                               Margin="0,0,0,12" />
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                        <Image Source="ms-appx:///Assets/Views/AlertDialog/alert-question-48.png"
+                               Width="40" Height="40"
+                               Margin="0,0,14,0"
+                               VerticalAlignment="Center" />
+                        <TextBlock x:Name="UnsavedDialogTitle"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                   FontSize="15"
+                                   Foreground="{StaticResource XFilesForegroundBrush}"
+                                   Text="Unsaved changes"
+                                   TextWrapping="Wrap"
+                                   MaxWidth="340"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,0,0" />
+                    </StackPanel>
+
                     <TextBlock x:Name="UnsavedDialogMessage"
                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                FontSize="13"
@@ -150,40 +166,53 @@
                                Text="Save changes before closing?"
                                TextWrapping="Wrap"
                                Margin="0,0,0,16" />
-                    <StackPanel x:Name="UnsavedDialogButtons" Orientation="Horizontal" HorizontalAlignment="Center">
-                        <StackPanel x:Name="UnsavedSaveBtn" Orientation="Horizontal" Margin="0,0,16,0"
-                                    VerticalAlignment="Center">
-                            <Image Source="ms-appx:///Assets/GamepadButtons/abxy/a.png"
-                                   Width="14" Height="14" Margin="0,0,4,0"
-                                   VerticalAlignment="Center" />
-                            <TextBlock Text="Save"
-                                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                                       FontSize="12" Foreground="#93C43C"
+
+                    <StackPanel x:Name="UnsavedDialogButtons" Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button x:Name="UnsavedSaveBtn"
+                                Style="{StaticResource ConfirmDialogButton}"
+                                Margin="0,0,8,0"
+                                Click="OnUnsavedSaveClicked">
+                            <StackPanel Orientation="Horizontal">
+                                <Image Source="ms-appx:///Assets/GamepadButtons/abxy/a.png"
+                                       Width="18" Height="18" Margin="0,0,6,0"
                                        VerticalAlignment="Center" />
-                        </StackPanel>
-                        <StackPanel x:Name="UnsavedDiscardBtn" Orientation="Horizontal" Margin="0,0,16,0"
-                                    VerticalAlignment="Center">
-                            <Image Source="ms-appx:///Assets/GamepadButtons/abxy/x.png"
-                                   Width="14" Height="14" Margin="0,0,4,0"
-                                   VerticalAlignment="Center" />
-                            <TextBlock Text="Discard"
-                                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                                       FontSize="12" Foreground="#E74C3C"
+                                <TextBlock Text="Save"
+                                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                                           Foreground="{StaticResource XFilesForegroundBrush}"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="UnsavedDiscardBtn"
+                                Style="{StaticResource ConfirmDialogButton}"
+                                Margin="0,0,8,0"
+                                Click="OnUnsavedDiscardClicked">
+                            <StackPanel Orientation="Horizontal">
+                                <Image Source="ms-appx:///Assets/GamepadButtons/abxy/x.png"
+                                       Width="18" Height="18" Margin="0,0,6,0"
                                        VerticalAlignment="Center" />
-                        </StackPanel>
-                        <StackPanel x:Name="UnsavedCancelBtn" Orientation="Horizontal"
-                                    VerticalAlignment="Center">
-                            <Image Source="ms-appx:///Assets/GamepadButtons/abxy/b.png"
-                                   Width="14" Height="14" Margin="0,0,4,0"
-                                   VerticalAlignment="Center" />
-                            <TextBlock Text="Cancel"
-                                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                                       FontSize="12" Foreground="#80FFFFFF"
+                                <TextBlock Text="Discard"
+                                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                                           Foreground="#E74C3C"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="UnsavedCancelBtn"
+                                Style="{StaticResource ConfirmDialogButton}"
+                                Click="OnUnsavedCancelClicked">
+                            <StackPanel Orientation="Horizontal">
+                                <Image Source="ms-appx:///Assets/GamepadButtons/abxy/b.png"
+                                       Width="18" Height="18" Margin="0,0,6,0"
                                        VerticalAlignment="Center" />
-                        </StackPanel>
+                                <TextBlock Text="Cancel"
+                                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                                           Foreground="{StaticResource XFilesForegroundBrush}"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
                     </StackPanel>
                 </StackPanel>
             </Border>
+            </Grid>
 
             <!-- Footer legend -->
             <Border x:Name="FooterBar"

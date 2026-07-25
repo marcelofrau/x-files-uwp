@@ -77,11 +77,23 @@ namespace XFiles
             }
         }
 
-        protected override void OnLaunched(LaunchActivatedEventArgs e)
+        protected override async void OnLaunched(LaunchActivatedEventArgs e)
         {
             Log.Init();
             Log.Information("App.OnLaunched — PrelaunchActivated={Prelaunch}, PreviousState={State}",
                 e.PrelaunchActivated, e.PreviousExecutionState);
+
+            // Load persisted log level from SQLite
+            try
+            {
+                string level = await Settings.XFilesSettings.GetLogLevelAsync();
+                Log.SetLogLevel(level);
+                Log.Information("App: log level loaded from settings: {Level}", level);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("App: failed to load log level, using default Info", ex);
+            }
 
 #if XRAY_ENABLED
             _xray = Xray.Start("x-files", cfg =>
@@ -181,7 +193,7 @@ namespace XFiles
             }
             catch (Exception ex)
             {
-                Log.Warning("Failed to play boot chime: {Error}", ex.Message);
+                Log.Warning("Failed to play boot chime", ex);
             }
         }
 

@@ -28,7 +28,7 @@ namespace XFiles.Controls
 
         public DirectoryTestPage()
         {
-            Log.Information("DirectoryTestPage.ctor");
+            Log.Debug("DirectoryTestPage.ctor");
             this.InitializeComponent();
             this.KeyDown += OnKeyDown;
             this.PointerPressed += OnPointerPressed;
@@ -39,7 +39,7 @@ namespace XFiles.Controls
                 if (App.GamepadInput != null)
                 {
                     App.GamepadInput.ActiveNavigable = this;
-                    Log.Information("DirectoryTestPage: set as ActiveNavigable");
+                    Log.Debug("DirectoryTestPage: set as ActiveNavigable");
                 }
             };
 
@@ -117,7 +117,7 @@ namespace XFiles.Controls
             if (_pathHistory.Count > 0)
             {
                 _currentPath = _pathHistory.Pop();
-                Log.Information("NavigateBack: to '{Path}'", _currentPath ?? "(root)");
+                Log.Debug("NavigateBack: to '{Path}'", _currentPath ?? "(root)");
                 LoadEntriesAsync();
             }
             else

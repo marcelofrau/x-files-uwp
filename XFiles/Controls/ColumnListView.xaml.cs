@@ -290,7 +290,7 @@ namespace XFiles.Controls
 
         public ColumnListView()
         {
-            Log.Information("ColumnListView.ctor");
+            Log.Debug("ColumnListView.ctor");
             this.InitializeComponent();
         }
 
@@ -329,7 +329,7 @@ namespace XFiles.Controls
 
             EntryList.ItemsSource = _entries;
             StatusText = $"{_entries.Count} items";
-            Log.Information("ColumnListView.LoadAsync: displaying {Count} entries", _entries.Count);
+            Log.Debug("ColumnListView.LoadAsync: displaying {Count} entries", _entries.Count);
 
             if (EntryList.Items.Count > 0)
                 EntryList.SelectedIndex = 0;
@@ -405,7 +405,7 @@ namespace XFiles.Controls
         {
             if (EntryList.SelectedItem is EntryViewModel selected)
             {
-                Log.Information("ColumnListView.OnConfirm: '{Name}' (isDir={IsDir})",
+                Log.Debug("ColumnListView.OnConfirm: '{Name}' (isDir={IsDir})",
                     selected.Name, selected.IsDirectory);
                 ItemOpened?.Invoke(this, ToFileEntry(selected));
             }
@@ -413,7 +413,7 @@ namespace XFiles.Controls
 
         public void OnBack()
         {
-            Log.Information("ColumnListView.OnBack");
+            Log.Debug("ColumnListView.OnBack");
             BackRequested?.Invoke(this, EventArgs.Empty);
         }
 

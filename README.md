@@ -177,6 +177,7 @@ See [DEPLOY-XBOX.md](docs/DEPLOY-XBOX.md) for detailed steps.
 | [UI-THEMING.md](docs/UI-THEMING.md) | ControlTemplate conventions |
 | [ROADMAP.md](docs/ROADMAP.md) | Phased implementation plan |
 | [DECISIONS.md](docs/DECISIONS.md) | ADRs — why XAML, why SharpCompress, etc. |
+| [LOGGING.md](docs/LOGGING.md) | Log levels, debug flags, architecture, conventions |
 | [DEPLOY-XBOX.md](docs/DEPLOY-XBOX.md) | Developer Mode, Device Portal, sideload steps |
 
 ---

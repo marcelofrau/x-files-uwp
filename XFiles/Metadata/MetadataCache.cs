@@ -11,6 +11,7 @@ namespace XFiles.Metadata
         private const string DbFileName = "metadata.db";
         private const long MaxCacheAgeMs = 90L * 24 * 60 * 60 * 1000;
         private const long MaxCoverArtAgeMs = 180L * 24 * 60 * 60 * 1000;
+        private const int CurrentSchemaVersion = 1;
 
         private static SQLiteAsyncConnection _db;
         private static readonly object _initLock = new object();
@@ -28,10 +29,85 @@ namespace XFiles.Metadata
                 _db = new SQLiteAsyncConnection(dbPath);
             }
 
+            // Schema version tracking
+            await _db.CreateTableAsync<SchemaVersionEntry>();
+            var versionEntry = await _db.Table<SchemaVersionEntry>()
+                .Where(v => v.Id == 1).FirstOrDefaultAsync();
+            int currentVersion = versionEntry?.Version ?? 0;
+
+            if (currentVersion < CurrentSchemaVersion)
+            {
+                Log.Information("MetadataCache: migrating schema v{Old} → v{New}", currentVersion, CurrentSchemaVersion);
+                await RunMigrationsAsync(_db, currentVersion);
+            }
+
             await _db.CreateTableAsync<MetadataCacheEntry>();
             await _db.CreateTableAsync<CoverArtEntry>();
-            Log.Information("MetadataCache: database opened at {Path}", DbFileName);
+            await _db.CreateTableAsync<AppSettingEntry>();
+            Log.Information("MetadataCache: database opened at {Path} schema v{Version}", DbFileName, CurrentSchemaVersion);
             return _db;
+        }
+
+        private static async Task RunMigrationsAsync(SQLiteAsyncConnection db, int fromVersion)
+        {
+            if (fromVersion < 1)
+            {
+                // v1: SchemaVersion + AppSettings tables (created by CreateTableAsync above)
+            }
+            // Future migrations:
+            // if (fromVersion < 2) { ... }
+
+            // Update version
+            var existing = await db.Table<SchemaVersionEntry>()
+                .Where(v => v.Id == 1).FirstOrDefaultAsync();
+            if (existing != null)
+            {
+                existing.Version = CurrentSchemaVersion;
+                await db.UpdateAsync(existing);
+            }
+            else
+            {
+                await db.InsertAsync(new SchemaVersionEntry { Id = 1, Version = CurrentSchemaVersion });
+            }
+        }
+
+        public static async Task<string> GetSettingAsync(string key, string defaultValue = null)
+        {
+            try
+            {
+                var db = await GetDbAsync();
+                var entry = await db.Table<AppSettingEntry>()
+                    .Where(s => s.Key == key).FirstOrDefaultAsync();
+                return entry?.Value ?? defaultValue;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("MetadataCache: GetSettingAsync failed key='{Key}'", ex, key);
+                return defaultValue;
+            }
+        }
+
+        public static async Task SetSettingAsync(string key, string value)
+        {
+            try
+            {
+                var db = await GetDbAsync();
+                var existing = await db.Table<AppSettingEntry>()
+                    .Where(s => s.Key == key).FirstOrDefaultAsync();
+                if (existing != null)
+                {
+                    existing.Value = value;
+                    await db.UpdateAsync(existing);
+                }
+                else
+                {
+                    await db.InsertAsync(new AppSettingEntry { Key = key, Value = value });
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("MetadataCache: SetSettingAsync failed key='{Key}'", ex, key);
+            }
         }
 
         public async Task<MetadataMatch> GetAsync(string cacheKey)
@@ -45,14 +121,14 @@ namespace XFiles.Metadata
 
                 if (entry == null)
                 {
-                    Log.Information("MetadataCache: miss key='{Key}'", cacheKey);
+                    Log.Debug("MetadataCache: miss key='{Key}'", cacheKey);
                     return null;
                 }
 
                 long ageMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - entry.Timestamp;
                 if (ageMs > MaxCacheAgeMs)
                 {
-                    Log.Information("MetadataCache: expired key='{Key}' age={Age}d", cacheKey, ageMs / 86400000);
+                    Log.Debug("MetadataCache: expired key='{Key}' age={Age}d", cacheKey, ageMs / 86400000);
                     await db.DeleteAsync(entry);
                     return null;
                 }
@@ -93,13 +169,13 @@ namespace XFiles.Metadata
                 float confidence = entry.Confidence;
                 string mbid = entry.MusicBrainzId;
 
-                Log.Information("MetadataCache: hit key='{Key}' title='{Title}' art={HasArt}",
+                Log.Debug("MetadataCache: hit key='{Key}' title='{Title}' art={HasArt}",
                     cacheKey, meta.Title, meta.HasAlbumArt);
                 return MetadataMatch.FromMusicBrainz(meta, confidence, mbid);
             }
             catch (Exception ex)
             {
-                Log.Warning("MetadataCache: GetAsync failed key='{Key}': {Error}", cacheKey, ex.Message);
+                Log.Warning("MetadataCache: GetAsync failed key='{Key}'", ex, cacheKey);
                 return null;
             }
         }
@@ -117,7 +193,7 @@ namespace XFiles.Metadata
                 if (match.CoverArtBytes != null && match.CoverArtBytes.Length > 0 && !string.IsNullOrEmpty(albumKey))
                 {
                     await UpsertCoverArtAsync(db, albumKey, match.CoverArtBytes, match.Metadata.AlbumArtMime ?? "image/jpeg");
-                    Log.Information("MetadataCache: stored cover art key='{Key}' size={Size}", albumKey, match.CoverArtBytes.Length);
+                    Log.Debug("MetadataCache: stored cover art key='{Key}' size={Size}", albumKey, match.CoverArtBytes.Length);
                 }
 
                 if (!string.IsNullOrEmpty(match.CoverArtUrl) && !string.IsNullOrEmpty(albumKey))
@@ -133,7 +209,7 @@ namespace XFiles.Metadata
                             CoverUrl = match.CoverArtUrl,
                             Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
                         });
-                        Log.Information("MetadataCache: stored cover URL key='{Key}' url={Url}", albumKey, match.CoverArtUrl);
+                        Log.Debug("MetadataCache: stored cover URL key='{Key}' url={Url}", albumKey, match.CoverArtUrl);
                     }
                 }
 
@@ -162,12 +238,12 @@ namespace XFiles.Metadata
                 else
                     await db.InsertAsync(entry);
 
-                Log.Information("MetadataCache: stored key='{Key}' title='{Title}' coverKey='{CoverKey}'",
+                Log.Debug("MetadataCache: stored key='{Key}' title='{Title}' coverKey='{CoverKey}'",
                     cacheKey, match.Metadata.Title, albumKey);
             }
             catch (Exception ex)
             {
-                Log.Warning("MetadataCache: SetAsync failed key='{Key}': {Error}", cacheKey, ex.Message);
+                Log.Warning("MetadataCache: SetAsync failed key='{Key}'", ex, cacheKey);
             }
         }
 
@@ -196,7 +272,7 @@ namespace XFiles.Metadata
             }
             catch (Exception ex)
             {
-                Log.Warning("MetadataCache: GetCoverArtAsync failed: {Error}", ex.Message);
+                Log.Warning("MetadataCache: GetCoverArtAsync failed", ex);
                 return null;
             }
         }
@@ -210,11 +286,11 @@ namespace XFiles.Metadata
 
                 var db = await GetDbAsync();
                 await UpsertCoverArtAsync(db, key, artData, mime);
-                Log.Information("MetadataCache: stored cover art album='{Key}' size={Size}", key, artData.Length);
+                Log.Debug("MetadataCache: stored cover art album='{Key}' size={Size}", key, artData.Length);
             }
             catch (Exception ex)
             {
-                Log.Warning("MetadataCache: StoreCoverArtAsync failed: {Error}", ex.Message);
+                Log.Warning("MetadataCache: StoreCoverArtAsync failed", ex);
             }
         }
 
@@ -277,7 +353,7 @@ namespace XFiles.Metadata
             }
             catch (Exception ex)
             {
-                Log.Warning("MetadataCache: ClearAsync failed: {Error}", ex.Message);
+                Log.Warning("MetadataCache: ClearAsync failed", ex);
                 return 0;
             }
         }

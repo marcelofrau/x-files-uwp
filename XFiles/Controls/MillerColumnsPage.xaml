@@ -1256,7 +1256,7 @@
             </Grid>
         </Grid>
 
-        <!-- Placeholder screen overlay (Settings / Startup Preferences) -->
+        <!-- Placeholder screen overlay (Settings / About) -->
         <Grid x:Name="PlaceholderOverlay" Visibility="Collapsed"
               Grid.Row="0" Grid.RowSpan="3"
               HorizontalAlignment="Stretch" VerticalAlignment="Stretch">

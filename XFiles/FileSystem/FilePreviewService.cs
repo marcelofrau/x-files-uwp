@@ -264,12 +264,12 @@ namespace XFiles.FileSystem
                     result.Type = FilePreviewType.Unsupported;
                 }
             }
-            catch (Exception ex)
-            {
-                result.Type = FilePreviewType.Error;
-                result.ErrorMessage = $"Cannot load preview: {ex.Message}";
-                Log.Warning("FilePreviewService: error previewing '{Path}': {Error}", filePath, ex.Message);
-            }
+                catch (Exception ex)
+                {
+                    Log.Warning("FilePreviewService: image decode/bitmap failed", ex);
+                    result.Type = FilePreviewType.Error;
+                    result.ErrorMessage = $"Cannot create image bitmap: {ex.Message}";
+                }
 
             return result;
         }
@@ -379,6 +379,7 @@ namespace XFiles.FileSystem
                 }
                 catch (Exception ex)
                 {
+                    Log.Warning("FilePreviewService: image decode/bitmap failed", ex);
                     return ((SoftwareBitmap)null, 0, 0, $"Cannot decode image: {ex.Message}");
                 }
             });
@@ -417,6 +418,7 @@ namespace XFiles.FileSystem
                 }
                 catch (Exception ex)
                 {
+                    Log.Warning("FilePreviewService: image decode/bitmap failed", ex);
                     result.Type = FilePreviewType.Error;
                     result.ErrorMessage = $"Cannot create image bitmap: {ex.Message}";
                     tcs.SetResult(false);
@@ -519,6 +521,7 @@ namespace XFiles.FileSystem
                 }
                 catch (Exception ex)
                 {
+                    Log.Warning("FilePreviewService: image decode/bitmap failed", ex);
                     return ((SoftwareBitmap)null, 0, 0, $"Cannot decode image: {ex.Message}");
                 }
             });
@@ -563,6 +566,7 @@ namespace XFiles.FileSystem
                 }
                 catch (Exception ex)
                 {
+                    Log.Warning("FilePreviewService: image decode/bitmap failed", ex);
                     result.Type = FilePreviewType.Error;
                     result.ErrorMessage = $"Cannot create image bitmap: {ex.Message}";
                     tcs.SetResult(false);

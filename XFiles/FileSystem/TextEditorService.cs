@@ -9,7 +9,6 @@ namespace XFiles.FileSystem
     public enum FileTier
     {
         FullEdit,
-        DegradedEdit,
         ReadOnly
     }
 
@@ -37,9 +36,7 @@ namespace XFiles.FileSystem
     /// </summary>
     public static class TextEditorService
     {
-        public const long FullEditMaxBytes = 512 * 1024;
-        public const long DegradedEditMaxBytes = 2 * 1024 * 1024;
-        public const int LimitedUndoCount = 50;
+        public const long FullEditMaxBytes = 4 * 1024 * 1024;
         public const int SyncDebounceMs = 50;
 
         #region P/Invoke
@@ -131,7 +128,7 @@ namespace XFiles.FileSystem
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning("TextEditorService.Load exception: {Error}", ex.Message);
+                    Log.Warning("TextEditorService.Load exception", ex);
                     return null;
                 }
             });
@@ -177,7 +174,7 @@ namespace XFiles.FileSystem
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning("TextEditorService.Save exception: {Error}", ex.Message);
+                    Log.Warning("TextEditorService.Save exception", ex);
                     return false;
                 }
             });
@@ -189,7 +186,6 @@ namespace XFiles.FileSystem
         public static FileTier GetFileTier(long size)
         {
             if (size <= FullEditMaxBytes) return FileTier.FullEdit;
-            if (size <= DegradedEditMaxBytes) return FileTier.DegradedEdit;
             return FileTier.ReadOnly;
         }
 
@@ -201,7 +197,6 @@ namespace XFiles.FileSystem
             switch (tier)
             {
                 case FileTier.FullEdit: return "Full edit";
-                case FileTier.DegradedEdit: return "Edit (no highlight)";
                 case FileTier.ReadOnly: return "Read-only";
                 default: return "";
             }

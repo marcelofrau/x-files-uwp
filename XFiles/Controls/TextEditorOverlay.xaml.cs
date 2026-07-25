@@ -33,9 +33,11 @@ namespace XFiles.Controls
         // Toast timer
         private DispatcherTimer _toastTimer;
 
-        // Dirty state poll timer
+        // Dirty state
         private DispatcherTimer _dirtyPollTimer;
         private bool _lastDirtyState;
+        private bool _webViewReady;
+        private DateTime _dirtySuppressUntil = DateTime.MinValue;
 
         // Unsaved dialog state
         private bool _isUnsavedDialogOpen;
@@ -64,7 +66,7 @@ namespace XFiles.Controls
             this.InitializeComponent();
             _toastTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1500) };
             _toastTimer.Tick += OnToastTimerTick;
-            _dirtyPollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+            _dirtyPollTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _dirtyPollTimer.Tick += OnDirtyPollTick;
 
             // Virtual keyboard bridge
@@ -107,13 +109,8 @@ namespace XFiles.Controls
             EditorWebView.NavigationCompleted += OnEditorWebViewNavigated;
             EditorWebView.NavigateToString(html);
 
-            // Show notification bar for degraded/readonly
-            if (_fileTier == FileTier.DegradedEdit)
-            {
-                NotificationText.Text = $"Syntax highlighting disabled — file too large ({FormatFileSize(result.FileSize)})";
-                NotificationBar.Visibility = Visibility.Visible;
-            }
-            else if (_fileTier == FileTier.ReadOnly)
+            // Show notification bar for readonly
+            if (_fileTier == FileTier.ReadOnly)
             {
                 string reason = result.IsBinary
                     ? "This file appears to be binary and cannot be edited."
@@ -127,23 +124,23 @@ namespace XFiles.Controls
             }
 
             // Store JS config (applied after NavigationCompleted)
-            _pendingMaxUndo = _fileTier == FileTier.DegradedEdit ? LimitedUndoCount : 0;
+            _pendingMaxUndo = 0;
             _pendingHighlightEnabled = _highlightEnabled;
             _pendingLanguage = lang;
 
             // Show overlay
             Visibility = Visibility.Visible;
-            Log.Information("TextEditorOverlay: visibility=Visible, registering handlers");
+            Log.Debug("TextEditorOverlay: visibility=Visible, registering handlers");
 
             // Show HTML mouse cursor (LStick controls it on Xbox)
-            Log.Information("TextEditorOverlay: HTML mouse cursor enabled for LStick");
+            Log.Debug("TextEditorOverlay: HTML mouse cursor enabled for LStick");
 
             // Register keyboard handler
             if (!_keyHandlerRegistered)
             {
                 Window.Current.CoreWindow.KeyDown += OnEditorKeyDown;
                 _keyHandlerRegistered = true;
-                Log.Information("TextEditorOverlay: CoreWindow.KeyDown registered");
+                Log.Debug("TextEditorOverlay: CoreWindow.KeyDown registered");
             }
             else
             {
@@ -179,12 +176,18 @@ namespace XFiles.Controls
         public async Task<bool> ConfirmClose()
         {
             bool dirty = await InvokeJsBool("editor.isDirty()");
-            Log.Information("TextEditorOverlay: ConfirmClose — isDirty={Dirty}", dirty);
+            // Sync cached state with JS truth so badge is correct
+            if (dirty != _lastDirtyState)
+            {
+                _lastDirtyState = dirty;
+                UpdateSidebarStatus(dirty);
+            }
+            Log.Debug("TextEditorOverlay: ConfirmClose — isDirty={Dirty}", dirty);
             if (!dirty) return true;
 
-            Log.Information("TextEditorOverlay: ConfirmClose — showing unsaved dialog");
+            Log.Debug("TextEditorOverlay: ConfirmClose — showing unsaved dialog");
             var result = await ShowUnsavedDialog();
-            Log.Information("TextEditorOverlay: ConfirmClose — dialog result={Result}", result);
+            Log.Debug("TextEditorOverlay: ConfirmClose — dialog result={Result}", result);
             switch (result)
             {
                 case UnsavedDialogResult.Save:
@@ -196,7 +199,7 @@ namespace XFiles.Controls
                     await InvokeJs("editor.setDirty(false)");
                     return true;
                 default:
-                    Log.Information("TextEditorOverlay: ConfirmClose — cancelled, staying open");
+                    Log.Debug("TextEditorOverlay: ConfirmClose — cancelled, staying open");
                     return false;
             }
         }
@@ -213,18 +216,18 @@ namespace XFiles.Controls
             {
                 Window.Current.CoreWindow.KeyDown -= OnEditorKeyDown;
                 _keyHandlerRegistered = false;
-                Log.Information("TextEditorOverlay.Close: CoreWindow.KeyDown unregistered");
+                Log.Debug("TextEditorOverlay.Close: CoreWindow.KeyDown unregistered");
             }
 
             // Hide HTML mouse cursor
             try
             {
                 _ = InvokeJs("editor.hideMouse()");
-                Log.Information("TextEditorOverlay.Close: HTML mouse hidden");
+                Log.Debug("TextEditorOverlay.Close: HTML mouse hidden");
             }
             catch (Exception ex)
             {
-                Log.Warning("TextEditorOverlay.Close: mouse hide failed: {Error}", ex.Message);
+                Log.Warning("TextEditorOverlay.Close: mouse hide failed", ex);
             }
 
             Visibility = Visibility.Collapsed;
@@ -234,9 +237,9 @@ namespace XFiles.Controls
 
         private async System.Threading.Tasks.Task AttemptCloseAsync()
         {
-            Log.Information("TextEditorOverlay: AttemptCloseAsync called — dirtyPoll={Dirty}, unsavedOpen={Unsaved}", _lastDirtyState, _isUnsavedDialogOpen);
+            Log.Debug("TextEditorOverlay: AttemptCloseAsync called — dirty={Dirty}, unsavedOpen={Unsaved}", _lastDirtyState, _isUnsavedDialogOpen);
             bool safe = await ConfirmClose();
-            Log.Information("TextEditorOverlay: AttemptCloseAsync — ConfirmClose returned safe={Safe}", safe);
+            Log.Debug("TextEditorOverlay: AttemptCloseAsync — ConfirmClose returned safe={Safe}", safe);
             if (safe) Close();
         }
 
@@ -254,7 +257,7 @@ namespace XFiles.Controls
             if (!IsOpen || _isUnsavedDialogOpen) return;
 
             var key = e.VirtualKey;
-            Log.Information("EditorKeyDown: key={Key} readOnly={RO}", key, _isReadOnly);
+            Log.Verbose("EditorKeyDown: key={Key} readOnly={RO}", key, _isReadOnly);
 
             switch (key)
             {
@@ -291,7 +294,7 @@ namespace XFiles.Controls
                     e.Handled = true;
                     break;
                 case VirtualKey.GamepadMenu:
-                    Log.Information("EditorKeyDown: Start → save");
+                    Log.Verbose("EditorKeyDown: Start → save");
                     HandleSave();
                     e.Handled = true;
                     break;
@@ -311,19 +314,23 @@ namespace XFiles.Controls
                     foreach (var line in logs.Split('\n'))
                     {
                         if (!string.IsNullOrWhiteSpace(line))
-                            Log.Information("JS[{Dir}]: {Line}", direction, line);
+                        {
+#if EDITOR_JS_DEBUG
+                            Log.Verbose("JS[{Dir}]: {Line}", direction, line);
+#endif
+                        }
                     }
                 }
             }
             catch (Exception ex)
             {
-                Log.Warning("PullJsLogs failed: {Err}", ex.Message);
+                Log.Warning("PullJsLogs failed", ex);
             }
         }
 
         public void HandleButton(VirtualKey key)
         {
-            Log.Information("TextEditorOverlay.HandleButton: key={Key} unsavedOpen={Unsaved} keyboard={Keyboard} readOnly={RO}",
+            Log.Verbose("TextEditorOverlay.HandleButton: key={Key} unsavedOpen={Unsaved} keyboard={Keyboard} readOnly={RO}",
                 key, _isUnsavedDialogOpen, _isKeyboardVisible, _isReadOnly);
 
             if (_isUnsavedDialogOpen) { HandleUnsavedDialogButton(key); return; }
@@ -331,27 +338,27 @@ namespace XFiles.Controls
             switch (key)
             {
                 case VirtualKey.GamepadB:
-                    if (_isKeyboardVisible) { Log.Information("HandleButton: B → hide keyboard"); HideVirtualKeyboard(); }
-                    else { Log.Information("HandleButton: B → AttemptCloseAsync"); _ = AttemptCloseAsync(); }
+                    if (_isKeyboardVisible) { Log.Verbose("HandleButton: B → hide keyboard"); HideVirtualKeyboard(); }
+                    else { Log.Verbose("HandleButton: B → AttemptCloseAsync"); _ = AttemptCloseAsync(); }
                     break;
                 case VirtualKey.GamepadX:
-                    Log.Information("HandleButton: X → backspace");
-                    if (!_isReadOnly) { InvokeJs("editor.backspace()"); }
+                    Log.Verbose("HandleButton: X → backspace");
+                    if (!_isReadOnly) { InvokeJs("editor.backspace()"); PullJsLogs("backspace"); }
                     break;
                 case VirtualKey.GamepadY:
-                    Log.Information("HandleButton: Y → newline");
-                    if (!_isReadOnly) { InvokeJs("editor.insertNewline()"); }
+                    Log.Verbose("HandleButton: Y → newline");
+                    if (!_isReadOnly) { InvokeJs("editor.insertNewline()"); PullJsLogs("newline"); }
                     break;
                 case VirtualKey.GamepadA:
-                    Log.Information("HandleButton: A → show virtual keyboard");
+                    Log.Verbose("HandleButton: A → show virtual keyboard");
                     if (!_isReadOnly) { ShowVirtualKeyboard(); }
                     break;
                 case VirtualKey.GamepadMenu:
-                    Log.Information("HandleButton: Start → save");
+                    Log.Verbose("HandleButton: Start → save");
                     HandleSave();
                     break;
                 default:
-                    Log.Information("HandleButton: unhandled key {Key}", key);
+                    Log.Verbose("HandleButton: unhandled key {Key}", key);
                     break;
             }
         }
@@ -376,7 +383,7 @@ namespace XFiles.Controls
             }
             catch (Exception ex)
             {
-                Log.Warning("HandleLeftStick: moveMouse failed: {Error}", ex.Message);
+                Log.Warning("HandleLeftStick: moveMouse failed", ex);
             }
         }
 
@@ -392,13 +399,15 @@ namespace XFiles.Controls
                 var webViewOrigin = webViewToContent.TransformPoint(new Windows.Foundation.Point(0, 0));
                 float localX = (float)(pt.X - webViewOrigin.X);
                 float localY = (float)(pt.Y - webViewOrigin.Y);
+#if POINTER_DEBUG
                 Log.Verbose("PointerMoved: raw=({RawX:F1},{RawY:F1}) webOrigin=({Wx:F1},{Wy:F1}) local=({Lx:F1},{Ly:F1})",
                     pt.X, pt.Y, webViewOrigin.X, webViewOrigin.Y, localX, localY);
+#endif
                 InvokeJs($"editor.setTextCursorAtPoint({localX:F1},{localY:F1})");
             }
             catch (Exception ex)
             {
-                Log.Warning("OnCoreWindowPointerMoved failed: {Error}", ex.Message);
+                Log.Warning("OnCoreWindowPointerMoved failed", ex);
             }
         }
 
@@ -408,7 +417,7 @@ namespace XFiles.Controls
         {
             if (_isReadOnly || _isKeyboardVisible) return;
 
-            Log.Information("TextEditorOverlay: showing virtual keyboard");
+            Log.Debug("TextEditorOverlay: showing virtual keyboard");
             _isKeyboardVisible = true;
             _lastKeyboardText = "";
             KeyboardBridge.Text = "";
@@ -417,11 +426,11 @@ namespace XFiles.Controls
             try
             {
                 shown = InputPane.GetForCurrentView().TryShow();
-                Log.Information("TextEditorOverlay: InputPane.TryShow result={Result}", shown);
+                Log.Debug("TextEditorOverlay: InputPane.TryShow result={Result}", shown);
             }
             catch (Exception ex)
             {
-                Log.Warning("TextEditorOverlay: InputPane failed: {Error}", ex.Message);
+                Log.Warning("TextEditorOverlay: InputPane failed", ex);
             }
 
             if (shown)
@@ -446,12 +455,12 @@ namespace XFiles.Controls
             }
             catch (Exception ex)
             {
-                Log.Warning("TextEditorOverlay: HideVirtualKeyboard failed: {Error}", ex.Message);
+                Log.Warning("TextEditorOverlay: HideVirtualKeyboard failed", ex);
             }
 
             KeyboardBridge.Text = "";
 
-            Log.Information("TextEditorOverlay: virtual keyboard hidden");
+            Log.Debug("TextEditorOverlay: virtual keyboard hidden");
         }
 
         private void OnKeyboardBridgeTextChanged(object sender, TextChangedEventArgs e)
@@ -464,7 +473,7 @@ namespace XFiles.Controls
                 string newChars = currentText.Substring(_lastKeyboardText.Length);
                 string escaped = newChars.Replace("\\", "\\\\").Replace("'", "\\'").Replace("\n", "\\n").Replace("\r", "\\r");
                 _ = InvokeJs($"editor.insertText('{escaped}')");
-                Log.Information("TextEditorOverlay: keyboard input forwarded: {Chars}", newChars);
+                Log.Debug("TextEditorOverlay: keyboard input forwarded: {Chars}", newChars);
             }
             else if (currentText.Length < _lastKeyboardText.Length)
             {
@@ -513,12 +522,13 @@ namespace XFiles.Controls
             {
                 await InvokeJs("editor.setDirty(false)");
                 _lastDirtyState = false;
+                _dirtySuppressUntil = DateTime.Now.AddSeconds(2);
                 Log.Information("TextEditorOverlay: saved {File}", _fileName);
                 // Green badge + "Saved" status
-                DirtyBadge.Visibility = Visibility.Visible;
-                DirtyBadge.Fill = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x93, 0xC4, 0x3C));
                 StatusText.Text = "Saved";
-                StatusText.Foreground = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x93, 0xC4, 0x3C));
+                StatusText.Foreground = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x00, 0x00, 0x00));
+                StatusBadge.Background = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x93, 0xC4, 0x3C));
+                StatusBadge.Visibility = Visibility.Visible;
                 ShowToast("Saved");
             }
             else
@@ -532,13 +542,21 @@ namespace XFiles.Controls
 
         private async void OnDirtyPollTick(object sender, object e)
         {
-            if (Visibility != Visibility.Visible) { _dirtyPollTimer.Stop(); return; }
-            bool dirty = await InvokeJsBool("editor.isDirty()");
-            if (dirty != _lastDirtyState)
+            if (Visibility != Visibility.Visible || !_webViewReady) { return; }
+            if (DateTime.Now < _dirtySuppressUntil) { return; }
+            try
             {
-                Log.Information("TextEditorOverlay: dirty state changed → {Dirty}", dirty);
-                _lastDirtyState = dirty;
-                UpdateSidebarStatus(dirty);
+                bool dirty = await InvokeJsBool("editor.isDirty()");
+                if (dirty != _lastDirtyState)
+                {
+                    Log.Debug("TextEditorOverlay: dirty state changed → {Dirty}", dirty);
+                    _lastDirtyState = dirty;
+                    UpdateSidebarStatus(dirty);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("TextEditorOverlay: dirtyPoll failed", ex);
             }
         }
 
@@ -546,15 +564,15 @@ namespace XFiles.Controls
         {
             if (dirty)
             {
-                DirtyBadge.Visibility = Visibility.Visible;
-                DirtyBadge.Fill = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 0xF1, 0xC4, 0x0F));
                 StatusText.Text = "Modified";
-                StatusText.Foreground = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 0xE7, 0x4C, 0x3C));
+                StatusText.Foreground = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x00, 0x00, 0x00));
+                StatusBadge.Background = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 0xF1, 0xC4, 0x0F));
+                StatusBadge.Visibility = Visibility.Visible;
             }
             else
             {
-                DirtyBadge.Visibility = Visibility.Collapsed;
                 StatusText.Text = "";
+                StatusBadge.Visibility = Visibility.Collapsed;
             }
         }
 
@@ -595,22 +613,27 @@ namespace XFiles.Controls
 
         private Task<UnsavedDialogResult> ShowUnsavedDialog()
         {
-            Log.Information("TextEditorOverlay: ShowUnsavedDialog — showing dialog");
+            Log.Debug("TextEditorOverlay: ShowUnsavedDialog — showing dialog");
             _unsavedTcs = new TaskCompletionSource<UnsavedDialogResult>();
             _isUnsavedDialogOpen = true;
-            UnsavedDialog.Visibility = Visibility.Visible;
+            UnsavedOverlay.Visibility = Visibility.Visible;
             return _unsavedTcs.Task;
         }
 
         private void HideUnsavedDialog()
         {
             _isUnsavedDialogOpen = false;
-            UnsavedDialog.Visibility = Visibility.Collapsed;
+            UnsavedOverlay.Visibility = Visibility.Collapsed;
         }
+
+        private void OnUnsavedSaveClicked(object sender, RoutedEventArgs e) => HandleUnsavedDialogButton(VirtualKey.GamepadA);
+        private void OnUnsavedDiscardClicked(object sender, RoutedEventArgs e) => HandleUnsavedDialogButton(VirtualKey.GamepadX);
+        private void OnUnsavedCancelClicked(object sender, RoutedEventArgs e) => HandleUnsavedDialogButton(VirtualKey.GamepadB);
+        private void OnUnsavedOverlayTapped(object sender, TappedRoutedEventArgs e) => HandleUnsavedDialogButton(VirtualKey.GamepadB);
 
         private void HandleUnsavedDialogButton(VirtualKey key)
         {
-            Log.Information("TextEditorOverlay: HandleUnsavedDialogButton key={Key} tcsComplete={Complete}",
+            Log.Debug("TextEditorOverlay: HandleUnsavedDialogButton key={Key} tcsComplete={Complete}",
                 key, _unsavedTcs?.Task?.IsCompleted ?? true);
 
             if (_unsavedTcs == null || _unsavedTcs.Task.IsCompleted) return;
@@ -640,7 +663,7 @@ namespace XFiles.Controls
 
             // Show HTML mouse cursor
             await InvokeJs("editor.showMouse()");
-            Log.Information("TextEditorOverlay: HTML mouse cursor shown after WebView init");
+            Log.Debug("TextEditorOverlay: HTML mouse cursor shown after WebView init");
 
             // Give JS a moment to init, then configure and ensure cursor is positioned
             await Task.Delay(100);
@@ -649,7 +672,8 @@ namespace XFiles.Controls
             if (!string.IsNullOrEmpty(_pendingLanguage))
                 await InvokeJs($"editor.setLanguage('{_pendingLanguage}')");
             await InvokeJs("editor.updateBlockCursor()");
-            Log.Information("TextEditorOverlay: WebView initialized, focus released via visibility toggle");
+            _webViewReady = true;
+            Log.Debug("TextEditorOverlay: WebView initialized, focus released via visibility toggle");
         }
 
         private async Task InvokeJs(string script)
@@ -660,7 +684,7 @@ namespace XFiles.Controls
             }
             catch (Exception ex)
             {
-                Log.Warning("TextEditorOverlay.InvokeJs failed: {Error} — script: {Script}", ex.Message, script);
+                Log.Warning("TextEditorOverlay.InvokeJs failed — script: {Script}", ex, script);
             }
         }
 
@@ -672,14 +696,16 @@ namespace XFiles.Controls
             }
             catch (Exception ex)
             {
-                Log.Warning("TextEditorOverlay.InvokeJsStr failed: {Error}", ex.Message);
+                Log.Warning("TextEditorOverlay.InvokeJsStr failed", ex);
                 return "";
             }
         }
 
         private async Task<bool> InvokeJsBool(string script)
         {
-            string result = await InvokeJsStr(script);
+            // EdgeHTML InvokeScriptAsync returns empty string for JS booleans.
+            // Wrap to force explicit string return.
+            string result = await InvokeJsStr($"(function() {{ return ({script}) ? 'true' : 'false'; }})()");
             return result == "true";
         }
 
@@ -766,7 +792,7 @@ namespace XFiles.Controls
                     new Uri("ms-appx:///Assets/editor.js"));
                 _editorJs = await FileIO.ReadTextAsync(editorFile);
 
-                Log.Information("TextEditorOverlay: assets loaded — JS={JsLen}, CSS={CssLen}, Font={FontLen}, Editor={EditorLen}",
+                Log.Debug("TextEditorOverlay: assets loaded — JS={JsLen}, CSS={CssLen}, Font={FontLen}, Editor={EditorLen}",
                     _highlightJs.Length, _highlightCss.Length, _fontBase64.Length, _editorJs.Length);
             }
             catch (Exception ex)

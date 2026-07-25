@@ -111,7 +111,7 @@ namespace XFiles.FileSystem
             }
             catch (Exception ex)
             {
-                Log.Warning("EnumerateFilesRecursive: {Dir} error: {Error}", dir, ex.Message);
+                Log.Warning("EnumerateFilesRecursive: {Dir} error", ex, dir);
             }
             return files;
         }
@@ -198,7 +198,7 @@ namespace XFiles.FileSystem
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning("FileOperations.Copy exception: {Error}", ex.Message);
+                    Log.Warning("FileOperations.Copy exception", ex);
                     return OperationResult.Failed;
                 }
             });
@@ -225,7 +225,7 @@ namespace XFiles.FileSystem
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning("FileOperations.CopyDirectory exception: {Error}", ex.Message);
+                    Log.Warning("FileOperations.CopyDirectory exception", ex);
                     return OperationResult.Failed;
                 }
             });
@@ -278,7 +278,7 @@ namespace XFiles.FileSystem
             }
             catch (Exception ex)
             {
-                Log.Warning("FileOperations.CopyDirectoryRecursive: {Dir} error: {Error}", sourceDir, ex.Message);
+                Log.Warning("FileOperations.CopyDirectoryRecursive: {Dir} error", ex, sourceDir);
                 return OperationResult.Failed;
             }
 
@@ -321,7 +321,7 @@ namespace XFiles.FileSystem
                         Log.Warning("FileOperations.Move failed: error {Error}", err);
 
                         // Fallback: copy + delete (MoveFile fails across volumes)
-                        Log.Information("FileOperations.Move: trying copy+delete fallback");
+                        Log.Debug("FileOperations.Move: trying copy+delete fallback");
                         ok = CopyFileFromAppW(sourcePath, destPath, false);
                         if (!ok)
                         {
@@ -346,7 +346,7 @@ namespace XFiles.FileSystem
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning("FileOperations.Move exception: {Error}", ex.Message);
+                    Log.Warning("FileOperations.Move exception", ex);
                     return OperationResult.Failed;
                 }
             });
@@ -386,7 +386,7 @@ namespace XFiles.FileSystem
                     }
 
                     // Fallback: move each file individually with progress
-                    Log.Information("FileOperations.MoveDirectory: native move failed, using per-file fallback");
+                    Log.Debug("FileOperations.MoveDirectory: native move failed, using per-file fallback");
                     CreateDirectoryFromAppW(destPath, IntPtr.Zero);
 
                     var result = MoveDirectoryRecursive(sourceDir, destPath, progress, token);
@@ -405,7 +405,7 @@ namespace XFiles.FileSystem
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning("FileOperations.MoveDirectory exception: {Error}", ex.Message);
+                    Log.Warning("FileOperations.MoveDirectory exception", ex);
                     return OperationResult.Failed;
                 }
             });
@@ -471,7 +471,7 @@ namespace XFiles.FileSystem
             }
             catch (Exception ex)
             {
-                Log.Warning("FileOperations.MoveDirectoryRecursive: {Dir} error: {Error}", sourceDir, ex.Message);
+                Log.Warning("FileOperations.MoveDirectoryRecursive: {Dir} error", ex, sourceDir);
                 return OperationResult.Failed;
             }
 
@@ -504,7 +504,7 @@ namespace XFiles.FileSystem
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning("FileOperations.Rename exception: {Error}", ex.Message);
+                    Log.Warning("FileOperations.Rename exception", ex);
                     return OperationResult.Failed;
                 }
             });
@@ -547,7 +547,7 @@ namespace XFiles.FileSystem
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning("FileOperations.Delete exception: {Error}", ex.Message);
+                    Log.Warning("FileOperations.Delete exception", ex);
                     return OperationResult.Failed;
                 }
             });
@@ -596,7 +596,7 @@ namespace XFiles.FileSystem
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning("FileOperations.DeleteDirectory exception: {Error}", ex.Message);
+                    Log.Warning("FileOperations.DeleteDirectory exception", ex);
                     return OperationResult.Failed;
                 }
             });
@@ -627,7 +627,7 @@ namespace XFiles.FileSystem
             }
             catch (Exception ex)
             {
-                Log.Warning("RemoveDirectoriesRecursive: {Dir} error: {Error}", dir, ex.Message);
+                Log.Warning("RemoveDirectoriesRecursive: {Dir} error", ex, dir);
             }
         }
 
@@ -668,7 +668,7 @@ namespace XFiles.FileSystem
             }
             catch (Exception ex)
             {
-                Log.Warning("GetSingleRootFolder error: {Error}", ex.Message);
+                Log.Warning("GetSingleRootFolder error", ex);
                 return null;
             }
         }
@@ -730,13 +730,13 @@ namespace XFiles.FileSystem
                                         switch (decision)
                                         {
                                             case 0: // Skip
-                                                Log.Information("Extract: skipping {File}", entry.Key);
+                                                Log.Debug("Extract: skipping {File}", entry.Key);
                                                 continue;
                                             case 1: // Overwrite this one
-                                                Log.Information("Extract: overwriting {File}", entry.Key);
+                                                Log.Debug("Extract: overwriting {File}", entry.Key);
                                                 break;
                                             case 2: // Overwrite all remaining
-                                                Log.Information("Extract: overwrite all remaining");
+                                                Log.Debug("Extract: overwrite all remaining");
                                                 overwriteAll = true;
                                                 break;
                                         }
@@ -785,7 +785,7 @@ namespace XFiles.FileSystem
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning("FileOperations.Extract exception: {Error}", ex.Message);
+                    Log.Warning("FileOperations.Extract exception", ex);
                     return OperationResult.Failed;
                 }
             });
@@ -836,7 +836,7 @@ namespace XFiles.FileSystem
                                 int decision = await conflictCallback(fileName);
                                 if (decision == 0)
                                 {
-                                    Log.Information("ExtractFile: skipping {File}", fileName);
+                                    Log.Debug("ExtractFile: skipping {File}", fileName);
                                     return OperationResult.Success;
                                 }
                             }
@@ -870,7 +870,7 @@ namespace XFiles.FileSystem
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning("FileOperations.ExtractFile exception: {Error}", ex.Message);
+                    Log.Warning("FileOperations.ExtractFile exception", ex);
                     return OperationResult.Failed;
                 }
             });
@@ -1001,7 +1001,7 @@ namespace XFiles.FileSystem
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning("FileOperations.CreateFolder exception: {Error}", ex.Message);
+                    Log.Warning("FileOperations.CreateFolder exception", ex);
                     return OperationResult.Failed;
                 }
             });
@@ -1094,7 +1094,7 @@ namespace XFiles.FileSystem
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning("FileOperations.CreateZip exception: {Error}", ex.Message);
+                    Log.Warning("FileOperations.CreateZip exception", ex);
                     return OperationResult.Failed;
                 }
             });
@@ -1149,7 +1149,7 @@ namespace XFiles.FileSystem
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning("FileOperations.ListRecursiveAsync error: {Error}", ex.Message);
+                    Log.Warning("FileOperations.ListRecursiveAsync error", ex);
                 }
 
                 return (entries, folderCount);
@@ -1186,7 +1186,7 @@ namespace XFiles.FileSystem
             }
             catch (Exception ex)
             {
-                Log.Warning("FileOperations.ListDirectoryRecursive: {Dir} error: {Error}", dir, ex.Message);
+                Log.Warning("FileOperations.ListDirectoryRecursive: {Dir} error", ex, dir);
             }
         }
     }

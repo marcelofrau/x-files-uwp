@@ -11,6 +11,7 @@ var editor = (function () {
     var _dirty = false;
     var _wordWrap = false;
     var _highlightEnabled = true;
+    var _MOUSE_DEBUG = false;
     var _language = '';
     var _highlightTimeout = null;
     var _undoStack = [];
@@ -20,6 +21,7 @@ var editor = (function () {
     var _cursorBlinkInterval = null;
     var _cursorVisible = true;
     var _charWidth = 0;
+    var currentLineEl = null;
 
     // ── Debug logging ─────────────────────────────────────────
     var _logBuffer = [];
@@ -68,6 +70,12 @@ var editor = (function () {
         editorEl.style.position = 'relative';
         editorEl.appendChild(blockCursorEl);
 
+        // Current line highlight (subtle full-width bar)
+        currentLineEl = document.createElement('div');
+        currentLineEl.id = 'current-line';
+        currentLineEl.style.cssText = 'position:absolute;left:0;right:0;background:rgba(147,196,60,0.12);pointer-events:none;z-index:1;display:none;';
+        editorEl.appendChild(currentLineEl);
+
         // Measure actual char width for block cursor
         var measure = document.createElement('span');
         measure.style.cssText = 'font:13px Inconsolata,Consolas,Courier New,monospace;position:absolute;visibility:hidden;white-space:pre;';
@@ -93,8 +101,11 @@ var editor = (function () {
         startCursorBlink();
 
         // Normalize EdgeHTML <div> → \n on every DOM mutation
-        var observer = new MutationObserver(function () {
+        var observer = new MutationObserver(function (mutations) {
+            _logBuffer.push('[observer] firing mutations=' + mutations.length + ' posBefore=' + getCursorPosition());
             normalizeContent();
+            var posAfter = getCursorPosition();
+            _logBuffer.push('[observer] done posAfter=' + posAfter);
             updateLineNumbers();
         });
         observer.observe(codeEl, { childList: true, characterData: true, subtree: true });
@@ -108,6 +119,7 @@ var editor = (function () {
 
         // Track dirty state on input (listen on contentEditable div, not <code>)
         editorEl.addEventListener('input', function () {
+            _logBuffer.push('[input-event] pos=' + getCursorPosition() + ' dirty=' + _dirty);
             _dirty = true;
             pushUndoState();
             scheduleHighlight();
@@ -157,7 +169,7 @@ var editor = (function () {
             if (blockCursorEl) {
                 blockCursorEl.style.opacity = _cursorVisible ? '1' : '0';
             }
-        }, 530);
+        }, 300);
     }
 
     function updateBlockCursor() {
@@ -197,6 +209,12 @@ var editor = (function () {
             blockCursorEl.style.display = 'block';
             _cursorVisible = true;
             blockCursorEl.style.opacity = '1';
+            // Current line highlight
+            if (currentLineEl) {
+                currentLineEl.style.top = top + 'px';
+                currentLineEl.style.height = lineHeight + 'px';
+                currentLineEl.style.display = 'block';
+            }
             return;
         }
 
@@ -214,6 +232,13 @@ var editor = (function () {
 
         _cursorVisible = true;
         blockCursorEl.style.opacity = '1';
+
+        // Current line highlight
+        if (currentLineEl) {
+            currentLineEl.style.top = top + 'px';
+            currentLineEl.style.height = rect.height + 'px';
+            currentLineEl.style.display = 'block';
+        }
     }
 
     // ── Content ──────────────────────────────────────────────
@@ -242,8 +267,12 @@ var editor = (function () {
     }
 
     function insertText(text) {
+        var posBefore = getCursorPosition();
+        _logBuffer.push('[insertText] BEFORE: pos=' + posBefore + ' text="' + text + '" textLen=' + getText().length);
         _dirty = true;
         document.execCommand('insertText', false, text);
+        var posAfter = getCursorPosition();
+        _logBuffer.push('[insertText] AFTER:  pos=' + posAfter + ' delta=' + (posAfter - posBefore));
     }
 
     function deleteSelection() {
@@ -254,18 +283,30 @@ var editor = (function () {
     }
 
     function backspace() {
-        _dbg('backspace-before');
+        var posBefore = getCursorPosition();
         var sel = window.getSelection();
+        var collapsed = sel ? sel.isCollapsed : 'no-sel';
+        var containerName = (sel && sel.rangeCount > 0) ? sel.getRangeAt(0).startContainer.nodeName : 'none';
+        var containerOffset = (sel && sel.rangeCount > 0) ? sel.getRangeAt(0).startOffset : -1;
+        _logBuffer.push('[backspace] BEFORE: pos=' + posBefore + ' collapsed=' + collapsed +
+            ' container=' + containerName + ' offset=' + containerOffset + ' textLen=' + getText().length);
+
         if (sel && !sel.isCollapsed) {
             deleteSelection();
             _dirty = true;
-            _dbg('backspace-selDel');
+            _logBuffer.push('[backspace] deleted selection, posAfter=' + getCursorPosition());
             return;
         }
         // Use execCommand for undo support
         _dirty = true;
         document.execCommand('delete', false, null);
-        _dbg('backspace-after');
+
+        var posAfter = getCursorPosition();
+        var sel2 = window.getSelection();
+        var containerAfter = (sel2 && sel2.rangeCount > 0) ? sel2.getRangeAt(0).startContainer.nodeName : 'none';
+        var containerOffsetAfter = (sel2 && sel2.rangeCount > 0) ? sel2.getRangeAt(0).startOffset : -1;
+        _logBuffer.push('[backspace] AFTER:  pos=' + posAfter + ' delta=' + (posAfter - posBefore) +
+            ' container=' + containerAfter + ' offset=' + containerOffsetAfter);
     }
 
     function deleteChar() {
@@ -278,12 +319,13 @@ var editor = (function () {
     }
 
     function insertNewline() {
-        _dbg('newline-before');
         _dirty = true;
-        // Get current line indent for auto-indent
         var indent = getCurrentLineIndent();
+        var posBefore = getCursorPosition();
+        _logBuffer.push('[newline] BEFORE: pos=' + posBefore + ' indent="' + indent + '" textLen=' + getText().length);
         document.execCommand('insertText', false, '\n' + indent);
-        _dbg('newline-after');
+        var posAfter = getCursorPosition();
+        _logBuffer.push('[newline] AFTER:  pos=' + posAfter + ' delta=' + (posAfter - posBefore));
     }
 
     function getCurrentLineIndent() {
@@ -686,11 +728,18 @@ var editor = (function () {
 
     function refreshHighlight() {
         if (!_highlightEnabled || !codeEl || typeof hljs === 'undefined') return;
+        // hljs.highlightBlock destroys the browser selection — save and restore
+        var savedPos = getCursorPosition();
         try {
             hljs.highlightBlock(codeEl);
         } catch (e) {
             // Highlight failed — non-critical
         }
+        // Restore cursor after highlight rewrites the DOM
+        if (savedPos >= 0) {
+            setCursorPosition(savedPos);
+        }
+        _logBuffer.push('[highlight] done savedPos=' + savedPos + ' restoredPos=' + getCursorPosition());
     }
 
     function setHighlightEnabled(enabled) {
@@ -786,6 +835,20 @@ var editor = (function () {
         if (!codeEl) return;
         // EdgeHTML inserts <div> for Enter — convert to text nodes with \n
         var divs = codeEl.querySelectorAll('div');
+        if (divs.length === 0) return;
+
+        _logBuffer.push('[normalize] found ' + divs.length + ' <div> elements');
+
+        // Save selection state before DOM surgery
+        var sel = window.getSelection();
+        var savedOffset = -1;
+        if (sel && sel.rangeCount > 0) {
+            savedOffset = getCursorPosition();
+            _logBuffer.push('[normalize] sel BEFORE: offset=' + savedOffset +
+                ' container=' + sel.getRangeAt(0).startContainer.nodeName +
+                ' nodeVal=' + (sel.getRangeAt(0).startContainer.textContent || '').substring(0, 30));
+        }
+
         for (var i = 0; i < divs.length; i++) {
             var div = divs[i];
             var parent = div.parentNode;
@@ -800,6 +863,16 @@ var editor = (function () {
                 parent.insertBefore(div.firstChild, div);
             }
             parent.removeChild(div);
+        }
+
+        // Restore selection if it was valid before
+        if (savedOffset >= 0) {
+            var newPos = getCursorPosition();
+            _logBuffer.push('[normalize] sel AFTER: posBefore=' + savedOffset + ' posAfter=' + newPos);
+            if (newPos !== savedOffset) {
+                _logBuffer.push('[normalize] MISMATCH — restoring cursor to ' + savedOffset);
+                setCursorPosition(savedOffset);
+            }
         }
     }
 
@@ -856,29 +929,29 @@ var editor = (function () {
             }
         }
         if (!range) {
-            _logBuffer.push('[ptr-range] null at (' + x + ',' + y + ')');
+            if (_MOUSE_DEBUG) _logBuffer.push('[ptr-range] null at (' + x + ',' + y + ')');
             return -1;
         }
 
         // Only accept positions inside #code (not line-numbers or other elements)
         if (!codeEl.contains(range.startContainer)) {
-            _logBuffer.push('[ptr-range] outside codeEl at (' + x + ',' + y + ') container=' + range.startContainer.nodeName);
+            if (_MOUSE_DEBUG) _logBuffer.push('[ptr-range] outside codeEl at (' + x + ',' + y + ') container=' + range.startContainer.nodeName);
             return -1;
         }
 
         // Calculate offset from range — use countCharsUpTo for consistency with setCursorPosition
         var result = countCharsUpTo(range.startContainer, range.startOffset);
-        _logBuffer.push('[ptr-range] ok (' + x + ',' + y + ') offset=' + result);
+        if (_MOUSE_DEBUG) _logBuffer.push('[ptr-range] ok (' + x + ',' + y + ') offset=' + result);
         return result;
     }
 
     function setTextCursorAtPoint(viewportX, viewportY) {
-        _dbg('ptr-before');
+        if (_MOUSE_DEBUG) _dbg('ptr-before');
         var pos = getTextPositionAtPoint(viewportX, viewportY);
         if (pos >= 0) {
             setCursorPosition(pos);
         }
-        _dbg('ptr-after', 'ptr=(' + viewportX + ',' + viewportY + ') pos=' + pos);
+        if (_MOUSE_DEBUG) _dbg('ptr-after', 'ptr=(' + viewportX + ',' + viewportY + ') pos=' + pos);
     }
 
     // ── Mouse cursor (LStick on Xbox) ────────────────────────

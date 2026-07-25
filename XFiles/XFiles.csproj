@@ -35,6 +35,14 @@
     <DebugSymbols>true</DebugSymbols>
     <OutputPath>bin\x64\Debug\</OutputPath>
     <DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_UWP;XRAY_ENABLED</DefineConstants>
+    <!-- Debug flags: append to DefineConstants above to enable verbose logging for specific subsystems
+         GAMEPAD_POLL_DEBUG  — GamepadInputService polling (sticks, dpad state, button repeats)
+         VUMETER_DEBUG      — VuMeterBar per-tick audio sample levels
+         AUDIO_LEVEL_DEBUG  — AudioLevelService per-quantum processing data
+         POINTER_DEBUG      — TextEditorOverlay pointer/mouse coordinates
+         EDITOR_JS_DEBUG    — TextEditorOverlay JS log lines pulled from editor
+         ID3_PARSE_DEBUG    — Id3Tag per-frame parsing details
+    -->
     <NoWarn>;2008</NoWarn>
     <DebugType>full</DebugType>
     <PlatformTarget>x64</PlatformTarget>

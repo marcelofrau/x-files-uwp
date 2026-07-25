@@ -85,7 +85,7 @@ namespace XFiles.Controls
             _currentFilePath = filePath;
             string ext = Path.GetExtension(filePath);
             _isAudioMode = FilePreviewService.IsAudioFile(ext);
-            Log.Information("MediaPreviewControl: ext={Ext} isAudio={IsAudio}", ext, _isAudioMode);
+            Log.Debug("MediaPreviewControl: ext={Ext} isAudio={IsAudio}", ext, _isAudioMode);
 
             if (_isAudioMode)
             {
@@ -116,7 +116,7 @@ namespace XFiles.Controls
         {
             if (string.IsNullOrEmpty(filePath)) return;
             Stop();
-            Log.Information("MediaPreviewControl: showing placeholder for {Path}", filePath);
+            Log.Debug("MediaPreviewControl: showing placeholder for {Path}", filePath);
 
             _isAudioMode = true;
 
@@ -143,7 +143,7 @@ namespace XFiles.Controls
             }
             catch (Exception ex)
             {
-                Log.Warning("Failed to start audio playback: {Error}", ex.Message);
+                Log.Warning("Failed to start audio playback", ex);
                 _isPlaying = false;
                 _progressTimer.Stop();
                 UpdatePlayPauseIcon();
@@ -252,7 +252,7 @@ namespace XFiles.Controls
 
         private async Task LoadMetadataAsync(string filePath)
         {
-            Log.Information("Metadata: starting async load for {Path}", filePath);
+            Log.Debug("Metadata: starting async load for {Path}", filePath);
             _metadataCts?.Cancel();
             var cts = new CancellationTokenSource();
             _metadataCts = cts;
@@ -261,7 +261,7 @@ namespace XFiles.Controls
                 _metadataGuesser.SetInternetAvailable(true);
                 var match = await _metadataGuesser.ResolveAsync(filePath, cts.Token);
                 var tag = match?.Metadata;
-                Log.Information("Metadata: source={Source} score={Score:F2} title={Title} artist={Artist} album={Album}",
+                Log.Debug("Metadata: source={Source} score={Score:F2} title={Title} artist={Artist} album={Album}",
                     match?.Source, match?.Confidence, tag?.Title, tag?.Artist, tag?.Album);
 
                 if (cts.IsCancellationRequested || _currentFilePath != filePath)
@@ -291,12 +291,12 @@ namespace XFiles.Controls
                     AlbumText.Visibility = Visibility.Visible;
                 }
 
-                Log.Information("Metadata: applied title={Title} artist={Artist} album={Album} art={HasArt}",
+                Log.Debug("Metadata: applied title={Title} artist={Artist} album={Album} art={HasArt}",
                     tag?.Title, tag?.Artist, tag?.Album, hasArt);
             }
             catch (Exception ex)
             {
-                Log.Warning("Metadata: failed to load for {Path}: {Error}", filePath, ex.Message);
+                Log.Warning("Metadata: failed to load for {Path}", filePath, ex);
             }
         }
 
@@ -315,7 +315,7 @@ namespace XFiles.Controls
             }
             catch (Exception ex)
             {
-                Log.Warning("Failed to load album art: {Error}", ex.Message);
+                Log.Warning("Failed to load album art", ex);
                 AlbumArtBorder.Visibility = Visibility.Collapsed;
                 DefaultArtPanel.Visibility = Visibility.Visible;
             }
@@ -426,7 +426,7 @@ namespace XFiles.Controls
 
             _currentAudioIndex = (int)_currentPlaybackItem.AudioTracks.SelectedIndex;
 
-            Log.Information("EnumeratePreviewTracks: {SubCount} subtitle, {AudioCount} audio",
+            Log.Debug("EnumeratePreviewTracks: {SubCount} subtitle, {AudioCount} audio",
                 _currentSubtitleTracks.Count, _currentAudioTracks.Count);
         }
 
