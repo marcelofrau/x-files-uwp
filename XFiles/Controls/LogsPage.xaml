@@ -1,0 +1,191 @@
+<UserControl
+    x:Class="XFiles.Controls.LogsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Visibility="Collapsed">
+
+    <Grid>
+        <Grid x:Name="Overlay" Background="#FF0D1117">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="0.15*" />
+            <ColumnDefinition Width="0.85*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- ═══ Left Sidebar (15%) ═══ -->
+        <Border Grid.Column="0"
+                Background="#CC0D1117"
+                BorderBrush="#22FFFFFF"
+                BorderThickness="0,0,1,0">
+            <Grid Margin="12,16">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="12" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!-- Log icon -->
+                <Image Grid.Row="0"
+                       Source="ms-appx:///Assets/Views/StartMenu/startmenu-logs-48.png"
+                       Width="64" Height="64"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center" />
+
+                <!-- Log file name -->
+                <TextBlock x:Name="LogInfoText"
+                           Grid.Row="2"
+                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                           FontSize="13"
+                           Foreground="#D4D4D4"
+                           TextWrapping="Wrap"
+                           TextAlignment="Center"
+                           Text="" />
+
+                <!-- Log level -->
+                <TextBlock x:Name="LogLevelText"
+                           Grid.Row="3"
+                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                           FontSize="11"
+                           Foreground="#666666"
+                           TextAlignment="Center"
+                           Text="" />
+
+                <!-- Status badge -->
+                <Border x:Name="StatusBadge"
+                        Grid.Row="5"
+                        CornerRadius="4"
+                        Padding="10,2"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Bottom"
+                        Visibility="Collapsed">
+                    <TextBlock x:Name="StatusText"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="12"
+                               LineHeight="16"
+                               Margin="0,3,0,0"
+                               Foreground="#000000"
+                               TextAlignment="Center"
+                               VerticalAlignment="Center"
+                               Text="" />
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- ═══ Right: Log Content Area (85%) ═══ -->
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- Loading state -->
+            <TextBlock x:Name="LoadingText"
+                       Grid.Row="0"
+                       Text="Loading logs..."
+                       Foreground="#666666"
+                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                       FontSize="13"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center" />
+
+            <!-- Log content -->
+            <ScrollViewer x:Name="LogScroll"
+                          Grid.Row="0"
+                          Padding="12,8"
+                          HorizontalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Auto">
+                <TextBlock x:Name="LogText"
+                           FontFamily="Consolas"
+                           FontSize="11"
+                           Foreground="#999999"
+                           TextWrapping="NoWrap"
+                           IsTextSelectionEnabled="True" />
+            </ScrollViewer>
+
+            <!-- Upload progress panel (hidden by default) -->
+            <Border x:Name="UploadProgressPanel"
+                    Grid.Row="0"
+                    VerticalAlignment="Bottom"
+                    Background="#E60D1117"
+                    Padding="16,10"
+                    Visibility="Collapsed">
+                <StackPanel>
+                    <TextBlock x:Name="UploadStatusText"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="12"
+                               Foreground="{StaticResource XFilesAccentBrush}"
+                               Margin="0,0,0,6"
+                               Text="" />
+                    <ProgressBar x:Name="UploadProgressBar"
+                                 Minimum="0" Maximum="100"
+                                 Value="0"
+                                 Height="6"
+                                 IsIndeterminate="True"
+                                 Foreground="{StaticResource XFilesAccentBrush}"
+                                 Background="#2A2D33" />
+                </StackPanel>
+            </Border>
+
+            <!-- Footer legend -->
+            <Border x:Name="FooterBar"
+                    Grid.Row="1"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Bottom"
+                    Background="#CC0D1117"
+                    Padding="16,8">
+                <StackPanel Orientation="Horizontal"
+                            HorizontalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,12,0">
+                        <Image Source="ms-appx:///Assets/GamepadButtons/abxy/b.png"
+                               Width="16" Height="16" Margin="0,0,4,0"
+                               VerticalAlignment="Center" />
+                        <TextBlock Text="Close"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                   FontSize="11" Foreground="#80FFFFFF"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,12,0">
+                        <Image Source="ms-appx:///Assets/GamepadButtons/abxy/y.png"
+                               Width="16" Height="16" Margin="0,0,4,0"
+                               VerticalAlignment="Center" />
+                        <TextBlock Text="Share Log"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                   FontSize="11" Foreground="#80FFFFFF"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                    <TextBlock Text="|"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="11" Foreground="#40FFFFFF"
+                               Margin="0,0,12,0"
+                               VerticalAlignment="Center" />
+                    <StackPanel Orientation="Horizontal" Margin="0,0,12,0">
+                        <Image Source="ms-appx:///Assets/GamepadButtons/dpads/dpad-all-directions.png"
+                               Width="18" Height="18" Margin="0,0,4,0"
+                               VerticalAlignment="Center" />
+                        <TextBlock Text="Navigate"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                   FontSize="11" Foreground="#80FFFFFF"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,12,0">
+                        <Image Source="ms-appx:///Assets/GamepadButtons/analog/button_xbox_analog_r.png"
+                               Width="18" Height="18" Margin="0,0,4,0"
+                               VerticalAlignment="Center" />
+                        <TextBlock Text="Scroll"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                   FontSize="11" Foreground="#80FFFFFF"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                    <TextBlock x:Name="FooterStatusText"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="11" Foreground="#60FFFFFF"
+                               VerticalAlignment="Center"
+                               Text="" />
+                </StackPanel>
+            </Border>
+        </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

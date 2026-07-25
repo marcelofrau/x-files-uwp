@@ -90,6 +90,9 @@
     <PackageReference Include="SQLitePCLRaw.bundle_green">
       <Version>2.1.10</Version>
     </PackageReference>
+    <PackageReference Include="ZXing.Net">
+      <Version>0.16.9</Version>
+    </PackageReference>
   </ItemGroup>
   <ItemGroup Condition="Exists('..\..\XrayLib\XrayLib\XrayLib.csproj')">
     <ProjectReference Include="..\..\XrayLib\XrayLib\XrayLib.csproj">
@@ -173,6 +176,12 @@
     </Compile>
     <Compile Include="Controls\SettingsPage.xaml.cs">
       <DependentUpon>SettingsPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\LogsPage.xaml.cs">
+      <DependentUpon>LogsPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\ShareDialog.xaml.cs">
+      <DependentUpon>ShareDialog.xaml</DependentUpon>
     </Compile>
     <Compile Include="Controls\OperationProgressDialog.xaml.cs">
       <DependentUpon>OperationProgressDialog.xaml</DependentUpon>
@@ -297,6 +306,14 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Controls\SettingsPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\LogsPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\ShareDialog.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
@@ -449,6 +466,7 @@
     <Content Include="Assets\Views\StartMenu\startmenu-startup-48.png" />
     <Content Include="Assets\Views\StartMenu\startmenu-about-48.png" />
     <Content Include="Assets\Views\StartMenu\startmenu-close-48.png" />
+    <Content Include="Assets\Views\StartMenu\startmenu-logs-48.png" />
     <Content Include="Assets\Views\MillerColumnsPage\osd\osd-play-48.png" />
     <Content Include="Assets\Views\MillerColumnsPage\osd\osd-pause-48.png" />
     <Content Include="Assets\Views\MillerColumnsPage\osd\osd-next-48.png" />
@@ -509,6 +527,7 @@
   </ItemGroup>
   <PropertyGroup>
     <PreBuildEvent>powershell -ExecutionPolicy Bypass -NoProfile -File "$(SolutionDir)tools\increment-version.ps1"</PreBuildEvent>
+    <PostBuildEvent>powershell -ExecutionPolicy Bypass -NoProfile -Command "$pkgDir = '$(SolutionDir)AppPackages'; if (Test-Path $pkgDir) { $dirs = Get-ChildItem $pkgDir -Directory | Sort-Object Name; if ($dirs.Count -gt 3) { $toDelete = $dirs | Select-Object -First ($dirs.Count - 3); $toDelete | Remove-Item -Recurse -Force; Write-Host '[cleanup] Removed' $toDelete.Count 'old package(s), kept last 3' } }"</PostBuildEvent>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(VisualStudioVersion)' == '' or '$(VisualStudioVersion)' &lt; '14.0' ">
     <VisualStudioVersion>14.0</VisualStudioVersion>

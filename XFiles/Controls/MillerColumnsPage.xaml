@@ -1117,6 +1117,10 @@
         <!-- Start menu -->
         <controls:StartMenu x:Name="StartMenuControl" />
 
+        <!-- Logs viewer overlay -->
+        <controls:LogsPage x:Name="LogsPageControl" />
+        <controls:ShareDialog x:Name="ShareDialogControl" />
+
         <!-- Video track menu (subtitles + audio) -->
         <controls:VideoTrackMenu x:Name="VideoTrackMenuControl" />
 

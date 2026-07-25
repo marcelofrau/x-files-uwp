@@ -13,6 +13,7 @@ namespace XFiles.Controls
     {
         Settings,
         About,
+        ViewLogs,
         CloseApplication
     }
 
@@ -54,6 +55,12 @@ namespace XFiles.Controls
                     Item = StartMenuItem.About,
                     Label = "About",
                     IconPath = IconBase + "startmenu-about-48.png"
+                },
+                new MenuItem
+                {
+                    Item = StartMenuItem.ViewLogs,
+                    Label = "View Logs",
+                    IconPath = IconBase + "startmenu-logs-48.png"
                 },
                 new MenuItem
                 {
