@@ -45,11 +45,6 @@ namespace XFiles.Controls
 
         private static readonly string IconBase = "ms-appx:///Assets/Views/FileActionSheet/";
 
-        private static readonly string ImageIcon = "ctx-image-120.png";
-        private static readonly string VideoIcon = "ctx-video-120.png";
-        private static readonly string AudioIcon = "ctx-audio-120.png";
-        private static readonly string TextIcon  = "ctx-text-120.png";
-        private static readonly string ArchiveIcon = "ctx-archive-120.png";
         private static readonly string DriveIcon = "ctx-drive-120.png";
         private static readonly string GenericIcon = "ctx-generic-120.png";
 
@@ -62,21 +57,73 @@ namespace XFiles.Controls
         private static readonly string ActionCreateFolder = "fileactionsheet-createfolder-48.png";
         private static readonly string ActionCreateZip = "fileactionsheet-createzip-48.png";
         private static readonly string ActionRefresh = "fileactionsheet-refresh-48.png";
+        private static readonly string ActionPaste = "fileactionsheet-paste-48.png";
         private static readonly string ActionEdit = "ctx-text-120.png";
 
-        private static readonly HashSet<string> ImageExts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        private static readonly Dictionary<string, string> ExtIconMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            ".png",".jpg",".jpeg",".gif",".bmp",".tiff",".tif",".webp",".svg"
-        };
-
-        private static readonly HashSet<string> VideoExts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ".mp4",".mkv",".avi",".wmv",".mov",".webm",".flv",".m4v"
-        };
-
-        private static readonly HashSet<string> AudioExts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ".mp3",".flac",".ogg",".wav",".aac",".m4a",".wma"
+            // Text / Code
+            [".txt"]  = "ctx-text-120.png",
+            [".log"]  = "ctx-text-120.png",
+            [".md"]   = "ctx-markdown-120.png",
+            [".json"] = "ctx-json-120.png",
+            [".xml"]  = "ctx-xml-120.png",
+            [".yaml"] = "ctx-yaml-120.png",
+            [".yml"]  = "ctx-yaml-120.png",
+            [".py"]   = "ctx-python-120.png",
+            [".js"]   = "ctx-javascript-120.png",
+            [".ts"]   = "ctx-typescript-120.png",
+            [".c"]    = "ctx-c-120.png",
+            [".cpp"]  = "ctx-cpp-120.png",
+            [".cc"]   = "ctx-cpp-120.png",
+            [".h"]    = "ctx-c-120.png",
+            [".hpp"]  = "ctx-cpp-120.png",
+            [".cs"]   = "ctx-csharp-120.png",
+            [".java"] = "ctx-java-120.png",
+            [".go"]   = "ctx-go-120.png",
+            [".rs"]   = "ctx-rust-120.png",
+            [".rb"]   = "ctx-ruby-120.png",
+            [".lua"]  = "ctx-lua-120.png",
+            [".sh"]   = "ctx-shell-120.png",
+            [".bat"]  = "ctx-shell-120.png",
+            [".ps1"]  = "ctx-shell-120.png",
+            [".html"] = "ctx-html-120.png",
+            [".htm"]  = "ctx-html-120.png",
+            [".css"]  = "ctx-css-120.png",
+            // PDF
+            [".pdf"]  = "ctx-pdf-120.png",
+            // Images
+            [".png"]  = "ctx-png-120.png",
+            [".jpg"]  = "ctx-jpeg-120.png",
+            [".jpeg"] = "ctx-jpeg-120.png",
+            [".gif"]  = "ctx-gif-120.png",
+            [".bmp"]  = "ctx-bmp-120.png",
+            [".svg"]  = "ctx-svg-120.png",
+            [".tiff"] = "ctx-tiff-120.png",
+            [".tif"]  = "ctx-tiff-120.png",
+            [".webp"] = "ctx-webp-120.png",
+            // Audio
+            [".mp3"]  = "ctx-mp3-120.png",
+            [".flac"] = "ctx-flac-120.png",
+            [".ogg"]  = "ctx-ogg-120.png",
+            [".wav"]  = "ctx-wav-120.png",
+            [".m4a"]  = "ctx-m4a-120.png",
+            [".aac"]  = "ctx-aac-120.png",
+            [".wma"]  = "ctx-mp3-120.png",
+            [".opus"] = "ctx-opus-120.png",
+            // Video
+            [".mp4"]  = "ctx-mp4-120.png",
+            [".mkv"]  = "ctx-mkv-120.png",
+            [".avi"]  = "ctx-avi-120.png",
+            [".webm"] = "ctx-webm-120.png",
+            [".flv"]  = "ctx-flv-120.png",
+            [".wmv"]  = "ctx-wmv-120.png",
+            [".mov"]  = "ctx-mov-120.png",
+            [".m4v"]  = "ctx-mp4-120.png",
+            // Archives
+            [".zip"]  = "ctx-zip-120.png",
+            [".7z"]   = "ctx-7z-120.png",
+            [".rar"]  = "ctx-rar-120.png",
         };
 
         internal static readonly HashSet<string> TextExts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -84,11 +131,6 @@ namespace XFiles.Controls
             ".txt",".log",".out",".err",".md",".json",".xml",".cs",".js",".ts",
             ".py",".c",".cpp",".h",".java",".csproj",".sln",".yaml",".yml",
             ".ini",".cfg",".conf",".bat",".sh",".ps1",".cmd",".css",".html",".htm"
-        };
-
-        private static readonly HashSet<string> ArchiveExts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ".zip",".7z",".rar",".tar",".gz",".bz2",".xz"
         };
 
         private static string ResolveContextFileIcon(FileEntry entry)
@@ -99,17 +141,12 @@ namespace XFiles.Controls
                 var color = EntryViewModel.FolderColor;
                 return IconBase + $"ctx-folder-{color}-120.png";
             }
-            if (entry.IsArchive) return IconBase + ArchiveIcon;
+            if (entry.IsArchive) return IconBase + "ctx-archive-120.png";
 
             var ext = System.IO.Path.GetExtension(entry.Name);
-            if (!string.IsNullOrEmpty(ext))
-            {
-                if (ImageExts.Contains(ext)) return IconBase + ImageIcon;
-                if (VideoExts.Contains(ext)) return IconBase + VideoIcon;
-                if (AudioExts.Contains(ext)) return IconBase + AudioIcon;
-                if (TextExts.Contains(ext))  return IconBase + TextIcon;
-                if (ArchiveExts.Contains(ext)) return IconBase + ArchiveIcon;
-            }
+            if (!string.IsNullOrEmpty(ext) && ExtIconMap.TryGetValue(ext, out var icon))
+                return IconBase + icon;
+
             return IconBase + GenericIcon;
         }
 
@@ -207,7 +244,7 @@ namespace XFiles.Controls
                     {
                         Action = FileAction.Paste,
                         Label = "Paste",
-                        IconPath = IconBase + ActionCopy,
+                        IconPath = IconBase + ActionPaste,
                         LabelBrush = accent
                     });
                 }
@@ -310,7 +347,7 @@ namespace XFiles.Controls
             FileNameText.Text = archiveName;
 
             FileIconImage.Source = new Windows.UI.Xaml.Media.Imaging.BitmapImage(
-                new Uri(IconBase + ArchiveIcon));
+                new Uri(IconBase + "ctx-archive-120.png"));
 
             Visibility = Visibility.Visible;
             Overlay.Visibility = Visibility.Visible;
