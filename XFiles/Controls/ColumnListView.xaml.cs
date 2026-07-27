@@ -225,6 +225,8 @@ namespace XFiles.Controls
 
         public string SizeDisplay => IsDirectory ? "" : FormatSize(SizeBytes);
 
+        public bool IsDotDot { get; set; }
+
         public bool IsSelected
         {
             get => _isSelected;
@@ -323,7 +325,8 @@ namespace XFiles.Controls
                     IsDirectory = e.IsDirectory,
                     IsDrive = e.IsDrive,
                     IsArchive = e.IsArchive,
-                    SizeBytes = e.SizeBytes
+                    SizeBytes = e.SizeBytes,
+                    IsDotDot = (e.Name == "..")
                 })
                 .ToList();
 
@@ -450,6 +453,7 @@ namespace XFiles.Controls
         public void OnScrollVertical(double delta) { }
 
         public void OnSelectVisualizer() { }
+        public void OnToggleBatch() { }
     }
 
     /// <summary>

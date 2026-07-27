@@ -1,5 +1,6 @@
 <Page
     x:Class="XFiles.Controls.MillerColumnsPage"
+    x:Name="PageRoot"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:controls="using:XFiles.Controls"
@@ -12,6 +13,7 @@
         <local:BooleanToBrushConverter x:Key="BoolToHighlightBrush"
             TrueBrush="{StaticResource XFilesAccentBrush}"
             FalseBrush="{StaticResource XFilesTextMutedBrush}" />
+        <local:BooleanToColumnWidthConverter x:Key="BatchCheckWidthConverter" />
     </Page.Resources>
 
     <Grid>
@@ -201,21 +203,39 @@
                         Style="{StaticResource RetroListViewStyle}"
                         ItemContainerStyle="{StaticResource RetroListViewItemStyle}"
                         SelectionChanged="CurrentList_SelectionChanged"
-                        KeyDown="CurrentList_KeyDown">
+                        KeyDown="CurrentList_KeyDown"
+                        ContainerContentChanging="OnCurrentListContainerChanging">
                     <controls:RetroListView.ItemTemplate>
                         <DataTemplate>
-                            <Grid Margin="12,3,12,3">
+                            <Grid Margin="4,3,8,3">
                                 <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="{Binding IsBatchMode, ElementName=PageRoot, Converter={StaticResource BatchCheckWidthConverter}}" />
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <Image Grid.Column="0"
+                                <Border x:Name="BatchCheck"
+                                        Grid.Column="0"
+                                        Width="14" Height="14"
+                                        CornerRadius="3"
+                                        BorderBrush="#5593C43C"
+                                        BorderThickness="1"
+                                        Background="Transparent"
+                                        VerticalAlignment="Center"
+                                        Margin="0,0,8,0"
+                                        Visibility="Collapsed">
+                                    <Border x:Name="BatchCheckFill"
+                                            Background="#93C43C"
+                                            CornerRadius="2"
+                                            Margin="2"
+                                            Visibility="Collapsed" />
+                                </Border>
+                                <Image Grid.Column="1"
                                        Source="{Binding Icon}"
                                        Width="20" Height="20"
                                        Margin="0,0,8,0"
                                        VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="1"
+                                <TextBlock Grid.Column="2"
                                            x:Name="ItemNameText"
                                            Text="{Binding Name}"
                                            FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
@@ -223,7 +243,7 @@
                                            Margin="0,3,0,0"
                                            VerticalAlignment="Center"
                                            TextTrimming="CharacterEllipsis" />
-                                <TextBlock Grid.Column="2"
+                                <TextBlock Grid.Column="3"
                                            Text="{Binding SizeDisplay}"
                                            FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                            FontSize="11"
@@ -764,13 +784,13 @@
                                Foreground="{StaticResource XFilesTextMutedBrush}"
                                VerticalAlignment="Center" />
                 </StackPanel>
-                <!-- View -->
-                <StackPanel x:Name="FooterViewLabel" Orientation="Horizontal" Margin="0,0,14,0" Visibility="Collapsed">
+                <!-- View/Select (batch toggle) -->
+                <StackPanel x:Name="FooterViewLabel" Orientation="Horizontal" Margin="0,0,14,0">
                     <Image Source="ms-appx:///Assets/GamepadButtons/system/xboxl_view.png"
                            Width="18" Height="18" Margin="0,0,4,0"
                            VerticalAlignment="Center" />
                     <TextBlock x:Name="FooterViewLabelText"
-                               Text="Options"
+                               Text="Batch"
                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                FontSize="12"
                                Margin="0,3,0,0"
@@ -793,6 +813,17 @@
 
             <!-- Clipboard indicator (center) -->
             <TextBlock x:Name="FooterClipboardIndicator"
+                       Grid.Column="1"
+                       Text=""
+                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                       FontSize="11"
+                       Foreground="#FF93C43C"
+                       VerticalAlignment="Center"
+                       HorizontalAlignment="Center"
+                       Visibility="Collapsed" />
+
+            <!-- Batch status (center) -->
+            <TextBlock x:Name="FooterBatchStatus"
                        Grid.Column="1"
                        Text=""
                        FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
@@ -948,6 +979,22 @@
                                FontSize="12" Margin="0,2,0,0"
                                Foreground="#99FFFFFF" VerticalAlignment="Center" />
                 </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                    <Image Source="ms-appx:///Assets/GamepadButtons/lr/button_xbox_digital_bumper_light_1.png"
+                           Width="16" Height="16" Margin="0,0,4,0" VerticalAlignment="Center" />
+                    <TextBlock Text="Prev"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="12" Margin="0,2,0,0"
+                               Foreground="#99FFFFFF" VerticalAlignment="Center" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                    <Image Source="ms-appx:///Assets/GamepadButtons/lr/button_xbox_digital_bumper_light_2.png"
+                           Width="16" Height="16" Margin="0,0,4,0" VerticalAlignment="Center" />
+                    <TextBlock Text="Next"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="12" Margin="0,2,0,0"
+                               Foreground="#99FFFFFF" VerticalAlignment="Center" />
+                </StackPanel>
                 <StackPanel Orientation="Horizontal">
                     <Image Source="ms-appx:///Assets/GamepadButtons/abxy/b.png"
                            Width="16" Height="16" Margin="0,0,4,0" VerticalAlignment="Center" />
@@ -1083,6 +1130,22 @@
                     <Image Source="ms-appx:///Assets/GamepadButtons/analog/button_xbox_analog_l.png"
                            Width="16" Height="16" Margin="0,0,4,0" VerticalAlignment="Center" />
                     <TextBlock Text="Vol"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="12" Margin="0,2,0,0"
+                               Foreground="#99FFFFFF" VerticalAlignment="Center" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                    <Image Source="ms-appx:///Assets/GamepadButtons/lr/button_xbox_digital_bumper_light_1.png"
+                           Width="16" Height="16" Margin="0,0,4,0" VerticalAlignment="Center" />
+                    <TextBlock Text="-5s"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="12" Margin="0,2,0,0"
+                               Foreground="#99FFFFFF" VerticalAlignment="Center" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                    <Image Source="ms-appx:///Assets/GamepadButtons/lr/button_xbox_digital_bumper_light_2.png"
+                           Width="16" Height="16" Margin="0,0,4,0" VerticalAlignment="Center" />
+                    <TextBlock Text="+5s"
                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                FontSize="12" Margin="0,2,0,0"
                                Foreground="#99FFFFFF" VerticalAlignment="Center" />

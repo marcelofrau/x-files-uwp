@@ -18,57 +18,63 @@ namespace XFiles.Visualizers.Visualizers
 
     public class FireParticleSystem2
     {
-        private readonly FireParticle[] _particles = new FireParticle[800];
+        private readonly FireParticle[] _particles = new FireParticle[1500];
         private int _count;
         private readonly Random _rand = new Random();
+        private readonly object _lock = new object();
 
-        public int Count => _count;
+        public int Count { get { lock (_lock) return _count; } }
 
-        public void Emit(Vector2 spawnPos, float hue, float intensity)
+        public void Emit(Vector2 spawnPos, float hue, float intensity, float bass, float beat)
         {
-            if (_count >= _particles.Length) return;
-            int emitCount = (int)(2 + intensity * 6);
-            for (int i = 0; i < emitCount && _count < _particles.Length; i++)
+            lock (_lock)
             {
-                float angle = (float)(_rand.NextDouble() * Math.PI * 2.0);
-                float speed = (float)(30 + _rand.NextDouble() * 120 * intensity);
-                _particles[_count++] = new FireParticle
+                int emitCount = 3 + (beat > 0.5f ? 2 : 0);
+                for (int i = 0; i < emitCount && _count < _particles.Length; i++)
                 {
-                    Position = spawnPos,
-                    Velocity = new Vector2(
-                        (float)(_rand.NextDouble() - 0.5) * 40f,
-                        -1f * (float)(40 + _rand.NextDouble() * 100 * (1.0 + intensity))
-                    ),
-                    Life = 1.0f,
-                    MaxLife = (float)(0.4 + _rand.NextDouble() * 0.6),
-                    Size = (float)(2.5 + _rand.NextDouble() * 4.5),
-                    Hue = hue
-                };
+                    _particles[_count++] = new FireParticle
+                    {
+                        Position = spawnPos,
+                        Velocity = new Vector2(
+                            (float)(_rand.NextDouble() - 0.5) * 50f,
+                            -1f * (float)(120 + _rand.NextDouble() * 140 + bass * 120 + beat * 100)
+                        ),
+                        Life = 1.0f,
+                        MaxLife = (float)(1.2 + _rand.NextDouble() * 1.3),
+                        Size = (float)(5 + _rand.NextDouble() * 6 + intensity * 5),
+                        Hue = hue
+                    };
+                }
             }
         }
 
-        public void Update(float deltaTime, float time)
+        public void Update(float deltaTime, float time, float bass, float beat)
         {
-            for (int i = _count - 1; i >= 0; i--)
+            lock (_lock)
             {
-                var p = _particles[i];
-                p.Life -= deltaTime / p.MaxLife;
-                if (p.Life <= 0)
+                for (int i = _count - 1; i >= 0; i--)
                 {
-                    _particles[i] = _particles[--_count];
-                    continue;
+                    var p = _particles[i];
+                    p.Life -= deltaTime / p.MaxLife;
+                    if (p.Life <= 0)
+                    {
+                        _particles[i] = _particles[--_count];
+                        continue;
+                    }
+                    float turbulence = (float)Math.Sin(time * 8.0f + p.Position.Y * 0.05f) * (20f + beat * 40f + bass * 20f);
+                    p.Velocity.X += turbulence * deltaTime;
+                    p.Velocity.Y -= 55f * deltaTime;
+                    p.Position += p.Velocity * deltaTime;
+                    _particles[i] = p;
                 }
-                float turbulence = (float)Math.Sin(time * 8.0f + p.Position.Y * 0.05f) * 15f;
-                p.Velocity.X += turbulence * deltaTime;
-                p.Velocity.Y -= 25f * deltaTime;
-                p.Position += p.Velocity * deltaTime;
-                _particles[i] = p;
             }
         }
 
         public void Draw(CanvasDrawingSession ds)
         {
-            for (int i = 0; i < _count; i++)
+            int count;
+            lock (_lock) { count = _count; }
+            for (int i = 0; i < count; i++)
             {
                 var p = _particles[i];
                 float nl = Math.Clamp(p.Life, 0f, 1f);
@@ -135,24 +141,27 @@ namespace XFiles.Visualizers.Visualizers
             for (int i = 0; i < AudioData.BandCount; i++)
                 _smoothBands[i] += (data.BandLevels[i] - _smoothBands[i]) * AudioSmooth;
 
-            // Emit from 6 spawn points along the bottom
+            float avgLevel = 0;
+            for (int i = 0; i < AudioData.BandCount; i++) avgLevel += _smoothBands[i];
+            avgLevel /= AudioData.BandCount;
+
             _emitTimer += dt;
-            float emitInterval = Math.Max(0.01f, 0.033f - _smoothBeat * 0.015f);
+            float emitInterval = Math.Max(0.008f, 0.025f - _smoothBeat * 0.012f);
             if (_emitTimer > emitInterval)
             {
                 _emitTimer = 0;
-                for (int col = 0; col < 6; col++)
+                for (int col = 0; col < 8; col++)
                 {
-                    float spawnX = _width * (0.15f + col * 0.14f);
+                    float spawnX = _width * (0.10f + col * 0.11f);
                     float spawnY = _height * 0.88f;
-                    float hue = (float)col / 6f;
-                    float bandIntensity = _smoothBands[col * 4 % AudioData.BandCount];
-                    float intensity = bandIntensity + _smoothBeat * 0.3f + _smoothBass * 0.2f;
-                    _particles.Emit(new Vector2(spawnX, spawnY), hue, Math.Min(1f, intensity));
+                    float hue = (float)col / 8f;
+                    float colWeight = 0.7f + 0.3f * (float)Math.Sin(col * 0.8f + _time * 0.5f);
+                    float intensity = Math.Max(0.5f, avgLevel * 0.6f + _smoothBeat * 0.4f + _smoothBass * 0.3f) * colWeight;
+                    _particles.Emit(new Vector2(spawnX, spawnY), hue, Math.Min(1f, intensity), _smoothBass, _smoothBeat);
                 }
             }
 
-            _particles.Update(dt, _time);
+            _particles.Update(dt, _time, _smoothBass, _smoothBeat);
             _waveform = data.Waveform;
             _waveformCount = data.WaveformCount;
             if (_waveform != null && _waveformCount > 0)
@@ -176,6 +185,8 @@ namespace XFiles.Visualizers.Visualizers
         {
             if (_device == null || _width == 0 || _height == 0) return;
             ds.Clear(Color.FromArgb(255, 4, 1, 1));
+
+            DrawPlasmaBackground(ds);
 
             // Dark ground gradient
             float groundY = _height * 0.85f;
@@ -206,8 +217,8 @@ namespace XFiles.Visualizers.Visualizers
             }
 
             // Waveform line at bottom with ghost trail — ascending loop effect
-            float waveY = _height * 0.72f;
-            float waveH = _height * 0.10f;
+            float waveY = _height * 0.65f;
+            float waveH = _height * 0.20f;
             var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
 
             for (int g = 0; g < GhostFrames; g++)
@@ -233,7 +244,7 @@ namespace XFiles.Visualizers.Visualizers
                 {
                     float x = (float)i / count * _width;
                     float y = waveYOffset + wave[i] * waveH;
-                    ds.DrawLine(prevX, prevY, x, y, Color.FromArgb(waveAlpha, waveColor.R, waveColor.G, waveColor.B), 3f + _smoothBass * 1.5f, strokeStyle);
+                    ds.DrawLine(prevX, prevY, x, y, Color.FromArgb(waveAlpha, waveColor.R, waveColor.G, waveColor.B), 2f + _smoothBass * 3f, strokeStyle);
                     prevX = x; prevY = y;
                 }
             }
@@ -245,10 +256,44 @@ namespace XFiles.Visualizers.Visualizers
         public void ConfigurePipeline(PostProcessPipeline pipeline)
         {
             pipeline.FeedbackOpacity = 0.20f;
-            pipeline.FeedbackZoom = 1.0003f;
-            pipeline.BloomAmount = 0.04f;
+            pipeline.FeedbackZoom = 1.0006f;
+            pipeline.BloomAmount = 0.06f;
             pipeline.BloomBlur = 2f;
             pipeline.BloomThreshold = 0.5f;
+        }
+
+        private void DrawPlasmaBackground(CanvasDrawingSession ds)
+        {
+            int cols = (int)Math.Ceiling(_width / 16f);
+            int rows = (int)Math.Ceiling(_height / 16f);
+            float invW = 1f / _width, invH = 1f / _height;
+            float plasmaSpeed = 0.3f + _smoothBass * 0.5f;
+
+            for (int gy = 0; gy < rows; gy++)
+            {
+                float v = gy * 16f * invH;
+                for (int gx = 0; gx < cols; gx++)
+                {
+                    float u = gx * 16f * invW;
+                    float wave1 = (float)Math.Sin(u * 4f + _time * plasmaSpeed);
+                    float wave2 = (float)Math.Cos(v * 3f + _time * plasmaSpeed * 0.7f);
+                    float wave3 = (float)Math.Sin((u + v) * 2.5f + _time * plasmaSpeed * 1.3f);
+                    float plasma = (wave1 + wave2 + wave3) / 3f;
+
+                    float hue = plasma * 0.3f + _time * 0.04f;
+                    hue -= (float)Math.Floor(hue);
+                    float fireHue = hue * 0.15f;
+                    float sat = 0.8f + plasma * 0.2f;
+                    float brightness = 0.04f + plasma * 0.05f + _smoothBass * 0.03f;
+
+                    float dx = u - 0.5f, dy = v - 0.5f;
+                    float vignette = 1f - (float)Math.Sqrt(dx * dx + dy * dy) * 0.8f;
+                    if (vignette < 0f) vignette = 0f;
+                    brightness *= vignette;
+
+                    ds.FillRectangle(gx * 16f, gy * 16f, 16f, 16f, HslToRgb(fireHue, sat, brightness));
+                }
+            }
         }
 
         private static Color HslToRgb(float h, float s, float l)

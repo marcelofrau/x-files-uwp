@@ -1101,6 +1101,93 @@ namespace XFiles.FileSystem
         }
 
         /// <summary>
+        /// Create a ZIP archive from multiple source paths (files and/or directories).
+        /// </summary>
+        public static async Task<OperationResult> CreateZipAsync(List<string> sourcePaths, string zipPath, IProgress<OperationProgress> progress = null, CancellationToken token = default)
+        {
+            return await Task.Run(() =>
+            {
+                try
+                {
+                    if (token.IsCancellationRequested) return OperationResult.Cancelled;
+
+                    zipPath = GetUniqueFilePath(zipPath);
+                    Log.Info("FileOperations.CreateZip(multi): {Count} sources -> {Zip}", sourcePaths.Count, zipPath);
+
+                    using (var archive = SharpCompress.Archives.Zip.ZipArchive.Create())
+                    {
+                        int fileIndex = 0;
+                        var allFiles = new List<string>();
+
+                        foreach (var sourcePath in sourcePaths)
+                        {
+                            var pathType = CheckPathType(sourcePath);
+                            if (pathType == "file")
+                            {
+                                allFiles.Add(sourcePath);
+                            }
+                            else if (pathType == "directory")
+                            {
+                                allFiles.AddRange(EnumerateFilesRecursive(sourcePath));
+                            }
+                            else
+                            {
+                                Log.Warn("FileOperations.CreateZip(multi): source not found {Source}", sourcePath);
+                            }
+                        }
+
+                        foreach (var file in allFiles)
+                        {
+                            if (token.IsCancellationRequested) return OperationResult.Cancelled;
+
+                            string entryName = System.IO.Path.GetFileName(file);
+
+                            var entryData = ReadAllBytesWin32(file);
+                            if (entryData == null)
+                            {
+                                Log.Warn("FileOperations.CreateZip(multi): cannot read {Path}", file);
+                                continue;
+                            }
+                            archive.AddEntry(entryName, new MemoryStream(entryData), entryData.Length);
+
+                            fileIndex++;
+                            progress?.Report(new OperationProgress
+                            {
+                                FileName = entryName,
+                                PercentComplete = -1,
+                                FileIndex = fileIndex,
+                                FileTotal = allFiles.Count
+                            });
+                        }
+
+                        using (var zipStream = new MemoryStream())
+                        {
+                            archive.SaveTo(zipStream, new SharpCompress.Writers.WriterOptions(SharpCompress.Common.CompressionType.Deflate));
+                            zipStream.Position = 0;
+
+                            using (var writeStream = Win32FileWriteStream.Create(zipPath))
+                            {
+                                if (writeStream == null)
+                                {
+                                    Log.Warn("FileOperations.CreateZip(multi): cannot create zip file {Path}", zipPath);
+                                    return OperationResult.Failed;
+                                }
+                                zipStream.CopyTo(writeStream);
+                            }
+                        }
+                    }
+
+                    return OperationResult.Success;
+                }
+                catch (Exception ex)
+                {
+                    Log.Warn("FileOperations.CreateZip(multi) exception", ex);
+                    return OperationResult.Failed;
+                }
+            });
+        }
+
+        /// <summary>
         /// Read all bytes from a file using Win32 P/Invoke (Xbox-safe).
         /// </summary>
         private static byte[] ReadAllBytesWin32(string filePath)

@@ -17,7 +17,8 @@
 
             <StackPanel HorizontalAlignment="Center">
                 <!-- Title -->
-                <TextBlock Text="Log Shared"
+                <TextBlock x:Name="TitleText"
+                           Text="Shared"
                            Foreground="#B0D8A0"
                            FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
                            FontSize="16"

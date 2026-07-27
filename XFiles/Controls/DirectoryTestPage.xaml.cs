@@ -92,7 +92,8 @@ namespace XFiles.Controls
                     IsDirectory = e.IsDirectory,
                     IsDrive = e.IsDrive,
                     IsArchive = e.IsArchive,
-                    SizeBytes = e.SizeBytes
+                    SizeBytes = e.SizeBytes,
+                    IsDotDot = (e.Name == "..")
                 });
             }
 
@@ -219,5 +220,6 @@ namespace XFiles.Controls
         public void OnSettings() { }
 
         public void OnSelectVisualizer() { }
+        public void OnToggleBatch() { }
     }
 }

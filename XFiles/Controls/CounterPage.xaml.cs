@@ -142,5 +142,6 @@ namespace XFiles.Controls
         public void OnSettings() { }
 
         public void OnSelectVisualizer() { }
+        public void OnToggleBatch() { }
     }
 }

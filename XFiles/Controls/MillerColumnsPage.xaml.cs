@@ -25,11 +25,32 @@ using XFiles.Visualizers;
 
 namespace XFiles.Controls
 {
+    public class BooleanToColumnWidthConverter : Windows.UI.Xaml.Data.IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, string language)
+        {
+            bool batchMode = value is bool b && b;
+            return new Windows.UI.Xaml.GridLength(batchMode ? 22 : 0);
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, string language)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
     public sealed partial class MillerColumnsPage : Page, INavigable, INotifyPropertyChanged
     {
         private readonly ColumnNavigator _navigator = new ColumnNavigator();
         private bool _updating;
         private bool _slideFromRight;
+        private bool _isBatchMode;
+        public bool IsBatchMode
+        {
+            get => _isBatchMode;
+            set { _isBatchMode = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsBatchMode))); }
+        }
+        private readonly HashSet<string> _batchSelectedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private static string _highlightJs;
         private static string _highlightCss;
         private static string _fontBase64;
@@ -168,7 +189,8 @@ namespace XFiles.Controls
 
                 FooterLTRT.Visibility = Visibility.Collapsed;
                 FooterLBRB.Visibility = Visibility.Collapsed;
-                FooterViewLabel.Visibility = Visibility.Collapsed;
+                FooterViewLabel.Visibility = Visibility.Visible;
+                FooterViewLabelText.Text = "Batch";
                 UpdateFooterALabelFromSelection();
                 FooterBLabel.Text = "Back";
                 FooterXLabel.Text = "Refresh";
@@ -645,7 +667,8 @@ namespace XFiles.Controls
                 IsArchive = e.IsArchive,
                 SizeBytes = e.SizeBytes,
                 ArchiveRootPath = e.ArchiveRootPath,
-                ArchiveInternalPath = e.ArchiveInternalPath
+                ArchiveInternalPath = e.ArchiveInternalPath,
+                IsDotDot = (e.Name == "..")
             }).ToList();
 
             listView.ItemsSource = vms;
@@ -663,7 +686,8 @@ namespace XFiles.Controls
                 SizeBytes = e.SizeBytes,
                 ArchiveRootPath = e.ArchiveRootPath,
                 ArchiveInternalPath = e.ArchiveInternalPath,
-                IsHighlighted = (highlightName != null && e.Name == highlightName)
+                IsHighlighted = (highlightName != null && e.Name == highlightName),
+                IsDotDot = (e.Name == "..")
             }).ToList();
 
             listView.ItemsSource = vms;
@@ -680,7 +704,8 @@ namespace XFiles.Controls
                 IsArchive = e.IsArchive,
                 SizeBytes = e.SizeBytes,
                 ArchiveRootPath = e.ArchiveRootPath,
-                ArchiveInternalPath = e.ArchiveInternalPath
+                ArchiveInternalPath = e.ArchiveInternalPath,
+                IsDotDot = (e.Name == "..")
             }).ToList();
 
             SlideColumn(_slideFromRight);
@@ -776,12 +801,43 @@ namespace XFiles.Controls
 
             // Update A button label based on selected item type
             UpdateFooterALabelFromSelection();
+
+            // Refresh checkbox colors on selection change
+            if (_isBatchMode) UpdateBatchCheckboxes();
         }
 
         private void OnPreviewDebounceTick(object sender, object e)
         {
             _previewDebounceTimer.Stop();
             _ = _navigator.OnSelectionChangedAsync();
+        }
+
+        private static readonly Windows.UI.Xaml.Media.SolidColorBrush _checkBorderNormal = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x55, 0x93, 0xC4, 0x3C));
+        private static readonly Windows.UI.Xaml.Media.SolidColorBrush _checkBorderSelected = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x1A, 0x1D, 0x23));
+        private static readonly Windows.UI.Xaml.Media.SolidColorBrush _checkFillNormal = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x93, 0xC4, 0x3C));
+        private static readonly Windows.UI.Xaml.Media.SolidColorBrush _checkFillSelected = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x1A, 0x1D, 0x23));
+
+        private void OnCurrentListContainerChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
+        {
+            if (args.ItemContainer is Windows.UI.Xaml.Controls.ListViewItem container)
+            {
+                var vm = args.Item as EntryViewModel;
+                var check = FindBatchCheck(container);
+                if (check != null)
+                {
+                    bool showCheck = _isBatchMode && vm != null && !vm.IsDotDot;
+                    check.Visibility = showCheck ? Visibility.Visible : Visibility.Collapsed;
+                    bool isSelected = container.IsSelected;
+                    check.BorderBrush = isSelected ? _checkBorderSelected : _checkBorderNormal;
+                    var fill = check.FindName("BatchCheckFill") as Windows.UI.Xaml.Controls.Border;
+                    if (fill != null)
+                    {
+                        bool isChecked = showCheck && vm != null && vm.IsSelected;
+                        fill.Visibility = isChecked ? Visibility.Visible : Visibility.Collapsed;
+                        fill.Background = isSelected ? _checkFillSelected : _checkFillNormal;
+                    }
+                }
+            }
         }
 
         private void UpdateFooterALabel(string label)
@@ -966,6 +1022,7 @@ namespace XFiles.Controls
             if (LogsPageControl.IsVisible) return;
             if (ShareDialogControl.IsVisible) return;
             if (_isMediaPlayerActive) return;
+            if (_isBatchMode) return;
             _slideFromRight = false;
             _ = _navigator.DrillOutAsync();
         }
@@ -984,6 +1041,7 @@ namespace XFiles.Controls
             if (LogsPageControl.IsVisible) return;
             if (ShareDialogControl.IsVisible) return;
             if (_isMediaPlayerActive) return;
+            if (_isBatchMode) return;
             // ".." always means drill-out (go up)
             var sel = CurrentList.SelectedItem as EntryViewModel;
             if (sel != null && sel.Name == "..")
@@ -1023,6 +1081,14 @@ namespace XFiles.Controls
                 UpdateMediaPlayerFocusUI();
                 return;
             }
+
+            // Batch mode: A toggles item selection
+            if (_isBatchMode)
+            {
+                ToggleBatchItem();
+                return;
+            }
+
             if (_navigator.Current == null) return;
 
             var selected = CurrentList.SelectedItem as EntryViewModel;
@@ -1169,6 +1235,9 @@ namespace XFiles.Controls
                 return;
             }
 
+            // Batch mode: B exits batch (after all overlay/dialog checks)
+            if (_isBatchMode) { Log.Info("OnBack: → ExitBatchMode"); ExitBatchMode(); return; }
+
             // B button → go to parent directory
             Log.Info("OnBack: → DrillOutAsync");
             _slideFromRight = false;
@@ -1187,7 +1256,10 @@ namespace XFiles.Controls
             if (ShareDialogControl.IsVisible) return;
             if (_isMediaPlayerActive) return;
             Log.Verb("MillerColumnsPage.OnContextMenu — showing FileActionSheet");
-            _ = ShowFileActionSheetAsync();
+            if (_isBatchMode)
+                _ = ShowFileActionSheetBatchAsync();
+            else
+                _ = ShowFileActionSheetAsync();
         }
 
         public void OnRefresh()
@@ -1200,6 +1272,20 @@ namespace XFiles.Controls
             if (IsAnyOverlayVisible) return;
             if (LogsPageControl.IsVisible) return;
             if (ShareDialogControl.IsVisible) return;
+
+            // Batch mode: X deselects all
+            if (_isBatchMode)
+            {
+                Log.Info("OnRefresh: batch mode → DeselectAll");
+                _batchSelectedPaths.Clear();
+                foreach (var item in CurrentList.Items)
+                {
+                    if (item is EntryViewModel vm) vm.IsSelected = false;
+                }
+                UpdateBatchCheckboxes();
+                UpdateBatchFooter();
+                return;
+            }
 
             var selected = CurrentList.SelectedItem as EntryViewModel;
             if (selected != null)
@@ -1311,7 +1397,7 @@ namespace XFiles.Controls
             LogsPageControl.OnShareRequested = (url) =>
             {
                 Log.Dbg("ShowLogs: share requested, opening ShareDialog");
-                ShareDialogControl.Show(url);
+                ShareDialogControl.Show(url, "Log Shared");
             };
             LogsPageControl.Show();
             Log.Info("ShowLogs: Show() returned, IsVisible={V}", LogsPageControl.IsVisible);
@@ -1758,6 +1844,176 @@ namespace XFiles.Controls
             }
         }
 
+        // --- Batch Selection ---
+
+        public void OnToggleBatch()
+        {
+            if (IsAnyOverlayVisible || FileActionSheetControl.IsOpen ||
+                StartMenuControl.IsOpen || LogsPageControl.IsVisible ||
+                ShareDialogControl.IsVisible || _isMediaPlayerActive) return;
+
+            if (_isBatchMode)
+                ExitBatchMode();
+            else
+                EnterBatchMode();
+        }
+
+        private void EnterBatchMode()
+        {
+            if (IsBatchMode) return;
+            IsBatchMode = true;
+            _batchSelectedPaths.Clear();
+            Log.Info("BatchMode: entered");
+            UpdateBatchCheckboxes();
+            UpdateBatchFooter();
+            UpdateFooterLabels();
+        }
+
+        private void ExitBatchMode()
+        {
+            if (!IsBatchMode) return;
+            IsBatchMode = false;
+            _batchSelectedPaths.Clear();
+            foreach (var item in CurrentList.Items)
+            {
+                if (item is EntryViewModel vm) vm.IsSelected = false;
+            }
+            Log.Info("BatchMode: exited");
+            UpdateBatchCheckboxes();
+            UpdateBatchFooter();
+            UpdateFooterLabels();
+        }
+
+        private void ToggleBatchItem()
+        {
+            if (!_isBatchMode) return;
+            var selected = CurrentList.SelectedItem as EntryViewModel;
+            if (selected == null || selected.IsDotDot) return;
+
+            if (_batchSelectedPaths.Contains(selected.FullPath))
+            {
+                _batchSelectedPaths.Remove(selected.FullPath);
+                selected.IsSelected = false;
+            }
+            else
+            {
+                _batchSelectedPaths.Add(selected.FullPath);
+                selected.IsSelected = true;
+            }
+            Log.Verb("BatchMode: toggled {Name} (selected={Sel}, total={Total})",
+                selected.Name, selected.IsSelected, _batchSelectedPaths.Count);
+
+            // Move cursor down to help bulk selection
+            if (CurrentList.SelectedIndex < CurrentList.Items.Count - 1)
+            {
+                CurrentList.SelectedIndex++;
+                CurrentList.ScrollIntoView(CurrentList.SelectedItem);
+            }
+
+            UpdateBatchCheckboxes();
+            UpdateBatchFooter();
+        }
+
+        private void UpdateBatchCheckboxes()
+        {
+            for (int i = 0; i < CurrentList.Items.Count; i++)
+            {
+                var container = CurrentList.ContainerFromIndex(i) as Windows.UI.Xaml.Controls.ListViewItem;
+                if (container == null) continue;
+
+                var check = FindBatchCheck(container);
+                if (check == null) continue;
+
+                var vm = CurrentList.Items[i] as EntryViewModel;
+                bool showCheck = _isBatchMode && vm != null && !vm.IsDotDot;
+                check.Visibility = showCheck ? Visibility.Visible : Visibility.Collapsed;
+                bool isSelected = container.IsSelected;
+                check.BorderBrush = isSelected ? _checkBorderSelected : _checkBorderNormal;
+
+                var fill = check.FindName("BatchCheckFill") as Windows.UI.Xaml.Controls.Border;
+                if (fill != null)
+                {
+                    bool isChecked = showCheck && vm != null && vm.IsSelected;
+                    fill.Visibility = isChecked ? Visibility.Visible : Visibility.Collapsed;
+                    fill.Background = isSelected ? _checkFillSelected : _checkFillNormal;
+                }
+            }
+        }
+
+        private static Windows.UI.Xaml.Controls.Border FindBatchCheck(Windows.UI.Xaml.Controls.ListViewItem container)
+        {
+            // Walk visual tree to find BatchCheck border by Name
+            return FindElementByName(container, "BatchCheck") as Windows.UI.Xaml.Controls.Border;
+        }
+
+        private static Windows.UI.Xaml.FrameworkElement FindElementByName(Windows.UI.Xaml.FrameworkElement root, string name)
+        {
+            int count = Windows.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(root);
+            for (int i = 0; i < count; i++)
+            {
+                var child = Windows.UI.Xaml.Media.VisualTreeHelper.GetChild(root, i) as Windows.UI.Xaml.FrameworkElement;
+                if (child == null) continue;
+                if (child.Name == name) return child;
+                var found = FindElementByName(child, name);
+                if (found != null) return found;
+            }
+            return null;
+        }
+
+        private void UpdateBatchFooter()
+        {
+            if (_isBatchMode)
+            {
+                int count = _batchSelectedPaths.Count;
+                FooterBatchStatus.Text = count > 0
+                    ? $"{count} file{(count == 1 ? "" : "s")} selected"
+                    : "Batch select mode";
+                FooterBatchStatus.Visibility = Visibility.Visible;
+                FooterClipboardIndicator.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                FooterBatchStatus.Visibility = Visibility.Collapsed;
+                UpdateClipboardIndicator();
+            }
+        }
+
+        private void UpdateFooterLabels()
+        {
+            if (_isBatchMode)
+            {
+                FooterALabel.Text = "Select";
+                FooterBLabel.Text = "Exit";
+                FooterXLabel.Text = "Deselect All";
+                FooterYLabel.Text = "Menu";
+                FooterViewLabelText.Text = "Batch";
+            }
+            else
+            {
+                UpdateFooterALabelFromSelection();
+                FooterBLabel.Text = "Back";
+                FooterXLabel.Text = "Refresh";
+                FooterYLabel.Text = "Menu";
+                FooterViewLabelText.Text = "Batch";
+            }
+        }
+
+        /// <summary>
+        /// Get selected FileEntry objects from batch selection.
+        /// </summary>
+        private List<FileEntry> GetBatchEntries()
+        {
+            var entries = new List<FileEntry>();
+            if (_navigator.Current == null) return entries;
+            foreach (var fe in _navigator.Current.Entries)
+            {
+                if (fe.Name == "..") continue;
+                if (_batchSelectedPaths.Contains(fe.FullPath))
+                    entries.Add(fe);
+            }
+            return entries;
+        }
+
         // --- Fullscreen Video ---
 
         public async Task OpenFullscreenForFile(string filePath, TimeSpan position)
@@ -2126,6 +2382,15 @@ namespace XFiles.Controls
             }
             Log.Info("HandleShareAsync: {File}", entry.FullPath);
 
+            bool confirmed = await AlertDialogControl.ShowConfirmAsync(
+                $"This file will be uploaded to gofile.io and remain available for a few days.\n\n" +
+                $"Share \"{entry.Name}\"?");
+            if (!confirmed)
+            {
+                Log.Verb("HandleShareAsync: user cancelled confirmation");
+                return;
+            }
+
             var cts = new System.Threading.CancellationTokenSource();
 
             OpProgressDialog.Show("Sharing", entry.Name, "");
@@ -2172,7 +2437,7 @@ namespace XFiles.Controls
 
                 if (!string.IsNullOrEmpty(url))
                 {
-                    ShareDialogControl.Show(url);
+                    ShareDialogControl.Show(url, "File Shared");
                 }
                 else
                 {
@@ -3105,6 +3370,253 @@ namespace XFiles.Controls
                     await HandleShareAsync(entry);
                     break;
             }
+        }
+
+        private async Task ShowFileActionSheetBatchAsync()
+        {
+            if (_batchSelectedPaths.Count == 0)
+            {
+                Log.Verb("ShowFileActionSheetBatchAsync: no items selected");
+                return;
+            }
+
+            Log.Info("ShowFileActionSheetBatchAsync: {Count} items selected", _batchSelectedPaths.Count);
+
+            UpdateFooterALabel("Select");
+            var action = await FileActionSheetControl.ShowBatchAsync(_batchSelectedPaths.Count);
+            UpdateFooterALabelFromSelection();
+            if (action == null)
+            {
+                Log.Verb("ShowFileActionSheetBatchAsync: cancelled");
+                return;
+            }
+
+            Log.Info("ShowFileActionSheetBatchAsync: action={Action}", action);
+
+            var entries = GetBatchEntries();
+
+            switch (action)
+            {
+                case FileAction.Copy:
+                    Log.Info("BatchCopy: {Count} items → clipboard", entries.Count);
+                    ClipboardState.Copy(entries);
+                    UpdateClipboardIndicator();
+                    ExitBatchMode();
+                    break;
+                case FileAction.Move:
+                    await HandleBatchMoveAsync(entries);
+                    break;
+                case FileAction.Delete:
+                    await HandleBatchDeleteAsync(entries);
+                    break;
+                case FileAction.CreateZip:
+                    await HandleBatchCreateZipAsync(entries);
+                    break;
+                case FileAction.Share:
+                    await HandleBatchShareAsync(entries);
+                    break;
+            }
+        }
+
+        private async Task HandleBatchMoveAsync(List<FileEntry> entries)
+        {
+            Log.Info("HandleBatchMoveAsync: {Count} items", entries.Count);
+
+            UpdateFooterALabel("Select");
+            var destDir = await FolderBrowserDialogControl.ShowAsync(_navigator.Current?.Path ?? null);
+            UpdateFooterALabelFromSelection();
+
+            if (string.IsNullOrEmpty(destDir))
+            {
+                Log.Verb("HandleBatchMoveAsync: cancelled at folder browser");
+                return;
+            }
+
+            // Build combined file list for confirmation
+            var allFiles = new List<string>();
+            int folderCount = 0;
+            foreach (var entry in entries)
+            {
+                var (files, folders) = await FileOperations.ListRecursiveAsync(entry.FullPath);
+                allFiles.AddRange(files);
+                folderCount += folders;
+            }
+
+            UpdateFooterALabel("Confirm");
+            bool confirmed = await FileOperationConfirmDialogControl.ShowMoveAsync(
+                $"{entries.Count} items", destDir, allFiles, folderCount);
+            UpdateFooterALabelFromSelection();
+
+            if (!confirmed)
+            {
+                Log.Verb("HandleBatchMoveAsync: confirmation cancelled");
+                return;
+            }
+
+            // Move each item
+            int success = 0, failed = 0;
+            foreach (var entry in entries)
+            {
+                var result = await FileOperations.MoveAsync(entry.FullPath, destDir);
+                if (result == FileOperations.OperationResult.Success)
+                    success++;
+                else
+                    failed++;
+            }
+
+            if (failed > 0)
+                _ = AlertDialogControl.ShowAsync($"Moved {success} items, failed to move {failed}.", AlertType.Error);
+            else
+                Log.Info("HandleBatchMoveAsync: {Count} items moved", success);
+
+            ExitBatchMode();
+            await _navigator.RefreshCurrentAsync();
+        }
+
+        private async Task HandleBatchDeleteAsync(List<FileEntry> entries)
+        {
+            Log.Info("HandleBatchDeleteAsync: {Count} items", entries.Count);
+
+            // Build combined file list
+            var allFiles = new List<string>();
+            int folderCount = 0;
+            foreach (var entry in entries)
+            {
+                var (files, folders) = await FileOperations.ListRecursiveAsync(entry.FullPath);
+                allFiles.AddRange(files);
+                folderCount += folders;
+            }
+
+            bool confirmed = await FileOperationConfirmDialogControl.ShowAsync(
+                $"{entries.Count} items", true, allFiles, folderCount);
+            if (!confirmed)
+            {
+                Log.Verb("HandleBatchDeleteAsync: confirmation cancelled");
+                return;
+            }
+
+            int success = 0, failed = 0;
+            foreach (var entry in entries)
+            {
+                FileOperations.OperationResult result;
+                if (entry.IsDirectory)
+                    result = await FileOperations.DeleteDirectoryAsync(entry.FullPath);
+                else
+                    result = await FileOperations.DeleteAsync(entry.FullPath);
+
+                if (result == FileOperations.OperationResult.Success)
+                    success++;
+                else
+                    failed++;
+            }
+
+            if (failed > 0)
+                _ = AlertDialogControl.ShowAsync($"Deleted {success} items, failed to delete {failed}.", AlertType.Error);
+            else
+                Log.Info("HandleBatchDeleteAsync: {Count} items deleted", success);
+
+            ExitBatchMode();
+            await _navigator.RefreshCurrentAsync();
+        }
+
+        private async Task HandleBatchCreateZipAsync(List<FileEntry> entries)
+        {
+            Log.Info("HandleBatchCreateZipAsync: {Count} items", entries.Count);
+
+            string defaultName = entries.Count == 1
+                ? entries[0].Name + ".zip"
+                : "archive.zip";
+            var zipName = await InputDialogControl.ShowAsync("Create ZIP", defaultName);
+            if (string.IsNullOrEmpty(zipName))
+            {
+                Log.Verb("HandleBatchCreateZipAsync: cancelled");
+                return;
+            }
+
+            var currentPath = _navigator.Current?.Path;
+            if (string.IsNullOrEmpty(currentPath)) return;
+            var zipPath = System.IO.Path.Combine(currentPath, zipName);
+
+            OpProgressDialog.Show("Creating ZIP", $"{entries.Count} items", zipPath);
+            var result = await FileOperations.CreateZipAsync(entries.Select(e => e.FullPath).ToList(), zipPath, null, OpProgressDialog.CancelToken);
+
+            if (result == FileOperations.OperationResult.Cancelled)
+            {
+                Log.Info("HandleBatchCreateZipAsync: cancelled");
+                OpProgressDialog.Cancel();
+                await Task.Delay(1500);
+                OpProgressDialog.Close();
+                return;
+            }
+
+            OpProgressDialog.Complete();
+            await Task.Delay(400);
+            OpProgressDialog.Close();
+
+            if (result == FileOperations.OperationResult.Success)
+            {
+                Log.Info("HandleBatchCreateZipAsync: success — selecting '{Name}'", zipName);
+                ExitBatchMode();
+                await _navigator.RefreshCurrentAsync(selectName: zipName);
+            }
+            else
+            {
+                Log.Warn("HandleBatchCreateZipAsync: failed");
+                _ = AlertDialogControl.ShowAsync($"Failed to create ZIP \"{zipName}\".", AlertType.Error);
+            }
+        }
+
+        private async Task HandleBatchShareAsync(List<FileEntry> entries)
+        {
+            Log.Info("HandleBatchShareAsync: {Count} items", entries.Count);
+
+            if (entries.Count == 1)
+            {
+                // Single file: share directly
+                await HandleShareAsync(entries[0]);
+                ExitBatchMode();
+                return;
+            }
+
+            // Multiple files: create ZIP first, then share
+            var tempZip = System.IO.Path.Combine(
+                Windows.Storage.ApplicationData.Current.TemporaryFolder.Path,
+                $"share-{Guid.NewGuid():N}.zip");
+
+            OpProgressDialog.Show("Compressing", $"{entries.Count} files", "Creating ZIP for sharing...");
+            var result = await FileOperations.CreateZipAsync(
+                entries.Select(e => e.FullPath).ToList(), tempZip, null, OpProgressDialog.CancelToken);
+
+            if (result != FileOperations.OperationResult.Success)
+            {
+                Log.Warn("HandleBatchShareAsync: ZIP creation failed");
+                OpProgressDialog.Cancel();
+                await Task.Delay(1500);
+                OpProgressDialog.Close();
+                _ = AlertDialogControl.ShowAsync("Failed to create ZIP for sharing.", AlertType.Error);
+                return;
+            }
+
+            OpProgressDialog.Close();
+            await Task.Delay(200);
+
+            // Share the temp ZIP
+            var zipEntry = new FileEntry
+            {
+                Name = $"{entries.Count} file{(entries.Count == 1 ? "" : "s")}",
+                FullPath = tempZip
+            };
+
+            try
+            {
+                await HandleShareAsync(zipEntry);
+            }
+            finally
+            {
+                try { System.IO.File.Delete(tempZip); } catch { }
+            }
+
+            ExitBatchMode();
         }
 
         private async Task HandleCopyAsync(FileEntry entry)

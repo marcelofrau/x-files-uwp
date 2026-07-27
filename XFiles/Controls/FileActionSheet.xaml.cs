@@ -368,6 +368,69 @@ namespace XFiles.Controls
             return _tcs.Task;
         }
 
+        public Task<FileAction?> ShowBatchAsync(int selectedCount)
+        {
+            _tcs = new TaskCompletionSource<FileAction?>();
+
+            var actions = new List<ActionItem>();
+            var accent = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x93, 0xC4, 0x3C));
+            var red = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0xE7, 0x4C, 0x3C));
+
+            actions.Add(new ActionItem
+            {
+                Action = FileAction.Copy,
+                Label = "Copy",
+                IconPath = IconBase + ActionCopy,
+                LabelBrush = accent
+            });
+
+            actions.Add(new ActionItem
+            {
+                Action = FileAction.Move,
+                Label = "Move",
+                IconPath = IconBase + ActionMove,
+                LabelBrush = accent
+            });
+
+            actions.Add(new ActionItem
+            {
+                Action = FileAction.Delete,
+                Label = "Delete",
+                IconPath = IconBase + ActionDelete,
+                LabelBrush = red
+            });
+
+            actions.Add(new ActionItem
+            {
+                Action = FileAction.CreateZip,
+                Label = "Create ZIP",
+                IconPath = IconBase + ActionCreateZip,
+                LabelBrush = accent
+            });
+
+            actions.Add(new ActionItem
+            {
+                Action = FileAction.Share,
+                Label = "Share",
+                IconPath = IconBase + ActionShare,
+                LabelBrush = accent
+            });
+
+            ActionList.ItemsSource = actions;
+            FileNameText.Text = $"{selectedCount} file{(selectedCount == 1 ? "" : "s")}";
+
+            FileIconImage.Source = new Windows.UI.Xaml.Media.Imaging.BitmapImage(
+                new Uri(IconBase + "ctx-generic-120.png"));
+
+            Visibility = Visibility.Visible;
+            Overlay.Visibility = Visibility.Visible;
+
+            ActionList.SelectedIndex = 0;
+            ActionList.Focus(FocusState.Programmatic);
+
+            return _tcs.Task;
+        }
+
         private static string FormatSize(long bytes)
         {
             if (bytes < 1024) return $"{bytes} B";

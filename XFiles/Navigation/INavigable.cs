@@ -29,5 +29,6 @@ namespace XFiles.Navigation
         void OnScrollHorizontal(double delta);
         void OnScrollVertical(double delta);
         void OnSelectVisualizer();
+        void OnToggleBatch();
     }
 }

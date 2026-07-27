@@ -227,15 +227,17 @@ namespace XFiles.Visualizers.Visualizers
 
         public void ConfigurePipeline(PostProcessPipeline pipeline)
         {
-            pipeline.FeedbackOpacity = 0.30f;
-            pipeline.FeedbackZoom = 1.003f;
-            pipeline.FeedbackDecay = 0.02f;
-            pipeline.BloomEnabled = true;
-            pipeline.BloomAmount = 0.06f;
-            pipeline.BloomBlur = 0.8f;
-            pipeline.BloomThreshold = 0.5f;
+            pipeline.Rotation = 0f;
+            pipeline.SlideX = 0f;
+            pipeline.SlideY = 0f;
+            pipeline.FeedbackOpacity = 0f;
+            pipeline.FeedbackZoom = 1.0f;
+            pipeline.FeedbackDecay = 0f;
+            pipeline.BloomEnabled = false;
+            pipeline.BloomAmount = 0.01f;
+            pipeline.BloomBlur = 0.01f;
+            pipeline.BloomThreshold = 0.65f;
             pipeline.VignetteEnabled = true;
-            pipeline.VignetteAmount = 0.25f;
         }
     }
 }

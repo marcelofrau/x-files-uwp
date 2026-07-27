@@ -254,7 +254,7 @@ namespace XFiles.Navigation
                 if (nav.IsMediaFullscreen || nav.IsMediaPlayerActive)
                     nav.OnSelectVisualizer();
                 else
-                    nav.OnSettings();
+                    nav.OnToggleBatch();
             }
 
             // LB, RB — continuous seek while held

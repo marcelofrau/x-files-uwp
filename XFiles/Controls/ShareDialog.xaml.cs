@@ -21,11 +21,12 @@ namespace XFiles.Controls
             this.InitializeComponent();
         }
 
-        public void Show(string url)
+        public void Show(string url, string title = "Shared")
         {
-            Log.Info("ShareDialog.Show: url={Url}", url ?? "(null)");
+            Log.Info("ShareDialog.Show: url={Url} title={Title}", url ?? "(null)", title);
             Visibility = Visibility.Visible;
             Overlay.Visibility = Visibility.Visible;
+            TitleText.Text = title;
             UrlText.Text = url;
 
             try
