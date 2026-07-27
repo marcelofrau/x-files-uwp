@@ -26,7 +26,8 @@ namespace XFiles.Controls
         CreateFolder,
         CreateZip,
         Refresh,
-        Edit
+        Edit,
+        Share
     }
 
     public class ActionItem
@@ -59,6 +60,7 @@ namespace XFiles.Controls
         private static readonly string ActionRefresh = "fileactionsheet-refresh-48.png";
         private static readonly string ActionPaste = "fileactionsheet-paste-48.png";
         private static readonly string ActionEdit = "ctx-text-120.png";
+        private static readonly string ActionShare = "fileactionsheet-share-48.png";
 
         private static readonly Dictionary<string, string> ExtIconMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -263,6 +265,14 @@ namespace XFiles.Controls
                     Label = "Rename",
                     IconPath = IconBase + ActionRename,
                     LabelBrush = dim
+                });
+
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.Share,
+                    Label = "Share",
+                    IconPath = IconBase + ActionShare,
+                    LabelBrush = accent
                 });
 
                 actions.Add(new ActionItem

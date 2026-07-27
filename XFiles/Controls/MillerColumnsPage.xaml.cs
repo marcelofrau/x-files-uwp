@@ -20,6 +20,7 @@ using XFiles.Audio;
 using XFiles.FileSystem;
 using XFiles.Metadata;
 using XFiles.Navigation;
+using XFiles.Services;
 using XFiles.Visualizers;
 
 namespace XFiles.Controls
@@ -2116,6 +2117,85 @@ namespace XFiles.Controls
             await System.Threading.Tasks.Task.CompletedTask;
         }
 
+        private async System.Threading.Tasks.Task HandleShareAsync(FileEntry entry)
+        {
+            if (entry == null || string.IsNullOrEmpty(entry.FullPath))
+            {
+                Log.Warn("HandleShareAsync: null/empty entry");
+                return;
+            }
+            Log.Info("HandleShareAsync: {File}", entry.FullPath);
+
+            var cts = new System.Threading.CancellationTokenSource();
+
+            OpProgressDialog.Show("Sharing", entry.Name, "");
+
+            try
+            {
+                string url = await XFiles.Services.FileShareService.ShareAsync(
+                    entry.FullPath,
+                    statusText =>
+                    {
+                        _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                        {
+                            if (OpProgressDialog.IsOpen)
+                            {
+                                OpProgressDialog.UpdateProgress(new FileOperations.OperationProgress
+                                {
+                                    FileName = statusText,
+                                    PercentComplete = -1
+                                });
+                            }
+                        });
+                    },
+                    (bytesUploaded, totalBytes) =>
+                    {
+                        _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                        {
+                            if (OpProgressDialog.IsOpen)
+                            {
+                                OpProgressDialog.UpdateProgress(new FileOperations.OperationProgress
+                                {
+                                    FileName = $"Uploading {FormatBytes(bytesUploaded)} / {FormatBytes(totalBytes)}",
+                                    PercentComplete = totalBytes > 0 ? (double)bytesUploaded / totalBytes * 100 : -1,
+                                    BytesCopied = bytesUploaded,
+                                    TotalBytes = totalBytes
+                                });
+                            }
+                        });
+                    },
+                    cts.Token);
+
+                OpProgressDialog.Complete();
+                await System.Threading.Tasks.Task.Delay(400);
+                OpProgressDialog.Close();
+
+                if (!string.IsNullOrEmpty(url))
+                {
+                    ShareDialogControl.Show(url);
+                }
+                else
+                {
+                    Log.Warn("HandleShareAsync: upload returned null URL");
+                    _ = AlertDialogControl.ShowAsync("Share failed: upload returned no URL.", AlertType.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("HandleShareAsync: exception: {Error}", ex.Message);
+                OpProgressDialog.Close();
+                _ = AlertDialogControl.ShowAsync($"Share failed: {ex.Message}", AlertType.Error);
+            }
+        }
+
+        private static string FormatBytes(long bytes)
+        {
+            if (bytes < 1024) return $"{bytes} B";
+            if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+            if (bytes < 1024 * 1024 * 1024) return $"{bytes / (1024.0 * 1024):F1} MB";
+            return $"{bytes / (1024.0 * 1024 * 1024):F2} GB";
+        }
+
         private void OnFullscreenProgressTick(object sender, object e)
         {
             _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Low, () =>
@@ -3020,6 +3100,9 @@ namespace XFiles.Controls
                     break;
                 case FileAction.Edit:
                     await HandleEditAsync(entry);
+                    break;
+                case FileAction.Share:
+                    await HandleShareAsync(entry);
                     break;
             }
         }

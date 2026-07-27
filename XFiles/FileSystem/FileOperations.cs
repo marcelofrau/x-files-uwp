@@ -122,7 +122,7 @@ namespace XFiles.FileSystem
         /// where System.IO.File.Exists / Directory.Exists may fail.
         /// Returns: "file", "directory", or null.
         /// </summary>
-        private static string CheckPathType(string path)
+        internal static string CheckPathType(string path)
         {
             if (GetFileAttributesExFromAppW(path, 0, out var attr))
             {

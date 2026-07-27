@@ -437,13 +437,10 @@
                                     FontSize="13"
                                     VerticalAlignment="Center" />
                                 <Border Background="#93C43C" CornerRadius="4"
-                                        Padding="8,3" Margin="4,0">
-                                    <TextBlock Text="Y"
-                                        Foreground="#1A1D23"
-                                        FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
-                                        FontSize="13"
-                                        FontWeight="Bold"
-                                        VerticalAlignment="Center" />
+                                        Padding="6,4" Margin="4,0">
+                                    <Image Source="ms-appx:///Assets/GamepadButtons/abxy/y.png"
+                                           Width="18" Height="18"
+                                           VerticalAlignment="Center" />
                                 </Border>
                                 <TextBlock Text=" to extract"
                                     Foreground="{StaticResource XFilesTextDimBrush}"
