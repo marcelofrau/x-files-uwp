@@ -39,7 +39,9 @@ namespace XFiles.Controls
 
             FileListText.Text = string.Join("\n", files);
 
-            DeleteButton.Background = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x44, 0x44, 0x44));
+            var redBg = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 0xE7, 0x4C, 0x3C));
+            DeleteButton.Background = redBg;
+            DeleteButton.BorderBrush = redBg;
             DeleteButtonText.Text = "DELETE";
 
             _tcs = new TaskCompletionSource<bool>();
@@ -62,7 +64,9 @@ namespace XFiles.Controls
 
             FileListText.Text = string.Join("\n", files);
 
-            DeleteButton.Background = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x1B, 0x6E, 0xD1));
+            var greenBg = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x93, 0xC4, 0x3C));
+            DeleteButton.Background = greenBg;
+            DeleteButton.BorderBrush = greenBg;
             DeleteButtonText.Text = "MOVE";
 
             _tcs = new TaskCompletionSource<bool>();

@@ -71,8 +71,6 @@
                             Style="{StaticResource ConfirmDialogButton}"
                             Click="OnDeleteClicked"
                             Margin="0,0,8,0"
-                            Background="#FF4444"
-                            BorderBrush="#FF4444"
                             x:FieldModifier="public">
                         <StackPanel Orientation="Horizontal">
                             <Image Source="ms-appx:///Assets/GamepadButtons/abxy/a.png"
