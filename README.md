@@ -125,21 +125,20 @@ All the essentials, accessible from the **Y button** context menu:
 ## 📸 Screenshots
 
 <p align="center">
-  <img src="docs/screenshots/music-player.jpg" alt="Music Player" width="400" />
-  &nbsp;
-  <img src="docs/screenshots/xfiles-01-splash.jpg" alt="Splash Screen" width="400" />
-</p>
-<p align="center">
   <img src="docs/screenshots/xfiles-02-welcome.jpg" alt="Welcome" width="400" />
   &nbsp;
-  <img src="docs/screenshots/xfiles-03-spinup-hdd.jpg" alt="Spin-up HDD" width="400" />
+  <img src="docs/screenshots/xfiles-04-about.jpg" alt="About" width="600" />
+</p>
+<p align="center">
+  <img src="docs/screenshots/xfiles-08-image-viewer.jpg" alt="Image Viewer" width="600" />
+  &nbsp;
+  <img src="docs/screenshots/xfiles-36-editor.jpg" alt="Editor" width="600" />
 </p>
 
 <details>
 <summary>📸 All screenshots (48)</summary>
 
 <p align="center">
-  <img src="docs/screenshots/music-player.jpg" alt="Music Player" width="600" /><br/>
   <img src="docs/screenshots/xfiles-01-splash.jpg" alt="Splash Screen" width="600" /><br/>
   <img src="docs/screenshots/xfiles-02-welcome.jpg" alt="Welcome" width="600" /><br/>
   <img src="docs/screenshots/xfiles-03-spinup-hdd.jpg" alt="Spin-up HDD" width="600" /><br/>
