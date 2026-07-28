@@ -42,6 +42,10 @@ plan. Do not skip ahead to later phases without completing/documenting earlier o
   class/method name (e.g. `Log.Dbg("FileOperations.Copy: ...")`). High-frequency hot paths
   use `#if` flags (e.g. `GAMEPAD_POLL_DEBUG`) — compiled out by default, enabled in csproj
   for debugging. Never swallow exceptions — always log them. See `docs/LOGGING.md`.
+- **Release flow is automated via GitHub Actions.** To release: update `RELEASE-NOTES.md`,
+  commit, tag `v{major}.{minor}.{patch}.{build}` (4-part), push tag. Workflow builds +
+  packages + creates release with zip. See `docs/RELEASE.md`. Do NOT manually create
+  releases via `gh release create` — the workflow handles everything.
 
 ## Architecture at a Glance
 See `docs/ARCHITECTURE.md` for the full picture. Layers (top → bottom):
@@ -64,6 +68,7 @@ XAML Views → ViewModels → Navigation (`INavigable`, `ColumnNavigator`) →
 | `docs/ASSETS-GUIDE.md` | Asset naming, directory structure, personal icon set workflow |
 | `docs/DECISIONS.md` | ADRs — why XAML, why not yazi-core, why SharpCompress, etc. |
 | `docs/LOGGING.md` | Log levels, debug flags (`#if`), architecture, conventions |
+| `docs/RELEASE.md` | Release process, CI/CD workflow, versioning scheme |
 | `docs/text-editor/SPEC.md` | Text editor requirements, file size tiers, scope |
 | `docs/text-editor/ARCHITECTURE.md` | Editor components, data flow, system keyboard integration |
 | `docs/text-editor/INPUT-MAPPING.md` | Gamepad button mapping for Navigate + Input modes |
@@ -91,6 +96,17 @@ XAML Views → ViewModels → Navigation (`INavigable`, `ColumnNavigator`) →
 MSBuild.exe "XFiles.sln" /p:Configuration=Debug /p:Platform=x64
 ```
 Deploy to Xbox: see `docs/DEPLOY-XBOX.md`.
+
+## Release Process
+See `docs/RELEASE.md` for full details. Quick reference:
+1. Update `RELEASE-NOTES.md` with changes since last version
+2. Commit: `git commit -m "docs: release notes for vX.Y.Z.B"`
+3. Tag: `git tag vX.Y.Z.B` (4-part version, last = build number)
+4. Push: `git push && git push origin vX.Y.Z.B`
+5. GitHub Actions builds + packages + creates release with zip automatically
+
+Version scheme: `major.minor.patch.build` — build number auto-increments via
+`build_counter.txt` + PreBuildEvent. Tag must include full 4-part version.
 
 ## Known Pitfalls (anticipated, from sibling project's experience)
 1. **StorageFolder APIs will silently fail or throw AccessDenied** for arbitrary drive
