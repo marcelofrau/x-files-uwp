@@ -62,7 +62,43 @@ namespace XFiles.FileSystem
         [DllImport("kernel32.dll")]
         private static extern uint GetLogicalDrives();
 
+        [DllImport("api-ms-win-core-file-fromapp-l1-1-0.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr CreateFile2FromAppW(
+            string lpFileName,
+            uint dwDesiredAccess,
+            uint dwShareMode,
+            uint dwCreationDisposition,
+            IntPtr lpSecurityAttributes);
+
+        private const uint GENERIC_READ = 0x80000000;
+        private const uint FILE_SHARE_READ = 0x00000001;
+        private const uint OPEN_EXISTING = 3;
+
         #endregion
+
+        public static bool FileExists(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return false;
+            IntPtr hFind = FindFirstFileExFromAppW(path, FINDEX_INFO_LEVELS.FindExInfoStandard,
+                out _, FINDEX_SEARCH_OPS.FindExSearchNameMatch, IntPtr.Zero, 0);
+            if (hFind == new IntPtr(INVALID_HANDLE_VALUE)) return false;
+            FindClose(hFind);
+            return true;
+        }
+
+        /// <summary>
+        /// Open a file for reading via P/Invoke (bypasses UWP sandbox).
+        /// Returns null if file cannot be opened. Caller owns the stream.
+        /// </summary>
+        public static Stream OpenFileRead(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return null;
+            IntPtr hFile = CreateFile2FromAppW(path, GENERIC_READ, FILE_SHARE_READ,
+                OPEN_EXISTING, IntPtr.Zero);
+            if (hFile == new IntPtr(INVALID_HANDLE_VALUE)) return null;
+            var handle = new Microsoft.Win32.SafeHandles.SafeFileHandle(hFile, ownsHandle: true);
+            return new FileStream(handle, FileAccess.Read, bufferSize: 4096, isAsync: false);
+        }
 
         public static async Task<List<FileEntry>> ScanAsync(string path, CancellationToken token = default)
         {

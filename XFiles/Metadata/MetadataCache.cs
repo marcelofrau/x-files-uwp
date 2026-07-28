@@ -11,7 +11,8 @@ namespace XFiles.Metadata
         private const string DbFileName = "metadata.db";
         private const long MaxCacheAgeMs = 90L * 24 * 60 * 60 * 1000;
         private const long MaxCoverArtAgeMs = 180L * 24 * 60 * 60 * 1000;
-        private const int CurrentSchemaVersion = 1;
+        private const long MaxLibRetroCacheAgeMs = 30L * 24 * 60 * 60 * 1000;
+        private const int CurrentSchemaVersion = 2;
 
         private static SQLiteAsyncConnection _db;
         private static readonly object _initLock = new object();
@@ -44,6 +45,7 @@ namespace XFiles.Metadata
             await _db.CreateTableAsync<MetadataCacheEntry>();
             await _db.CreateTableAsync<CoverArtEntry>();
             await _db.CreateTableAsync<AppSettingEntry>();
+            await _db.CreateTableAsync<LibRetroThumbnailEntry>();
             Log.Info("MetadataCache: database opened at {Path} schema v{Version}", DbFileName, CurrentSchemaVersion);
             return _db;
         }
@@ -54,8 +56,12 @@ namespace XFiles.Metadata
             {
                 // v1: SchemaVersion + AppSettings tables (created by CreateTableAsync above)
             }
+            if (fromVersion < 2)
+            {
+                // v2: LibRetro thumbnail cache (created by CreateTableAsync above)
+            }
             // Future migrations:
-            // if (fromVersion < 2) { ... }
+            // if (fromVersion < 3) { ... }
 
             // Update version
             var existing = await db.Table<SchemaVersionEntry>()
@@ -381,6 +387,108 @@ namespace XFiles.Metadata
             if (string.IsNullOrWhiteSpace(artist) && string.IsNullOrWhiteSpace(album))
                 return null;
             return $"{(artist ?? "").ToLowerInvariant()}|{(album ?? "").ToLowerInvariant()}";
+        }
+
+        public static async Task<bool> GetLibRetroThumbnailAsync(string url)
+        {
+            try
+            {
+                var db = await GetDbAsync();
+                var entry = await db.Table<LibRetroThumbnailEntry>()
+                    .Where(e => e.Url == url)
+                    .FirstOrDefaultAsync();
+
+                if (entry == null) return false;
+
+                long ageMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - entry.Timestamp;
+                if (ageMs > MaxLibRetroCacheAgeMs)
+                {
+                    await db.DeleteAsync(entry);
+                    return false;
+                }
+
+                return entry.Found;
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("MetadataCache: GetLibRetroThumbnailAsync failed url='{Url}'", ex, url);
+                return false;
+            }
+        }
+
+        public static async Task SetLibRetroThumbnailAsync(string url, bool found)
+        {
+            try
+            {
+                var db = await GetDbAsync();
+                var existing = await db.Table<LibRetroThumbnailEntry>()
+                    .Where(e => e.Url == url)
+                    .FirstOrDefaultAsync();
+
+                if (existing != null)
+                {
+                    existing.Found = found;
+                    existing.Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                    await db.UpdateAsync(existing);
+                }
+                else
+                {
+                    await db.InsertAsync(new LibRetroThumbnailEntry
+                    {
+                        Url = url,
+                        Found = found,
+                        Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("MetadataCache: SetLibRetroThumbnailAsync failed url='{Url}'", ex, url);
+            }
+        }
+
+        public static async Task<int> PruneLibRetroCacheAsync()
+        {
+            try
+            {
+                var db = await GetDbAsync();
+                long cutoff = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - MaxLibRetroCacheAgeMs;
+                var old = await db.Table<LibRetroThumbnailEntry>()
+                    .Where(e => e.Timestamp < cutoff)
+                    .ToListAsync();
+                foreach (var entry in old)
+                    await db.DeleteAsync(entry);
+                return old.Count;
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("MetadataCache: PruneLibRetroCacheAsync failed", ex);
+                return 0;
+            }
+        }
+
+        public static async Task<bool> IsLibRetroUrlCachedAsync(string url)
+        {
+            try
+            {
+                var db = await GetDbAsync();
+                var entry = await db.Table<LibRetroThumbnailEntry>()
+                    .Where(e => e.Url == url)
+                    .FirstOrDefaultAsync();
+                if (entry == null) return false;
+
+                long ageMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - entry.Timestamp;
+                if (ageMs > MaxLibRetroCacheAgeMs)
+                {
+                    await db.DeleteAsync(entry);
+                    return false;
+                }
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
     }
 }

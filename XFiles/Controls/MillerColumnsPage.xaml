@@ -472,6 +472,108 @@
                     </StackPanel>
                 </Grid>
 
+                <!-- Preview content: ROM cartridge -->
+                <Grid Grid.Row="1"
+                    x:Name="PreviewRomPanel"
+                    Visibility="Collapsed"
+                    Background="#0F1318">
+                    <Grid Margin="16">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <!-- Cover art area (centered) -->
+                        <Grid Grid.Row="0"
+                              HorizontalAlignment="Center" VerticalAlignment="Center"
+                              Width="200" Height="200" Margin="0,0,0,12">
+                            <Border Background="#1A2230" CornerRadius="8"
+                                    BorderBrush="#2A3240" BorderThickness="1">
+                                <Grid>
+                                    <!-- System icon placeholder (default) -->
+                                    <Image x:Name="RomSystemIcon"
+                                           Width="128" Height="128"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           Opacity="0.6"
+                                           Source="ms-appx:///Assets/Views/MillerColumnsPage/rom/icons8-game-controller-128.png" />
+                                    <!-- Cover art (hidden until fetched) -->
+                                    <Image x:Name="RomCoverImage"
+                                           Width="200" Height="200"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           Stretch="Uniform"
+                                           Visibility="Collapsed" />
+                                </Grid>
+                            </Border>
+                        </Grid>
+
+                        <!-- Game name -->
+                        <TextBlock x:Name="RomTitleText" Grid.Row="1"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                                   FontSize="18" Foreground="#FFE0E0E0"
+                                   HorizontalAlignment="Center" TextAlignment="Center"
+                                   TextWrapping="Wrap" MaxLines="2"
+                                   Margin="0,0,0,4" />
+
+                        <!-- System + genre + players (one line) -->
+                        <TextBlock x:Name="RomMetaLine1" Grid.Row="2"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                   FontSize="12" Foreground="#FF93C43C"
+                                   HorizontalAlignment="Center" TextAlignment="Center"
+                                   Margin="0,0,0,2" />
+
+                        <!-- Developer · Publisher -->
+                        <TextBlock x:Name="RomMetaLine2" Grid.Row="3"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                   FontSize="11" Foreground="#88FFFFFF"
+                                   HorizontalAlignment="Center" TextAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   Margin="0,0,0,2"
+                                   Visibility="Collapsed" />
+
+                        <!-- Rating · Year -->
+                        <TextBlock x:Name="RomMetaLine3" Grid.Row="4"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                   FontSize="11" Foreground="#88FFFFFF"
+                                   HorizontalAlignment="Center" TextAlignment="Center"
+                                   Margin="0,0,0,8"
+                                   Visibility="Collapsed" />
+
+                        <!-- Description (2-3 lines, truncated) -->
+                        <TextBlock x:Name="RomDescriptionText" Grid.Row="5"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                   FontSize="11" Foreground="#AAFFFFFF"
+                                   TextAlignment="Left"
+                                   TextWrapping="Wrap"
+                                   MaxLines="3"
+                                   TextTrimming="CharacterEllipsis"
+                                   Margin="0,4,0,0"
+                                   Visibility="Collapsed" />
+
+                        <!-- Separator line (when gamelist data present) -->
+                        <Border x:Name="RomDescSeparator" Grid.Row="6"
+                                Height="1" Background="#22FFFFFF"
+                                HorizontalAlignment="Stretch"
+                                Margin="0,8,0,0"
+                                Visibility="Collapsed" />
+
+                        <!-- File size (always shown at bottom of info area) -->
+                        <TextBlock x:Name="RomSizeText" Grid.Row="7"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                   FontSize="11" Foreground="#66FFFFFF"
+                                   HorizontalAlignment="Center" TextAlignment="Center"
+                                   VerticalAlignment="Bottom"
+                                   Margin="0,8,0,0" />
+                    </Grid>
+                </Grid>
+
                 <TextBlock Grid.Row="2"
                     x:Name="PreviewStatus"
                     Text=""
@@ -1395,7 +1497,6 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <FontIcon Grid.Column="0" Glyph="&#xE783;" FontSize="22"
                                   Foreground="#FFE04848" VerticalAlignment="Center" Margin="0,0,10,0" />
@@ -1403,11 +1504,6 @@
                                    FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
                                    FontSize="18" Foreground="#FFE04848"
                                    VerticalAlignment="Center" Text="Error" />
-                        <Button x:Name="BtnErrorClose" Grid.Column="2"
-                                Background="Transparent" BorderThickness="0"
-                                Padding="8,4" Click="OnErrorCloseClick">
-                            <FontIcon Glyph="&#xE711;" FontSize="16" Foreground="#99FFFFFF" />
-                        </Button>
                     </Grid>
 
                     <!-- Description -->
@@ -1428,42 +1524,79 @@
                         </ScrollViewer>
                     </Border>
 
-                    <!-- Buttons -->
+                    <!-- Buttons: X=Copy, Y=Share, A/B=Close -->
                     <Grid Grid.Row="3" Margin="0,12,0,0">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
 
+                        <!-- X = Copy error to clipboard -->
                         <Button x:Name="BtnErrorCopy" Grid.Column="0"
-                                Background="#FF254220" Foreground="#FF93C43C"
-                                BorderBrush="#FF4A6220" BorderThickness="1"
-                                Padding="16,6" Click="OnErrorCopyClick">
+                                Background="Transparent" BorderThickness="0"
+                                Padding="10,6" Click="OnErrorCopyClick"
+                                HorizontalAlignment="Center">
                             <StackPanel Orientation="Horizontal">
-                                <FontIcon Glyph="&#xE8C8;" FontSize="14" Margin="0,0,6,0"
-                                          VerticalAlignment="Center" />
-                                <TextBlock Text="Copy Error" FontSize="12"
+                                <Image Source="ms-appx:///Assets/GamepadButtons/abxy/x.png"
+                                       Width="26" Height="26" Margin="0,0,8,0"
+                                       VerticalAlignment="Center" />
+                                <TextBlock Text="Copy" FontSize="12"
                                            FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                                           VerticalAlignment="Center" />
+                                           Foreground="#FF93C43C" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
 
-                        <Button x:Name="BtnErrorReport" Grid.Column="2"
-                                Background="#FF254220" Foreground="#FF93C43C"
-                                BorderBrush="#FF4A6220" BorderThickness="1"
-                                Padding="16,6" Click="OnErrorReportClick">
+                        <!-- Y = Share error via gofile.io -->
+                        <Button x:Name="BtnErrorShare" Grid.Column="1"
+                                Background="Transparent" BorderThickness="0"
+                                Padding="10,6" Click="OnErrorShareClick"
+                                HorizontalAlignment="Center">
                             <StackPanel Orientation="Horizontal">
-                                <FontIcon Glyph="&#xE77D;" FontSize="14" Margin="0,0,6,0"
-                                          VerticalAlignment="Center" />
-                                <TextBlock Text="Report to GitHub" FontSize="12"
+                                <Image Source="ms-appx:///Assets/GamepadButtons/abxy/y.png"
+                                       Width="26" Height="26" Margin="0,0,8,0"
+                                       VerticalAlignment="Center" />
+                                <TextBlock x:Name="ErrorShareText" Text="Share" FontSize="12"
                                            FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                                           VerticalAlignment="Center" />
+                                           Foreground="#FF93C43C" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+
+                        <!-- A/B = Close -->
+                        <Button x:Name="BtnErrorClose" Grid.Column="2"
+                                Background="Transparent" BorderThickness="0"
+                                Padding="10,6" Click="OnErrorCloseClick"
+                                HorizontalAlignment="Center">
+                            <StackPanel Orientation="Horizontal">
+                                <Image Source="ms-appx:///Assets/GamepadButtons/abxy/a.png"
+                                       Width="26" Height="26" Margin="0,0,8,0"
+                                       VerticalAlignment="Center" />
+                                <TextBlock Text="Close" FontSize="12"
+                                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                           Foreground="#FF93C43C" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
                     </Grid>
                 </Grid>
             </Border>
+
+            <!-- Upload progress overlay (shown during share) -->
+            <Grid x:Name="ErrorUploadProgress" Visibility="Collapsed"
+                  HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                <Grid.Background>
+                    <SolidColorBrush Color="#AA000000" />
+                </Grid.Background>
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Spacing="10">
+                    <ProgressRing IsActive="True" Width="40" Height="40"
+                                  Foreground="#FF93C43C" />
+                    <TextBlock x:Name="ErrorUploadStatus"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="13" Foreground="#CCFFFFFF"
+                               HorizontalAlignment="Center" Text="Preparing..." />
+                </StackPanel>
+            </Grid>
+
         </Grid>
     </Grid>
 </Page>

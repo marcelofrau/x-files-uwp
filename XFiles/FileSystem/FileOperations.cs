@@ -152,13 +152,162 @@ namespace XFiles.FileSystem
             public int FileTotal { get; set; }
         }
 
+        public class ScanResult
+        {
+            public int FileCount;
+            public long TotalBytes;
+        }
+
+        private const int CopyChunkSize = 65536; // 64KB
+
+        /// <summary>
+        /// Streaming file copy using Win32 P/Invoke streams.
+        /// Supports per-chunk cancel and byte-level progress reporting.
+        /// </summary>
+        private static OperationResult CopyFileStreaming(
+            string sourcePath, string destPath,
+            IProgress<OperationProgress> progress, string fileName,
+            long fileBytesCopied, long fileTotalBytes,
+            CancellationToken token)
+        {
+            try
+            {
+                using (var readStream = Win32FileStream.OpenRead(sourcePath))
+                {
+                    if (readStream == null)
+                    {
+                        Log.Warn("FileOperations.CopyFileStreaming: cannot open source {Path}", sourcePath);
+                        return OperationResult.Failed;
+                    }
+
+                    using (var writeStream = Win32FileWriteStream.Create(destPath))
+                    {
+                        if (writeStream == null)
+                        {
+                            Log.Warn("FileOperations.CopyFileStreaming: cannot create dest {Path}", destPath);
+                            return OperationResult.Failed;
+                        }
+
+                        var buffer = new byte[CopyChunkSize];
+                        long totalCopied = 0;
+                        int bytesRead;
+
+                        do
+                        {
+                            if (token.IsCancellationRequested) return OperationResult.Cancelled;
+
+                            bytesRead = readStream.Read(buffer, 0, CopyChunkSize);
+                            if (bytesRead > 0)
+                            {
+                                writeStream.Write(buffer, 0, bytesRead);
+                                totalCopied += bytesRead;
+
+                                if (fileTotalBytes > 0)
+                                {
+                                    progress?.Report(new OperationProgress
+                                    {
+                                        FileName = fileName,
+                                        PercentComplete = (double)totalCopied / fileTotalBytes * 100.0,
+                                        BytesCopied = fileBytesCopied + totalCopied,
+                                        TotalBytes = fileBytesCopied + fileTotalBytes
+                                    });
+                                }
+                            }
+                        }
+                        while (bytesRead > 0);
+                    }
+                }
+                return OperationResult.Success;
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("FileOperations.CopyFileStreaming exception: {File}", ex, sourcePath);
+                // Clean up partial dest file
+                try { DeleteFileFromAppW(destPath); } catch { }
+                return OperationResult.Failed;
+            }
+        }
+
+        /// <summary>
+        /// Pre-scan source paths to count total files and total bytes.
+        /// Used to show accurate progress before starting the actual operation.
+        /// </summary>
+        public static async Task<ScanResult> ScanPathsAsync(List<string> paths)
+        {
+            return await Task.Run(() =>
+            {
+                var result = new ScanResult();
+                foreach (var path in paths)
+                {
+                    var pathType = CheckPathType(path);
+                    if (pathType == "file")
+                    {
+                        result.FileCount++;
+                        result.TotalBytes += GetFileSizePInvoke(path);
+                    }
+                    else if (pathType == "directory")
+                    {
+                        ScanDirectoryRecursive(path, result);
+                    }
+                }
+                return result;
+            });
+        }
+
+        private static void ScanDirectoryRecursive(string dir, ScanResult result)
+        {
+            try
+            {
+                var findData = new WIN32_FIND_DATA();
+                IntPtr hFind = FindFirstFileExFromAppW(
+                    dir + "\\*", 0, out findData, 0, IntPtr.Zero, 0);
+                if (hFind == new IntPtr(-1)) return;
+
+                do
+                {
+                    if (findData.cFileName == "." || findData.cFileName == "..") continue;
+                    if ((findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+                    {
+                        ScanDirectoryRecursive(dir + "\\" + findData.cFileName, result);
+                    }
+                    else
+                    {
+                        result.FileCount++;
+                        long fileSize = ((long)findData.nFileSizeHigh << 32) | findData.nFileSizeLow;
+                        result.TotalBytes += fileSize;
+                    }
+                }
+                while (FindNextFileW(hFind, out findData));
+
+                FindClose(hFind);
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("ScanDirectoryRecursive: {Dir} error", ex, dir);
+            }
+        }
+
+        private static long GetFileSizePInvoke(string path)
+        {
+            if (GetFileAttributesExFromAppW(path, 0, out var attr))
+            {
+                return ((long)attr.nFileSizeHigh << 32) | attr.nFileSizeLow;
+            }
+            return 0;
+        }
+
         /// <summary>
         /// Copy file from source to destination directory.
         /// If sameDir is true, uses "Copy N" naming to avoid overwriting in same directory.
+        /// Uses streaming copy with cancel support and per-file byte progress.
+        /// If fileBytesOffset is provided, progress reports are offset (for multi-file overall tracking).
         /// </summary>
-        public static async Task<OperationResult> CopyAsync(string sourcePath, string destDir, IProgress<OperationProgress> progress = null, bool sameDir = false, CancellationToken token = default)
+        public static async Task<OperationResult> CopyAsync(
+            string sourcePath, string destDir,
+            IProgress<OperationProgress> progress = null,
+            bool sameDir = false, CancellationToken token = default,
+            long fileBytesOffset = 0, long overallTotalBytes = 0)
         {
-            // Directory: delegate to CopyDirectoryAsync
             var pathType = CheckPathType(sourcePath);
             if (pathType == "directory")
             {
@@ -173,28 +322,26 @@ namespace XFiles.FileSystem
 
                     string fileName = Path.GetFileName(sourcePath);
                     string destPath = Path.Combine(destDir, fileName);
-
                     destPath = sameDir ? GetCopyName(destPath) : GetUniqueFilePath(destPath);
 
-                    Log.Info("FileOperations.Copy: {Source} -> {Dest}", sourcePath, destPath);
+                    long fileSize = GetFileSizePInvoke(sourcePath);
+                    Log.Info("FileOperations.Copy: {Source} -> {Dest} ({Size} bytes)", sourcePath, destPath, fileSize);
 
-                    bool ok = CopyFileFromAppW(sourcePath, destPath, false);
-                    if (!ok)
+                    var result = CopyFileStreaming(sourcePath, destPath, progress, fileName,
+                        fileBytesOffset, overallTotalBytes > 0 ? overallTotalBytes : fileSize, token);
+
+                    if (result == OperationResult.Success)
                     {
-                        int err = Marshal.GetLastWin32Error();
-                        Log.Warn("FileOperations.Copy failed: error {Error}", err);
-                        return OperationResult.Failed;
+                        progress?.Report(new OperationProgress
+                        {
+                            FileName = fileName,
+                            PercentComplete = 100,
+                            BytesCopied = overallTotalBytes > 0 ? fileBytesOffset + fileSize : fileSize,
+                            TotalBytes = overallTotalBytes > 0 ? overallTotalBytes : fileSize
+                        });
                     }
 
-                    progress?.Report(new OperationProgress
-                    {
-                        FileName = fileName,
-                        PercentComplete = 100,
-                        BytesCopied = GetFileSize(destPath),
-                        TotalBytes = GetFileSize(destPath)
-                    });
-
-                    return OperationResult.Success;
+                    return result;
                 }
                 catch (Exception ex)
                 {
@@ -207,10 +354,11 @@ namespace XFiles.FileSystem
         /// <summary>
         /// Copy directory recursively from source to destination.
         /// If sameDir is true, uses "Copy N" naming to avoid overwriting in same directory.
+        /// Pre-scans for accurate file count + total bytes before starting.
         /// </summary>
         public static async Task<OperationResult> CopyDirectoryAsync(string sourceDir, string destDir, IProgress<OperationProgress> progress = null, bool sameDir = false, CancellationToken token = default)
         {
-            return await Task.Run(() =>
+            return await Task.Run(async () =>
             {
                 try
                 {
@@ -221,7 +369,25 @@ namespace XFiles.FileSystem
                     Log.Info("FileOperations.CopyDirectory: {Source} -> {Dest}", sourceDir, destPath);
                     CreateDirectoryFromAppW(destPath, IntPtr.Zero);
 
-                    return CopyDirectoryRecursive(sourceDir, destPath, progress, token);
+                    // Pre-scan for accurate progress
+                    var scan = new ScanResult();
+                    ScanDirectoryRecursive(sourceDir, scan);
+
+                    int completedFiles = 0;
+                    long completedBytes = 0;
+
+                    progress?.Report(new OperationProgress
+                    {
+                        FileName = dirName,
+                        PercentComplete = 0,
+                        FileIndex = 0,
+                        FileTotal = scan.FileCount,
+                        BytesCopied = 0,
+                        TotalBytes = scan.TotalBytes
+                    });
+
+                    return CopyDirectoryRecursive(sourceDir, destPath, progress, token,
+                        ref completedFiles, scan.FileCount, ref completedBytes, scan.TotalBytes);
                 }
                 catch (Exception ex)
                 {
@@ -231,7 +397,10 @@ namespace XFiles.FileSystem
             });
         }
 
-        private static OperationResult CopyDirectoryRecursive(string sourceDir, string destDir, IProgress<OperationProgress> progress, CancellationToken token = default)
+        private static OperationResult CopyDirectoryRecursive(
+            string sourceDir, string destDir,
+            IProgress<OperationProgress> progress, CancellationToken token,
+            ref int completedFiles, long totalFiles, ref long completedBytes, long totalBytes)
         {
             try
             {
@@ -251,25 +420,36 @@ namespace XFiles.FileSystem
                     {
                         string destSubDir = destDir + "\\" + findData.cFileName;
                         CreateDirectoryFromAppW(destSubDir, IntPtr.Zero);
-                        var result = CopyDirectoryRecursive(fullPath, destSubDir, progress, token);
+                        var result = CopyDirectoryRecursive(fullPath, destSubDir, progress, token,
+                            ref completedFiles, totalFiles, ref completedBytes, totalBytes);
                         if (result != OperationResult.Success) { FindClose(hFind); return result; }
                     }
                     else
                     {
                         string destFile = destDir + "\\" + findData.cFileName;
-                        bool ok = CopyFileFromAppW(fullPath, destFile, false);
-                        if (!ok)
+                        long fileSize = ((long)findData.nFileSizeHigh << 32) | findData.nFileSizeLow;
+
+                        var result = CopyFileStreaming(fullPath, destFile, progress, findData.cFileName,
+                            completedBytes, totalBytes, token);
+
+                        if (result != OperationResult.Cancelled)
                         {
-                            Log.Warn("FileOperations.CopyDirectory: failed to copy {File}", fullPath);
-                            FindClose(hFind);
-                            return OperationResult.Failed;
+                            completedFiles++;
+                            completedBytes += fileSize;
+
+                            progress?.Report(new OperationProgress
+                            {
+                                FileName = findData.cFileName,
+                                PercentComplete = totalFiles > 0 ? (double)completedFiles / totalFiles * 100.0 : -1,
+                                FileIndex = completedFiles,
+                                FileTotal = (int)totalFiles,
+                                BytesCopied = completedBytes,
+                                TotalBytes = totalBytes
+                            });
                         }
 
-                        progress?.Report(new OperationProgress
-                        {
-                            FileName = findData.cFileName,
-                            PercentComplete = -1
-                        });
+                        if (result == OperationResult.Cancelled) { FindClose(hFind); return OperationResult.Cancelled; }
+                        if (result == OperationResult.Failed) { FindClose(hFind); return OperationResult.Failed; }
                     }
                 }
                 while (FindNextFileW(hFind, out findData));
@@ -320,12 +500,13 @@ namespace XFiles.FileSystem
                         int err = Marshal.GetLastWin32Error();
                         Log.Warn("FileOperations.Move failed: error {Error}", err);
 
-                        // Fallback: copy + delete (MoveFile fails across volumes)
-                        Log.Dbg("FileOperations.Move: trying copy+delete fallback");
-                        ok = CopyFileFromAppW(sourcePath, destPath, false);
-                        if (!ok)
+                        // Fallback: streaming copy + delete (MoveFile fails across volumes)
+                        Log.Dbg("FileOperations.Move: trying streaming copy+delete fallback");
+                        long fileSize = GetFileSizePInvoke(sourcePath);
+                        var copyResult = CopyFileStreaming(sourcePath, destPath, progress, fileName, 0, fileSize, token);
+                        if (copyResult != OperationResult.Success)
                         {
-                            return OperationResult.Failed;
+                            return copyResult;
                         }
                         bool deleted = DeleteFileFromAppW(sourcePath);
                         if (!deleted)
@@ -440,13 +621,14 @@ namespace XFiles.FileSystem
                         bool ok = MoveFileFromAppW(fullPath, destFile);
                         if (!ok)
                         {
-                            // Fallback: copy + delete
-                            ok = CopyFileFromAppW(fullPath, destFile, false);
-                            if (!ok)
+                            // Fallback: streaming copy + delete
+                            long fileSize = ((long)findData.nFileSizeHigh << 32) | findData.nFileSizeLow;
+                            var copyResult = CopyFileStreaming(fullPath, destFile, progress, findData.cFileName, 0, fileSize, token);
+                            if (copyResult != OperationResult.Success)
                             {
                                 Log.Warn("FileOperations.MoveDirectoryRecursive: failed to move {File}", fullPath);
                                 FindClose(hFind);
-                                return OperationResult.Failed;
+                                return copyResult;
                             }
                             bool deleted = DeleteFileFromAppW(fullPath);
                             if (!deleted)
@@ -678,6 +860,7 @@ namespace XFiles.FileSystem
         /// conflictCallback receives the conflicting filename and returns:
         ///   0=Skip, 1=Overwrite, 2=OverwriteAll.
         /// If null, files are overwritten silently (existing behavior).
+        /// Pre-scans archive entries for accurate progress.
         /// </summary>
         public static async Task<OperationResult> ExtractAsync(
             string archivePath, string destDir,
@@ -707,69 +890,127 @@ namespace XFiles.FileSystem
 
                         using (var archive = SharpCompress.Archives.ArchiveFactory.Open(stream))
                         {
-                            bool overwriteAll = conflictCallback == null;
-
+                            // Pre-scan: count files and total uncompressed size
+                            int totalFiles = 0;
+                            long totalBytes = 0;
                             foreach (var entry in archive.Entries)
                             {
-                                if (token.IsCancellationRequested) return OperationResult.Cancelled;
-
-                                if (entry.IsDirectory) continue;
-
-                                progress?.Report(new OperationProgress
+                                if (!entry.IsDirectory)
                                 {
-                                    FileName = entry.Key,
-                                    PercentComplete = -1
-                                });
+                                    totalFiles++;
+                                    totalBytes += (long)entry.Size;
+                                }
+                            }
 
-                                if (!overwriteAll && conflictCallback != null)
+                            int completedFiles = 0;
+                            long completedBytes = 0;
+                            bool overwriteAll = conflictCallback == null;
+
+                            // Reset stream for extraction pass
+                            stream.Seek(0, SeekOrigin.Begin);
+                            using (var archive2 = SharpCompress.Archives.ArchiveFactory.Open(stream))
+                            {
+                                foreach (var entry in archive2.Entries)
                                 {
-                                    string destPath = System.IO.Path.Combine(destDir, entry.Key);
-                                    if (CheckPathType(destPath) == "file")
+                                    if (token.IsCancellationRequested) return OperationResult.Cancelled;
+
+                                    if (entry.IsDirectory) continue;
+
+                                    if (!overwriteAll && conflictCallback != null)
                                     {
-                                        int decision = await conflictCallback(entry.Key);
-                                        switch (decision)
+                                        string destPath = System.IO.Path.Combine(destDir, entry.Key);
+                                        if (CheckPathType(destPath) == "file")
                                         {
-                                            case 0: // Skip
-                                                Log.Dbg("Extract: skipping {File}", entry.Key);
-                                                continue;
-                                            case 1: // Overwrite this one
-                                                Log.Dbg("Extract: overwriting {File}", entry.Key);
-                                                break;
-                                            case 2: // Overwrite all remaining
-                                                Log.Dbg("Extract: overwrite all remaining");
-                                                overwriteAll = true;
-                                                break;
+                                            int decision = await conflictCallback(entry.Key);
+                                            switch (decision)
+                                            {
+                                                case 0: // Skip
+                                                    Log.Dbg("Extract: skipping {File}", entry.Key);
+                                                    completedFiles++;
+                                                    completedBytes += (long)entry.Size;
+                                                    continue;
+                                                case 1: // Overwrite this one
+                                                    Log.Dbg("Extract: overwriting {File}", entry.Key);
+                                                    break;
+                                                case 2: // Overwrite all remaining
+                                                    Log.Dbg("Extract: overwrite all remaining");
+                                                    overwriteAll = true;
+                                                    break;
+                                            }
                                         }
                                     }
-                                }
 
-                                // Ensure parent directory exists (SharpCompress entry.Key may include subdirs)
-                                string entryDestPath = System.IO.Path.Combine(destDir, entry.Key);
-                                string entryParentDir = System.IO.Path.GetDirectoryName(entryDestPath);
-                                if (entryParentDir != null && CheckPathType(entryParentDir) == null)
-                                {
-                                    CreateDirectoryFromAppW(entryParentDir, IntPtr.Zero);
-                                }
-
-                                // Extract via OpenEntryStream + Win32FileWriteStream (no WriteToDirectory)
-                                using (var entryStream = entry.OpenEntryStream())
-                                {
-                                    if (entryStream == null)
+                                    progress?.Report(new OperationProgress
                                     {
-                                        Log.Warn("Extract: cannot open entry stream {File}", entry.Key);
-                                        continue;
+                                        FileName = entry.Key,
+                                        PercentComplete = totalFiles > 0 ? (double)completedFiles / totalFiles * 100.0 : -1,
+                                        FileIndex = completedFiles,
+                                        FileTotal = totalFiles,
+                                        BytesCopied = completedBytes,
+                                        TotalBytes = totalBytes
+                                    });
+
+                                    // Ensure parent directory exists
+                                    string entryDestPath = System.IO.Path.Combine(destDir, entry.Key);
+                                    string entryParentDir = System.IO.Path.GetDirectoryName(entryDestPath);
+                                    if (entryParentDir != null && CheckPathType(entryParentDir) == null)
+                                    {
+                                        CreateDirectoryFromAppW(entryParentDir, IntPtr.Zero);
                                     }
 
-                                    using (var writeStream = Win32FileWriteStream.Create(entryDestPath))
+                                    // Extract with cancel support via chunked copy
+                                    using (var entryStream = entry.OpenEntryStream())
                                     {
-                                        if (writeStream == null)
+                                        if (entryStream == null)
                                         {
-                                            Log.Warn("Extract: cannot create dest file {Path}", entryDestPath);
+                                            Log.Warn("Extract: cannot open entry stream {File}", entry.Key);
+                                            completedFiles++;
+                                            completedBytes += (long)entry.Size;
                                             continue;
                                         }
 
-                                        entryStream.CopyTo(writeStream);
+                                        using (var writeStream = Win32FileWriteStream.Create(entryDestPath))
+                                        {
+                                            if (writeStream == null)
+                                            {
+                                                Log.Warn("Extract: cannot create dest file {Path}", entryDestPath);
+                                                completedFiles++;
+                                                completedBytes += (long)entry.Size;
+                                                continue;
+                                            }
+
+                                            var buffer = new byte[CopyChunkSize];
+                                            long entryCopied = 0;
+                                            long entrySize = (long)entry.Size;
+                                            int bytesRead;
+
+                                            do
+                                            {
+                                                if (token.IsCancellationRequested) return OperationResult.Cancelled;
+
+                                                bytesRead = entryStream.Read(buffer, 0, CopyChunkSize);
+                                                if (bytesRead > 0)
+                                                {
+                                                    writeStream.Write(buffer, 0, bytesRead);
+                                                    entryCopied += bytesRead;
+
+                                                    progress?.Report(new OperationProgress
+                                                    {
+                                                        FileName = entry.Key,
+                                                        PercentComplete = totalFiles > 0 ? (double)(completedFiles) / totalFiles * 100.0 : -1,
+                                                        FileIndex = completedFiles,
+                                                        FileTotal = totalFiles,
+                                                        BytesCopied = completedBytes + entryCopied,
+                                                        TotalBytes = totalBytes
+                                                    });
+                                                }
+                                            }
+                                            while (bytesRead > 0);
+                                        }
                                     }
+
+                                    completedFiles++;
+                                    completedBytes += (long)entry.Size;
                                 }
                             }
                         }

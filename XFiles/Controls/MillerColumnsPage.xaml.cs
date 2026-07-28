@@ -3,9 +3,13 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Runtime.InteropServices.WindowsRuntime;
+using System.Threading;
 using System.Threading.Tasks;
 using Windows.ApplicationModel;
+using Windows.Data.Json;
 using Windows.Media.Core;
 using Windows.Media.Playback;
 using Windows.Storage;
@@ -64,6 +68,9 @@ namespace XFiles.Controls
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
                 ".txt", ".log", ".out", ".err",
+                ".nfo", ".diz", ".sfv",
+                ".md5", ".sha1", ".sha256", ".sha512",
+                ".asc", ".hash", ".crc",
             };
 
         public MillerColumnsPage()
@@ -435,6 +442,109 @@ namespace XFiles.Controls
                         _mediaLoadTimer.Start();
                         break;
 
+                    case FilePreviewType.Rom:
+                        string romName = _navigator.Preview.PreviewTextContent ?? "";
+                        string romSystem = _navigator.Preview.PreviewRomSystem ?? "ROM";
+                        string romFileType = _navigator.Preview.PreviewFileType ?? "";
+                        string romIcon = _navigator.Preview.PreviewRomIconPath ?? "";
+
+                        RomTitleText.Text = romName;
+
+                        // System icon
+                        if (!string.IsNullOrEmpty(romIcon))
+                        {
+                            RomSystemIcon.Source = new Windows.UI.Xaml.Media.Imaging.BitmapImage(
+                                new Uri(romIcon));
+                        }
+
+                        // Reset cover art and gamelist UI state
+                        RomCoverImage.Visibility = Visibility.Collapsed;
+                        RomMetaLine2.Visibility = Visibility.Collapsed;
+                        RomMetaLine3.Visibility = Visibility.Collapsed;
+                        RomDescriptionText.Visibility = Visibility.Collapsed;
+                        RomDescSeparator.Visibility = Visibility.Collapsed;
+
+                        // Gamelist enrichment
+                        bool hasGamelist = _navigator.Preview.PreviewHasGamelistData;
+                        if (hasGamelist)
+                        {
+                            string genre = _navigator.Preview.PreviewRomGenre ?? "";
+                            int players = _navigator.Preview.PreviewRomPlayers;
+                            string metaLine1 = romSystem;
+                            if (!string.IsNullOrEmpty(genre))
+                                metaLine1 += $" — {genre}";
+                            if (players > 0)
+                                metaLine1 += $", {players} player{(players == 1 ? "" : "s")}";
+                            RomMetaLine1.Text = metaLine1;
+
+                            string dev = _navigator.Preview.PreviewRomDeveloper ?? "";
+                            string pub = _navigator.Preview.PreviewRomPublisher ?? "";
+                            if (!string.IsNullOrEmpty(dev) || !string.IsNullOrEmpty(pub))
+                            {
+                                string devPub = "";
+                                if (!string.IsNullOrEmpty(dev)) devPub = dev;
+                                if (!string.IsNullOrEmpty(pub))
+                                {
+                                    if (devPub.Length > 0) devPub += " · ";
+                                    devPub += pub;
+                                }
+                                RomMetaLine2.Text = devPub;
+                                RomMetaLine2.Visibility = Visibility.Visible;
+                            }
+
+                            float rating = _navigator.Preview.PreviewRomRating;
+                            int year = _navigator.Preview.PreviewRomReleaseYear;
+                            if (rating > 0 || year > 0)
+                            {
+                                string ratingYear = "";
+                                if (rating > 0)
+                                {
+                                    int stars = (int)Math.Round(rating * 5);
+                                    ratingYear = new string('★', Math.Min(stars, 5)) +
+                                                 new string('☆', Math.Max(5 - stars, 0));
+                                }
+                                if (year > 0)
+                                {
+                                    if (ratingYear.Length > 0) ratingYear += "  ";
+                                    ratingYear += year.ToString();
+                                }
+                                RomMetaLine3.Text = ratingYear;
+                                RomMetaLine3.Visibility = Visibility.Visible;
+                            }
+
+                            string desc = _navigator.Preview.PreviewRomDescription ?? "";
+                            if (!string.IsNullOrEmpty(desc))
+                            {
+                                RomDescriptionText.Text = desc;
+                                RomDescriptionText.Visibility = Visibility.Visible;
+                                RomDescSeparator.Visibility = Visibility.Visible;
+                            }
+                        }
+                        else
+                        {
+                            // No gamelist: simple "System ROM" line
+                            RomMetaLine1.Text = $"{romSystem} ROM";
+                        }
+
+                        RomSizeText.Text = FormatSize(_navigator.Preview.PreviewFileSize);
+                        PreviewRomPanel.Visibility = Visibility.Visible;
+                        PreviewStatus.Text = hasGamelist
+                            ? $"{romSystem} — {romFileType}"
+                            : $"{romSystem} — {romFileType}";
+
+                        // Cover art: gamelist local → LibRetro → system icon (stays)
+                        string localCover = _navigator.Preview.PreviewRomCoverLocalPath;
+                        if (!string.IsNullOrEmpty(localCover) && DirectoryScanner.FileExists(localCover))
+                        {
+                            _ = LoadRomCoverFromLocalFileAsync(localCover);
+                        }
+                        else
+                        {
+                            // No local cover: try LibRetro fetch
+                            _ = FetchRomCoverArtAsync(romSystem, romName);
+                        }
+                        break;
+
                     case FilePreviewType.Error:
                         PreviewErrorText.Text = _navigator.Preview.PreviewErrorMessage ?? "Unknown error";
                         PreviewStatus.Text = "";
@@ -478,6 +588,7 @@ namespace XFiles.Controls
 
         private void HideAllPreviewPanels()
         {
+            _coverArtCts?.Cancel();
             PreviewList.Visibility = Visibility.Collapsed;
             PreviewTextScroll.Visibility = Visibility.Collapsed;
             PreviewCodeView.Visibility = Visibility.Collapsed;
@@ -485,6 +596,7 @@ namespace XFiles.Controls
             PreviewMediaPanel.Visibility = Visibility.Collapsed;
             _mediaLoadTimer.Stop();
             MediaPreview.Stop();
+            PreviewRomPanel.Visibility = Visibility.Collapsed;
             PreviewErrorPanel.Visibility = Visibility.Collapsed;
             PreviewUnsupportedPanel.Visibility = Visibility.Collapsed;
             PreviewArchiveMediaPanel.Visibility = Visibility.Collapsed;
@@ -1057,7 +1169,7 @@ namespace XFiles.Controls
         public void OnConfirm()
         {
             if (TextEditorOverlayControl.IsOpen) { TextEditorOverlayControl.HandleButton(Windows.System.VirtualKey.GamepadA); return; }
-            if (ErrorOverlay.Visibility == Visibility.Visible) { Log.Info("OnConfirm: blocked by ErrorOverlay"); return; }
+            if (ErrorOverlay.Visibility == Visibility.Visible) { Log.Dbg("OnConfirm: → HideError"); HideError(); return; }
             if (InputDialogControl.Visibility == Visibility.Visible) { Log.Dbg("OnConfirm: → InputDialog"); InputDialogControl.HandleButton(Windows.System.VirtualKey.GamepadA); return; }
             if (AlertDialogControl.Visibility == Visibility.Visible) { Log.Dbg("OnConfirm: → ConfirmDialog"); AlertDialogControl.HandleButton(Windows.System.VirtualKey.GamepadA); return; }
             if (OverwriteDialogControl.IsDialogVisible) { Log.Dbg("OnConfirm: → OverwriteDialog"); OverwriteDialogControl.HandleButton(Windows.System.VirtualKey.GamepadA); return; }
@@ -1248,7 +1360,7 @@ namespace XFiles.Controls
         {
             if (TextEditorOverlayControl.IsOpen) { TextEditorOverlayControl.HandleButton(Windows.System.VirtualKey.GamepadY); return; }
             if (IsAnyFullscreen) return;
-            if (ErrorOverlay.Visibility == Visibility.Visible) return;
+            if (ErrorOverlay.Visibility == Visibility.Visible) { Log.Dbg("OnContextMenu: → ErrorShare"); OnErrorShareClick(null, null); return; }
             if (IsAnyOverlayVisible) return;
             if (StartMenuControl.IsOpen) return;
             if (FileActionSheetControl.IsOpen) return;
@@ -1268,7 +1380,7 @@ namespace XFiles.Controls
             if (IsAnyFullscreen) return;
             if (FileActionSheetControl.IsOpen) return;
             if (StartMenuControl.IsOpen) return;
-            if (ErrorOverlay.Visibility == Visibility.Visible) return;
+            if (ErrorOverlay.Visibility == Visibility.Visible) { Log.Dbg("OnRefresh: → ErrorCopy"); OnErrorCopyClick(null, null); return; }
             if (IsAnyOverlayVisible) return;
             if (LogsPageControl.IsVisible) return;
             if (ShareDialogControl.IsVisible) return;
@@ -1888,7 +2000,7 @@ namespace XFiles.Controls
         {
             if (!_isBatchMode) return;
             var selected = CurrentList.SelectedItem as EntryViewModel;
-            if (selected == null || selected.IsDotDot) return;
+            if (selected == null || selected.IsDotDot || selected.IsDrive) return;
 
             if (_batchSelectedPaths.Contains(selected.FullPath))
             {
@@ -3453,16 +3565,64 @@ namespace XFiles.Controls
                 return;
             }
 
-            // Move each item
+            // Pre-scan for accurate progress
+            var sourcePaths = entries.Select(e => e.FullPath).ToList();
+            var scan = await FileOperations.ScanPathsAsync(sourcePaths);
+
+            OpProgressDialog.Show("Moving", $"{entries.Count} items", destDir,
+                0, scan.FileCount);
+
+            int completedFiles = 0;
+            long completedBytes = 0;
             int success = 0, failed = 0;
+
             foreach (var entry in entries)
             {
-                var result = await FileOperations.MoveAsync(entry.FullPath, destDir);
+                var progress = new Progress<FileOperations.OperationProgress>(p =>
+                {
+                    Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                    {
+                        OpProgressDialog.UpdateProgress(new FileOperations.OperationProgress
+                        {
+                            FileName = p.FileName,
+                            PercentComplete = scan.FileCount > 0
+                                ? (double)completedFiles / scan.FileCount * 100.0
+                                : -1,
+                            FileIndex = completedFiles,
+                            FileTotal = scan.FileCount,
+                            BytesCopied = completedBytes + p.BytesCopied,
+                            TotalBytes = scan.TotalBytes
+                        });
+                    });
+                });
+
+                var result = await FileOperations.MoveAsync(entry.FullPath, destDir, progress, OpProgressDialog.CancelToken);
+
+                if (result == FileOperations.OperationResult.Cancelled)
+                {
+                    Log.Info("HandleBatchMoveAsync: cancelled");
+                    OpProgressDialog.Cancel();
+                    await Task.Delay(1500);
+                    OpProgressDialog.Close();
+                    ExitBatchMode();
+                    await _navigator.RefreshCurrentAsync();
+                    return;
+                }
+
+                var entryScan = await FileOperations.ScanPathsAsync(
+                    new List<string> { entry.FullPath });
+                completedFiles += entryScan.FileCount;
+                completedBytes += entryScan.TotalBytes;
+
                 if (result == FileOperations.OperationResult.Success)
                     success++;
                 else
                     failed++;
             }
+
+            OpProgressDialog.Complete();
+            await Task.Delay(400);
+            OpProgressDialog.Close();
 
             if (failed > 0)
                 _ = AlertDialogControl.ShowAsync($"Moved {success} items, failed to move {failed}.", AlertType.Error);
@@ -3643,42 +3803,70 @@ namespace XFiles.Controls
             Log.Info("HandlePasteAsync: {Count} items → {Dest}",
                 entries.Count, destDir);
 
-            int fileIndex = 0;
+            // Pre-scan all source paths for accurate total
+            var sourcePaths = entries.Select(e => e.FullPath).ToList();
+            var scan = await FileOperations.ScanPathsAsync(sourcePaths);
+
+            OpProgressDialog.Show("Copying", $"{entries.Count} items", destDir,
+                0, scan.FileCount);
+            if (scan.TotalBytes > 0)
+                OpProgressDialog.UpdateProgress(new FileOperations.OperationProgress
+                {
+                    TotalBytes = scan.TotalBytes,
+                    FileTotal = scan.FileCount
+                });
+
+            int completedFiles = 0;
+            long completedBytes = 0;
+
             foreach (var entry in entries)
             {
-                fileIndex++;
                 bool sameDir = string.Equals(
                     System.IO.Path.GetDirectoryName(entry.FullPath)?.TrimEnd('\\'),
                     destDir.TrimEnd('\\'),
                     StringComparison.OrdinalIgnoreCase);
 
+                // Progress updates overall completed bytes across all entries
                 var progress = new Progress<FileOperations.OperationProgress>(p =>
                 {
-                    p.FileIndex = fileIndex;
-                    p.FileTotal = entries.Count;
                     Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
-                        OpProgressDialog.UpdateProgress(p));
+                    {
+                        // Overlay this entry's progress onto overall tracking
+                        var overall = new FileOperations.OperationProgress
+                        {
+                            FileName = p.FileName,
+                            PercentComplete = scan.FileCount > 0
+                                ? (double)completedFiles / scan.FileCount * 100.0
+                                : -1,
+                            FileIndex = completedFiles,
+                            FileTotal = scan.FileCount,
+                            BytesCopied = completedBytes + p.BytesCopied,
+                            TotalBytes = scan.TotalBytes
+                        };
+                        OpProgressDialog.UpdateProgress(overall);
+                    });
                 });
-
-                OpProgressDialog.Show("Copying", entry.Name, destDir,
-                    fileIndex, entries.Count);
 
                 var result = await FileOperations.CopyAsync(
                     entry.FullPath, destDir, progress, sameDir, OpProgressDialog.CancelToken);
 
                 if (result == FileOperations.OperationResult.Cancelled)
                 {
-                        Log.Dbg("HandlePasteAsync: cancelled at file {Index}/{Total}", fileIndex, entries.Count);
+                    Log.Dbg("HandlePasteAsync: cancelled at file {Completed}/{Total}",
+                        completedFiles, scan.FileCount);
                     OpProgressDialog.Cancel();
                     await Task.Delay(1500);
                     OpProgressDialog.Close();
                     break;
                 }
 
-                OpProgressDialog.TrackCompleted(entry.Name);
-                OpProgressDialog.Complete();
-                await Task.Delay(400);
-                OpProgressDialog.Close();
+                // After this entry completes, advance completedFiles by entry's file count
+                var entryScan = await FileOperations.ScanPathsAsync(
+                    new List<string> { entry.FullPath });
+                completedFiles += entryScan.FileCount;
+                completedBytes += entryScan.TotalBytes;
+
+                OpProgressDialog.TrackCompleted(entry.Name, entryScan.TotalBytes);
 
                 if (result != FileOperations.OperationResult.Success)
                 {
@@ -3686,6 +3874,10 @@ namespace XFiles.Controls
                     _ = AlertDialogControl.ShowAsync($"Copy failed: \"{entry.Name}\".", AlertType.Error);
                 }
             }
+
+            OpProgressDialog.Complete();
+            await Task.Delay(400);
+            OpProgressDialog.Close();
 
             UpdateClipboardIndicator();
             await _navigator.RefreshCurrentAsync();
@@ -3730,13 +3922,17 @@ namespace XFiles.Controls
             }
 
             // 3. Execute move with progress
+            var scan = await FileOperations.ScanPathsAsync(
+                new List<string> { entry.FullPath });
+
             var progress = new Progress<FileOperations.OperationProgress>(p =>
             {
                 Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
                     OpProgressDialog.UpdateProgress(p));
             });
 
-            OpProgressDialog.Show("Moving", entry.Name, destDir);
+            OpProgressDialog.Show("Moving", entry.Name, destDir,
+                0, scan.FileCount);
             var result = await FileOperations.MoveAsync(entry.FullPath, destDir, progress, OpProgressDialog.CancelToken);
 
             if (result == FileOperations.OperationResult.Cancelled)
@@ -4094,7 +4290,190 @@ namespace XFiles.Controls
             }
         }
 
+        private async Task LoadRomCoverFromLocalFileAsync(string filePath)
+        {
+            _coverArtCts?.Cancel();
+            _coverArtCts = new CancellationTokenSource();
+            var ct = _coverArtCts.Token;
+
+            try
+            {
+                using (var stream = DirectoryScanner.OpenFileRead(filePath))
+                {
+                    if (stream == null) return;
+
+                    var bitmap = new Windows.UI.Xaml.Media.Imaging.BitmapImage();
+                    await bitmap.SetSourceAsync(stream.AsRandomAccessStream());
+
+                    if (ct.IsCancellationRequested) return;
+
+                    RomCoverImage.Source = bitmap;
+                    RomCoverImage.Visibility = Visibility.Visible;
+
+                    Log.Verb("LoadRomCoverFromLocalFileAsync: loaded {Path}", filePath);
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                Log.Verb("LoadRomCoverFromLocalFileAsync: failed - {Message}", ex.Message);
+            }
+        }
+
+        private async Task FetchRomCoverArtAsync(string system, string title)
+        {
+            if (string.IsNullOrEmpty(system) || system == "ROM" || string.IsNullOrEmpty(title))
+                return;
+
+            _coverArtCts?.Cancel();
+            _coverArtCts = new CancellationTokenSource();
+            var ct = _coverArtCts.Token;
+
+            try
+            {
+                if (!LibRetroSystemNames.TryGetValue(system, out string libRetroSystem))
+                    return;
+
+                var titleVariations = BuildTitleVariations(title);
+                var missedUrls = new List<string>();
+
+                foreach (var variation in titleVariations)
+                {
+                    if (ct.IsCancellationRequested) return;
+
+                    string url = $"https://thumbnails.libretro.com/{Uri.EscapeDataString(libRetroSystem)}/Named_Titles/{Uri.EscapeDataString(variation)}.png";
+
+                    // Check SQLite cache — skip if already known (hit or miss, within 30 days)
+                    if (await Metadata.MetadataCache.IsLibRetroUrlCachedAsync(url))
+                    {
+                        Log.Verb("FetchRomCoverArtAsync: cached skip {Url}", url);
+                        continue;
+                    }
+
+                    Log.Verb("FetchRomCoverArtAsync: trying {Url}", url);
+
+                    var response = await _coverArtClient.GetAsync(url, ct);
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        Log.Verb("FetchRomCoverArtAsync: {StatusCode} for '{Variation}'", response.StatusCode, variation);
+                        missedUrls.Add(url);
+                        continue;
+                    }
+
+                    var stream = await response.Content.ReadAsStreamAsync();
+                    var bitmap = new Windows.UI.Xaml.Media.Imaging.BitmapImage();
+                    await bitmap.SetSourceAsync(stream.AsRandomAccessStream());
+
+                    if (ct.IsCancellationRequested) return;
+
+                    RomCoverImage.Source = bitmap;
+                    RomCoverImage.Visibility = Visibility.Visible;
+
+                    // Cache as hit
+                    await Metadata.MetadataCache.SetLibRetroThumbnailAsync(url, true);
+
+                    Log.Info("FetchRomCoverArtAsync: loaded cover for '{Title}' via variation '{Variation}'",
+                        title, variation);
+                    return;
+                }
+
+                // All variations missed — cache them so we don't retry for 30 days
+                foreach (var missedUrl in missedUrls)
+                {
+                    await Metadata.MetadataCache.SetLibRetroThumbnailAsync(missedUrl, false);
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                Log.Verb("FetchRomCoverArtAsync: failed - {Message}", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Build title variations for LibRetro matching.
+        /// No-Intro names like "Super Mario Bros (USA)" may not match LibRetro naming.
+        /// </summary>
+        private static List<string> BuildTitleVariations(string title)
+        {
+            var variations = new List<string>();
+            string clean = title.Replace("/", " -").Replace("\\", " -").Trim();
+            variations.Add(clean);
+
+            // Progressively strip all parenthesized/bracketed groups from right to left
+            // "Alien Brigade (1990) (Atari) [!]" → "Alien Brigade (1990) (Atari)" → "Alien Brigade (1990)" → "Alien Brigade"
+            string current = clean;
+            while (current.Length > 0)
+            {
+                // Strip last (...) group
+                int lastParen = current.LastIndexOf('(');
+                int lastBracket = current.LastIndexOf('[');
+                int stripIdx = Math.Max(lastParen, lastBracket);
+                if (stripIdx <= 0) break;
+
+                string stripped = current.Substring(0, stripIdx).TrimEnd();
+                if (stripped.Length == 0 || stripped == current) break;
+                current = stripped;
+                variations.Add(current);
+            }
+
+            // Try base name without trailing dot
+            if (current.Length > 0 && current != clean)
+                variations.Add(current + ".");
+
+            // Deduplicate (keep order)
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var result = new List<string>();
+            foreach (var v in variations)
+            {
+                if (seen.Add(v))
+                    result.Add(v);
+            }
+            return result;
+        }
+
         private string _lastErrorText = "";
+        private static readonly HttpClient _errorShareClient = new HttpClient();
+        private static readonly HttpClient _coverArtClient = new HttpClient();
+        private static CancellationTokenSource _coverArtCts;
+
+        private static readonly Dictionary<string, string> LibRetroSystemNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["NES"] = "Nintendo - Nintendo Entertainment System",
+            ["SNES"] = "Nintendo - Super Nintendo Entertainment System",
+            ["Game Boy"] = "Nintendo - Game Boy",
+            ["Game Boy Color"] = "Nintendo - Game Boy Color",
+            ["GBA"] = "Nintendo - Game Boy Advance",
+            ["Genesis"] = "Sega - Mega Drive - Genesis",
+            ["Master System"] = "Sega - Master System",
+            ["Game Gear"] = "Sega - Game Gear",
+            ["PC Engine"] = "NEC - PC Engine",
+            ["Atari 2600"] = "Atari - 2600",
+            ["Atari 5200"] = "Atari - 5200",
+            ["Atari 7800"] = "Atari - 7800",
+            ["Atari Jaguar"] = "Atari - Jaguar",
+            ["Atari Lynx"] = "Atari - Lynx",
+            ["ColecoVision"] = "Coleco - ColecoVision",
+            ["Intellivision"] = "Mattel - Intellivision",
+            ["SG-1000"] = "Sega - SG-1000",
+            ["Vectrex"] = "GCE - Vectrex",
+            ["Nintendo 64"] = "Nintendo - Nintendo 64",
+            ["Nintendo DS"] = "Nintendo - Nintendo DS",
+            ["Nintendo 3DS"] = "Nintendo - Nintendo 3DS",
+            ["Virtual Boy"] = "Nintendo - Virtual Boy",
+            ["GameCube"] = "Nintendo - GameCube",
+            ["Dreamcast"] = "Sega - Dreamcast",
+            ["Saturn"] = "Sega - Saturn",
+            ["PlayStation"] = "Sony - PlayStation",
+            ["Neo Geo Pocket"] = "SNK - Neo Geo Pocket",
+            ["Neo Geo"] = "SNK - Neo Geo",
+            ["WonderSwan"] = "Bandai - WonderSwan",
+            ["Sega 32X"] = "Sega - Sega 32X",
+            ["Sega CD"] = "Sega - Sega CD",
+            ["Wii"] = "Nintendo - Wii",
+            ["PSP"] = "Sony - PlayStation Portable",
+            ["Switch"] = "Nintendo - Switch",
+        };
 
         public void ShowError(string title, string description, string details)
         {
@@ -4103,6 +4482,11 @@ namespace XFiles.Controls
             ErrorDetailsText.Text = details;
             ErrorOverlay.Visibility = Visibility.Visible;
             ErrorOverlay.Opacity = 0;
+
+            // Reset share state
+            ErrorShareText.Text = "Share";
+            ErrorUploadProgress.Visibility = Visibility.Collapsed;
+            BtnErrorShare.IsEnabled = true;
 
             var fadeIn = new DoubleAnimation { To = 1.0, Duration = new Duration(TimeSpan.FromMilliseconds(200)) };
             Storyboard.SetTarget(fadeIn, ErrorOverlay);
@@ -4118,14 +4502,15 @@ namespace XFiles.Controls
         private void HideError()
         {
             ErrorOverlay.Visibility = Visibility.Collapsed;
+            ErrorUploadProgress.Visibility = Visibility.Collapsed;
         }
 
-        private async void OnErrorCloseClick(object sender, RoutedEventArgs e)
+        private void OnErrorCloseClick(object sender, RoutedEventArgs e)
         {
             HideError();
         }
 
-        private async void OnErrorCopyClick(object sender, RoutedEventArgs e)
+        private void OnErrorCopyClick(object sender, RoutedEventArgs e)
         {
             try
             {
@@ -4140,17 +4525,94 @@ namespace XFiles.Controls
             }
         }
 
-        private async void OnErrorReportClick(object sender, RoutedEventArgs e)
+        private async void OnErrorShareClick(object sender, RoutedEventArgs e)
         {
             try
             {
-                var uri = new Uri("https://github.com/marcelofrau/x-files-uwp/issues/new?template=bug_report.md&title=" +
-                    Uri.EscapeDataString("Error: " + ErrorTitleText.Text));
-                await Windows.System.Launcher.LaunchUriAsync(uri);
+                BtnErrorShare.IsEnabled = false;
+                ErrorShareText.Text = "Uploading...";
+                ErrorUploadProgress.Visibility = Visibility.Visible;
+                Log.Info("ErrorShare: starting upload");
+
+                // 1. Get gofile server
+                ErrorUploadStatus.Text = "Getting server...";
+                var serverResp = await _errorShareClient.GetStringAsync("https://api.gofile.io/servers");
+                var serverJson = JsonObject.Parse(serverResp);
+                string server = serverJson.GetNamedObject("data")
+                    .GetNamedArray("servers").GetObjectAt(0).GetNamedString("name");
+                Log.Info("ErrorShare: server={Server}", server);
+
+                // 2. Build zip: error.txt + current session log
+                ErrorUploadStatus.Text = "Compressing...";
+                byte[] zipBytes;
+                string timestamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+                using (var archive = SharpCompress.Archives.Zip.ZipArchive.Create())
+                {
+                    var errorBytes = System.Text.Encoding.UTF8.GetBytes(_lastErrorText);
+                    archive.AddEntry($"error-{timestamp}.txt",
+                        new MemoryStream(errorBytes), errorBytes.Length);
+
+                    string logContent = await Task.Run(() => Log.GetAllSessionsContent());
+                    if (!string.IsNullOrEmpty(logContent))
+                    {
+                        var logBytes = System.Text.Encoding.UTF8.GetBytes(logContent);
+                        archive.AddEntry($"xfiles-logs-{timestamp}.txt",
+                            new MemoryStream(logBytes), logBytes.Length);
+                    }
+
+                    using (var zipStream = new MemoryStream())
+                    {
+                        archive.SaveTo(zipStream,
+                            new SharpCompress.Writers.WriterOptions(SharpCompress.Common.CompressionType.Deflate));
+                        zipBytes = zipStream.ToArray();
+                    }
+                }
+                Log.Info("ErrorShare: zip={KB} KB", zipBytes.Length / 1024);
+
+                // 3. Upload
+                ErrorUploadStatus.Text = $"Uploading {zipBytes.Length / 1024} KB...";
+                var form = new MultipartFormDataContent();
+                var fileContent = new ByteArrayContent(zipBytes);
+                fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/zip");
+                form.Add(fileContent, "file", $"xfiles-error-{timestamp}.zip");
+
+                string uploadUrl = $"https://{server}.gofile.io/contents/uploadfile";
+                Log.Info("ErrorShare: uploading to {Url}", uploadUrl);
+                var resp = await _errorShareClient.PostAsync(uploadUrl, form);
+                string responseBody = await resp.Content.ReadAsStringAsync();
+                Log.Info("ErrorShare: status={Status}", resp.StatusCode);
+
+                // 4. Parse URL
+                string downloadUrl = null;
+                var respJson = JsonObject.Parse(responseBody);
+                if (respJson.ContainsKey("data") && respJson["data"].ValueType == JsonValueType.Object)
+                {
+                    var data = respJson.GetNamedObject("data");
+                    if (data.ContainsKey("downloadPage"))
+                        downloadUrl = data.GetNamedString("downloadPage");
+                }
+
+                ErrorUploadProgress.Visibility = Visibility.Collapsed;
+
+                if (!string.IsNullOrEmpty(downloadUrl))
+                {
+                    Log.Info("ErrorShare: success, URL={Url}", downloadUrl);
+                    HideError();
+                    ShareDialogControl.Show(downloadUrl, "Error Shared");
+                }
+                else
+                {
+                    Log.Warn("ErrorShare: upload returned no URL");
+                    ErrorShareText.Text = "Failed";
+                    BtnErrorShare.IsEnabled = true;
+                }
             }
             catch (Exception ex)
             {
-                Log.Warn("Failed to open GitHub", ex);
+                Log.Warn("ErrorShare: upload failed: {Error}", ex.Message);
+                ErrorUploadProgress.Visibility = Visibility.Collapsed;
+                ErrorShareText.Text = "Failed";
+                BtnErrorShare.IsEnabled = true;
             }
         }
 

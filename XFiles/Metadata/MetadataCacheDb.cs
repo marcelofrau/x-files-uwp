@@ -55,4 +55,14 @@ namespace XFiles.Metadata
 
         public string Value { get; set; }
     }
+
+    public class LibRetroThumbnailEntry
+    {
+        [PrimaryKey]
+        public string Url { get; set; }
+
+        public bool Found { get; set; }
+
+        public long Timestamp { get; set; }
+    }
 }

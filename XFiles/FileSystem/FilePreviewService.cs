@@ -22,6 +22,7 @@ namespace XFiles.FileSystem
         Pdf,
         Audio,
         Video,
+        Rom,
         Unsupported,
         Error
     }
@@ -38,11 +39,72 @@ namespace XFiles.FileSystem
         public int PixelWidth { get; set; }
         public int PixelHeight { get; set; }
         public int PdfPageCount { get; set; }
+        public string RomSystem { get; set; }
+        public string RomIconPath { get; set; }
+
+        // Gamelist data (populated when gamelist.xml entry matches)
+        public bool HasGamelistData { get; set; }
+        public string RomDescription { get; set; }
+        public string RomDeveloper { get; set; }
+        public string RomPublisher { get; set; }
+        public string RomGenre { get; set; }
+        public int RomPlayers { get; set; }
+        public float RomRating { get; set; }
+        public int RomReleaseYear { get; set; }
+        public string RomCoverLocalPath { get; set; }
     }
 
     public static class FilePreviewService
     {
         private const long MaxTextBytes = 256 * 1024; // 256 KB
+
+        private static readonly Dictionary<string, string> RomSystemIcons =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "NES", "retro-nes-128.png" },
+                { "SNES", "retro-snes-128.png" },
+                { "Game Boy", "retro-game-boy-128.png" },
+                { "Game Boy Color", "retro-game-boy-color-128.png" },
+                { "GBA", "retro-game-boy-advance-128.png" },
+                { "Genesis/Mega Drive", "retro-sega-genesis-128.png" },
+                { "Master System", "retro-master-system-128.png" },
+                { "Game Gear", "retro-game-gear-128.png" },
+                { "PC Engine/TurboGrafx-16", "retro-pc-engine-128.png" },
+                { "Atari Jaguar", "retro-gamecube-128.png" },
+                { "Atari Lynx", "retro-gamecube-128.png" },
+                { "ZX Spectrum", "retro-nintendo-ds-128.png" },
+                { "Vectrex", "retro-virtual-boy-128.png" },
+                { "Nintendo 64", "retro-nintendo-64-128.png" },
+                { "Nintendo DS", "retro-nintendo-ds-128.png" },
+                { "Nintendo 3DS", "retro-nintendo-ds-128.png" },
+                { "Virtual Boy", "retro-virtual-boy-128.png" },
+                { "Neo Geo Pocket", "retro-neogeo-128.png" },
+                { "Neo Geo", "retro-neogeo-128.png" },
+                { "Dreamcast", "retro-dreamcast-128.png" },
+                { "GameCube", "retro-gamecube-128.png" },
+                { "Saturn", "retro-sega-saturn-128.png" },
+                { "PlayStation", RomDefaultIcon },
+                { "WonderSwan", "retro-gamecube-128.png" },
+                { "Sega 32X", "retro-sega-genesis-128.png" },
+                { "Wii", "retro-gamecube-128.png" },
+                { "Wii U", "retro-gamecube-128.png" },
+                { "Switch", "retro-gamecube-128.png" },
+                { "PSP", RomDefaultIcon },
+                { "Sega CD", "retro-sega-genesis-128.png" },
+            };
+
+        private const string RomDefaultIcon = "icons8-game-controller-128.png";
+        private const string RomIconBasePath = "ms-appx:///Assets/Views/MillerColumnsPage/rom/";
+
+        public static string GetRomIconPathPublic(string system) => GetRomIconPath(system);
+
+        private static string GetRomIconPath(string system)
+        {
+            if (!string.IsNullOrEmpty(system) &&
+                RomSystemIcons.TryGetValue(system, out string icon))
+                return RomIconBasePath + icon;
+            return RomIconBasePath + RomDefaultIcon;
+        }
 
         #region P/Invoke
 
@@ -134,6 +196,10 @@ namespace XFiles.FileSystem
                 ".pod", ".srt", ".vtt", ".sub",
                 ".lrc", ".ly",
                 ".bib", ".cls", ".sty", ".tex", ".latex",
+                // ROM/disk metadata
+                ".nfo", ".diz", ".sfv",
+                ".md5", ".sha1", ".sha256", ".sha512",
+                ".asc", ".hash", ".crc",
             };
 
         private static readonly HashSet<string> ImageExtensions =
@@ -213,7 +279,7 @@ namespace XFiles.FileSystem
                 }
 
                 string ext = Path.GetExtension(filePath);
-                result.FileType = GetFileTypeLabel(ext);
+                result.FileType = GetFileTypeLabel(ext, filePath);
 
                 if (IsImageFile(ext) && !IsSvgFile(ext))
                 {
@@ -256,6 +322,10 @@ namespace XFiles.FileSystem
                     result.FileSizeBytes = fileSize;
                     result.Type = FilePreviewType.Audio;
                 }
+                else if (RomHeaderParser.IsRomFile(ext))
+                {
+                    await LoadRomPreview(filePath, result);
+                }
                 else
                 {
                     long fileSize = 0;
@@ -294,6 +364,20 @@ namespace XFiles.FileSystem
                         return result;
                     }
 
+                    // Disambiguate .md inside archives: peek first bytes
+                    if (string.Equals(ext, ".md", StringComparison.OrdinalIgnoreCase))
+                    {
+                        byte[] buf = new byte[256];
+                        int read = stream.Read(buf, 0, buf.Length);
+                        bool hasNull = false;
+                        for (int i = 0; i < read; i++)
+                        {
+                            if (buf[i] == 0) { hasNull = true; break; }
+                        }
+                        result.FileType = hasNull ? "Genesis ROM" : "Markdown";
+                        stream.Position = 0;
+                    }
+
                     if (IsImageFile(ext))
                     {
                         await LoadImagePreviewFromStream(stream, result);
@@ -305,6 +389,10 @@ namespace XFiles.FileSystem
                     else if (IsTextFile(ext))
                     {
                         await LoadTextPreviewFromStream(stream, result);
+                    }
+                    else if (RomHeaderParser.IsRomFile(ext))
+                    {
+                        await LoadRomPreviewFromStream(stream, result, ext);
                     }
                     else
                     {
@@ -592,6 +680,68 @@ namespace XFiles.FileSystem
             result.IsTruncated = false;
         }
 
+        private static async Task LoadRomPreview(string filePath, FilePreviewResult result)
+        {
+            result.Type = FilePreviewType.Rom;
+
+            long fileSize = 0;
+            byte[] headerBytes = await Task.Run(() =>
+            {
+                GetFileSizeWin32(filePath, out fileSize);
+                return ReadFileWin32(filePath, 512);
+            });
+
+            result.FileSizeBytes = fileSize;
+            string ext = Path.GetExtension(filePath);
+
+            if (headerBytes != null &&
+                RomHeaderParser.TryParseTitle(headerBytes, ext, out string title, out string system))
+            {
+                result.TextContent = title ?? Path.GetFileNameWithoutExtension(filePath);
+                result.RomSystem = system;
+                result.FileType = system + " ROM";
+                result.RomIconPath = GetRomIconPath(system);
+            }
+            else
+            {
+                // Fallback: use filename without extension
+                string name = Path.GetFileNameWithoutExtension(filePath);
+                result.TextContent = name;
+                result.RomSystem = "ROM";
+                result.RomIconPath = GetRomIconPath(null);
+            }
+        }
+
+        private static async Task LoadRomPreviewFromStream(Stream stream, FilePreviewResult result, string ext)
+        {
+            result.Type = FilePreviewType.Rom;
+
+            byte[] headerBytes = new byte[512];
+            int bytesRead = await stream.ReadAsync(headerBytes, 0, headerBytes.Length);
+
+            if (bytesRead < headerBytes.Length)
+            {
+                byte[] trimmed = new byte[bytesRead];
+                Array.Copy(headerBytes, trimmed, bytesRead);
+                headerBytes = trimmed;
+            }
+
+            if (headerBytes.Length >= 16 &&
+                RomHeaderParser.TryParseTitle(headerBytes, ext, out string title, out string system))
+            {
+                result.TextContent = title ?? result.FileType;
+                result.RomSystem = system;
+                result.FileType = system + " ROM";
+                result.RomIconPath = GetRomIconPath(system);
+            }
+            else
+            {
+                result.TextContent = result.FileType;
+                result.RomSystem = "ROM";
+                result.RomIconPath = GetRomIconPath(null);
+            }
+        }
+
         /// <summary>
         /// Read file via Win32 CreateFileFromAppW + ReadFile.
         /// If maxBytes is 0, reads entire file.
@@ -695,14 +845,50 @@ namespace XFiles.FileSystem
                 { "svg", "SVG" },
                 { "zip", "ZIP Archive" }, { "7z", "7-Zip Archive" }, { "rar", "RAR Archive" },
                 { "tar", "Tar Archive" }, { "gz", "Gzip Archive" }, { "bz2", "Bzip2 Archive" },
+                { "nfo", "NFO" }, { "diz", "Disk Info" }, { "sfv", "CRC Checksum" },
+                { "md5", "MD5 Checksum" }, { "sha1", "SHA-1 Checksum" },
+                { "sha256", "SHA-256 Checksum" }, { "sha512", "SHA-512 Checksum" },
+                { "asc", "ASCII" }, { "hash", "Checksum" }, { "crc", "CRC Checksum" },
+                { "nes", "NES ROM" }, { "sfc", "SNES ROM" }, { "smc", "SNES ROM" },
+                { "gb", "Game Boy ROM" }, { "gbc", "Game Boy Color ROM" }, { "gba", "GBA ROM" },
+                { "gen", "Genesis ROM" },
+                { "sms", "Master System ROM" }, { "gg", "Game Gear ROM" },
+                { "pce", "PC Engine ROM" }, { "tg16", "TurboGrafx-16 ROM" },
+                { "a26", "Atari 2600 ROM" }, { "a52", "Atari 5200 ROM" }, { "a78", "Atari 7800 ROM" },
+                { "j64", "Atari Jaguar ROM" }, { "jag", "Atari Jaguar ROM" }, { "lnx", "Atari Lynx ROM" },
+                { "col", "ColecoVision ROM" }, { "int", "Intellivision ROM" },
+                { "sg", "SG-1000 ROM" }, { "msx", "MSX ROM" },
+                { "sna", "ZX Spectrum Snapshot" }, { "z80", "ZX Spectrum Snapshot" },
+                { "vec", "Vectrex ROM" },
             };
 
-        private static string GetFileTypeLabel(string extension)
+        private static string GetFileTypeLabel(string extension, string filePath = null)
         {
             if (string.IsNullOrEmpty(extension))
                 return "Unknown";
 
             string key = extension.TrimStart('.').ToLowerInvariant();
+
+            // Ambiguous extension: peek at file contents to disambiguate
+            if (key == "md" && !string.IsNullOrEmpty(filePath))
+            {
+                try
+                {
+                    using (var fs = Win32FileStream.OpenRead(filePath))
+                    {
+                        byte[] buf = new byte[256];
+                        int read = fs.Read(buf, 0, buf.Length);
+                        for (int i = 0; i < read; i++)
+                        {
+                            if (buf[i] == 0)
+                                return "Genesis ROM";
+                        }
+                    }
+                }
+                catch { }
+                return "Markdown";
+            }
+
             string label;
             if (FileTypeLabels.TryGetValue(key, out label))
                 return label;

@@ -23,6 +23,10 @@ namespace XFiles.Navigation
         private int _previewGeneration;
         private readonly ArchiveBrowser _archiveBrowser = new ArchiveBrowser();
 
+        // Gamelist cache: parsed once per directory, cleared on navigation
+        private Dictionary<string, GamelistEntry> _gamelistCache;
+        private string _gamelistDirectory;
+
         public ColumnState Parent => _history.Count > 0 ? _history.Peek() : null;
         public ColumnState Current => _current;
         public ColumnState Preview => _preview;
@@ -155,6 +159,9 @@ namespace XFiles.Navigation
                 LoadingChanged?.Invoke(false);
             }
 
+            // Load gamelist.xml for this directory
+            await LoadGamelistAsync(path);
+
             // Update preview: show first item of new current
             await UpdatePreviewAsync();
 
@@ -247,6 +254,17 @@ namespace XFiles.Navigation
             var previous = _history.Pop();
             _current = previous;
 
+            // Reload gamelist for the parent directory
+            if (_current.IsArchive)
+            {
+                // Inside archive: gamelist from parent directory still applies
+                // (don't clear _gamelistCache)
+            }
+            else if (!string.IsNullOrEmpty(_current.Path))
+            {
+                await LoadGamelistAsync(_current.Path);
+            }
+
             await UpdatePreviewAsync();
             ColumnsChanged?.Invoke();
         }
@@ -291,9 +309,106 @@ namespace XFiles.Navigation
             {
                 if (selected.IsArchive)
                 {
-                    _preview = new ColumnState { Path = selected.FullPath, Label = selected.Name };
-                    await _preview.LoadArchiveDirectoryAsync(_archiveBrowser, selected.FullPath, "");
-                    if (_previewGeneration != gen) return;
+                    // Peek inside archive to determine if it contains a ROM
+                    var archiveEntries = _archiveBrowser.ListEntries(selected.FullPath, "");
+                    bool hasRom = false;
+                    string romInternalName = null;
+
+                    foreach (var entry in archiveEntries)
+                    {
+                        if (!entry.IsDirectory)
+                        {
+                            string entryExt = System.IO.Path.GetExtension(entry.Name);
+                            if (RomHeaderParser.IsRomFile(entryExt))
+                            {
+                                hasRom = true;
+                                romInternalName = entry.Name;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (hasRom)
+                    {
+                        // ROM preview — gamelist enriches if available
+                        string romSystem = GetSystemFromDirectory(_current.Path);
+                        GamelistEntry gamelistEntry = _gamelistCache != null
+                            ? GamelistParser.FindEntry(_gamelistCache, selected.Name)
+                            : null;
+
+                        _preview = new ColumnState
+                        {
+                            Path = selected.FullPath,
+                            Label = selected.Name,
+                            IsFilePreview = true,
+                            PreviewType = FilePreviewType.Rom,
+                            PreviewFilePath = selected.FullPath,
+                            PreviewFileType = "ZIP Archive",
+                            PreviewFileSize = selected.SizeBytes,
+                            PreviewRomSystem = romSystem,
+                            PreviewRomIconPath = FilePreviewService.GetRomIconPathPublic(romSystem)
+                        };
+
+                        if (gamelistEntry != null)
+                        {
+                            _preview.PreviewHasGamelistData = true;
+                            _preview.PreviewTextContent = !string.IsNullOrEmpty(gamelistEntry.Name)
+                                ? gamelistEntry.Name
+                                : System.IO.Path.GetFileNameWithoutExtension(selected.Name);
+                            _preview.PreviewRomDescription = gamelistEntry.Description;
+                            _preview.PreviewRomDeveloper = gamelistEntry.Developer;
+                            _preview.PreviewRomPublisher = gamelistEntry.Publisher;
+                            _preview.PreviewRomGenre = gamelistEntry.Genre;
+                            _preview.PreviewRomPlayers = gamelistEntry.Players;
+                            _preview.PreviewRomRating = gamelistEntry.Rating;
+                            if (gamelistEntry.ReleaseDate.HasValue)
+                                _preview.PreviewRomReleaseYear = gamelistEntry.ReleaseDate.Value.Year;
+                            _preview.PreviewRomCoverLocalPath = GamelistParser.GetCoverPath(gamelistEntry);
+
+                            Log.Verb("ColumnNavigator: archive gamelist enriched '{Name}' — genre={Genre} dev={Dev}",
+                                gamelistEntry.Name, gamelistEntry.Genre, gamelistEntry.Developer);
+                        }
+                        else
+                        {
+                            // No gamelist — show game name, XAML will try LibRetro fetch
+                            _preview.PreviewTextContent = System.IO.Path.GetFileNameWithoutExtension(selected.Name);
+                            Log.Verb("ColumnNavigator: archive '{Name}' — no gamelist, will try LibRetro",
+                                selected.Name);
+                        }
+                    }
+                    else
+                    {
+                        // Not a ROM — show archive contents as text list
+                        var sb = new System.Text.StringBuilder();
+                        sb.AppendLine($"Archive: {selected.Name}");
+                        sb.AppendLine($"Size: {FormatSizeHuman(selected.SizeBytes)}");
+                        sb.AppendLine();
+                        sb.AppendLine($"Contents ({archiveEntries.Count} items):");
+                        sb.AppendLine();
+
+                        foreach (var entry in archiveEntries)
+                        {
+                            if (entry.IsDirectory)
+                                sb.AppendLine($"  [DIR]  {entry.Name}/");
+                            else
+                                sb.AppendLine($"         {entry.Name}  ({FormatSizeHuman(entry.SizeBytes)})");
+                        }
+
+                        _preview = new ColumnState
+                        {
+                            Path = selected.FullPath,
+                            Label = selected.Name,
+                            IsFilePreview = true,
+                            PreviewType = FilePreviewType.Text,
+                            PreviewTextContent = sb.ToString(),
+                            PreviewFileType = "ZIP Archive",
+                            PreviewFileSize = selected.SizeBytes,
+                            PreviewFilePath = selected.FullPath
+                        };
+
+                        Log.Verb("ColumnNavigator: archive '{Name}' — not a ROM, showing contents ({Count} items)",
+                            selected.Name, archiveEntries.Count);
+                    }
                 }
                 else
                 {
@@ -329,6 +444,41 @@ namespace XFiles.Navigation
                     _preview.PreviewPixelHeight = previewResult.PixelHeight;
                     _preview.PreviewFilePath = selected.FullPath;
                     _preview.PreviewPdfPageCount = previewResult.PdfPageCount;
+                    _preview.PreviewRomSystem = previewResult.RomSystem;
+                    _preview.PreviewRomIconPath = previewResult.RomIconPath;
+
+                    // Enrich with gamelist data if available
+                    if (_gamelistCache != null && previewResult.Type == FilePreviewType.Rom)
+                    {
+                        string lookupName = selected.Name;
+
+                        // For files inside archive, also try parent ZIP name
+                        GamelistEntry gamelistEntry = GamelistParser.FindEntry(_gamelistCache, lookupName);
+                        if (gamelistEntry == null && !string.IsNullOrEmpty(selected.ArchiveRootPath))
+                        {
+                            string zipName = System.IO.Path.GetFileName(selected.ArchiveRootPath);
+                            gamelistEntry = GamelistParser.FindEntry(_gamelistCache, zipName);
+                        }
+
+                        if (gamelistEntry != null)
+                        {
+                            _preview.PreviewHasGamelistData = true;
+                            if (!string.IsNullOrEmpty(gamelistEntry.Name))
+                                _preview.PreviewTextContent = gamelistEntry.Name;
+                            _preview.PreviewRomDescription = gamelistEntry.Description;
+                            _preview.PreviewRomDeveloper = gamelistEntry.Developer;
+                            _preview.PreviewRomPublisher = gamelistEntry.Publisher;
+                            _preview.PreviewRomGenre = gamelistEntry.Genre;
+                            _preview.PreviewRomPlayers = gamelistEntry.Players;
+                            _preview.PreviewRomRating = gamelistEntry.Rating;
+                            if (gamelistEntry.ReleaseDate.HasValue)
+                                _preview.PreviewRomReleaseYear = gamelistEntry.ReleaseDate.Value.Year;
+                            _preview.PreviewRomCoverLocalPath = GamelistParser.GetCoverPath(gamelistEntry);
+
+                            Log.Verb("ColumnNavigator: gamelist enriched '{Name}' — genre={Genre} dev={Dev}",
+                                gamelistEntry.Name, gamelistEntry.Genre, gamelistEntry.Developer);
+                        }
+                    }
                 }
             }
         }
@@ -354,6 +504,91 @@ namespace XFiles.Navigation
 
             await UpdatePreviewAsync();
             PreviewChanged?.Invoke();
+        }
+
+        /// <summary>
+        /// Load gamelist.xml for the current directory if it exists.
+        /// Uses XmlReader streaming (no DOM overhead).
+        /// </summary>
+        private async Task LoadGamelistAsync(string directoryPath)
+        {
+            _gamelistCache = null;
+            _gamelistDirectory = null;
+
+            if (string.IsNullOrEmpty(directoryPath)) return;
+
+            string gamelistPath = System.IO.Path.Combine(directoryPath, "gamelist.xml");
+            if (!DirectoryScanner.FileExists(gamelistPath)) return;
+
+            try
+            {
+                _gamelistCache = await GamelistParser.ParseAsync(gamelistPath);
+                _gamelistDirectory = directoryPath;
+                Log.Info("ColumnNavigator: loaded gamelist from {Path} ({Count} entries)",
+                    gamelistPath, _gamelistCache.Count);
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("ColumnNavigator: failed to load gamelist from {Path}: {Error}",
+                    gamelistPath, ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Infer ROM system name from directory path (e.g. "E:\Atari 2600" → "Atari 2600").
+        /// Falls back to "ROM" if no recognizable system name found.
+        /// </summary>
+        private static string GetSystemFromDirectory(string dirPath)
+        {
+            if (string.IsNullOrEmpty(dirPath)) return "ROM";
+
+            string dirName = System.IO.Path.GetFileName(dirPath);
+            if (string.IsNullOrEmpty(dirName)) return "ROM";
+
+            string lower = dirName.ToLowerInvariant();
+            if (lower.Contains("atari 2600") || lower.Contains("a2600")) return "Atari 2600";
+            if (lower.Contains("atari 5200") || lower.Contains("a5200")) return "Atari 5200";
+            if (lower.Contains("atari 7800") || lower.Contains("a7800")) return "Atari 7800";
+            if (lower.Contains("atari lynx")) return "Atari Lynx";
+            if (lower.Contains("atari jaguar")) return "Atari Jaguar";
+            if (lower.Contains("genesis") || lower.Contains("mega drive")) return "Genesis/Mega Drive";
+            if (lower.Contains("master system")) return "Master System";
+            if (lower.Contains("game gear")) return "Game Gear";
+            if (lower.Contains("game boy color") || lower.Contains("gbc")) return "Game Boy Color";
+            if (lower.Contains("game boy advance") || lower.Contains("gba")) return "GBA";
+            if (lower.Contains("game boy") || lower.Contains("gb ")) return "Game Boy";
+            if (lower.Contains("snes") || lower.Contains("super nintendo") || lower.Contains("super famicom"))
+                return "SNES";
+            if (lower.Contains("nes") || lower.Contains("nintendo") || lower.Contains("famicom"))
+                return "NES";
+            if (lower.Contains("pc engine") || lower.Contains("turbografx")) return "PC Engine/TurboGrafx-16";
+            if (lower.Contains("colecovision")) return "ColecoVision";
+            if (lower.Contains("intellivision")) return "Intellivision";
+            if (lower.Contains("sg-1000")) return "SG-1000";
+            if (lower.Contains("msx")) return "MSX";
+            if (lower.Contains("zx spectrum") || lower.Contains("spectrum")) return "ZX Spectrum";
+            if (lower.Contains("vectrex")) return "Vectrex";
+            if (lower.Contains("nintendo 64") || lower.Contains("n64")) return "Nintendo 64";
+            if (lower.Contains("nintendo ds") || lower.Contains("nds")) return "Nintendo DS";
+            if (lower.Contains("nintendo 3ds") || lower.Contains("3ds")) return "Nintendo 3DS";
+            if (lower.Contains("virtualboy") || lower.Contains("virtual boy")) return "Virtual Boy";
+            if (lower.Contains("gamecube") || lower.Contains("ngc")) return "GameCube";
+            if (lower.Contains("dreamcast")) return "Dreamcast";
+            if (lower.Contains("saturn")) return "Saturn";
+            if (lower.Contains("playstation 3") || lower.Contains("ps3")) return "PlayStation";
+            if (lower.Contains("playstation 2") || lower.Contains("ps2")) return "PlayStation";
+            if (lower.Contains("playstation") || lower.Contains("psx") || lower.Contains("ps1")) return "PlayStation";
+            if (lower.Contains("psp") || lower.Contains("playstation portable")) return "PSP";
+            if (lower.Contains("wii u") || lower.Contains("wiiu")) return "Wii U";
+            if (lower.Contains("wii")) return "Wii";
+            if (lower.Contains("neo geo pocket") || lower.Contains("ngp")) return "Neo Geo Pocket";
+            if (lower.Contains("neo geo")) return "Neo Geo";
+            if (lower.Contains("switch") || lower.Contains("nsp") || lower.Contains("xci")) return "Switch";
+            if (lower.Contains("32x") || lower.Contains("32-x")) return "Sega 32X";
+            if (lower.Contains("segacd") || lower.Contains("segA cd") || lower.Contains("mega cd")) return "Sega CD";
+            if (lower.Contains("wonderswan")) return "WonderSwan";
+
+            return dirName;
         }
 
         /// <summary>
@@ -403,6 +638,14 @@ namespace XFiles.Navigation
 
             ColumnsChanged?.Invoke();
         }
+
+        private static string FormatSizeHuman(long bytes)
+        {
+            if (bytes < 1024) return $"{bytes} B";
+            if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+            if (bytes < 1024 * 1024 * 1024) return $"{bytes / (1024.0 * 1024):F1} MB";
+            return $"{bytes / (1024.0 * 1024 * 1024):F2} GB";
+        }
     }
 
     /// <summary>
@@ -431,6 +674,19 @@ namespace XFiles.Navigation
         public int PreviewPixelHeight { get; set; }
         public string PreviewFilePath { get; set; }
         public int PreviewPdfPageCount { get; set; }
+        public string PreviewRomSystem { get; set; }
+        public string PreviewRomIconPath { get; set; }
+
+        // Gamelist enrichment data
+        public bool PreviewHasGamelistData { get; set; }
+        public string PreviewRomDescription { get; set; }
+        public string PreviewRomDeveloper { get; set; }
+        public string PreviewRomPublisher { get; set; }
+        public string PreviewRomGenre { get; set; }
+        public int PreviewRomPlayers { get; set; }
+        public float PreviewRomRating { get; set; }
+        public int PreviewRomReleaseYear { get; set; }
+        public string PreviewRomCoverLocalPath { get; set; }
 
         public string ParentPath
         {

@@ -46,6 +46,8 @@ Maps file extensions to Papirus icon names and project asset filenames.
 | `.rb` | text/x-ruby | text-x-ruby | filetype-text-x-ruby-48.png |
 | `.sh` | application/x-shellscript | application-x-shellscript | filetype-application-x-shellscript-48.png |
 | `.md` | text/markdown | text-markdown | filetype-text-markdown-48.png |
+| `.nfo` | text/plain | text-x-generic | filetype-text-x-generic-48.png |
+| `.diz` | text/plain | text-x-generic | filetype-text-x-generic-48.png |
 
 ## Generic Fallbacks
 
