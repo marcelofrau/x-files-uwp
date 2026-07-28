@@ -127,12 +127,12 @@ All the essentials, accessible from the **Y button** context menu:
 <p align="center">
   <img src="docs/screenshots/xfiles-02-welcome.jpg" alt="Welcome" width="400" />
   &nbsp;
-  <img src="docs/screenshots/xfiles-04-about.jpg" alt="About" width="600" />
+  <img src="docs/screenshots/xfiles-04-about.jpg" alt="About" width="400" />
 </p>
 <p align="center">
-  <img src="docs/screenshots/xfiles-08-image-viewer.jpg" alt="Image Viewer" width="600" />
+  <img src="docs/screenshots/xfiles-08-image-viewer.jpg" alt="Image Viewer" width="400" />
   &nbsp;
-  <img src="docs/screenshots/xfiles-36-editor.jpg" alt="Editor" width="600" />
+  <img src="docs/screenshots/xfiles-36-editor.jpg" alt="Editor" width="400" />
 </p>
 
 <details>
