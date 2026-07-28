@@ -124,7 +124,72 @@ All the essentials, accessible from the **Y button** context menu:
 
 ## 📸 Screenshots
 
-> *Screenshots coming soon — deployed and tested on real Xbox hardware.*
+<p align="center">
+  <img src="docs/screenshots/music-player.jpg" alt="Music Player" width="400" />
+  &nbsp;
+  <img src="docs/screenshots/xfiles-01-splash.jpg" alt="Splash Screen" width="400" />
+</p>
+<p align="center">
+  <img src="docs/screenshots/xfiles-02-welcome.jpg" alt="Welcome" width="400" />
+  &nbsp;
+  <img src="docs/screenshots/xfiles-03-spinup-hdd.jpg" alt="Spin-up HDD" width="400" />
+</p>
+
+<details>
+<summary>📸 All screenshots (48)</summary>
+
+<p align="center">
+  <img src="docs/screenshots/music-player.jpg" alt="Music Player" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-01-splash.jpg" alt="Splash Screen" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-02-welcome.jpg" alt="Welcome" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-03-spinup-hdd.jpg" alt="Spin-up HDD" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-04-about.jpg" alt="About" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-05-xml-highlight.jpg" alt="XML Highlight" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-06-highlight1.jpg" alt="Highlight 1" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-07-highlight2.jpg" alt="Highlight 2" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-08-image-viewer.jpg" alt="Image Viewer" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-09-pdf-viewer.jpg" alt="PDF Viewer" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-09-pdf-viewer-full.jpg" alt="PDF Viewer Fullscreen" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-10-svg-viewer.jpg" alt="SVG Viewer" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-11-music-player-full.jpg" alt="Music Player Fullscreen" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-12-viz1.jpg" alt="Visualizer 1" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-13-viz2.jpg" alt="Visualizer 2" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-14-viz3.jpg" alt="Visualizer 3" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-15-viz4.jpg" alt="Visualizer 4" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-16-viz5.jpg" alt="Visualizer 5" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-17-viz6.jpg" alt="Visualizer 6" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-18-viz7.jpg" alt="Visualizer 7" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-19-viz8.jpg" alt="Visualizer 8" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-20-viz9.jpg" alt="Visualizer 9" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-21-viz10.jpg" alt="Visualizer 10" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-22-viz11.jpg" alt="Visualizer 11" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-23-viz12.jpg" alt="Visualizer 12" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-24-viz13.jpg" alt="Visualizer 13" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-25-fileops.jpg" alt="File Operations" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-25-share1.jpg" alt="Share 1" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-26-share2.jpg" alt="Share 2" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-27-share-progress.jpg" alt="Share Progress" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-28-share-qr.jpg" alt="Share QR" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-29-batch-selection.jpg" alt="Batch Selection" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-30-batch-operation.jpg" alt="Batch Operation" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-32-progress.jpg" alt="Progress" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-33-progress-paste.jpg" alt="Progress Paste" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-34-roms.jpg" alt="ROMs" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-35-edit-file.jpg" alt="Edit File" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-36-editor.jpg" alt="Editor" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-37-logs.jpg" alt="Logs" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-38-logs-share.jpg" alt="Logs Share" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-39-delete.jpg" alt="Delete" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-40-delete1.jpg" alt="Delete Confirm" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-41-new-folder.jpg" alt="New Folder" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-42-move-here.jpg" alt="Move Here" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-43-move-here.jpg" alt="Move Here 2" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-44-settings.jpg" alt="Settings" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-45-video-player.jpg" alt="Video Player" width="600" /><br/>
+  <img src="docs/screenshots/xfiles-46-video-player-full.jpg" alt="Video Player Fullscreen" width="600" />
+</p>
+
+</details>
 
 ---
 
