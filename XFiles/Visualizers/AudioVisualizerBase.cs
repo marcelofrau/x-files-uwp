@@ -115,36 +115,40 @@ namespace XFiles.Visualizers
             }
             if (vis == null) return;
 
-            if (!_initialized)
+            try
             {
-                vis.Initialize(args.DrawingSession.Device);
-
-                // Dispose old pipeline before creating new one
-                _pipeline?.Dispose();
-
-                // Initialize pipeline
-                _pipeline = new PostProcessPipeline();
-                _pipeline.Initialize(args.DrawingSession.Device);
-
-                if (_cachedWidth > 0 && _cachedHeight > 0)
+                if (!_initialized)
                 {
-                    vis.Resize(_cachedWidth, _cachedHeight);
-                    _pipeline.Resize(_cachedWidth, _cachedHeight);
+                    vis.Initialize(args.DrawingSession.Device);
+
+                    _pipeline?.Dispose();
+
+                    _pipeline = new PostProcessPipeline();
+                    _pipeline.Initialize(args.DrawingSession.Device);
+
+                    if (_cachedWidth > 0 && _cachedHeight > 0)
+                    {
+                        vis.Resize(_cachedWidth, _cachedHeight);
+                        _pipeline.Resize(_cachedWidth, _cachedHeight);
+                    }
+                    _initialized = true;
                 }
-                _initialized = true;
-            }
 
-            var ds = args.DrawingSession;
+                var ds = args.DrawingSession;
 
-            // Use post-processing pipeline for MilkDrop-style effects
-            if (_pipeline != null)
-            {
-                vis.ConfigurePipeline(_pipeline);
-                _pipeline.Draw(ds, (sceneDs) => vis.Draw(sceneDs), _bassLevel, _beatLevel);
+                if (_pipeline != null)
+                {
+                    vis.ConfigurePipeline(_pipeline);
+                    _pipeline.Draw(ds, (sceneDs) => vis.Draw(sceneDs), _bassLevel, _beatLevel);
+                }
+                else
+                {
+                    vis.Draw(ds);
+                }
             }
-            else
+            catch (Exception ex)
             {
-                vis.Draw(ds);
+                Log.Err("AudioVisualizerBase.OnCanvasDraw", ex);
             }
         }
 

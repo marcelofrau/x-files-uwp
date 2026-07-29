@@ -29,6 +29,8 @@ namespace XFiles.Visualizers
         RetroOscilloscope,
         InfernoCore,
         WaveformTunnel,
-        InfernoCore2
+        GeissFluid,
+        Xbox360Boot,
+        ThreeDoMusicTiles
     }
 }

@@ -63,10 +63,12 @@ namespace XFiles.Audio
         private bool _isAnalyzing;
         private int _isProcessing;
         private bool _gcRegionActive;
+        private CancellationTokenSource _swapCts;
         private float _decayFactor = 0.85f;
         private float _peakHoldDuration = 1.5f;
         private float _peakDecayFactor = 0.92f;
         private int _quantumLogCounter;
+        private bool _firstBandDataLogged;
         private string _currentFilePath;
 
 #if AUDIO_ANALYSIS
@@ -89,6 +91,7 @@ namespace XFiles.Audio
 
         private bool _isGraphRunning;
         public bool IsPlaying => _isGraphRunning;
+        public string CurrentFilePath => _currentFilePath;
         public bool IsFileLoaded => _fileInputNode != null || _mediaSourceNode != null;
 
         public TimeSpan Position
@@ -314,8 +317,9 @@ namespace XFiles.Audio
 
                 _fileInputNode.Start();
 
-                try { _gcRegionActive = GC.TryStartNoGCRegion(256 * 1024 * 1024); } catch { }
+                try { _gcRegionActive = GC.TryStartNoGCRegion(256 * 1024); } catch { }
                 _isAnalyzing = true;
+                Log.Info("AudioLevelService: IsAnalyzing=true (LoadViaStorageFile)");
                 _graph.Start();
                 _isGraphRunning = true;
                 MediaOpened?.Invoke(this, EventArgs.Empty);
@@ -323,6 +327,7 @@ namespace XFiles.Audio
             catch (Exception ex)
             {
                 Log.Warn("AudioLevelService: LoadViaStorageFile failed", ex);
+                EndGcRegion();
                 MediaFailed?.Invoke(this, EventArgs.Empty);
                 Stop();
             }
@@ -366,8 +371,9 @@ namespace XFiles.Audio
 
                 _mediaSourceNode.Start();
 
-                try { _gcRegionActive = GC.TryStartNoGCRegion(256 * 1024 * 1024); } catch { }
+                try { _gcRegionActive = GC.TryStartNoGCRegion(256 * 1024); } catch { }
                 _isAnalyzing = true;
+                Log.Info("AudioLevelService: IsAnalyzing=true (LoadViaStream)");
                 _graph.Start();
                 _isGraphRunning = true;
                 MediaOpened?.Invoke(this, EventArgs.Empty);
@@ -375,6 +381,7 @@ namespace XFiles.Audio
             catch (Exception ex)
             {
                 Log.Warn("AudioLevelService: LoadViaStream failed", ex);
+                EndGcRegion();
                 MediaFailed?.Invoke(this, EventArgs.Empty);
                 Stop();
             }
@@ -453,8 +460,7 @@ namespace XFiles.Audio
 #if AUDIO_ANALYSIS
             StopFftWorker();
 #endif
-            try { if (_gcRegionActive) GC.EndNoGCRegion(); } catch { }
-            _gcRegionActive = false;
+            EndGcRegion();
 
             if (_mediaSourceNode != null)
             {
@@ -479,13 +485,18 @@ namespace XFiles.Audio
             }
 
             _currentFilePath = null;
+            _firstBandDataLogged = false;
 
 #if AUDIO_ANALYSIS
+            _frameReady = false;
+            _frameCopyCount = 0;
+
             for (int i = 0; i < BandCount; i++)
             {
                 _bandLevels[i] = 0f;
                 _bandPeaks[i] = 0f;
                 _bandPeakHoldTimers[i] = 0f;
+                _bandDb[i] = 0f;
             }
 
             _beat = 0f;
@@ -494,6 +505,137 @@ namespace XFiles.Audio
 #endif
 
             Log.Info("AudioLevelService: stopped");
+        }
+
+        public async Task SwapSourceAsync(string filePath)
+        {
+            if (string.IsNullOrEmpty(filePath))
+                return;
+
+            _swapCts?.Cancel();
+            _swapCts = new CancellationTokenSource();
+
+            if (_graph == null)
+            {
+                await LoadAndPlay(filePath);
+                return;
+            }
+
+            _currentFilePath = filePath;
+            Log.Info("AudioLevelService: swapping source to {Path}", filePath);
+
+            if (_isGraphRunning)
+            {
+                try { _graph.Stop(); } catch { }
+                _isGraphRunning = false;
+            }
+
+            if (_fileInputNode != null)
+            {
+                try
+                {
+                    _fileInputNode.FileCompleted -= OnFileCompleted;
+                    _fileInputNode.RemoveOutgoingConnection(_deviceOutputNode);
+                    _fileInputNode.RemoveOutgoingConnection(_frameOutputNode);
+                    _fileInputNode.Stop();
+                    _fileInputNode.Dispose();
+                }
+                catch { }
+                _fileInputNode = null;
+            }
+            if (_mediaSourceNode != null)
+            {
+                try
+                {
+                    _mediaSourceNode.RemoveOutgoingConnection(_deviceOutputNode);
+                    _mediaSourceNode.RemoveOutgoingConnection(_frameOutputNode);
+                    _mediaSourceNode.Stop();
+                    _mediaSourceNode.Dispose();
+                }
+                catch { }
+                _mediaSourceNode = null;
+            }
+
+            try
+            {
+                StorageFile storageFile = null;
+                try { storageFile = await StorageFile.GetFileFromPathAsync(filePath); }
+                catch { }
+
+                if (storageFile == null)
+                {
+                    try
+                    {
+                        string dir = Path.GetDirectoryName(filePath);
+                        string name = Path.GetFileName(filePath);
+                        var folder = await StorageFolder.GetFolderFromPathAsync(dir);
+                        storageFile = await folder.GetFileAsync(name);
+                    }
+                    catch { }
+                }
+
+                if (storageFile != null)
+                {
+                    var fileResult = await _graph.CreateFileInputNodeAsync(storageFile);
+                    if (fileResult.Status != AudioFileNodeCreationStatus.Success)
+                    {
+                        Log.Warn("AudioLevelService: SwapSource file node failed: {Status}", fileResult.Status);
+                        MediaFailed?.Invoke(this, EventArgs.Empty);
+                        Stop();
+                        return;
+                    }
+                    _fileInputNode = fileResult.FileInputNode;
+                    _fileInputNode.FileCompleted += OnFileCompleted;
+                    _fileInputNode.AddOutgoingConnection(_deviceOutputNode);
+                    _fileInputNode.AddOutgoingConnection(_frameOutputNode);
+                    _fileInputNode.Start();
+                }
+                else
+                {
+                    var fileStream = new FileStream(filePath,
+                        FileMode.Open, FileAccess.Read,
+                        FileShare.Read | FileShare.Write | FileShare.Delete,
+                        1048576, true);
+                    var mediaSource = MediaSource.CreateFromStream(
+                        fileStream.AsRandomAccessStream(), "audio/mpeg");
+                    var nodeResult = await _graph.CreateMediaSourceAudioInputNodeAsync(mediaSource);
+                    if (nodeResult.Status != MediaSourceAudioInputNodeCreationStatus.Success)
+                    {
+                        Log.Warn("AudioLevelService: SwapSource stream node failed: {Status}", nodeResult.Status);
+                        fileStream.Dispose();
+                        MediaFailed?.Invoke(this, EventArgs.Empty);
+                        Stop();
+                        return;
+                    }
+                    _mediaSourceNode = nodeResult.Node;
+                    _mediaSourceNode.AddOutgoingConnection(_deviceOutputNode);
+                    _mediaSourceNode.AddOutgoingConnection(_frameOutputNode);
+                    _mediaSourceNode.Start();
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("AudioLevelService: SwapSource failed", ex);
+                MediaFailed?.Invoke(this, EventArgs.Empty);
+                Stop();
+                return;
+            }
+
+            try
+            {
+                if (!_gcRegionActive)
+                    try { _gcRegionActive = GC.TryStartNoGCRegion(256 * 1024); } catch { }
+
+                _graph.Start();
+                _isGraphRunning = true;
+                MediaOpened?.Invoke(this, EventArgs.Empty);
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("AudioLevelService: SwapSource post-startup failed", ex);
+                EndGcRegion();
+                Stop();
+            }
         }
 
         private unsafe void OnQuantumStarted(AudioGraph sender, object args)
@@ -516,13 +658,22 @@ namespace XFiles.Audio
                 CopyFrameToBuffer(frame);
 
                 _quantumLogCounter++;
+
+                float bandsSum = 0f;
+                for (int i = 0; i < BandCount; i++) bandsSum += _bandLevels[i];
+
+                if (!_firstBandDataLogged && bandsSum > 0.001f)
+                {
+                    _firstBandDataLogged = true;
+                    Log.Info("AudioLevelService: FIRST non-zero band data quantum#{Cnt} rate={Rate} ch={Ch} sum={Sum:F4} lvl0={L0:F4} lvl5={L5:F4}",
+                        _quantumLogCounter, _sampleRate, _channels, bandsSum, _bandLevels[0], _bandLevels[5]);
+                }
+
 #if AUDIO_LEVEL_DEBUG
                 if (_quantumLogCounter <= 5 || (_quantumLogCounter % 1000 == 0 && _quantumLogCounter <= 10000))
                 {
-                    float sum = 0f;
-                    for (int i = 0; i < BandCount; i++) sum += _bandLevels[i];
                     Log.Info("AudioLevelService: quantum#{Cnt} rate={Rate} ch={Ch} bandsSum={Sum:F4} lvl0={L0:F4} lvl5={L5:F4}",
-                        _quantumLogCounter, _sampleRate, _channels, sum, _bandLevels[0], _bandLevels[5]);
+                        _quantumLogCounter, _sampleRate, _channels, bandsSum, _bandLevels[0], _bandLevels[5]);
                 }
 #endif
 #endif
@@ -554,18 +705,28 @@ namespace XFiles.Audio
                 int floatCount = (int)(capacity / sizeof(float));
                 int totalSamples = floatCount / _channels;
                 int fftSamples = Math.Min(FftSize, totalSamples);
+
+                // Bounds check: ensure (fftSamples-1)*_channels + ch stays within floatCount
+                int maxSafeSamples = (floatCount - _channels) / _channels;
+                if (maxSafeSamples < 0) maxSafeSamples = 0;
+                fftSamples = Math.Min(fftSamples, maxSafeSamples);
                 if (fftSamples == 0) return;
 
-                int channelsToProcess = Math.Min(1, _channels);
+#if AUDIO_LEVEL_DEBUG
+                if (_quantumLogCounter <= 3)
+                {
+                    Log.Dbg("AudioLevelService.CopyFrameToBuffer: q#{Cnt} cap={Cap} flt={Flt} ch={Ch} total={Total} fft={Fft} maxSafe={Safe}",
+                        _quantumLogCounter, capacity, floatCount, _channels, totalSamples, fftSamples, maxSafeSamples);
+                }
+#endif
+
+                int channelsToAvg = Math.Min(2, _channels);
                 for (int i = 0; i < fftSamples; i++)
                 {
-                    float maxVal = 0f;
-                    for (int ch = 0; ch < channelsToProcess; ch++)
-                    {
-                        float val = Math.Abs(((float*)dataByte)[i * _channels + ch]);
-                        if (val > maxVal) maxVal = val;
-                    }
-                    _frameCopyBuffer[i] = maxVal;
+                    float sum = 0f;
+                    for (int ch = 0; ch < channelsToAvg; ch++)
+                        sum += ((float*)dataByte)[i * _channels + ch];
+                    _frameCopyBuffer[i] = sum / channelsToAvg;
                 }
                 _frameCopyCount = fftSamples;
                 _frameReady = true;
@@ -575,7 +736,15 @@ namespace XFiles.Audio
 
         private void ProcessFrameFromBuffer()
         {
+            try
+            {
             int fftSamples = _frameCopyCount;
+
+            if (fftSamples <= 0 || fftSamples > FftSize)
+            {
+                Log.Warn("AudioLevelService: ProcessFrameFromBuffer invalid count {Count}", fftSamples);
+                return;
+            }
 
             Array.Copy(_frameCopyBuffer, _windowedBuffer, fftSamples);
             for (int i = fftSamples; i < FftSize; i++)
@@ -661,6 +830,11 @@ namespace XFiles.Audio
             else
                 _beat *= _beatDecay;
             if (_beat < 0.01f) _beat = 0f;
+            }
+            catch (Exception ex)
+            {
+                Log.Err("AudioLevelService: ProcessFrameFromBuffer error", ex);
+            }
         }
 #endif
 
@@ -702,6 +876,7 @@ namespace XFiles.Audio
 
         private void FftWorkerLoop()
         {
+            Log.Dbg("AudioLevelService: FFT worker started");
             while (true)
             {
                 _fftSignal.Wait();
@@ -713,11 +888,22 @@ namespace XFiles.Audio
                     ProcessFrameFromBuffer();
                 }
             }
+            Log.Dbg("AudioLevelService: FFT worker exiting");
         }
 #endif
 
+        private void EndGcRegion()
+        {
+            if (_gcRegionActive)
+            {
+                try { GC.EndNoGCRegion(); } catch { }
+                _gcRegionActive = false;
+            }
+        }
+
         public void Dispose()
         {
+            EndGcRegion();
             Stop();
         }
     }

@@ -83,6 +83,7 @@ namespace XFiles.Controls
         public void LoadFile(string filePath)
         {
             if (string.IsNullOrEmpty(filePath)) return;
+            Log.Dbg("MediaPreviewControl.LoadFile: enter for {Path} (wasPlaying={WasPlaying})", filePath, _isPlaying);
             Stop();
             _hasEnded = false;
             Log.Info("MediaPreviewControl: loading {Path}", filePath);
@@ -117,6 +118,55 @@ namespace XFiles.Controls
             Visibility = Visibility.Visible;
         }
 
+        public void LoadNextTrack(string filePath)
+        {
+            if (string.IsNullOrEmpty(filePath)) return;
+
+            string ext = Path.GetExtension(filePath);
+            bool newIsAudio = FilePreviewService.IsAudioFile(ext);
+
+            Log.Dbg("MediaPreviewControl.LoadNextTrack: enter for {Path} isAudio={IsAudio} wasPlaying={WasPlaying}", filePath, newIsAudio, _isPlaying);
+
+            if (_isAudioMode != newIsAudio)
+            {
+                Log.Info("MediaPreviewControl: mode switch, full load for {Path}", filePath);
+                LoadFile(filePath);
+                return;
+            }
+
+            Log.Info("MediaPreviewControl: swapping source for {Path}", filePath);
+            _currentFilePath = filePath;
+            _hasEnded = false;
+            _isPlaying = false;
+
+            if (_isAudioMode)
+            {
+                AudioInfoPanel.Visibility = Visibility.Visible;
+                AlbumArtBorder.Visibility = Visibility.Collapsed;
+                DefaultArtPanel.Visibility = Visibility.Visible;
+                TitleText.Text = Path.GetFileNameWithoutExtension(filePath);
+                ArtistText.Text = "";
+                ArtistText.Visibility = Visibility.Collapsed;
+                AlbumText.Text = "";
+                AlbumText.Visibility = Visibility.Collapsed;
+                _ = LoadMetadataAsync(filePath);
+                _isLoadingPlayback = true;
+                _ = _audioLevelService.SwapSourceAsync(filePath);
+            }
+            else
+            {
+                _currentSourceUri = new Uri(filePath);
+                var source = MediaSource.CreateFromUri(_currentSourceUri);
+                _currentPlaybackItem = new MediaPlaybackItem(source);
+                Player.Pause();
+                Player.Source = _currentPlaybackItem;
+            }
+
+            UpdatePlayPauseIcon();
+            Visibility = Visibility.Visible;
+            PlayerStateChanged?.Invoke(this, EventArgs.Empty);
+        }
+
         public void ShowPlaceholder(string filePath)
         {
             if (string.IsNullOrEmpty(filePath)) return;
@@ -141,6 +191,7 @@ namespace XFiles.Controls
 
         private async Task StartAudioPlayback(string filePath)
         {
+            Log.Info("MediaPreviewControl.StartAudioPlayback: starting for {Path}", filePath ?? "(null)");
             try
             {
 #if AUDIO_ANALYSIS
@@ -162,48 +213,55 @@ namespace XFiles.Controls
             }
         }
 
-        public void StopPlayer()
-        {
-            if (_isPlaying)
-            {
-                if (_isAudioMode)
-                    _audioLevelService.Pause();
-                else
-                    Player.Pause();
-                _isPlaying = false;
-                _progressTimer.Stop();
-                UpdatePlayPauseIcon();
-                PlayerStateChanged?.Invoke(this, EventArgs.Empty);
-            }
-            if (_isAudioMode)
-            {
-                _audioLevelService.Stop();
+		public void StopPlayer()
+		{
+			if (_isPlaying)
+			{
+				if (_isAudioMode)
+					_audioLevelService.Pause();
+				else
+					Player.Pause();
+				_isPlaying = false;
+				_progressTimer.Stop();
+				UpdatePlayPauseIcon();
+				PlayerStateChanged?.Invoke(this, EventArgs.Empty);
+			}
+			if (_isAudioMode)
+			{
+				_audioLevelService.MediaOpened -= OnAudioMediaOpened;
+				_audioLevelService.MediaEnded -= OnAudioMediaEnded;
+				_audioLevelService.MediaFailed -= OnAudioMediaFailed;
+				_audioLevelService.Dispose();
+				_audioLevelService = null;
 #if AUDIO_ANALYSIS
-                VuMeter.DetachService();
+				VuMeter.DetachService();
 #endif
-            }
-            _metadataCts?.Cancel();
-            _metadataCts = null;
-            _currentFilePath = null;
-        }
+			}
+			_metadataCts?.Cancel();
+			_metadataCts = null;
+			_currentFilePath = null;
+		}
 
-        public void Stop()
-        {
-            _progressTimer.Stop();
-            _metadataCts?.Cancel();
-            _metadataCts = null;
-            if (_isAudioMode)
-            {
-                _audioLevelService.Stop();
+		public void Stop()
+		{
+			_progressTimer.Stop();
+			_metadataCts?.Cancel();
+			_metadataCts = null;
+			if (_isAudioMode)
+			{
+				if (_audioLevelService != null)
+				{
+					_audioLevelService.Stop();
 #if AUDIO_ANALYSIS
-                VuMeter.DetachService();
+					VuMeter.DetachService();
 #endif
-            }
-            else
-            {
-                Player.Pause();
-                Player.Source = null;
-            }
+				}
+			}
+			else
+			{
+				Player.Pause();
+				Player.Source = null;
+			}
             _currentSourceUri = null;
             _currentFilePath = null;
             _isPlaying = false;
@@ -226,12 +284,25 @@ namespace XFiles.Controls
                 Session.Position = position;
         }
 
-        public void TogglePlayPause()
-        {
-            if (_isAudioMode)
-            {
+		public void TogglePlayPause()
+		{
+			Log.Dbg("MediaPreviewControl.TogglePlayPause: audio={IsAudio} playing={IsPlaying} loading={IsLoading} fileLoaded={FileLoaded} file={File}",
+				_isAudioMode, _isPlaying, _isLoadingPlayback, _audioLevelService?.IsFileLoaded ?? false, _currentFilePath ?? "(null)");
+			if (_audioLevelService == null)
+			{
+				_audioLevelService = new AudioLevelService();
+				_audioLevelService.MediaOpened += OnAudioMediaOpened;
+				_audioLevelService.MediaEnded += OnAudioMediaEnded;
+				_audioLevelService.MediaFailed += OnAudioMediaFailed;
+			}
+			if (_isAudioMode)
+			{
                 if (string.IsNullOrEmpty(_currentFilePath)) return;
-                if (!_audioLevelService.IsFileLoaded && !_isLoadingPlayback)
+                bool fileMismatch = _audioLevelService.IsFileLoaded
+                    && !string.IsNullOrEmpty(_currentFilePath)
+                    && _audioLevelService.CurrentFilePath != _currentFilePath;
+                if (fileMismatch) _audioLevelService.Stop();
+                if ((!_audioLevelService.IsFileLoaded || fileMismatch) && !_isLoadingPlayback)
                 {
                     _isLoadingPlayback = true;
                     _hasEnded = false;
@@ -245,7 +316,20 @@ namespace XFiles.Controls
                 if (_isLoadingPlayback) return;
                 _audioLevelService.TogglePlayPause();
                 _isPlaying = _audioLevelService.IsPlaying;
-                if (_isPlaying) _hasEnded = false;
+                if (!_isPlaying)
+                {
+                    Log.Dbg("MediaPreviewControl.TogglePlayPause: resume failed, forcing reload");
+                    _audioLevelService.Stop();
+                    _isLoadingPlayback = true;
+                    _hasEnded = false;
+                    _isPlaying = true;
+                    UpdatePlayPauseIcon();
+                    _progressTimer.Start();
+                    PlayerStateChanged?.Invoke(this, EventArgs.Empty);
+                    _ = StartAudioPlayback(_currentFilePath);
+                    return;
+                }
+                _hasEnded = false;
             }
             else
             {
@@ -364,6 +448,7 @@ namespace XFiles.Controls
             await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
             {
                 Log.Info("AudioLevelService: media opened — starting playback state");
+                _isLoadingPlayback = false;
                 _isPlaying = true;
                 UpdatePlayPauseIcon();
                 _progressTimer.Start();

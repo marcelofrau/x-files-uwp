@@ -30,7 +30,20 @@ namespace XFiles.Controls
 
         public bool IsDrive { get; set; }
         public bool IsVirtual { get; set; }
-        public bool IsFavorite { get; set; }
+        private bool _isFavorite;
+        public bool IsFavorite
+        {
+            get => _isFavorite;
+            set
+            {
+                if (_isFavorite != value)
+                {
+                    _isFavorite = value;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsFavorite)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Icon)));
+                }
+            }
+        }
         public string ArchiveRootPath { get; set; }
         public string ArchiveInternalPath { get; set; }
 
@@ -217,9 +230,7 @@ namespace XFiles.Controls
             : IsDrive
                 ? "ms-appx:///Assets/FileTypes/drive-harddisk-24.png"
                 : IsFavorite
-                    ? (IsDirectory
-                        ? "ms-appx:///Assets/FileTypes/folder-favorite-24.png"
-                        : "ms-appx:///Assets/FileTypes/file-favorite-24.png")
+                    ? "ms-appx:///Assets/FileTypes/favorite-24.png"
                     : IsDirectory
                         ? $"ms-appx:///Assets/FileTypes/folder-{_folderColor}-24.png"
                         : (IsArchive ? "ms-appx:///Assets/FileTypes/file-archive-24.png"
@@ -498,4 +509,5 @@ namespace XFiles.Controls
             base.OnKeyDown(e);
         }
     }
+
 }

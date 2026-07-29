@@ -27,7 +27,6 @@ namespace XFiles.Controls
         // HTML template parts (loaded once)
         private static string _highlightJs;
         private static string _highlightCss;
-        private static string _fontBase64;
         private static string _editorJs;
 
         // Toast timer
@@ -728,7 +727,7 @@ namespace XFiles.Controls
   body {{ background:#0F1318; overflow:hidden; height:100vh; }}
   #editor {{
     display:flex; height:100vh; overflow:auto;
-    font-family:'Inconsolata','Consolas','Courier New',monospace;
+    font-family:'Consolas','Courier New',monospace;
     font-size:13px; color:#D4D4D4; line-height:1.5;
     white-space:pre;
   }}
@@ -736,13 +735,13 @@ namespace XFiles.Controls
     width:50px; min-width:50px;
     text-align:right; padding:8px 8px 8px 0;
     color:#5A5C60; user-select:none; pointer-events:none;
-    font-family:'Inconsolata','Consolas','Courier New',monospace;
+    font-family:'Consolas','Courier New',monospace;
     font-size:13px; line-height:1.5;
   }}
   #line-numbers div {{ height:1.5em; }}
   #code {{
     flex:1; padding:8px 12px; outline:none;
-    font-family:'Inconsolata','Consolas','Courier New',monospace;
+    font-family:'Consolas','Courier New',monospace;
     font-size:13px; line-height:1.5;
     tab-size:4; -moz-tab-size:4;
     overflow:visible;
@@ -770,7 +769,7 @@ namespace XFiles.Controls
 
         private static async Task EnsureAssetsLoadedAsync()
         {
-            if (_highlightJs != null && _highlightCss != null && _fontBase64 != null && _editorJs != null)
+            if (_highlightJs != null && _highlightCss != null && _editorJs != null)
                 return;
 
             try
@@ -783,24 +782,18 @@ namespace XFiles.Controls
                     new Uri("ms-appx:///Assets/highlight-aco.css"));
                 _highlightCss = await FileIO.ReadTextAsync(cssFile);
 
-                var fontFile = await StorageFile.GetFileFromApplicationUriAsync(
-                    new Uri("ms-appx:///Assets/Inconsolata-Regular.ttf"));
-                var fontBytes = await Task.Run(() => System.IO.File.ReadAllBytes(fontFile.Path));
-                _fontBase64 = Convert.ToBase64String(fontBytes);
-
                 var editorFile = await StorageFile.GetFileFromApplicationUriAsync(
                     new Uri("ms-appx:///Assets/editor.js"));
                 _editorJs = await FileIO.ReadTextAsync(editorFile);
 
-                Log.Dbg("TextEditorOverlay: assets loaded — JS={JsLen}, CSS={CssLen}, Font={FontLen}, Editor={EditorLen}",
-                    _highlightJs.Length, _highlightCss.Length, _fontBase64.Length, _editorJs.Length);
+                Log.Dbg("TextEditorOverlay: assets loaded — JS={JsLen}, CSS={CssLen}, Editor={EditorLen}",
+                    _highlightJs.Length, _highlightCss.Length, _editorJs.Length);
             }
             catch (Exception ex)
             {
                 Log.Err("TextEditorOverlay: failed to load assets", ex);
                 _highlightJs = "";
                 _highlightCss = "";
-                _fontBase64 = "";
                 _editorJs = "";
             }
         }

@@ -57,16 +57,30 @@
 
                 <StackPanel Orientation="Horizontal"
                             HorizontalAlignment="Center"
-                            Padding="0,12,0,0">
-                    <Image Source="ms-appx:///Assets/GamepadButtons/abxy/b.png"
-                           Width="18" Height="18" Margin="0,0,4,0"
-                           VerticalAlignment="Center" />
-                    <TextBlock Text="Back"
-                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                               FontSize="12"
-                               Foreground="{StaticResource XFilesTextMutedBrush}"
-                               Margin="0,3,0,0"
+                            Padding="0,12,0,0"
+                            Spacing="16">
+                    <StackPanel Orientation="Horizontal">
+                        <Image Source="ms-appx:///Assets/GamepadButtons/abxy/a.png"
+                               Width="18" Height="18" Margin="0,0,4,0"
                                VerticalAlignment="Center" />
+                        <TextBlock Text="Select"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                   FontSize="12"
+                                   Foreground="{StaticResource XFilesTextMutedBrush}"
+                                   Margin="0,3,0,0"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <Image Source="ms-appx:///Assets/GamepadButtons/abxy/b.png"
+                               Width="18" Height="18" Margin="0,0,4,0"
+                               VerticalAlignment="Center" />
+                        <TextBlock Text="Back"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                   FontSize="12"
+                                   Foreground="{StaticResource XFilesTextMutedBrush}"
+                                   Margin="0,3,0,0"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
                 </StackPanel>
             </StackPanel>
         </Border>

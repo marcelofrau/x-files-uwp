@@ -64,7 +64,9 @@ namespace XFiles
         {
             try
             {
-                var rootGrid = Window.Current.Content as Grid;
+                var window = Window.Current;
+                if (window == null) return;
+                var rootGrid = window.Content as Grid;
                 var frame = rootGrid?.Children[0] as Frame;
                 if (frame?.Content is Controls.MillerColumnsPage millerPage)
                 {
