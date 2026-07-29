@@ -19,6 +19,7 @@ using Windows.UI.Xaml.Data;
 using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Media.Animation;
+using Windows.System;
 using Windows.System.Display;
 using XFiles.Audio;
 using XFiles.FileSystem;
@@ -57,9 +58,8 @@ namespace XFiles.Controls
         private readonly HashSet<string> _batchSelectedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private static string _highlightJs;
         private static string _highlightCss;
-        private static string _fontBase64;
 
-
+        private InputRouter _router;
 
         private const int VK_LT = 0x7001;
         private const int VK_RT = 0x7002;
@@ -89,7 +89,7 @@ namespace XFiles.Controls
             _fullscreenProgressTimer.Tick += OnFullscreenProgressTick;
             _fsHideTimer.Tick += OnFsHideTimerTick;
 
-            _mediaLoadTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
+            _mediaLoadTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
             _mediaLoadTimer.Tick += OnMediaLoadTimerTick;
 
             _previewDebounceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(PreviewDebounceMs) };
@@ -111,13 +111,14 @@ namespace XFiles.Controls
             AboutVersionText.Text = $"v{version}";
 
             _ = _navigator.LoadRootAsync();
+            RegisterInputHandlers();
         }
 
         private bool _isMediaPlayerActive;
 
         // Preview debounce — delays preview update during rapid scrolling
         private DispatcherTimer _previewDebounceTimer;
-        private const int PreviewDebounceMs = 180;
+        private const int PreviewDebounceMs = 90;
 
         private long _overlayClosedTick;
         private readonly DisplayRequest _displayRequest = new DisplayRequest();
@@ -229,12 +230,14 @@ namespace XFiles.Controls
 
         private async void OnColumnsChanged()
         {
-            await UpdateUIAsync();
+            try { await UpdateUIAsync(); }
+            catch (Exception ex) { Log.Err("OnColumnsChanged: {Ex}", ex); }
         }
 
         private async void OnPreviewChanged()
         {
-            await UpdatePreviewColumnAsync();
+            try { await UpdatePreviewColumnAsync(); }
+            catch (Exception ex) { Log.Err("OnPreviewChanged: {Ex}", ex); }
         }
 
         private void OnLoadingChanged(bool isLoading)
@@ -625,14 +628,9 @@ namespace XFiles.Controls
 <head>
 <meta charset=""utf-8"">
 <style>
-  @font-face {{
-    font-family:'Inconsolata';
-    src:url(data:font/truetype;base64,{_fontBase64}) format('truetype');
-    font-weight:normal; font-style:normal;
-  }}
   html, body {{ margin:0; padding:0; background:#0F1318; overflow-x:auto; }}
   pre {{ margin:0; padding:12px 8px; white-space:pre; overflow-x:auto;
-         font-family:'Inconsolata','Consolas','Courier New',monospace;
+         font-family:'Consolas','Courier New',monospace;
          font-size:12px; color:#dcdcdc; line-height:1.4;
          display:inline-block; min-width:100%; }}
   code {{ font-family:inherit; }}
@@ -679,7 +677,7 @@ namespace XFiles.Controls
 
         private static async Task EnsureHighlightAssetsLoadedAsync()
         {
-            if (_highlightJs != null && _highlightCss != null && _fontBase64 != null) return;
+            if (_highlightJs != null && _highlightCss != null) return;
 
             try
             {
@@ -694,14 +692,6 @@ namespace XFiles.Controls
                     new Uri("ms-appx:///Assets/highlight-aco.css"));
                 _highlightCss = await FileIO.ReadTextAsync(cssFile);
                 Log.Dbg("EnsureHighlightAssetsLoadedAsync: CSS loaded, {Len} chars", _highlightCss.Length);
-
-                Log.Dbg("EnsureHighlightAssetsLoadedAsync: loading font...");
-                var fontFile = await StorageFile.GetFileFromApplicationUriAsync(
-                    new Uri("ms-appx:///Assets/Inconsolata-Regular.ttf"));
-                var fontBytes = await Task.Run(() => System.IO.File.ReadAllBytes(fontFile.Path));
-                _fontBase64 = Convert.ToBase64String(fontBytes);
-                Log.Dbg("EnsureHighlightAssetsLoadedAsync: font loaded, {Len} bytes, b64={B64Len}",
-                    fontBytes.Length, _fontBase64.Length);
             }
             catch (Exception ex)
             {
@@ -884,8 +874,8 @@ namespace XFiles.Controls
             var items = _navigator.Current?.Entries;
             string itemName = (items != null && CurrentList.SelectedIndex >= 0 && CurrentList.SelectedIndex < items.Count)
                 ? items[CurrentList.SelectedIndex].Name : "(none)";
-            Log.Dbg("SelectionChanged: index={Index} item=\"{Item}\" count={Count} updating={Updating}",
-                CurrentList.SelectedIndex, itemName, items?.Count ?? 0, _updating);
+            Log.Info("SELECTION: index={Index} item=\"{Item}\" count={Count} updating={Updating} isMediaActive={MediaActive}",
+                CurrentList.SelectedIndex, itemName, items?.Count ?? 0, _updating, _isMediaPlayerActive);
 
             if (_updating) return;
             if (CurrentList.SelectedIndex >= 0 && _navigator.Current != null)
@@ -1064,20 +1054,184 @@ namespace XFiles.Controls
 
         public bool IsMediaPlayerActive => _isMediaPlayerActive;
 
+        private void RegisterInputHandlers()
+        {
+            _router = new InputRouter();
+
+            _router.Add(new OverlayHandler(100,
+                () => TextEditorOverlayControl.IsOpen,
+                (k, r) =>
+                {
+                    if (k == VirtualKey.GamepadDPadUp) TextEditorOverlayControl.HandleDPadUp();
+                    else if (k == VirtualKey.GamepadDPadDown) TextEditorOverlayControl.HandleDPadDown();
+                    else if (k == VirtualKey.GamepadDPadLeft) TextEditorOverlayControl.HandleDPadLeft();
+                    else if (k == VirtualKey.GamepadDPadRight) TextEditorOverlayControl.HandleDPadRight();
+                    return true;
+                },
+                (k) => { TextEditorOverlayControl.HandleButton(k); return true; }));
+
+            _router.Add(new OverlayHandler(95,
+                () => VideoTrackMenuControl.IsOpen,
+                (k, r) => { VideoTrackMenuControl.HandleButton(k); return true; },
+                (k) => { VideoTrackMenuControl.HandleButton(k); return true; }));
+
+            _router.Add(new OverlayHandler(90,
+                () => FolderBrowserDialogControl.IsOpen,
+                (k, r) => { FolderBrowserDialogControl.HandleDPad(k); return true; },
+                (k) => { FolderBrowserDialogControl.HandleButton(k); return true; }));
+
+            _router.Add(new OverlayHandler(85,
+                () => LetterGridControl.IsOpen,
+                (k, r) => { LetterGridControl.HandleDPad(k); return true; },
+                (k) => { LetterGridControl.HandleDPad(k); return true; }));
+
+            _router.Add(new OverlayHandler(80,
+                () => InputDialogControl.Visibility == Visibility.Visible,
+                (k, r) => true,
+                (k) => { InputDialogControl.HandleButton(k); return true; }));
+
+            _router.Add(new OverlayHandler(75,
+                () => AlertDialogControl.Visibility == Visibility.Visible,
+                (k, r) => true,
+                (k) => { AlertDialogControl.HandleButton(k); return true; }));
+
+            _router.Add(new OverlayHandler(72,
+                () => OverwriteDialogControl.IsDialogVisible,
+                (k, r) => true,
+                (k) => { OverwriteDialogControl.HandleButton(k); return true; }));
+
+            _router.Add(new OverlayHandler(70,
+                () => FileOperationConfirmDialogControl.IsDialogVisible,
+                (k, r) => true,
+                (k) => { FileOperationConfirmDialogControl.HandleButton(k); return true; }));
+
+            _router.Add(new OverlayHandler(68,
+                () => OpProgressDialog.IsOpen,
+                (k, r) => true,
+                (k) => { if (k == VirtualKey.GamepadB) OpProgressDialog.Cancel(); return true; }));
+
+            _router.Add(new OverlayHandler(65,
+                () => SettingsPageControl.IsVisible,
+                (k, r) =>
+                {
+                    VirtualKey mapped = k;
+                    if (k == VirtualKey.GamepadDPadUp) mapped = VirtualKey.Up;
+                    else if (k == VirtualKey.GamepadDPadDown) mapped = VirtualKey.Down;
+                    SettingsPageControl.HandleDPad(mapped);
+                    return true;
+                },
+                (k) => { SettingsPageControl.HandleDPad(k); return true; }));
+
+            _router.Add(new OverlayHandler(62,
+                () => AboutOverlay.Visibility == Visibility.Visible,
+                (k, r) => true,
+                (k) => { if (k == VirtualKey.GamepadB) HideAbout(); return true; }));
+
+            _router.Add(new OverlayHandler(60,
+                () => StartMenuControl.IsOpen,
+                (k, r) =>
+                {
+                    VirtualKey mapped = k;
+                    if (k == VirtualKey.GamepadDPadUp) mapped = VirtualKey.Up;
+                    else if (k == VirtualKey.GamepadDPadDown) mapped = VirtualKey.Down;
+                    else if (k == VirtualKey.GamepadDPadLeft) mapped = VirtualKey.Left;
+                    else if (k == VirtualKey.GamepadDPadRight) mapped = VirtualKey.Right;
+                    StartMenuControl.ForwardDPad(mapped);
+                    return true;
+                },
+                (k) => { StartMenuControl.ForwardDPad(k); return true; }));
+
+            _router.Add(new OverlayHandler(55,
+                () => FileActionSheetControl.IsOpen,
+                (k, r) =>
+                {
+                    VirtualKey mapped = k;
+                    if (k == VirtualKey.GamepadDPadUp) mapped = VirtualKey.Up;
+                    else if (k == VirtualKey.GamepadDPadDown) mapped = VirtualKey.Down;
+                    else if (k == VirtualKey.GamepadDPadLeft) mapped = VirtualKey.Left;
+                    else if (k == VirtualKey.GamepadDPadRight) mapped = VirtualKey.Right;
+                    FileActionSheetControl.ForwardDPad(mapped);
+                    return true;
+                },
+                (k) => { FileActionSheetControl.ForwardDPad(k); return true; }));
+
+            _router.Add(new OverlayHandler(45,
+                () => LogsPageControl.IsVisible,
+                (k, r) => { LogsPageControl.HandleDPad(k); return true; },
+                (k) => { LogsPageControl.HandleDPad(k); return true; }));
+
+            _router.Add(new OverlayHandler(40,
+                () => ShareDialogControl.IsVisible,
+                (k, r) => { ShareDialogControl.HandleDPad(k); return true; },
+                (k) => { ShareDialogControl.HandleDPad(k); return true; }));
+
+            _router.Add(new OverlayHandler(36,
+                () => PlaceholderOverlay.Visibility == Visibility.Visible,
+                (k, r) => true,
+                (k) => { if (k == VirtualKey.GamepadB) HidePlaceholder(); return true; }));
+
+            _router.Add(new OverlayHandler(35,
+                () => ImageFullScreen.IsOpen,
+                (k, r) => true,
+                (k) =>
+                {
+                    if (k == VirtualKey.GamepadB) { ImageFullScreen.HandleButton(k); UpdateFooterALabelFromSelection(); }
+                    else if (k == VirtualKey.GamepadA) { ImageFullScreen.HandleButton(k); }
+                    return true;
+                }));
+
+            _router.Add(new OverlayHandler(34,
+                () => PdfFullScreen.IsOpen,
+                (k, r) => true,
+                (k) =>
+                {
+                    if (k == VirtualKey.GamepadB) { PdfFullScreen.HandleButton(k); UpdateFooterALabelFromSelection(); }
+                    return true;
+                }));
+
+            _router.Add(new OverlayHandler(33,
+                () => AudioFullScreenPanel.Visibility == Visibility.Visible,
+                (k, r) => true,
+                (k) =>
+                {
+                    if (k == VirtualKey.GamepadB) { CloseAudioFullscreen(); UpdateMediaPlayerFocusUI(); }
+                    else if (k == VirtualKey.GamepadA) { ToggleAudioFullscreenPlayPause(); }
+                    return true;
+                }));
+
+            _router.Add(new OverlayHandler(32,
+                () => VideoFullScreenPanel.Visibility == Visibility.Visible,
+                (k, r) =>
+                {
+                    if (k == VirtualKey.GamepadDPadLeft) HandleContinuousSeek(-5);
+                    else if (k == VirtualKey.GamepadDPadRight) HandleContinuousSeek(5);
+                    return true;
+                },
+                (k) =>
+                {
+                    if (k == VirtualKey.GamepadA) OnFsVideoInput();
+                    else if (k == VirtualKey.GamepadB)
+                    {
+                        if (FSControlsBar.Opacity > 0.0 || FSLegendText.Opacity > 0.0)
+                        {
+                            HideFsControls();
+                            _fsHideTimer.Stop();
+                        }
+                        else
+                        {
+                            CloseVideoFullScreen();
+                            UpdateFooterALabelFromSelection();
+                        }
+                    }
+                    return true;
+                }));
+        }
+
         // --- INavigable ---
 
         public void OnDPadUp(bool isRepeat = false)
         {
-            if (TextEditorOverlayControl.IsOpen) { TextEditorOverlayControl.HandleDPadUp(); return; }
-            if (VideoTrackMenuControl.IsOpen) { VideoTrackMenuControl.HandleButton(Windows.System.VirtualKey.GamepadDPadUp); return; }
-            if (FolderBrowserDialogControl.IsOpen) { FolderBrowserDialogControl.HandleDPad(Windows.System.VirtualKey.GamepadDPadUp); return; }
-            if (IsAnyFullscreen) { Log.Dbg("OnDPadUp: blocked by fullscreen (repeat={R})", isRepeat); return; }
-            if (IsAnyOverlayVisible) { Log.Dbg("OnDPadUp: blocked by overlay (repeat={R})", isRepeat); return; }
-            if (StartMenuControl.IsOpen) { StartMenuControl.ForwardDPad(Windows.System.VirtualKey.Up); return; }
-            if (FileActionSheetControl.IsOpen) { FileActionSheetControl.ForwardDPad(Windows.System.VirtualKey.Up); return; }
-            if (SettingsPageControl.IsVisible) { SettingsPageControl.HandleDPad(Windows.System.VirtualKey.Up); return; }
-            if (LogsPageControl.IsVisible) { LogsPageControl.HandleDPad(Windows.System.VirtualKey.Up); return; }
-            if (ShareDialogControl.IsVisible) { ShareDialogControl.HandleDPad(Windows.System.VirtualKey.Up); return; }
+            if (_router.RouteDPad(VirtualKey.GamepadDPadUp, isRepeat)) return;
 
             if (_isMediaPlayerActive) { MediaPreview.StopPlayer(); UpdateMediaPlayerFocusUI(); }
 
@@ -1098,16 +1252,7 @@ namespace XFiles.Controls
 
         public void OnDPadDown(bool isRepeat = false)
         {
-            if (TextEditorOverlayControl.IsOpen) { TextEditorOverlayControl.HandleDPadDown(); return; }
-            if (VideoTrackMenuControl.IsOpen) { VideoTrackMenuControl.HandleButton(Windows.System.VirtualKey.GamepadDPadDown); return; }
-            if (FolderBrowserDialogControl.IsOpen) { FolderBrowserDialogControl.HandleDPad(Windows.System.VirtualKey.GamepadDPadDown); return; }
-            if (IsAnyFullscreen) { Log.Dbg("OnDPadDown: blocked by fullscreen (repeat={R})", isRepeat); return; }
-            if (IsAnyOverlayVisible) { Log.Dbg("OnDPadDown: blocked by overlay (repeat={R})", isRepeat); return; }
-            if (StartMenuControl.IsOpen) { StartMenuControl.ForwardDPad(Windows.System.VirtualKey.Down); return; }
-            if (FileActionSheetControl.IsOpen) { FileActionSheetControl.ForwardDPad(Windows.System.VirtualKey.Down); return; }
-            if (SettingsPageControl.IsVisible) { SettingsPageControl.HandleDPad(Windows.System.VirtualKey.Down); return; }
-            if (LogsPageControl.IsVisible) { LogsPageControl.HandleDPad(Windows.System.VirtualKey.Down); return; }
-            if (ShareDialogControl.IsVisible) { ShareDialogControl.HandleDPad(Windows.System.VirtualKey.Down); return; }
+            if (_router.RouteDPad(VirtualKey.GamepadDPadDown, isRepeat)) return;
 
             if (_isMediaPlayerActive) { MediaPreview.StopPlayer(); UpdateMediaPlayerFocusUI(); }
 
@@ -1128,17 +1273,8 @@ namespace XFiles.Controls
 
         public void OnDPadLeft()
         {
-            if (TextEditorOverlayControl.IsOpen) { TextEditorOverlayControl.HandleDPadLeft(); return; }
-            if (VideoTrackMenuControl.IsOpen) { VideoTrackMenuControl.HandleButton(Windows.System.VirtualKey.GamepadDPadLeft); return; }
-            if (ImageFullScreen.IsOpen) return;
-            if (PdfFullScreen.IsOpen) return;
-            if (AudioFullScreenPanel.Visibility == Visibility.Visible) return;
-            if (VideoFullScreenPanel.Visibility == Visibility.Visible) { HandleContinuousSeek(-5); return; }
-            if (IsAnyOverlayVisible) return;
-            if (StartMenuControl.IsOpen) return;
-            if (FileActionSheetControl.IsOpen) return;
-            if (LogsPageControl.IsVisible) return;
-            if (ShareDialogControl.IsVisible) return;
+            if (_router.RouteDPad(VirtualKey.GamepadDPadLeft, false)) return;
+
             if (_isMediaPlayerActive) return;
             if (_isBatchMode) return;
             _slideFromRight = false;
@@ -1147,17 +1283,8 @@ namespace XFiles.Controls
 
         public void OnDPadRight()
         {
-            if (TextEditorOverlayControl.IsOpen) { TextEditorOverlayControl.HandleDPadRight(); return; }
-            if (VideoTrackMenuControl.IsOpen) { VideoTrackMenuControl.HandleButton(Windows.System.VirtualKey.GamepadDPadRight); return; }
-            if (ImageFullScreen.IsOpen) return;
-            if (PdfFullScreen.IsOpen) return;
-            if (AudioFullScreenPanel.Visibility == Visibility.Visible) return;
-            if (VideoFullScreenPanel.Visibility == Visibility.Visible) { HandleContinuousSeek(5); return; }
-            if (IsAnyOverlayVisible) return;
-            if (StartMenuControl.IsOpen) return;
-            if (FileActionSheetControl.IsOpen) return;
-            if (LogsPageControl.IsVisible) return;
-            if (ShareDialogControl.IsVisible) return;
+            if (_router.RouteDPad(VirtualKey.GamepadDPadRight, false)) return;
+
             if (_isMediaPlayerActive) return;
             if (_isBatchMode) return;
             // ".." always means drill-out (go up)
@@ -1174,24 +1301,9 @@ namespace XFiles.Controls
 
         public void OnConfirm()
         {
-            if (TextEditorOverlayControl.IsOpen) { TextEditorOverlayControl.HandleButton(Windows.System.VirtualKey.GamepadA); return; }
+            if (_router.RouteButton(VirtualKey.GamepadA)) return;
+
             if (ErrorOverlay.Visibility == Visibility.Visible) { Log.Dbg("OnConfirm: → HideError"); HideError(); return; }
-            if (InputDialogControl.Visibility == Visibility.Visible) { Log.Dbg("OnConfirm: → InputDialog"); InputDialogControl.HandleButton(Windows.System.VirtualKey.GamepadA); return; }
-            if (AlertDialogControl.Visibility == Visibility.Visible) { Log.Dbg("OnConfirm: → ConfirmDialog"); AlertDialogControl.HandleButton(Windows.System.VirtualKey.GamepadA); return; }
-            if (OverwriteDialogControl.IsDialogVisible) { Log.Dbg("OnConfirm: → OverwriteDialog"); OverwriteDialogControl.HandleButton(Windows.System.VirtualKey.GamepadA); return; }
-            if (FileOperationConfirmDialogControl.IsDialogVisible) { Log.Dbg("OnConfirm: → FileOperationConfirmDialog"); FileOperationConfirmDialogControl.HandleButton(Windows.System.VirtualKey.GamepadA); return; }
-            if (FolderBrowserDialogControl.IsOpen) { Log.Dbg("OnConfirm: → FolderBrowserDialog"); FolderBrowserDialogControl.HandleButton(Windows.System.VirtualKey.GamepadA); return; }
-            if (IsAnyOverlayVisible) { Log.Dbg("OnConfirm: blocked by overlay"); return; }
-            if (StartMenuControl.IsOpen) { Log.Dbg("OnConfirm: → StartMenu"); StartMenuControl.ForwardDPad(Windows.System.VirtualKey.GamepadA); return; }
-            if (SettingsPageControl.IsVisible) { Log.Dbg("OnConfirm: → Settings"); SettingsPageControl.HandleDPad(Windows.System.VirtualKey.GamepadA); return; }
-            if (ShareDialogControl.IsVisible) { Log.Dbg("OnConfirm: → ShareDialog"); ShareDialogControl.HandleDPad(Windows.System.VirtualKey.GamepadA); return; }
-            if (LogsPageControl.IsVisible) { Log.Dbg("OnConfirm: → LogsPage close"); LogsPageControl.HandleDPad(Windows.System.VirtualKey.GamepadB); return; }
-            if (ImageFullScreen.IsOpen) { Log.Info("OnConfirm: blocked by ImageFullScreen"); return; }
-            if (PdfFullScreen.IsOpen) { Log.Info("OnConfirm: blocked by PdfFullScreen"); return; }
-            if (VideoTrackMenuControl.IsOpen) { Log.Dbg("OnConfirm: → VideoTrackMenu"); VideoTrackMenuControl.HandleButton(Windows.System.VirtualKey.GamepadA); return; }
-            if (VideoFullScreenPanel.Visibility == Visibility.Visible) { Log.Dbg("OnConfirm: → FsVideoInput"); OnFsVideoInput(); return; }
-            if (AudioFullScreenPanel.Visibility == Visibility.Visible) { Log.Info("OnConfirm: → toggle audio play/pause"); ToggleAudioFullscreenPlayPause(); return; }
-            if (FileActionSheetControl.IsOpen) { Log.Dbg("OnConfirm: → FileActionSheet"); FileActionSheetControl.ForwardDPad(Windows.System.VirtualKey.GamepadA); return; }
             if (_isMediaPlayerActive)
             {
                 Log.Info("OnConfirm: → media player button");
@@ -1270,6 +1382,8 @@ namespace XFiles.Controls
                     }
                     else
                     {
+                        Log.Info("OnConfirm: loading+playing audio {Path}", selected.FullPath);
+                        MediaPreview.Stop();
                         MediaPreview.LoadFile(selected.FullPath);
                         MediaPreview.TogglePlayPause();
                         UpdateMediaPlayerFocusUI();
@@ -1297,6 +1411,8 @@ namespace XFiles.Controls
                     }
                     else
                     {
+                        Log.Info("OnConfirm: loading+playing video {Path}", selected.FullPath);
+                        MediaPreview.Stop();
                         MediaPreview.LoadFile(selected.FullPath);
                         MediaPreview.TogglePlayPause();
                         UpdateMediaPlayerFocusUI();
@@ -1319,45 +1435,9 @@ namespace XFiles.Controls
                 return;
             }
 
-            if (TextEditorOverlayControl.IsOpen)
-            {
-                Log.Dbg("OnBack: → TextEditorOverlay");
-                TextEditorOverlayControl.HandleButton(Windows.System.VirtualKey.GamepadB);
-                return;
-            }
+            if (_router.RouteButton(VirtualKey.GamepadB)) return;
+
             if (ErrorOverlay.Visibility == Visibility.Visible) { Log.Dbg("OnBack: → HideError"); HideError(); return; }
-            if (AboutOverlay.Visibility == Visibility.Visible) { Log.Dbg("OnBack: → HideAbout"); HideAbout(); return; }
-            if (PlaceholderOverlay.Visibility == Visibility.Visible) { Log.Dbg("OnBack: → HidePlaceholder"); HidePlaceholder(); return; }
-            if (InputDialogControl.Visibility == Visibility.Visible) { Log.Dbg("OnBack: → InputDialog cancel"); InputDialogControl.HandleButton(Windows.System.VirtualKey.GamepadB); return; }
-            if (AlertDialogControl.Visibility == Visibility.Visible) { Log.Dbg("OnBack: → ConfirmDialog cancel"); AlertDialogControl.HandleButton(Windows.System.VirtualKey.GamepadB); return; }
-            if (OverwriteDialogControl.IsDialogVisible) { Log.Dbg("OnBack: → OverwriteDialog skip"); OverwriteDialogControl.HandleButton(Windows.System.VirtualKey.GamepadB); return; }
-            if (FileOperationConfirmDialogControl.IsDialogVisible) { Log.Dbg("OnBack: → FileOperationConfirmDialog cancel"); FileOperationConfirmDialogControl.HandleButton(Windows.System.VirtualKey.GamepadB); return; }
-            if (FolderBrowserDialogControl.IsOpen) { Log.Dbg("OnBack: → FolderBrowserDialog cancel"); FolderBrowserDialogControl.HandleButton(Windows.System.VirtualKey.GamepadB); return; }
-            if (IsAnyOverlayVisible) { Log.Dbg("OnBack: blocked by overlay"); return; }
-            if (StartMenuControl.IsOpen) { Log.Dbg("OnBack: → StartMenu"); StartMenuControl.ForwardDPad(Windows.System.VirtualKey.GamepadB); return; }
-            if (SettingsPageControl.IsVisible) { Log.Dbg("OnBack: → Settings close"); SettingsPageControl.HandleDPad(Windows.System.VirtualKey.GamepadB); return; }
-            if (ShareDialogControl.IsVisible) { Log.Dbg("OnBack: → ShareDialog close"); ShareDialogControl.HandleDPad(Windows.System.VirtualKey.GamepadB); return; }
-            if (LogsPageControl.IsVisible) { Log.Dbg("OnBack: → LogsPage close"); LogsPageControl.HandleDPad(Windows.System.VirtualKey.GamepadB); return; }
-            if (ImageFullScreen.IsOpen) { Log.Info("OnBack: → ImageFullScreen close"); ImageFullScreen.HandleButton(Windows.System.VirtualKey.GamepadB); UpdateFooterALabelFromSelection(); return; }
-            if (PdfFullScreen.IsOpen) { Log.Info("OnBack: → PdfFullScreen close"); PdfFullScreen.HandleButton(Windows.System.VirtualKey.GamepadB); UpdateFooterALabelFromSelection(); return; }
-            if (VideoTrackMenuControl.IsOpen) { Log.Info("OnBack: → VideoTrackMenu close"); VideoTrackMenuControl.HandleButton(Windows.System.VirtualKey.GamepadB); return; }
-            if (VideoFullScreenPanel.Visibility == Visibility.Visible)
-            {
-                if (FSControlsBar.Opacity > 0.0 || FSLegendText.Opacity > 0.0)
-                {
-                    Log.Info("OnBack: → hide video controls");
-                    HideFsControls();
-                    _fsHideTimer.Stop();
-                    return;
-                }
-                Log.Info("OnBack: → CloseVideoFullScreen");
-                CloseVideoFullScreen();
-                UpdateFooterALabelFromSelection();
-                return;
-            }
-            if (AudioFullScreenPanel.Visibility == Visibility.Visible) { Log.Info("OnBack: → CloseAudioFullscreen"); CloseAudioFullscreen(); UpdateMediaPlayerFocusUI(); return; }
-            if (FileActionSheetControl.IsOpen) { Log.Dbg("OnBack: → FileActionSheet cancel"); FileActionSheetControl.ForwardDPad(Windows.System.VirtualKey.GamepadB); return; }
-            if (OpProgressDialog.IsOpen) { Log.Dbg("OnBack: → OpProgressDialog cancel"); OpProgressDialog.Cancel(); return; }
             if (_isMediaPlayerActive)
             {
                 Log.Info("OnBack: → StopPlayer");
@@ -1377,17 +1457,11 @@ namespace XFiles.Controls
 
         public void OnContextMenu()
         {
-            if (TextEditorOverlayControl.IsOpen) { TextEditorOverlayControl.HandleButton(Windows.System.VirtualKey.GamepadY); return; }
-            if (IsAnyFullscreen) return;
+            if (_router.RouteButton(VirtualKey.GamepadY)) return;
+
             if (ErrorOverlay.Visibility == Visibility.Visible) { Log.Dbg("OnContextMenu: → ErrorShare"); OnErrorShareClick(null, null); return; }
-            if (IsAnyOverlayVisible) return;
-            if (StartMenuControl.IsOpen) return;
-            if (FileActionSheetControl.IsOpen) return;
-            if (LogsPageControl.IsVisible) { LogsPageControl.HandleDPad(Windows.System.VirtualKey.GamepadY); return; }
-            if (ShareDialogControl.IsVisible) return;
             if (_isMediaPlayerActive) return;
 
-            // Virtual entries (Favorites) have no file actions
             if (CurrentList.SelectedItem is EntryViewModel vm && vm.IsVirtual) return;
 
             Log.Verb("MillerColumnsPage.OnContextMenu — showing FileActionSheet");
@@ -1399,6 +1473,7 @@ namespace XFiles.Controls
 
         public void OnContextMenuLongPress()
         {
+            if (_router.RouteButton(VirtualKey.GamepadY)) return;
             if (IsAnyFullscreen) return;
             if (IsAnyOverlayVisible) return;
             if (StartMenuControl.IsOpen) return;
@@ -1406,56 +1481,80 @@ namespace XFiles.Controls
             if (_isMediaPlayerActive) return;
 
             bool inFavorites = _navigator.Current?.IsFavorite == true;
+            var sel = CurrentList.SelectedItem as EntryViewModel;
+            if (sel == null) return;
+
             if (inFavorites)
             {
                 Log.Info("OnContextMenuLongPress: in favorites column — removing favorite");
-                var sel = CurrentList.SelectedItem as EntryViewModel;
-                if (sel == null) return;
+                _ = RemoveFavoriteAsync(sel.FullPath);
+            }
+            else if (sel.IsFavorite)
+            {
+                Log.Info("OnContextMenuLongPress: already favorited — removing favorite");
                 _ = RemoveFavoriteAsync(sel.FullPath);
             }
             else
             {
                 Log.Info("OnContextMenuLongPress: adding to favorites");
-                var sel = CurrentList.SelectedItem as EntryViewModel;
-                if (sel == null) return;
                 _ = AddFavoriteAsync(sel.Name, sel.FullPath, sel.IsDirectory);
             }
         }
 
         private async Task AddFavoriteAsync(string name, string path, bool isDir)
         {
-            await FileSystem.FavoritesManager.AddAsync(path, name, isDir);
-            Log.Info("Added to favorites: {Path}", path);
+            try
+            {
+                await FileSystem.FavoritesManager.AddAsync(path, name, isDir);
+                Log.Info("Added to favorites: {Path}", path);
+
+                if (CurrentList?.ItemsSource is IList<EntryViewModel> items)
+                {
+                    var vm = items.FirstOrDefault(i => i.FullPath == path);
+                    if (vm != null)
+                        vm.IsFavorite = true;
+                }
+            }
+            catch (Exception ex) { Log.Err("AddFavoriteAsync: {Ex}", ex); }
         }
 
         private async Task RemoveFavoriteAsync(string path)
         {
-            await FileSystem.FavoritesManager.RemoveAsync(path);
-            Log.Info("Removed from favorites: {Path}", path);
-            if (_navigator.Current?.IsFavorite == true)
+            try
             {
-                var favs = await FileSystem.FavoritesManager.GetAllAsync();
-                _navigator.Current.Entries = favs.Select(f => new FileSystem.FileEntry
+                await FileSystem.FavoritesManager.RemoveAsync(path);
+                Log.Info("Removed from favorites: {Path}", path);
+
+                if (_navigator.Current?.IsFavorite == true)
                 {
-                    Name = f.Name,
-                    FullPath = f.Path,
-                    IsDirectory = f.IsDirectory
-                }).ToList();
-                BindCurrentList(_navigator.Current);
-                CurrentStatus.Text = $"{favs.Count} items";
+                    var favs = await FileSystem.FavoritesManager.GetAllAsync();
+                    _navigator.Current.Entries = favs.Select(f => new FileSystem.FileEntry
+                    {
+                        Name = f.Name,
+                        FullPath = f.Path,
+                        IsDirectory = f.IsDirectory
+                    }).ToList();
+                    BindCurrentList(_navigator.Current);
+                    CurrentStatus.Text = $"{favs.Count} items";
+                }
+                else
+                {
+                    if (CurrentList?.ItemsSource is IList<EntryViewModel> items)
+                    {
+                        var vm = items.FirstOrDefault(i => i.FullPath == path);
+                        if (vm != null)
+                            vm.IsFavorite = false;
+                    }
+                }
             }
+            catch (Exception ex) { Log.Err("RemoveFavoriteAsync: {Ex}", ex); }
         }
 
         public void OnRefresh()
         {
-            if (TextEditorOverlayControl.IsOpen) { TextEditorOverlayControl.HandleButton(Windows.System.VirtualKey.GamepadX); return; }
-            if (IsAnyFullscreen) return;
-            if (FileActionSheetControl.IsOpen) return;
-            if (StartMenuControl.IsOpen) return;
+            if (_router.RouteButton(VirtualKey.GamepadX)) return;
+
             if (ErrorOverlay.Visibility == Visibility.Visible) { Log.Dbg("OnRefresh: → ErrorCopy"); OnErrorCopyClick(null, null); return; }
-            if (IsAnyOverlayVisible) return;
-            if (LogsPageControl.IsVisible) return;
-            if (ShareDialogControl.IsVisible) return;
 
             // Batch mode: X deselects all
             if (_isBatchMode)
@@ -1529,9 +1628,7 @@ namespace XFiles.Controls
             if (IsAnyOverlayVisible) return;
             if (StartMenuControl.IsOpen) { StartMenuControl.ForwardDPad(Windows.System.VirtualKey.GamepadA); return; }
             if (FileActionSheetControl.IsOpen) return;
-            if (ImageFullScreen.IsOpen) return;
-            if (PdfFullScreen.IsOpen) return;
-            if (VideoFullScreenPanel.Visibility == Visibility.Visible) return;
+            if (IsAnyFullscreen) return;
             if (_isMediaPlayerActive) return;
             _ = ShowStartMenuAsync();
         }
@@ -2885,7 +2982,9 @@ namespace XFiles.Controls
             (AudioFullscreenMode.RetroOscilloscope, "Retro Oscilloscope"),
             (AudioFullscreenMode.InfernoCore, "Inferno Core"),
             (AudioFullscreenMode.WaveformTunnel, "Waveform Tunnel"),
-            (AudioFullscreenMode.InfernoCore2, "Inferno Core 2")
+            (AudioFullscreenMode.GeissFluid, "Geiss Fluid"),
+            (AudioFullscreenMode.Xbox360Boot, "Xbox 360 Boot"),
+            (AudioFullscreenMode.ThreeDoMusicTiles, "3DO Music Tiles")
         };
 
         private DispatcherTimer _fsModeOsdTimer;
@@ -2902,7 +3001,8 @@ namespace XFiles.Controls
                 {
                     _fsVisualizerMode = candidate;
                     ApplyAudioVisualizerMode();
-                    ShowModeOsd(_fsModeOrder.First(m => m.Mode == candidate).Label);
+                    var modeEntry = _fsModeOrder.FirstOrDefault(m => m.Mode == candidate);
+                    ShowModeOsd(modeEntry.Label ?? candidate.ToString());
                     if (candidate == AudioFullscreenMode.Default)
                         FsTrackInfoBorder.Visibility = Visibility.Collapsed;
                     return;
@@ -3435,16 +3535,24 @@ namespace XFiles.Controls
             FsDefaultArtPanel.Visibility = Visibility.Visible;
             _fsHasAlbumArt = false;
 
-            // Load next track via AudioGraph (playback + VU meter)
-            StopFsAudioAnalysis();
-            _fsAudioLevelService = new AudioLevelService();
-            _fsAudioLevelService.MediaOpened += OnFsAudioOpened;
-            _fsAudioLevelService.MediaEnded += OnFsAudioEnded;
-            _fsAudioLevelService.MediaFailed += OnFsAudioFailed;
+            // Load next track via AudioGraph (reuse if possible)
+            if (_fsAudioLevelService != null && _fsAudioLevelService.IsFileLoaded)
+            {
+                Log.Info("NavigateAudioTrack: reusing AudioLevelService, SwapSource to {Path}", nextFile.FullPath);
+                _ = _fsAudioLevelService.SwapSourceAsync(nextFile.FullPath);
+            }
+            else
+            {
+                StopFsAudioAnalysis();
+                _fsAudioLevelService = new AudioLevelService();
+                _fsAudioLevelService.MediaOpened += OnFsAudioOpened;
+                _fsAudioLevelService.MediaEnded += OnFsAudioEnded;
+                _fsAudioLevelService.MediaFailed += OnFsAudioFailed;
 #if AUDIO_ANALYSIS
-            FsVuMeter.AttachService(_fsAudioLevelService);
+                FsVuMeter.AttachService(_fsAudioLevelService);
 #endif
-            _ = _fsAudioLevelService.LoadAndPlay(nextFile.FullPath);
+                _ = _fsAudioLevelService.LoadAndPlay(nextFile.FullPath);
+            }
 
             // Re-apply current visualizer mode with new audio service
             if (_fsVisualizerMode != AudioFullscreenMode.Default)
@@ -3923,6 +4031,8 @@ namespace XFiles.Controls
 
         private async Task HandlePasteAsync()
         {
+            try
+            {
             if (!ClipboardState.HasItems) return;
 
             var destDir = _navigator.Current?.Path;
@@ -4015,6 +4125,8 @@ namespace XFiles.Controls
 
             UpdateClipboardIndicator();
             await _navigator.RefreshCurrentAsync();
+        }
+        catch (Exception ex) { Log.Err("HandlePasteAsync: {Ex}", ex); _ = AlertDialogControl.ShowAsync("Paste failed.", AlertType.Error); }
         }
 
         private async Task HandleMoveAsync(FileEntry entry)

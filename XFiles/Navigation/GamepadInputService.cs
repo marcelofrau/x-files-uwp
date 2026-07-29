@@ -147,14 +147,14 @@ namespace XFiles.Navigation
 
             if ((dpadJustPressed & GamepadButtons.DPadUp) != 0)
             {
-                Log.Verb("DPAD: initial press Up");
+                Log.Info("INPUT: DPad Up initial press");
                 nav.OnDPadUp(isRepeat: false);
                 _dpadRepeatCooldown = DpadInitialDelay;
                 _dpadNavigatedThisTick = true;
             }
             if ((dpadJustPressed & GamepadButtons.DPadDown) != 0)
             {
-                Log.Verb("DPAD: initial press Down");
+                Log.Info("INPUT: DPad Down initial press");
                 nav.OnDPadDown(isRepeat: false);
                 _dpadRepeatCooldown = DpadInitialDelay;
                 _dpadNavigatedThisTick = true;
@@ -215,12 +215,12 @@ namespace XFiles.Navigation
             // A, B — just pressed only
             if ((justPressed & GamepadButtons.A) != 0)
             {
-                Log.Verb("Button: A (Confirm)");
+                Log.Info("INPUT: A (Confirm)");
                 nav.OnConfirm();
             }
             if ((justPressed & GamepadButtons.B) != 0)
             {
-                Log.Verb("Button: B (Back)");
+                Log.Info("INPUT: B (Back)");
                 nav.OnBack();
             }
 
@@ -228,7 +228,7 @@ namespace XFiles.Navigation
             const int YLongPressTicks = 15;
             if ((justPressed & GamepadButtons.Y) != 0)
             {
-                Log.Verb("Button: Y pressed — starting hold timer");
+                Log.Info("INPUT: Y pressed — starting hold timer");
                 _yHeld = true;
                 _yHeldTicks = 0;
                 _yLongPressHandled = false;
@@ -334,8 +334,8 @@ namespace XFiles.Navigation
         private double _dpadRepeatCooldown;
         private GamepadButtons _dpadHeld;
         private bool _dpadNavigatedThisTick;
-        private const double DpadInitialDelay = 300;
-        private const double DpadRepeatInterval = 80;
+private const double DpadInitialDelay = 250;
+private const double DpadRepeatInterval = 60;
         private const double StickDeadzone = 0.18;
         private const double StickMinSpeed = 6.0;   // items/sec at deadzone edge
         private const double StickMaxSpeed = 28.0;   // items/sec at full deflection
@@ -356,8 +356,8 @@ namespace XFiles.Navigation
                 deflection = Math.Min(1.0, deflection);
                 double speed = StickMinSpeed + deflection * (StickMaxSpeed - StickMinSpeed);
 
-                _stickAccumY += speed / 60.0; // 60 ticks/sec (16ms)
-                int steps = (int)_stickAccumY;
+                _stickAccumY += speed / 30.0; // 30 ticks/sec (33ms)
+                int steps = Math.Min((int)_stickAccumY, 5);
                 if (steps != 0)
                 {
                     _stickAccumY -= steps;
@@ -382,8 +382,8 @@ namespace XFiles.Navigation
                 double deflection = (magX - StickDeadzone) / (1.0 - StickDeadzone);
                 double speed = StickMinSpeed + Math.Min(1.0, deflection) * (StickMaxSpeed - StickMinSpeed);
 
-                _stickAccumX += speed / 60.0;
-                int steps = (int)_stickAccumX;
+                _stickAccumX += speed / 30.0;
+                int steps = Math.Min((int)_stickAccumX, 5);
                 if (steps != 0)
                 {
                     _stickAccumX -= steps;

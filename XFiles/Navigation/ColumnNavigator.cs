@@ -20,7 +20,7 @@ namespace XFiles.Navigation
         private CancellationTokenSource _loadCts;
 
         private CancellationTokenSource _previewCts;
-        private int _previewGeneration;
+        private long _previewGeneration;
         private readonly ArchiveBrowser _archiveBrowser = new ArchiveBrowser();
 
         // Gamelist cache: parsed once per directory, cleared on navigation
@@ -85,15 +85,18 @@ namespace XFiles.Navigation
 
             await _current.LoadAsync(null);
 
-            // Inject Favorites virtual entry at top
-            _current.Entries.Insert(0, new FileEntry
+            // Inject Favorites virtual entry at top (also into AllEntries for ClearSearch)
+            var favEntry = new FileEntry
             {
                 Name = "Favorites",
                 FullPath = null,
                 IsDirectory = true,
                 IsDrive = false,
                 IsVirtual = true
-            });
+            };
+            _current.Entries.Insert(0, favEntry);
+            if (_current.AllEntries != null)
+                _current.AllEntries.Insert(0, favEntry);
 
             ColumnsChanged?.Invoke();
         }
@@ -148,16 +151,18 @@ namespace XFiles.Navigation
 
             // Cancel any in-flight scan
             _loadCts?.Cancel();
+            _loadCts?.Dispose();
             _loadCts = new CancellationTokenSource();
             var token = _loadCts.Token;
 
-            // Push current state to history
+            // Push current state to history (preserve full list for ClearSearch on DrillOut)
             _history.Push(new ColumnState
             {
                 Path = _current.Path,
                 Label = _current.Label,
                 SelectedIndex = _current.SelectedIndex,
-                Entries = _current.Entries
+                Entries = _current.Entries,
+                AllEntries = _current.AllEntries
             });
 
             // Current becomes the new directory
@@ -312,7 +317,7 @@ namespace XFiles.Navigation
         /// </summary>
         public async Task UpdatePreviewAsync()
         {
-            int gen = ++_previewGeneration;
+            long gen = ++_previewGeneration;
             var selected = _current.GetSelectedEntry();
             if (selected == null)
             {
@@ -489,6 +494,7 @@ namespace XFiles.Navigation
         public async Task OnSelectionChangedAsync()
         {
             _previewCts?.Cancel();
+            _previewCts?.Dispose();
             _previewCts = new CancellationTokenSource();
             var token = _previewCts.Token;
 
@@ -602,6 +608,7 @@ namespace XFiles.Navigation
 
             // Cancel any in-flight scan
             _loadCts?.Cancel();
+            _loadCts?.Dispose();
             _loadCts = new CancellationTokenSource();
             var token = _loadCts.Token;
 
@@ -690,6 +697,7 @@ namespace XFiles.Navigation
         public string Label { get; set; }
         public int SelectedIndex { get; set; }
         public List<FileEntry> Entries { get; set; } = new List<FileEntry>();
+        public List<FileEntry> AllEntries { get; set; }
         private List<FileEntry> _allEntries;
         public string SearchQuery { get; set; }
         public bool IsSearchActive => !string.IsNullOrEmpty(SearchQuery);
@@ -732,14 +740,14 @@ namespace XFiles.Navigation
                 if (string.IsNullOrEmpty(Path))
                     return null;
 
-                var parent = System.IO.Directory.GetParent(Path);
-                return parent?.FullName;
+                return System.IO.Path.GetDirectoryName(Path);
             }
         }
 
         public async Task LoadAsync(string path, CancellationToken token = default)
         {
             _allEntries = await DirectoryScanner.ScanAsync(path, token);
+            AllEntries = _allEntries;
             Entries = new List<FileEntry>(_allEntries);
 
             // Ensure ".." is selected if available
@@ -750,6 +758,7 @@ namespace XFiles.Navigation
         public async Task LoadArchiveDirectoryAsync(ArchiveBrowser archiveBrowser, string archivePath, string subPath)
         {
             _allEntries = archiveBrowser.ListEntries(archivePath, subPath).ToList();
+            AllEntries = _allEntries;
             Entries = new List<FileEntry>(_allEntries);
             if (SelectedIndex == 0 && Entries.Count > 0)
                 SelectedIndex = 0;
@@ -775,6 +784,8 @@ namespace XFiles.Navigation
         public void ClearSearch()
         {
             SearchQuery = null;
+            if (_allEntries == null && AllEntries != null)
+                _allEntries = AllEntries;
             if (_allEntries != null)
                 Entries = new List<FileEntry>(_allEntries);
         }

@@ -44,8 +44,31 @@ namespace XFiles.Controls
         {
             if (!IsOpen) return;
 
+            int cols = 7;
+            int total = LetterGrid.Items.Count;
+
             switch (key)
             {
+                case VirtualKey.GamepadDPadLeft:
+                case VirtualKey.Left:
+                    if (LetterGrid.SelectedIndex > 0)
+                        LetterGrid.SelectedIndex--;
+                    break;
+                case VirtualKey.GamepadDPadRight:
+                case VirtualKey.Right:
+                    if (LetterGrid.SelectedIndex < total - 1)
+                        LetterGrid.SelectedIndex++;
+                    break;
+                case VirtualKey.GamepadDPadUp:
+                case VirtualKey.Up:
+                    if (LetterGrid.SelectedIndex - cols >= 0)
+                        LetterGrid.SelectedIndex -= cols;
+                    break;
+                case VirtualKey.GamepadDPadDown:
+                case VirtualKey.Down:
+                    if (LetterGrid.SelectedIndex + cols < total)
+                        LetterGrid.SelectedIndex += cols;
+                    break;
                 case VirtualKey.GamepadA:
                 case VirtualKey.Enter:
                     if (LetterGrid.SelectedItem is char letter)

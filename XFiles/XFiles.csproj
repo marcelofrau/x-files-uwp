@@ -34,7 +34,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
     <DebugSymbols>true</DebugSymbols>
     <OutputPath>bin\x64\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_UWP;AUDIO_ANALYSIS</DefineConstants>
+    <DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_UWP;AUDIO_ANALYSIS;VUMETER_DEBUG;AUDIO_LEVEL_DEBUG</DefineConstants>
     <!-- Debug flags: uncomment in DefineConstants above to enable
          AUDIO_ANALYSIS    — FFT processing + VU meter (comment out to test stutter without analysis overhead)
          GAMEPAD_POLL_DEBUG  — GamepadInputService polling (sticks, dpad state, button repeats)
@@ -114,6 +114,7 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Navigation\INavigable.cs" />
     <Compile Include="Navigation\GamepadInputService.cs" />
+    <Compile Include="Navigation\InputRouter.cs" />
     <Compile Include="Navigation\ColumnNavigator.cs" />
     <Compile Include="FileSystem\FileEntry.cs" />
     <Compile Include="FileSystem\DirectoryScanner.cs" />
@@ -246,7 +247,9 @@
     <Compile Include="Visualizers\Visualizers\RetroOscilloscopeVisualizer.cs" />
     <Compile Include="Visualizers\Visualizers\InfernoCoreVisualizer.cs" />
     <Compile Include="Visualizers\Visualizers\WaveformTunnelVisualizer.cs" />
-    <Compile Include="Visualizers\Visualizers\InfernoCoreVisualizer2.cs" />
+    <Compile Include="Visualizers\Visualizers\GeissVisualizer.cs" />
+    <Compile Include="Visualizers\Visualizers\Xbox360BootVisualizer.cs" />
+    <Compile Include="Visualizers\Visualizers\ThreeDoTileVisualizer.cs" />
   </ItemGroup>
   <ItemGroup>
     <ApplicationDefinition Include="App.xaml">
@@ -402,8 +405,7 @@
     <Content Include="Assets\FileTypes\folder-darkcyan-24.png" />
     <Content Include="Assets\FileTypes\folder-orange-24.png" />
     <Content Include="Assets\FileTypes\favorites-24.png" />
-    <Content Include="Assets\FileTypes\file-favorite-24.png" />
-    <Content Include="Assets\FileTypes\folder-favorite-24.png" />
+    <Content Include="Assets\FileTypes\favorite-24.png" />
     <Content Include="Assets\FileTypes\file-archive-24.png" />
     <Content Include="Assets\FileTypes\file-generic-24.png" />
     <Content Include="Assets\FileTypes\file-archive-96.png" />

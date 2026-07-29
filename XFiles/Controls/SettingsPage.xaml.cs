@@ -138,7 +138,7 @@ namespace XFiles.Controls
                             {
                                 Label = "Clear Cache",
                                 Description = "Remove all 0 cached metadata and cover art entries",
-                                IconPath = "ms-appx:///Assets/Views/FileActionSheet/fileactionsheet-delete-48.png",
+                                IconPath = IconBase + "startmenu-close-48.png",
                                 Action = "clear-cache"
                             },
                             new SettingsMenuItem
@@ -150,6 +150,7 @@ namespace XFiles.Controls
                             }
                         };
                         SettingsList.ItemsSource = items;
+                        SettingsList.SelectedIndex = 0;
                     }
                     catch (Exception ex)
                     {

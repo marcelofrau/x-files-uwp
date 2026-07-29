@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using SQLite;
 using Windows.Storage;
@@ -14,41 +15,33 @@ namespace XFiles.Metadata
         private const long MaxLibRetroCacheAgeMs = 30L * 24 * 60 * 60 * 1000;
         private const int CurrentSchemaVersion = 2;
 
-        private static SQLiteAsyncConnection _db;
-        private static readonly object _initLock = new object();
-
-        private static async Task<SQLiteAsyncConnection> GetDbAsync()
-        {
-            if (_db != null) return _db;
-
-            lock (_initLock)
+        private static readonly Lazy<Task<SQLiteAsyncConnection>> _dbLazy =
+            new Lazy<Task<SQLiteAsyncConnection>>(async () =>
             {
-                if (_db != null) return _db;
-
                 string dbPath = Path.Combine(
                     ApplicationData.Current.LocalFolder.Path, DbFileName);
-                _db = new SQLiteAsyncConnection(dbPath);
-            }
+                var db = new SQLiteAsyncConnection(dbPath);
 
-            // Schema version tracking
-            await _db.CreateTableAsync<SchemaVersionEntry>();
-            var versionEntry = await _db.Table<SchemaVersionEntry>()
-                .Where(v => v.Id == 1).FirstOrDefaultAsync();
-            int currentVersion = versionEntry?.Version ?? 0;
+                await db.CreateTableAsync<SchemaVersionEntry>();
+                var versionEntry = await db.Table<SchemaVersionEntry>()
+                    .Where(v => v.Id == 1).FirstOrDefaultAsync();
+                int currentVersion = versionEntry?.Version ?? 0;
 
-            if (currentVersion < CurrentSchemaVersion)
-            {
-                Log.Info("MetadataCache: migrating schema v{Old} → v{New}", currentVersion, CurrentSchemaVersion);
-                await RunMigrationsAsync(_db, currentVersion);
-            }
+                if (currentVersion < CurrentSchemaVersion)
+                {
+                    Log.Info("MetadataCache: migrating schema v{Old} → v{New}", currentVersion, CurrentSchemaVersion);
+                    await RunMigrationsAsync(db, currentVersion);
+                }
 
-            await _db.CreateTableAsync<MetadataCacheEntry>();
-            await _db.CreateTableAsync<CoverArtEntry>();
-            await _db.CreateTableAsync<AppSettingEntry>();
-            await _db.CreateTableAsync<LibRetroThumbnailEntry>();
-            Log.Info("MetadataCache: database opened at {Path} schema v{Version}", DbFileName, CurrentSchemaVersion);
-            return _db;
-        }
+                await db.CreateTableAsync<MetadataCacheEntry>();
+                await db.CreateTableAsync<CoverArtEntry>();
+                await db.CreateTableAsync<AppSettingEntry>();
+                await db.CreateTableAsync<LibRetroThumbnailEntry>();
+                Log.Info("MetadataCache: database opened at {Path} schema v{Version}", DbFileName, CurrentSchemaVersion);
+                return db;
+            }, LazyThreadSafetyMode.ExecutionAndPublication);
+
+        private static Task<SQLiteAsyncConnection> GetDbAsync() => _dbLazy.Value;
 
         private static async Task RunMigrationsAsync(SQLiteAsyncConnection db, int fromVersion)
         {

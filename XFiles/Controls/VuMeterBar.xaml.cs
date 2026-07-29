@@ -157,6 +157,7 @@ namespace XFiles.Controls
         private void StartRendering()
         {
             if (_renderTimer != null && _renderTimer.IsEnabled) return;
+            Log.Info("VuMeterBar.StartRendering: service={Svc} analyzing={Analyzing}", _service != null, _service?.IsAnalyzing);
 
             _renderTimer = new DispatcherTimer
             {

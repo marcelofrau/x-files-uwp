@@ -25,6 +25,20 @@ namespace XFiles.Controls
         public StartMenuItem Item { get; set; }
         public string Label { get; set; }
         public string IconPath { get; set; }
+        public bool IsSeparator { get; set; }
+    }
+
+    public class StartMenuSeparatorSelector : DataTemplateSelector
+    {
+        public DataTemplate DefaultTemplate { get; set; }
+        public DataTemplate SeparatorTemplate { get; set; }
+
+        protected override DataTemplate SelectTemplateCore(object item)
+        {
+            if (item is MenuItem mi && mi.IsSeparator)
+                return SeparatorTemplate;
+            return DefaultTemplate;
+        }
     }
 
     public sealed partial class StartMenu : UserControl
@@ -49,10 +63,11 @@ namespace XFiles.Controls
 
             _mainItems = new List<MenuItem>
             {
+                new MenuItem { Item = StartMenuItem.Search, Label = "Search", IconPath = IconBase + "startmenu-search-48.png" },
+                new MenuItem { IsSeparator = true },
                 new MenuItem { Item = StartMenuItem.Settings, Label = "Settings", IconPath = IconBase + "startmenu-settings-48.png" },
                 new MenuItem { Item = StartMenuItem.About, Label = "About", IconPath = IconBase + "startmenu-about-48.png" },
                 new MenuItem { Item = StartMenuItem.ViewLogs, Label = "View Logs", IconPath = IconBase + "startmenu-logs-48.png" },
-                new MenuItem { Item = StartMenuItem.Search, Label = "Search", IconPath = IconBase + "startmenu-search-48.png" },
                 new MenuItem { Item = StartMenuItem.CloseApplication, Label = "Close Application", IconPath = IconBase + "startmenu-close-48.png" }
             };
 
@@ -66,7 +81,7 @@ namespace XFiles.Controls
             MenuList.ItemsSource = items;
             Visibility = Visibility.Visible;
             Overlay.Visibility = Visibility.Visible;
-            MenuList.SelectedIndex = 0;
+            MenuList.SelectedIndex = FindNextNonSeparator(-1, 1);
             MenuList.Focus(FocusState.Programmatic);
         }
 
@@ -74,7 +89,15 @@ namespace XFiles.Controls
         {
             if (args.ItemContainer is ListViewItem container)
             {
-                container.Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x99, 0x99, 0x99));
+                if (args.Item is MenuItem mi && mi.IsSeparator)
+                {
+                    container.IsEnabled = false;
+                    container.Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x33, 0x36, 0x3F));
+                }
+                else
+                {
+                    container.Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x99, 0x99, 0x99));
+                }
             }
         }
 
@@ -90,6 +113,7 @@ namespace XFiles.Controls
 
             for (int i = 0; i < MenuList.Items.Count; i++)
             {
+                if (MenuList.Items[i] is MenuItem mi && mi.IsSeparator) continue;
                 var container = MenuList.ContainerFromIndex(i) as ListViewItem;
                 if (container != null)
                 {
@@ -98,23 +122,36 @@ namespace XFiles.Controls
             }
         }
 
+        private int FindNextNonSeparator(int fromIndex, int step)
+        {
+            int count = MenuList.Items.Count;
+            for (int i = fromIndex + step; i >= 0 && i < count; i += step)
+            {
+                if (MenuList.Items[i] is MenuItem mi && !mi.IsSeparator)
+                    return i;
+            }
+            return -1;
+        }
+
         public void ForwardDPad(VirtualKey key)
         {
             if (!IsOpen) return;
             switch (key)
             {
                 case VirtualKey.Up:
-                    if (MenuList.SelectedIndex > 0)
-                        MenuList.SelectedIndex--;
-                    else if (MenuList.Items.Count > 0)
-                        MenuList.SelectedIndex = MenuList.Items.Count - 1;
-                    break;
+                    {
+                        int next = FindNextNonSeparator(MenuList.SelectedIndex, -1);
+                        if (next >= 0)
+                            MenuList.SelectedIndex = next;
+                        break;
+                    }
                 case VirtualKey.Down:
-                    if (MenuList.SelectedIndex < MenuList.Items.Count - 1)
-                        MenuList.SelectedIndex++;
-                    else if (MenuList.Items.Count > 0)
-                        MenuList.SelectedIndex = 0;
-                    break;
+                    {
+                        int next = FindNextNonSeparator(MenuList.SelectedIndex, 1);
+                        if (next >= 0)
+                            MenuList.SelectedIndex = next;
+                        break;
+                    }
                 case VirtualKey.GamepadA:
                 case VirtualKey.Enter:
                     if (MenuList.SelectedItem is MenuItem item)
