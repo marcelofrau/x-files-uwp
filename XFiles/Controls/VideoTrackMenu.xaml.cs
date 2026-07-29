@@ -37,9 +37,10 @@ namespace XFiles.Controls
         public void Show(List<SubtitleTrack> subtitles, List<AudioTrackInfo> audioTracks,
             int currentSubtitleIndex, int currentAudioIndex)
         {
-            _selectedSubtitleIndex = currentSubtitleIndex;
+            // Map caller index to menu list index (offset by 1 for "Off" entry at position 0)
+            _selectedSubtitleIndex = currentSubtitleIndex >= 0 ? currentSubtitleIndex + 1 : 0;
             _selectedAudioIndex = currentAudioIndex;
-            _activeSubtitleIndex = currentSubtitleIndex;
+            _activeSubtitleIndex = currentSubtitleIndex >= 0 ? currentSubtitleIndex + 1 : 0;
             _activeAudioIndex = currentAudioIndex;
 
             _hasSubtitles = subtitles != null && subtitles.Count > 0;
@@ -53,7 +54,14 @@ namespace XFiles.Controls
             if (_hasSubtitles)
                 _optionItems.Add(new OptionItem { Label = "Subtitles", IconPath = "ms-appx:///Assets/Views/VideoTrackMenu/videotrackmenu-subtitles-48.png" });
 
-            _subtitleItems = new List<SubtitleTrackItem>();
+            _subtitleItems = new List<SubtitleTrackItem>
+            {
+                new SubtitleTrackItem
+                {
+                    Track = new SubtitleTrack(),
+                    DisplayName = "Off",
+                }
+            };
             if (_hasSubtitles)
             {
                 for (int i = 0; i < subtitles.Count; i++)
@@ -167,6 +175,8 @@ namespace XFiles.Controls
                     {
                         if (OptionsList.SelectedIndex > 0)
                             OptionsList.SelectedIndex--;
+                        else if (_optionItems.Count > 0)
+                            OptionsList.SelectedIndex = _optionItems.Count - 1;
                     }
                     else if (_currentView == MenuView.Subtitles)
                     {
@@ -175,12 +185,22 @@ namespace XFiles.Controls
                             SubtitleList.SelectedIndex--;
                             SubtitleList.ScrollIntoView(SubtitleList.SelectedItem);
                         }
+                        else if (_subtitleItems.Count > 0)
+                        {
+                            SubtitleList.SelectedIndex = _subtitleItems.Count - 1;
+                            SubtitleList.ScrollIntoView(SubtitleList.SelectedItem);
+                        }
                     }
                     else if (_currentView == MenuView.AudioTracks)
                     {
                         if (AudioList.SelectedIndex > 0)
                         {
                             AudioList.SelectedIndex--;
+                            AudioList.ScrollIntoView(AudioList.SelectedItem);
+                        }
+                        else if (_audioItems.Count > 0)
+                        {
+                            AudioList.SelectedIndex = _audioItems.Count - 1;
                             AudioList.ScrollIntoView(AudioList.SelectedItem);
                         }
                     }
@@ -192,6 +212,8 @@ namespace XFiles.Controls
                     {
                         if (OptionsList.SelectedIndex < _optionItems.Count - 1)
                             OptionsList.SelectedIndex++;
+                        else if (_optionItems.Count > 0)
+                            OptionsList.SelectedIndex = 0;
                     }
                     else if (_currentView == MenuView.Subtitles)
                     {
@@ -200,12 +222,22 @@ namespace XFiles.Controls
                             SubtitleList.SelectedIndex++;
                             SubtitleList.ScrollIntoView(SubtitleList.SelectedItem);
                         }
+                        else if (_subtitleItems.Count > 0)
+                        {
+                            SubtitleList.SelectedIndex = 0;
+                            SubtitleList.ScrollIntoView(SubtitleList.SelectedItem);
+                        }
                     }
                     else if (_currentView == MenuView.AudioTracks)
                     {
                         if (AudioList.SelectedIndex < _audioItems.Count - 1)
                         {
                             AudioList.SelectedIndex++;
+                            AudioList.ScrollIntoView(AudioList.SelectedItem);
+                        }
+                        else if (_audioItems.Count > 0)
+                        {
+                            AudioList.SelectedIndex = 0;
                             AudioList.ScrollIntoView(AudioList.SelectedItem);
                         }
                     }
@@ -297,7 +329,7 @@ namespace XFiles.Controls
                 {
                     int itemIndex = _subtitleItems.IndexOf(item);
                     bool active = (itemIndex == _activeSubtitleIndex);
-                    container.Opacity = active ? 1.0 : 0.7;
+                    container.Opacity = 1.0;
                 }
             }
         }
@@ -311,7 +343,7 @@ namespace XFiles.Controls
                 {
                     int itemIndex = _audioItems.IndexOf(item);
                     bool active = (itemIndex == _activeAudioIndex);
-                    container.Opacity = active ? 1.0 : 0.7;
+                    container.Opacity = 1.0;
                 }
             }
         }

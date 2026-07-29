@@ -27,7 +27,9 @@ namespace XFiles.Controls
         CreateZip,
         Refresh,
         Edit,
-        Share
+        Share,
+        AddToFavorites,
+        RemoveFromFavorites
     }
 
     public class ActionItem
@@ -61,6 +63,7 @@ namespace XFiles.Controls
         private static readonly string ActionPaste = "fileactionsheet-paste-48.png";
         private static readonly string ActionEdit = "ctx-text-120.png";
         private static readonly string ActionShare = "fileactionsheet-share-48.png";
+        private static readonly string ActionFavorite = "fileactionsheet-favorite-48.png";
 
         private static readonly Dictionary<string, string> ExtIconMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -439,6 +442,49 @@ namespace XFiles.Controls
             return $"{bytes / (1024.0 * 1024 * 1024):F2} GB";
         }
 
+        public Task<FileAction?> ShowFavoritesActionsAsync(FileEntry entry)
+        {
+            _tcs = new TaskCompletionSource<FileAction?>();
+
+            var actions = new List<ActionItem>();
+            var accent = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x93, 0xC4, 0x3C));
+            var red = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0xE7, 0x4C, 0x3C));
+
+            actions.Add(new ActionItem
+            {
+                Action = FileAction.RemoveFromFavorites,
+                Label = "Remove from Favorites",
+                IconPath = IconBase + ActionFavorite,
+                LabelBrush = red
+            });
+
+            var ext = System.IO.Path.GetExtension(entry.Name);
+            if (!entry.IsDirectory && FileActionSheet.TextExts.Contains(ext))
+            {
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.Edit,
+                    Label = "Edit",
+                    IconPath = IconBase + ActionEdit,
+                    LabelBrush = accent
+                });
+            }
+
+            ActionList.ItemsSource = actions;
+            FileNameText.Text = entry.Name;
+
+            FileIconImage.Source = new Windows.UI.Xaml.Media.Imaging.BitmapImage(
+                new Uri(ResolveContextFileIcon(entry)));
+
+            Visibility = Visibility.Visible;
+            Overlay.Visibility = Visibility.Visible;
+
+            ActionList.SelectedIndex = 0;
+            ActionList.Focus(FocusState.Programmatic);
+
+            return _tcs.Task;
+        }
+
         private void OnActionContainerChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
         {
             if (args.ItemContainer is ListViewItem container)
@@ -475,10 +521,14 @@ namespace XFiles.Controls
                 case VirtualKey.Up:
                     if (ActionList.SelectedIndex > 0)
                         ActionList.SelectedIndex--;
+                    else if (ActionList.Items.Count > 0)
+                        ActionList.SelectedIndex = ActionList.Items.Count - 1;
                     break;
                 case VirtualKey.Down:
                     if (ActionList.SelectedIndex < ActionList.Items.Count - 1)
                         ActionList.SelectedIndex++;
+                    else if (ActionList.Items.Count > 0)
+                        ActionList.SelectedIndex = 0;
                     break;
                 case VirtualKey.GamepadA:
                 case VirtualKey.Enter:

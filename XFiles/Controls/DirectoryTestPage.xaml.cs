@@ -192,6 +192,7 @@ namespace XFiles.Controls
         public void OnConfirm() => OpenSelected();
         public void OnBack() => NavigateBack();
         public void OnContextMenu() { }
+        public void OnContextMenuLongPress() { }
 
         public void OnPageUp()
         {

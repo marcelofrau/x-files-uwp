@@ -15,5 +15,8 @@ namespace XFiles.FileSystem
         // Only set when entry lives INSIDE an archive:
         public string ArchiveRootPath { get; set; }
         public string ArchiveInternalPath { get; set; }
+
+        // Virtual entry (e.g. Favorites pseudo-folder in root)
+        public bool IsVirtual { get; set; }
     }
 }

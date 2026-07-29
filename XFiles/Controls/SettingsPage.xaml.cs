@@ -93,10 +93,14 @@ namespace XFiles.Controls
                 case VirtualKey.Up:
                     if (SettingsList.SelectedIndex > 0)
                         SettingsList.SelectedIndex--;
+                    else if (SettingsList.Items.Count > 0)
+                        SettingsList.SelectedIndex = SettingsList.Items.Count - 1;
                     break;
                 case VirtualKey.Down:
                     if (SettingsList.SelectedIndex < SettingsList.Items.Count - 1)
                         SettingsList.SelectedIndex++;
+                    else if (SettingsList.Items.Count > 0)
+                        SettingsList.SelectedIndex = 0;
                     break;
                 case VirtualKey.GamepadA:
                 case VirtualKey.Enter:

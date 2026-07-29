@@ -302,7 +302,7 @@ namespace XFiles.Controls
                 if (_navigator.Current != null)
                 {
                     BindCurrentList(_navigator.Current);
-                    CurrentStatus.Text = $"{_navigator.Current.Entries.Count} items";
+                    CurrentStatus.Text = FormatCount(_navigator.Current.Entries);
                 }
 
                 // Footer count
@@ -347,7 +347,7 @@ namespace XFiles.Controls
             if (!_navigator.Preview.IsFilePreview)
             {
                 BindList(PreviewList, _navigator.Preview);
-                PreviewStatus.Text = $"{_navigator.Preview.Entries.Count} items";
+                PreviewStatus.Text = FormatCount(_navigator.Preview.Entries);
                 PreviewList.Visibility = Visibility.Visible;
             }
             else
@@ -777,6 +777,8 @@ namespace XFiles.Controls
                 IsDirectory = e.IsDirectory,
                 IsDrive = e.IsDrive,
                 IsArchive = e.IsArchive,
+                IsVirtual = e.IsVirtual,
+                IsFavorite = e.FullPath != null && FileSystem.FavoritesManager.IsFavorite(e.FullPath),
                 SizeBytes = e.SizeBytes,
                 ArchiveRootPath = e.ArchiveRootPath,
                 ArchiveInternalPath = e.ArchiveInternalPath,
@@ -795,6 +797,8 @@ namespace XFiles.Controls
                 IsDirectory = e.IsDirectory,
                 IsDrive = e.IsDrive,
                 IsArchive = e.IsArchive,
+                IsVirtual = e.IsVirtual,
+                IsFavorite = e.FullPath != null && FileSystem.FavoritesManager.IsFavorite(e.FullPath),
                 SizeBytes = e.SizeBytes,
                 ArchiveRootPath = e.ArchiveRootPath,
                 ArchiveInternalPath = e.ArchiveInternalPath,
@@ -814,6 +818,8 @@ namespace XFiles.Controls
                 IsDirectory = e.IsDirectory,
                 IsDrive = e.IsDrive,
                 IsArchive = e.IsArchive,
+                IsVirtual = e.IsVirtual,
+                IsFavorite = e.FullPath != null && FileSystem.FavoritesManager.IsFavorite(e.FullPath),
                 SizeBytes = e.SizeBytes,
                 ArchiveRootPath = e.ArchiveRootPath,
                 ArchiveInternalPath = e.ArchiveInternalPath,
@@ -1009,7 +1015,7 @@ namespace XFiles.Controls
 
         private void UpdateFooterXLabel()
         {
-            FooterXLabel.Text = ClipboardState.HasItems ? "Paste" : "Refresh";
+            FooterXLabel.Text = "Refresh";
         }
 
         // --- Input handling ---
@@ -1335,7 +1341,20 @@ namespace XFiles.Controls
             if (ImageFullScreen.IsOpen) { Log.Info("OnBack: → ImageFullScreen close"); ImageFullScreen.HandleButton(Windows.System.VirtualKey.GamepadB); UpdateFooterALabelFromSelection(); return; }
             if (PdfFullScreen.IsOpen) { Log.Info("OnBack: → PdfFullScreen close"); PdfFullScreen.HandleButton(Windows.System.VirtualKey.GamepadB); UpdateFooterALabelFromSelection(); return; }
             if (VideoTrackMenuControl.IsOpen) { Log.Info("OnBack: → VideoTrackMenu close"); VideoTrackMenuControl.HandleButton(Windows.System.VirtualKey.GamepadB); return; }
-            if (VideoFullScreenPanel.Visibility == Visibility.Visible) { Log.Info("OnBack: → CloseVideoFullScreen"); CloseVideoFullScreen(); UpdateFooterALabelFromSelection(); return; }
+            if (VideoFullScreenPanel.Visibility == Visibility.Visible)
+            {
+                if (FSControlsBar.Opacity > 0.0 || FSLegendText.Opacity > 0.0)
+                {
+                    Log.Info("OnBack: → hide video controls");
+                    HideFsControls();
+                    _fsHideTimer.Stop();
+                    return;
+                }
+                Log.Info("OnBack: → CloseVideoFullScreen");
+                CloseVideoFullScreen();
+                UpdateFooterALabelFromSelection();
+                return;
+            }
             if (AudioFullScreenPanel.Visibility == Visibility.Visible) { Log.Info("OnBack: → CloseAudioFullscreen"); CloseAudioFullscreen(); UpdateMediaPlayerFocusUI(); return; }
             if (FileActionSheetControl.IsOpen) { Log.Dbg("OnBack: → FileActionSheet cancel"); FileActionSheetControl.ForwardDPad(Windows.System.VirtualKey.GamepadB); return; }
             if (OpProgressDialog.IsOpen) { Log.Dbg("OnBack: → OpProgressDialog cancel"); OpProgressDialog.Cancel(); return; }
@@ -1367,11 +1386,64 @@ namespace XFiles.Controls
             if (LogsPageControl.IsVisible) { LogsPageControl.HandleDPad(Windows.System.VirtualKey.GamepadY); return; }
             if (ShareDialogControl.IsVisible) return;
             if (_isMediaPlayerActive) return;
+
+            // Virtual entries (Favorites) have no file actions
+            if (CurrentList.SelectedItem is EntryViewModel vm && vm.IsVirtual) return;
+
             Log.Verb("MillerColumnsPage.OnContextMenu — showing FileActionSheet");
             if (_isBatchMode)
                 _ = ShowFileActionSheetBatchAsync();
             else
                 _ = ShowFileActionSheetAsync();
+        }
+
+        public void OnContextMenuLongPress()
+        {
+            if (IsAnyFullscreen) return;
+            if (IsAnyOverlayVisible) return;
+            if (StartMenuControl.IsOpen) return;
+            if (FileActionSheetControl.IsOpen) return;
+            if (_isMediaPlayerActive) return;
+
+            bool inFavorites = _navigator.Current?.IsFavorite == true;
+            if (inFavorites)
+            {
+                Log.Info("OnContextMenuLongPress: in favorites column — removing favorite");
+                var sel = CurrentList.SelectedItem as EntryViewModel;
+                if (sel == null) return;
+                _ = RemoveFavoriteAsync(sel.FullPath);
+            }
+            else
+            {
+                Log.Info("OnContextMenuLongPress: adding to favorites");
+                var sel = CurrentList.SelectedItem as EntryViewModel;
+                if (sel == null) return;
+                _ = AddFavoriteAsync(sel.Name, sel.FullPath, sel.IsDirectory);
+            }
+        }
+
+        private async Task AddFavoriteAsync(string name, string path, bool isDir)
+        {
+            await FileSystem.FavoritesManager.AddAsync(path, name, isDir);
+            Log.Info("Added to favorites: {Path}", path);
+        }
+
+        private async Task RemoveFavoriteAsync(string path)
+        {
+            await FileSystem.FavoritesManager.RemoveAsync(path);
+            Log.Info("Removed from favorites: {Path}", path);
+            if (_navigator.Current?.IsFavorite == true)
+            {
+                var favs = await FileSystem.FavoritesManager.GetAllAsync();
+                _navigator.Current.Entries = favs.Select(f => new FileSystem.FileEntry
+                {
+                    Name = f.Name,
+                    FullPath = f.Path,
+                    IsDirectory = f.IsDirectory
+                }).ToList();
+                BindCurrentList(_navigator.Current);
+                CurrentStatus.Text = $"{favs.Count} items";
+            }
         }
 
         public void OnRefresh()
@@ -1494,6 +1566,29 @@ namespace XFiles.Controls
                 case StartMenuItem.CloseApplication:
                     Log.Info("Start menu: Close Application selected");
                     Windows.UI.Xaml.Application.Current.Exit();
+                    break;
+
+                case StartMenuItem.JumpToLetter:
+                    Log.Dbg("Start menu: Jump to Letter selected");
+                    char? letter = await LetterGridControl.ShowAsync();
+                    if (letter.HasValue)
+                    {
+                        Log.Info("Jump to Letter: {Letter}", letter.Value);
+                        _navigator.JumpToLetter(letter.Value);
+                    }
+                    break;
+
+                case StartMenuItem.SearchFiles:
+                    Log.Dbg("Start menu: Search Files selected");
+                    string query = await InputDialogControl.ShowAsync("Search", "");
+                    if (!string.IsNullOrEmpty(query))
+                    {
+                        Log.Info("Search: query=\"{Query}\"", query);
+                        _navigator.Current?.ApplySearch(query);
+                        CurrentHeader.Text = $"{_navigator.Current?.Label ?? ""} 🔍 \"{query}\"";
+                        BindCurrentList(_navigator.Current);
+                        CurrentStatus.Text = FormatCount(_navigator.Current?.Entries);
+                    }
                     break;
             }
         }
@@ -2457,6 +2552,11 @@ namespace XFiles.Controls
             _fullscreenProgressTimer.Stop();
             _fsHideTimer.Stop();
             _fsOsdHideTimer.Stop();
+
+            // Save playback state before clearing
+            var restorePath = _fsVideoPath;
+            var restorePos = FsVideoSession.Position;
+
             FsVideoPlayer.Pause();
             FsVideoPlayer.MediaEnded -= OnFsVideoMediaEnded;
             FsVideoPlayer.Source = null;
@@ -2469,6 +2569,16 @@ namespace XFiles.Controls
             VideoTrackMenuControl.Close();
             VideoFullScreenPanel.Visibility = Visibility.Collapsed;
             Log.Info("CloseVideoFullScreen: stopped, track state cleared");
+
+            // Restore inline preview at last position
+            if (!string.IsNullOrEmpty(restorePath))
+            {
+                Log.Info("CloseVideoFullScreen: restoring inline preview at {Position}", restorePos);
+                MediaPreview.LoadFile(restorePath);
+                if (restorePos > TimeSpan.Zero)
+                    MediaPreview.SeekTo(restorePos);
+            }
+
             UpdateDisplayRequest();
         }
 
@@ -3355,6 +3465,17 @@ namespace XFiles.Controls
             }
         }
 
+        private static string FormatCount(List<FileSystem.FileEntry> entries)
+        {
+            if (entries == null) return "0 items";
+            int folders = entries.Count(e => e.Name != ".." && e.IsDirectory);
+            int files = entries.Count(e => e.Name != ".." && !e.IsDirectory);
+            var parts = new List<string>();
+            if (folders > 0) parts.Add($"{folders} folder{(folders == 1 ? "" : "s")}");
+            if (files > 0) parts.Add($"{files} file{(files == 1 ? "" : "s")}");
+            return parts.Count > 0 ? string.Join(", ", parts) : "0 items";
+        }
+
         private void StopFsAudioAnalysis()
         {
 #if AUDIO_ANALYSIS
@@ -3433,7 +3554,14 @@ namespace XFiles.Controls
                 entry.Name, entry.IsDirectory, entry.IsArchive);
 
             UpdateFooterALabel("Select");
-            var action = await FileActionSheetControl.ShowAsync(entry);
+
+            // Favorites column gets limited action sheet
+            bool inFavorites = _navigator.Current?.IsFavorite == true;
+            FileAction? action;
+            if (inFavorites)
+                action = await FileActionSheetControl.ShowFavoritesActionsAsync(entry);
+            else
+                action = await FileActionSheetControl.ShowAsync(entry);
             UpdateFooterALabelFromSelection();
             if (action == null)
             {
@@ -3480,6 +3608,12 @@ namespace XFiles.Controls
                     break;
                 case FileAction.Share:
                     await HandleShareAsync(entry);
+                    break;
+                case FileAction.AddToFavorites:
+                    await AddFavoriteAsync(entry.Name, entry.FullPath, entry.IsDirectory);
+                    break;
+                case FileAction.RemoveFromFavorites:
+                    await RemoveFavoriteAsync(entry.FullPath);
                     break;
             }
         }

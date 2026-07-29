@@ -113,6 +113,8 @@ namespace XFiles.Controls
             UpdateDisplay("Y — +100");
         }
 
+        public void OnContextMenuLongPress() { }
+
         public void OnPageUp()
         {
             _counter += 50;

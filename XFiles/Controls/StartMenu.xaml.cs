@@ -14,7 +14,10 @@ namespace XFiles.Controls
         Settings,
         About,
         ViewLogs,
-        CloseApplication
+        CloseApplication,
+        Search,
+        JumpToLetter,
+        SearchFiles
     }
 
     public class MenuItem
@@ -27,6 +30,8 @@ namespace XFiles.Controls
     public sealed partial class StartMenu : UserControl
     {
         private TaskCompletionSource<StartMenuItem?> _tcs;
+        private List<MenuItem> _mainItems;
+        private bool _inSubMenu;
         public Action OnClosed;
 
         public bool IsOpen => Visibility == Visibility.Visible;
@@ -42,42 +47,27 @@ namespace XFiles.Controls
         {
             _tcs = new TaskCompletionSource<StartMenuItem?>();
 
-            var items = new List<MenuItem>
+            _mainItems = new List<MenuItem>
             {
-                new MenuItem
-                {
-                    Item = StartMenuItem.Settings,
-                    Label = "Settings",
-                    IconPath = IconBase + "startmenu-settings-48.png"
-                },
-                new MenuItem
-                {
-                    Item = StartMenuItem.About,
-                    Label = "About",
-                    IconPath = IconBase + "startmenu-about-48.png"
-                },
-                new MenuItem
-                {
-                    Item = StartMenuItem.ViewLogs,
-                    Label = "View Logs",
-                    IconPath = IconBase + "startmenu-logs-48.png"
-                },
-                new MenuItem
-                {
-                    Item = StartMenuItem.CloseApplication,
-                    Label = "Close Application",
-                    IconPath = IconBase + "startmenu-close-48.png"
-                }
+                new MenuItem { Item = StartMenuItem.Settings, Label = "Settings", IconPath = IconBase + "startmenu-settings-48.png" },
+                new MenuItem { Item = StartMenuItem.About, Label = "About", IconPath = IconBase + "startmenu-about-48.png" },
+                new MenuItem { Item = StartMenuItem.ViewLogs, Label = "View Logs", IconPath = IconBase + "startmenu-logs-48.png" },
+                new MenuItem { Item = StartMenuItem.Search, Label = "Search", IconPath = IconBase + "startmenu-search-48.png" },
+                new MenuItem { Item = StartMenuItem.CloseApplication, Label = "Close Application", IconPath = IconBase + "startmenu-close-48.png" }
             };
 
+            ShowMenu(_mainItems, "X-Files");
+            return _tcs.Task;
+        }
+
+        private void ShowMenu(List<MenuItem> items, string title)
+        {
+            MenuTitleText.Text = title;
             MenuList.ItemsSource = items;
             Visibility = Visibility.Visible;
             Overlay.Visibility = Visibility.Visible;
-
             MenuList.SelectedIndex = 0;
             MenuList.Focus(FocusState.Programmatic);
-
-            return _tcs.Task;
         }
 
         private void OnMenuContainerChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
@@ -116,20 +106,46 @@ namespace XFiles.Controls
                 case VirtualKey.Up:
                     if (MenuList.SelectedIndex > 0)
                         MenuList.SelectedIndex--;
+                    else if (MenuList.Items.Count > 0)
+                        MenuList.SelectedIndex = MenuList.Items.Count - 1;
                     break;
                 case VirtualKey.Down:
                     if (MenuList.SelectedIndex < MenuList.Items.Count - 1)
                         MenuList.SelectedIndex++;
+                    else if (MenuList.Items.Count > 0)
+                        MenuList.SelectedIndex = 0;
                     break;
                 case VirtualKey.GamepadA:
                 case VirtualKey.Enter:
                     if (MenuList.SelectedItem is MenuItem item)
-                        Close(item.Item);
+                        HandleSelection(item);
                     break;
                 case VirtualKey.GamepadB:
                 case VirtualKey.Escape:
-                    Close(null);
+                    if (_inSubMenu)
+                        ShowMenu(_mainItems, "X-Files");
+                    else
+                        Close(null);
+                    _inSubMenu = false;
                     break;
+            }
+        }
+
+        private void HandleSelection(MenuItem item)
+        {
+            if (item.Item == StartMenuItem.Search)
+            {
+                _inSubMenu = true;
+                var subItems = new List<MenuItem>
+                {
+                    new MenuItem { Item = StartMenuItem.JumpToLetter, Label = "Jump to Letter", IconPath = IconBase + "startmenu-search-48.png" },
+                    new MenuItem { Item = StartMenuItem.SearchFiles, Label = "Search Files", IconPath = IconBase + "startmenu-search-48.png" }
+                };
+                ShowMenu(subItems, "Search");
+            }
+            else
+            {
+                Close(item.Item);
             }
         }
 
@@ -142,6 +158,7 @@ namespace XFiles.Controls
         {
             Overlay.Visibility = Visibility.Collapsed;
             Visibility = Visibility.Collapsed;
+            _inSubMenu = false;
             _tcs?.TrySetResult(result);
             OnClosed?.Invoke();
         }

@@ -315,9 +315,9 @@ namespace XFiles.Audio
                 _fileInputNode.Start();
 
                 try { _gcRegionActive = GC.TryStartNoGCRegion(256 * 1024 * 1024); } catch { }
+                _isAnalyzing = true;
                 _graph.Start();
                 _isGraphRunning = true;
-                _isAnalyzing = true;
                 MediaOpened?.Invoke(this, EventArgs.Empty);
             }
             catch (Exception ex)
@@ -367,9 +367,9 @@ namespace XFiles.Audio
                 _mediaSourceNode.Start();
 
                 try { _gcRegionActive = GC.TryStartNoGCRegion(256 * 1024 * 1024); } catch { }
+                _isAnalyzing = true;
                 _graph.Start();
                 _isGraphRunning = true;
-                _isAnalyzing = true;
                 MediaOpened?.Invoke(this, EventArgs.Empty);
             }
             catch (Exception ex)

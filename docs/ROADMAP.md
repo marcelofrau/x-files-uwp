@@ -316,12 +316,8 @@ No regression in existing file browsing, preview, media playback, or archive nav
 
 ## Post-MVP Backlog (not yet phased)
 
-- Network browsing (SMB/UNC).
+- Windows file shares (SMB/UNC) — see `docs/FILE-SHARES.md` for feasibility assessment.
 - Hex dump preview for binaries.
-- Text editor: create new file from scratch.
-- Text editor: find and replace.
-- Text editor: go to line number.
-- Text editor: save with original encoding (not always UTF-8).
 - Multiple simultaneous users/gamepads.
 - Deep nested zips with real streaming (no intermediate `MemoryStream`).
 - Password-protected file support.

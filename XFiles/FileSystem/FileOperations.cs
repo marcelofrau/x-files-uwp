@@ -1265,13 +1265,15 @@ namespace XFiles.FileSystem
                         if (pathType == "file")
                         {
                             var fileName = System.IO.Path.GetFileName(sourcePath);
-                            var data = ReadAllBytesWin32(sourcePath);
-                            if (data == null)
+                            using (var stream = Win32FileStream.OpenRead(sourcePath))
                             {
-                                Log.Warn("FileOperations.CreateZip: cannot read {Path}", sourcePath);
-                                return OperationResult.Failed;
+                                if (stream == null)
+                                {
+                                    Log.Warn("FileOperations.CreateZip: cannot read {Path}", sourcePath);
+                                    return OperationResult.Failed;
+                                }
+                                archive.AddEntry(fileName, stream);
                             }
-                            archive.AddEntry(fileName, new MemoryStream(data), data.Length);
 
                             progress?.Report(new OperationProgress
                             {
@@ -1288,13 +1290,15 @@ namespace XFiles.FileSystem
                                 if (token.IsCancellationRequested) return OperationResult.Cancelled;
 
                                 var entryName = file.Substring(sourcePath.Length + 1);
-                                var entryData = ReadAllBytesWin32(file);
-                                if (entryData == null)
+                                using (var stream = Win32FileStream.OpenRead(file))
                                 {
-                                    Log.Warn("FileOperations.CreateZip: cannot read {Path}", file);
-                                    continue;
+                                    if (stream == null)
+                                    {
+                                        Log.Warn("FileOperations.CreateZip: cannot read {Path}", file);
+                                        continue;
+                                    }
+                                    archive.AddEntry(entryName, stream);
                                 }
-                                archive.AddEntry(entryName, new MemoryStream(entryData), entryData.Length);
 
                                 fileIndex++;
                                 progress?.Report(new OperationProgress
@@ -1383,13 +1387,15 @@ namespace XFiles.FileSystem
 
                             string entryName = System.IO.Path.GetFileName(file);
 
-                            var entryData = ReadAllBytesWin32(file);
-                            if (entryData == null)
+                            using (var stream = Win32FileStream.OpenRead(file))
                             {
-                                Log.Warn("FileOperations.CreateZip(multi): cannot read {Path}", file);
-                                continue;
+                                if (stream == null)
+                                {
+                                    Log.Warn("FileOperations.CreateZip(multi): cannot read {Path}", file);
+                                    continue;
+                                }
+                                archive.AddEntry(entryName, stream);
                             }
-                            archive.AddEntry(entryName, new MemoryStream(entryData), entryData.Length);
 
                             fileIndex++;
                             progress?.Report(new OperationProgress
