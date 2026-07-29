@@ -80,9 +80,21 @@ namespace XFiles.Navigation
         {
             _history.Clear();
             _current = new ColumnState { Path = null, Label = "(Drives)" };
+            _current.ClearSearch();
             _preview = null;
 
             await _current.LoadAsync(null);
+
+            // Inject Favorites virtual entry at top
+            _current.Entries.Insert(0, new FileEntry
+            {
+                Name = "Favorites",
+                FullPath = null,
+                IsDirectory = true,
+                IsDrive = false,
+                IsVirtual = true
+            });
+
             ColumnsChanged?.Invoke();
         }
 
@@ -97,6 +109,13 @@ namespace XFiles.Navigation
             ++_previewGeneration;
             var selected = _current.GetSelectedEntry();
             if (selected == null) return;
+
+            // Handle virtual entries (e.g. Favorites)
+            if (selected.IsVirtual)
+            {
+                await DrillIntoFavoritesAsync();
+                return;
+            }
 
             // Handle archives
             if (selected.IsArchive)
@@ -143,6 +162,7 @@ namespace XFiles.Navigation
 
             // Current becomes the new directory
             _current = new ColumnState { Path = path, Label = selected.Name };
+            _current.ClearSearch();
 
             LoadingChanged?.Invoke(true);
             try
@@ -197,6 +217,7 @@ namespace XFiles.Navigation
                 ArchiveRootPath = archiveEntry.FullPath,
                 ArchiveInternalPath = ""
             };
+            _current.ClearSearch();
 
             // Update preview: show first item of new current
             await UpdatePreviewAsync();
@@ -234,6 +255,7 @@ namespace XFiles.Navigation
                 ArchiveRootPath = dirEntry.ArchiveRootPath,
                 ArchiveInternalPath = dirEntry.ArchiveInternalPath
             };
+            _current.ClearSearch();
 
             // Update preview: show first item of new current
             await UpdatePreviewAsync();
@@ -253,6 +275,20 @@ namespace XFiles.Navigation
             ++_previewGeneration;
             var previous = _history.Pop();
             _current = previous;
+            _current.ClearSearch();
+
+            // If returning to favorites column, reload list
+            if (_current.IsFavorite)
+            {
+                var favs = await FavoritesManager.GetAllAsync();
+                _current.Entries = favs.Select(f => new FileEntry
+                {
+                    Name = f.Name,
+                    FullPath = f.Path,
+                    IsDirectory = f.IsDirectory
+                }).ToList();
+                _current.IsFilePreview = false;
+            }
 
             // Reload gamelist for the parent directory
             if (_current.IsArchive)
@@ -309,33 +345,15 @@ namespace XFiles.Navigation
             {
                 if (selected.IsArchive)
                 {
-                    // Peek inside archive to determine if it contains a ROM
-                    var archiveEntries = _archiveBrowser.ListEntries(selected.FullPath, "");
-                    bool hasRom = false;
-                    string romInternalName = null;
+                    // Check gamelist first — zip may have ROM metadata directly
+                    GamelistEntry gamelistEntry = _gamelistCache != null
+                        ? GamelistParser.FindEntry(_gamelistCache, selected.Name)
+                        : null;
 
-                    foreach (var entry in archiveEntries)
+                    if (gamelistEntry != null)
                     {
-                        if (!entry.IsDirectory)
-                        {
-                            string entryExt = System.IO.Path.GetExtension(entry.Name);
-                            if (RomHeaderParser.IsRomFile(entryExt))
-                            {
-                                hasRom = true;
-                                romInternalName = entry.Name;
-                                break;
-                            }
-                        }
-                    }
-
-                    if (hasRom)
-                    {
-                        // ROM preview — gamelist enriches if available
+                        // ROM preview — gamelist provides metadata
                         string romSystem = GetSystemFromDirectory(_current.Path);
-                        GamelistEntry gamelistEntry = _gamelistCache != null
-                            ? GamelistParser.FindEntry(_gamelistCache, selected.Name)
-                            : null;
-
                         _preview = new ColumnState
                         {
                             Path = selected.FullPath,
@@ -346,68 +364,31 @@ namespace XFiles.Navigation
                             PreviewFileType = "ZIP Archive",
                             PreviewFileSize = selected.SizeBytes,
                             PreviewRomSystem = romSystem,
-                            PreviewRomIconPath = FilePreviewService.GetRomIconPathPublic(romSystem)
-                        };
-
-                        if (gamelistEntry != null)
-                        {
-                            _preview.PreviewHasGamelistData = true;
-                            _preview.PreviewTextContent = !string.IsNullOrEmpty(gamelistEntry.Name)
+                            PreviewRomIconPath = FilePreviewService.GetRomIconPathPublic(romSystem),
+                            PreviewHasGamelistData = true,
+                            PreviewTextContent = !string.IsNullOrEmpty(gamelistEntry.Name)
                                 ? gamelistEntry.Name
-                                : System.IO.Path.GetFileNameWithoutExtension(selected.Name);
-                            _preview.PreviewRomDescription = gamelistEntry.Description;
-                            _preview.PreviewRomDeveloper = gamelistEntry.Developer;
-                            _preview.PreviewRomPublisher = gamelistEntry.Publisher;
-                            _preview.PreviewRomGenre = gamelistEntry.Genre;
-                            _preview.PreviewRomPlayers = gamelistEntry.Players;
-                            _preview.PreviewRomRating = gamelistEntry.Rating;
-                            if (gamelistEntry.ReleaseDate.HasValue)
-                                _preview.PreviewRomReleaseYear = gamelistEntry.ReleaseDate.Value.Year;
-                            _preview.PreviewRomCoverLocalPath = GamelistParser.GetCoverPath(gamelistEntry);
+                                : System.IO.Path.GetFileNameWithoutExtension(selected.Name),
+                            PreviewRomDescription = gamelistEntry.Description,
+                            PreviewRomDeveloper = gamelistEntry.Developer,
+                            PreviewRomPublisher = gamelistEntry.Publisher,
+                            PreviewRomGenre = gamelistEntry.Genre,
+                            PreviewRomPlayers = gamelistEntry.Players,
+                            PreviewRomRating = gamelistEntry.Rating,
+                            PreviewRomCoverLocalPath = GamelistParser.GetCoverPath(gamelistEntry)
+                        };
+                        if (gamelistEntry.ReleaseDate.HasValue)
+                            _preview.PreviewRomReleaseYear = gamelistEntry.ReleaseDate.Value.Year;
 
-                            Log.Verb("ColumnNavigator: archive gamelist enriched '{Name}' — genre={Genre} dev={Dev}",
-                                gamelistEntry.Name, gamelistEntry.Genre, gamelistEntry.Developer);
-                        }
-                        else
-                        {
-                            // No gamelist — show game name, XAML will try LibRetro fetch
-                            _preview.PreviewTextContent = System.IO.Path.GetFileNameWithoutExtension(selected.Name);
-                            Log.Verb("ColumnNavigator: archive '{Name}' — no gamelist, will try LibRetro",
-                                selected.Name);
-                        }
+                        Log.Verb("ColumnNavigator: archive gamelist enriched '{Name}' — genre={Genre} dev={Dev}",
+                            gamelistEntry.Name, gamelistEntry.Genre, gamelistEntry.Developer);
                     }
                     else
                     {
-                        // Not a ROM — show archive contents as text list
-                        var sb = new System.Text.StringBuilder();
-                        sb.AppendLine($"Archive: {selected.Name}");
-                        sb.AppendLine($"Size: {FormatSizeHuman(selected.SizeBytes)}");
-                        sb.AppendLine();
-                        sb.AppendLine($"Contents ({archiveEntries.Count} items):");
-                        sb.AppendLine();
-
-                        foreach (var entry in archiveEntries)
-                        {
-                            if (entry.IsDirectory)
-                                sb.AppendLine($"  [DIR]  {entry.Name}/");
-                            else
-                                sb.AppendLine($"         {entry.Name}  ({FormatSizeHuman(entry.SizeBytes)})");
-                        }
-
-                        _preview = new ColumnState
-                        {
-                            Path = selected.FullPath,
-                            Label = selected.Name,
-                            IsFilePreview = true,
-                            PreviewType = FilePreviewType.Text,
-                            PreviewTextContent = sb.ToString(),
-                            PreviewFileType = "ZIP Archive",
-                            PreviewFileSize = selected.SizeBytes,
-                            PreviewFilePath = selected.FullPath
-                        };
-
-                        Log.Verb("ColumnNavigator: archive '{Name}' — not a ROM, showing contents ({Count} items)",
-                            selected.Name, archiveEntries.Count);
+                        // No gamelist — show children in preview list (imitate folder)
+                        _preview = new ColumnState { Path = selected.FullPath, Label = selected.Name };
+                        await _preview.LoadArchiveDirectoryAsync(_archiveBrowser, selected.FullPath, "");
+                        if (_previewGeneration != gen) return;
                     }
                 }
                 else
@@ -479,6 +460,24 @@ namespace XFiles.Navigation
                                 gamelistEntry.Name, gamelistEntry.Genre, gamelistEntry.Developer);
                         }
                     }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Jump to first entry whose name starts with the given letter.
+        /// </summary>
+        public void JumpToLetter(char letter)
+        {
+            char upper = char.ToUpperInvariant(letter);
+            var entries = _current.Entries;
+            for (int i = 0; i < entries.Count; i++)
+            {
+                if (entries[i].Name.Length > 0 && char.ToUpperInvariant(entries[i].Name[0]) == upper)
+                {
+                    _current.SelectedIndex = i;
+                    ColumnsChanged?.Invoke();
+                    return;
                 }
             }
         }
@@ -639,6 +638,40 @@ namespace XFiles.Navigation
             ColumnsChanged?.Invoke();
         }
 
+        private async Task DrillIntoFavoritesAsync()
+        {
+            ++_previewGeneration;
+            Log.Info("ColumnNavigator: drilling into Favorites");
+
+            _history.Push(new ColumnState
+            {
+                Path = _current.Path,
+                Label = _current.Label,
+                SelectedIndex = _current.SelectedIndex,
+                Entries = _current.Entries
+            });
+
+            var favs = await FavoritesManager.GetAllAsync();
+            var entries = favs.Select(f => new FileEntry
+            {
+                Name = f.Name,
+                FullPath = f.Path,
+                IsDirectory = f.IsDirectory
+            }).ToList();
+
+            _current = new ColumnState
+            {
+                Path = null,
+                Label = "Favorites",
+                Entries = entries,
+                IsFavorite = true
+            };
+            _current.ClearSearch();
+
+            await UpdatePreviewAsync();
+            ColumnsChanged?.Invoke();
+        }
+
         private static string FormatSizeHuman(long bytes)
         {
             if (bytes < 1024) return $"{bytes} B";
@@ -657,8 +690,12 @@ namespace XFiles.Navigation
         public string Label { get; set; }
         public int SelectedIndex { get; set; }
         public List<FileEntry> Entries { get; set; } = new List<FileEntry>();
+        private List<FileEntry> _allEntries;
+        public string SearchQuery { get; set; }
+        public bool IsSearchActive => !string.IsNullOrEmpty(SearchQuery);
         public bool IsFilePreview { get; set; }
         public bool IsArchive { get; set; }
+        public bool IsFavorite { get; set; }
         public string ArchiveRootPath { get; set; }
         public string ArchiveInternalPath { get; set; }
 
@@ -702,7 +739,8 @@ namespace XFiles.Navigation
 
         public async Task LoadAsync(string path, CancellationToken token = default)
         {
-            Entries = await DirectoryScanner.ScanAsync(path, token);
+            _allEntries = await DirectoryScanner.ScanAsync(path, token);
+            Entries = new List<FileEntry>(_allEntries);
 
             // Ensure ".." is selected if available
             if (SelectedIndex == 0 && Entries.Count > 0 && Entries[0].Name == "..")
@@ -711,10 +749,34 @@ namespace XFiles.Navigation
 
         public async Task LoadArchiveDirectoryAsync(ArchiveBrowser archiveBrowser, string archivePath, string subPath)
         {
-            Entries = archiveBrowser.ListEntries(archivePath, subPath).ToList();
+            _allEntries = archiveBrowser.ListEntries(archivePath, subPath).ToList();
+            Entries = new List<FileEntry>(_allEntries);
             if (SelectedIndex == 0 && Entries.Count > 0)
                 SelectedIndex = 0;
             await Task.CompletedTask;
+        }
+
+        public void ApplySearch(string query)
+        {
+            SearchQuery = query;
+            if (string.IsNullOrEmpty(query) || _allEntries == null)
+            {
+                ClearSearch();
+                return;
+            }
+
+            string lower = query.ToLowerInvariant();
+            Entries = _allEntries.Where(e =>
+                e.Name != ".." && e.Name.IndexOf(lower, StringComparison.OrdinalIgnoreCase) >= 0
+            ).ToList();
+            SelectedIndex = 0;
+        }
+
+        public void ClearSearch()
+        {
+            SearchQuery = null;
+            if (_allEntries != null)
+                Entries = new List<FileEntry>(_allEntries);
         }
 
         public FileEntry GetSelectedEntry()

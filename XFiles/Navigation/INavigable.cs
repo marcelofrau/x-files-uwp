@@ -15,6 +15,7 @@ namespace XFiles.Navigation
         void OnConfirm();
         void OnBack();
         void OnContextMenu();
+        void OnContextMenuLongPress();
         void OnRefresh();
         void OnPaste();
         void OnSettings();

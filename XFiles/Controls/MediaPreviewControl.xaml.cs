@@ -220,6 +220,12 @@ namespace XFiles.Controls
 
         public bool IsPlayerActive => _isPlaying;
 
+        public void SeekTo(TimeSpan position)
+        {
+            if (Session != null)
+                Session.Position = position;
+        }
+
         public void TogglePlayPause()
         {
             if (_isAudioMode)
@@ -405,9 +411,12 @@ namespace XFiles.Controls
             await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
             {
                 Log.Verb("Media opened: {Duration}", Session.NaturalDuration);
-                _isPlaying = false;
+                _isPlaying = Session.PlaybackState == Windows.Media.Playback.MediaPlaybackState.Playing;
                 UpdatePlayPauseIcon();
-                _progressTimer.Stop();
+                if (_isPlaying)
+                    _progressTimer.Start();
+                else
+                    _progressTimer.Stop();
                 UpdateProgress();
                 EnumeratePreviewTracks();
                 PlayerStateChanged?.Invoke(this, EventArgs.Empty);

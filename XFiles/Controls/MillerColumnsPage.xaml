@@ -1296,6 +1296,9 @@
         <!-- Start menu -->
         <controls:StartMenu x:Name="StartMenuControl" />
 
+        <!-- Letter grid overlay (Jump to Letter) -->
+        <controls:LetterGridOverlay x:Name="LetterGridControl" />
+
         <!-- Logs viewer overlay -->
         <controls:LogsPage x:Name="LogsPageControl" />
         <controls:ShareDialog x:Name="ShareDialogControl" />

@@ -212,7 +212,7 @@ namespace XFiles.Navigation
 
             _dpadHeld = dpadNow;
 
-            // A, B, Y — just pressed only
+            // A, B — just pressed only
             if ((justPressed & GamepadButtons.A) != 0)
             {
                 Log.Verb("Button: A (Confirm)");
@@ -223,25 +223,43 @@ namespace XFiles.Navigation
                 Log.Verb("Button: B (Back)");
                 nav.OnBack();
             }
+
+            // Y — long-press detection (500ms = ~15 ticks)
+            const int YLongPressTicks = 15;
             if ((justPressed & GamepadButtons.Y) != 0)
             {
-                Log.Verb("Button: Y (Context)");
-                nav.OnContextMenu();
+                Log.Verb("Button: Y pressed — starting hold timer");
+                _yHeld = true;
+                _yHeldTicks = 0;
+                _yLongPressHandled = false;
+            }
+            if (_yHeld && (pressed & GamepadButtons.Y) != 0)
+            {
+                _yHeldTicks++;
+                if (_yHeldTicks >= YLongPressTicks && !_yLongPressHandled)
+                {
+                    Log.Verb("Button: Y long-press triggered");
+                    nav.OnContextMenuLongPress();
+                    _yLongPressHandled = true;
+                }
+            }
+            if ((justReleased & GamepadButtons.Y) != 0)
+            {
+                if (_yHeld && !_yLongPressHandled)
+                {
+                    Log.Verb("Button: Y short press (Context)");
+                    nav.OnContextMenu();
+                }
+                _yHeld = false;
+                _yHeldTicks = 0;
+                _yLongPressHandled = false;
             }
 
-            // X — paste (if clipboard has items) or refresh
+            // X — refresh current directory
             if ((justPressed & GamepadButtons.X) != 0)
             {
-                if (FileSystem.ClipboardState.HasItems)
-                {
-                    Log.Verb("Button: X (Paste)");
-                    nav.OnPaste();
-                }
-                else
-                {
-                    Log.Verb("Button: X (Refresh)");
-                    nav.OnRefresh();
-                }
+                Log.Verb("Button: X (Refresh)");
+                nav.OnRefresh();
             }
 
             // Start/Select — settings
@@ -305,6 +323,10 @@ namespace XFiles.Navigation
             _prevReading = reading;
             _prevButtons = pressed;
         }
+
+        private bool _yHeld;
+        private int _yHeldTicks;
+        private bool _yLongPressHandled;
 
         private double _stickAccumY;
         private double _stickAccumX;

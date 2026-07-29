@@ -206,7 +206,8 @@ namespace XFiles.FileSystem
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
                 ".png", ".jpg", ".jpeg", ".gif", ".bmp",
-                ".tiff", ".tif", ".webp", ".ico", ".svg"
+                ".tiff", ".tif", ".webp", ".ico", ".svg",
+                ".heic", ".heif"
             };
 
         private static readonly HashSet<string> AudioExtensions =

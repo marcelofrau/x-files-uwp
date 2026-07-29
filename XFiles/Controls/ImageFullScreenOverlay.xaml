@@ -22,31 +22,39 @@
         </Grid>
 
         <!-- Close hint -->
-        <StackPanel Orientation="Horizontal"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Bottom"
-                    Margin="0,0,0,24">
-            <Image Source="ms-appx:///Assets/GamepadButtons/abxy/b.png"
-                   Width="18" Height="18"
-                   Margin="0,0,6,0"
-                   VerticalAlignment="Center" />
-            <TextBlock Text="Close"
-                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                       FontSize="12"
-                       Foreground="#80FFFFFF"
-                       Margin="0,3,0,0"
+        <Border Background="#880D1117"
+                CornerRadius="8"
+                Padding="14,8"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Bottom"
+                Margin="0,0,0,24">
+            <StackPanel Orientation="Horizontal">
+                <Image Source="ms-appx:///Assets/GamepadButtons/abxy/b.png"
+                       Width="18" Height="18"
+                       Margin="0,0,6,0"
                        VerticalAlignment="Center" />
-        </StackPanel>
+                <TextBlock Text="Close"
+                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                           FontSize="12"
+                           Foreground="#FFFFFF"
+                           Margin="0,3,0,0"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+        </Border>
 
         <!-- Zoom level indicator -->
-        <TextBlock x:Name="ZoomText"
-                   HorizontalAlignment="Right"
-                   VerticalAlignment="Top"
-                   Margin="0,16,24,0"
-                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                   FontSize="14"
-                   Foreground="#80FFFFFF"
-                   Text="100%"
-                   Visibility="Collapsed" />
+        <Border Background="#880D1117"
+                CornerRadius="6"
+                Padding="10,6"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                Margin="0,16,24,0">
+            <TextBlock x:Name="ZoomText"
+                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                       FontSize="14"
+                       Foreground="#FFFFFF"
+                       Text="100%"
+                       Visibility="Collapsed" />
+        </Border>
     </Grid>
 </UserControl>

@@ -30,68 +30,84 @@
                       Foreground="#80FFFFFF" />
 
         <!-- Page indicator -->
-        <TextBlock x:Name="PageText"
-                   HorizontalAlignment="Center"
-                   VerticalAlignment="Top"
-                   Margin="0,16,0,0"
-                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                   FontSize="14"
-                   Foreground="#B0FFFFFF"
-                   Text="1 / 1" />
+        <Border Background="#880D1117"
+                CornerRadius="6"
+                Padding="16,8"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Top"
+                Margin="0,16,0,0">
+            <TextBlock x:Name="PageText"
+                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                       FontSize="14"
+                       Foreground="#FFFFFF"
+                       Text="1 / 1" />
+        </Border>
 
         <!-- LB/RB page hints -->
-        <StackPanel Orientation="Horizontal"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Bottom"
-                    Margin="0,0,0,24">
-            <Image Source="ms-appx:///Assets/GamepadButtons/lr/button_xbox_digital_bumper_light_1.png"
-                   Width="18" Height="18"
-                   Margin="0,0,4,0"
-                   VerticalAlignment="Center" />
-            <TextBlock Text="Prev"
-                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                       FontSize="12"
-                       Foreground="#80FFFFFF"
-                       Margin="0,3,14,0"
+        <Border Background="#880D1117"
+                CornerRadius="8"
+                Padding="16,8"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Bottom"
+                Margin="0,0,0,24">
+            <StackPanel Orientation="Horizontal">
+                <Image Source="ms-appx:///Assets/GamepadButtons/lr/button_xbox_digital_bumper_light_1.png"
+                       Width="18" Height="18"
+                       Margin="0,0,4,0"
                        VerticalAlignment="Center" />
-            <Image Source="ms-appx:///Assets/GamepadButtons/lr/button_xbox_digital_bumper_light_2.png"
-                   Width="18" Height="18"
-                   Margin="0,0,4,0"
-                   VerticalAlignment="Center" />
-            <TextBlock Text="Next"
-                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                       FontSize="12"
-                       Foreground="#80FFFFFF"
-                       Margin="0,3,0,0"
+                <TextBlock Text="Prev"
+                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                           FontSize="12"
+                           Foreground="#FFFFFF"
+                           Margin="0,3,14,0"
+                           VerticalAlignment="Center" />
+                <Image Source="ms-appx:///Assets/GamepadButtons/lr/button_xbox_digital_bumper_light_2.png"
+                       Width="18" Height="18"
+                       Margin="0,0,4,0"
                        VerticalAlignment="Center" />
-        </StackPanel>
+                <TextBlock Text="Next"
+                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                           FontSize="12"
+                           Foreground="#FFFFFF"
+                           Margin="0,3,0,0"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+        </Border>
 
         <!-- Close hint -->
-        <StackPanel Orientation="Horizontal"
-                    HorizontalAlignment="Right"
-                    VerticalAlignment="Bottom"
-                    Margin="0,0,24,24">
-            <Image Source="ms-appx:///Assets/GamepadButtons/abxy/b.png"
-                   Width="18" Height="18"
-                   Margin="0,0,6,0"
-                   VerticalAlignment="Center" />
-            <TextBlock Text="Close"
-                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                       FontSize="12"
-                       Foreground="#80FFFFFF"
-                       Margin="0,3,0,0"
+        <Border Background="#880D1117"
+                CornerRadius="8"
+                Padding="14,8"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Bottom"
+                Margin="0,0,24,24">
+            <StackPanel Orientation="Horizontal">
+                <Image Source="ms-appx:///Assets/GamepadButtons/abxy/b.png"
+                       Width="18" Height="18"
+                       Margin="0,0,6,0"
                        VerticalAlignment="Center" />
-        </StackPanel>
+                <TextBlock Text="Close"
+                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                           FontSize="12"
+                           Foreground="#FFFFFF"
+                           Margin="0,3,0,0"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+        </Border>
 
         <!-- Zoom level indicator -->
-        <TextBlock x:Name="ZoomText"
-                   HorizontalAlignment="Right"
-                   VerticalAlignment="Top"
-                   Margin="0,16,24,0"
-                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                   FontSize="14"
-                   Foreground="#80FFFFFF"
-                   Text="100%"
-                   Visibility="Collapsed" />
+        <Border Background="#880D1117"
+                CornerRadius="6"
+                Padding="10,6"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                Margin="0,16,24,0">
+            <TextBlock x:Name="ZoomText"
+                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                       FontSize="14"
+                       Foreground="#FFFFFF"
+                       Text="100%"
+                       Visibility="Collapsed" />
+        </Border>
     </Grid>
 </UserControl>

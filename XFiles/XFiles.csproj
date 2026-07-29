@@ -177,6 +177,10 @@
     <Compile Include="Controls\InputDialog.xaml.cs">
       <DependentUpon>InputDialog.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Controls\LetterGridOverlay.xaml.cs">
+      <DependentUpon>LetterGridOverlay.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="FileSystem\FavoritesManager.cs" />
     <Compile Include="Controls\SettingsPage.xaml.cs">
       <DependentUpon>SettingsPage.xaml</DependentUpon>
     </Compile>
@@ -309,6 +313,10 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="Controls\LetterGridOverlay.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Page Include="Controls\SettingsPage.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
@@ -393,6 +401,9 @@
     <Content Include="Assets\FileTypes\folder-yaru-24.png" />
     <Content Include="Assets\FileTypes\folder-darkcyan-24.png" />
     <Content Include="Assets\FileTypes\folder-orange-24.png" />
+    <Content Include="Assets\FileTypes\favorites-24.png" />
+    <Content Include="Assets\FileTypes\file-favorite-24.png" />
+    <Content Include="Assets\FileTypes\folder-favorite-24.png" />
     <Content Include="Assets\FileTypes\file-archive-24.png" />
     <Content Include="Assets\FileTypes\file-generic-24.png" />
     <Content Include="Assets\FileTypes\file-archive-96.png" />
@@ -452,6 +463,7 @@
     <Content Include="Assets\Views\FileActionSheet\fileactionsheet-paste-48.png" />
     <Content Include="Assets\Views\FileActionSheet\fileactionsheet-share-48.png" />
     <Content Include="Assets\Views\FileActionSheet\fileactionsheet-extractfolder-100.png" />
+    <Content Include="Assets\Views\FileActionSheet\fileactionsheet-favorite-48.png" />
     <Content Include="Assets\Views\FileActionSheet\ctx-drive-120.png" />
     <Content Include="Assets\Views\FileActionSheet\ctx-generic-120.png" />
     <Content Include="Assets\Views\FileActionSheet\ctx-archive-120.png" />
@@ -511,10 +523,12 @@
     <Content Include="Assets\Views\FileActionSheet\ctx-zip-120.png" />
     <Content Include="Assets\Views\FileActionSheet\ctx-7z-120.png" />
     <Content Include="Assets\Views\FileActionSheet\ctx-rar-120.png" />
+    <Content Include="Assets\Views\StartMenu\startmenu-search-48.png" />
     <Content Include="Assets\Views\StartMenu\startmenu-settings-48.png" />
     <Content Include="Assets\Views\StartMenu\startmenu-startup-48.png" />
     <Content Include="Assets\Views\StartMenu\startmenu-about-48.png" />
     <Content Include="Assets\Views\StartMenu\startmenu-close-48.png" />
+    <Content Include="Assets\Views\StartMenu\startmenu-favorites-48.png" />
     <Content Include="Assets\Views\StartMenu\startmenu-logs-48.png" />
     <Content Include="Assets\Views\MillerColumnsPage\osd\osd-play-48.png" />
     <Content Include="Assets\Views\MillerColumnsPage\osd\osd-pause-48.png" />

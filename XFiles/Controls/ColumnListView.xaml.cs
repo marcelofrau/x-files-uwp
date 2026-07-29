@@ -29,6 +29,8 @@ namespace XFiles.Controls
         }
 
         public bool IsDrive { get; set; }
+        public bool IsVirtual { get; set; }
+        public bool IsFavorite { get; set; }
         public string ArchiveRootPath { get; set; }
         public string ArchiveInternalPath { get; set; }
 
@@ -110,6 +112,8 @@ namespace XFiles.Controls
             // ISO / Disc
             [".iso"]  = "filetype-application-iso-24.png",
             [".img"]  = "filetype-application-iso-24.png",
+            [".cdi"]  = "filetype-application-iso-24.png",
+            [".gdi"]  = "filetype-application-iso-24.png",
             [".cue"]  = "filetype-application-iso-24.png",
             [".nrg"]  = "filetype-application-iso-24.png",
             [".mdf"]  = "filetype-application-iso-24.png",
@@ -208,12 +212,18 @@ namespace XFiles.Controls
 
         private static readonly string GenericIcon = "file-generic-24.png";
 
-        public string Icon => IsDrive
-            ? "ms-appx:///Assets/FileTypes/drive-harddisk-24.png"
-            : IsDirectory
-                ? $"ms-appx:///Assets/FileTypes/folder-{_folderColor}-24.png"
-                : (IsArchive ? "ms-appx:///Assets/FileTypes/file-archive-24.png"
-                              : $"ms-appx:///Assets/FileTypes/{GetFileIcon(Name)}");
+        public string Icon => IsVirtual
+            ? "ms-appx:///Assets/FileTypes/favorites-24.png"
+            : IsDrive
+                ? "ms-appx:///Assets/FileTypes/drive-harddisk-24.png"
+                : IsFavorite
+                    ? (IsDirectory
+                        ? "ms-appx:///Assets/FileTypes/folder-favorite-24.png"
+                        : "ms-appx:///Assets/FileTypes/file-favorite-24.png")
+                    : IsDirectory
+                        ? $"ms-appx:///Assets/FileTypes/folder-{_folderColor}-24.png"
+                        : (IsArchive ? "ms-appx:///Assets/FileTypes/file-archive-24.png"
+                                      : $"ms-appx:///Assets/FileTypes/{GetFileIcon(Name)}");
 
         public static string GetFileIcon(string fileName)
         {
@@ -421,6 +431,7 @@ namespace XFiles.Controls
         }
 
         public void OnContextMenu() { }
+        public void OnContextMenuLongPress() { }
 
         public void OnRefresh() { }
         public void OnPaste() { }
