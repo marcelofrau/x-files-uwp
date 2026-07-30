@@ -134,7 +134,7 @@ namespace XFiles.Visualizers
             {
                 _vizGcRegionActive = false;
                 try { GC.EndNoGCRegion(); } catch { }
-                Log.Info("VIS[TID={Tid}]: NoGCRegion ended on render thread", Environment.CurrentManagedThreadId);
+                Log.Verb("VIS[TID={Tid}]: NoGCRegion ended on render thread", Environment.CurrentManagedThreadId);
             }
             if (vis == null) return;
 
@@ -164,7 +164,7 @@ namespace XFiles.Visualizers
                             if (GC.TryStartNoGCRegion(VizNoGcRegionSize))
                             {
                                 _vizGcRegionActive = true;
-                                Log.Info("VIS[TID={Tid}]: NoGCRegion started {Size}MB", tid, VizNoGcRegionSize / (1024 * 1024));
+                                Log.Verb("VIS[TID={Tid}]: NoGCRegion started {Size}MB", tid, VizNoGcRegionSize / (1024 * 1024));
                             }
                             else
                                 Log.Warn("VIS[TID={Tid}]: NoGCRegion TryStart returned false", tid);
@@ -185,7 +185,7 @@ namespace XFiles.Visualizers
                     long delta = now - _lastAllocBytes;
                     _lastAllocBytes = now;
                     int tid = Environment.CurrentManagedThreadId;
-                    Log.Dbg("VIS-ALLOC[TID={Tid}]: allocRate={Rate}KB/s perFrame={Frame}B totalThread={Thread}KB heap={Heap}KB",
+                    Log.Verb("VIS-ALLOC[TID={Tid}]: allocRate={Rate}KB/s perFrame={Frame}B totalThread={Thread}KB heap={Heap}KB",
                         tid, delta / 1024, delta / 60, now / 1024, GC.GetTotalMemory(false) / 1024);
                     _gcLogCounter = 0;
                 }
@@ -231,7 +231,7 @@ namespace XFiles.Visualizers
             {
                 _vizGcRegionActive = false;
                 try { GC.EndNoGCRegion(); } catch { }
-                Log.Info("VIS[TID={Tid}]: NoGCRegion ended on render thread (update)",
+                Log.Verb("VIS[TID={Tid}]: NoGCRegion ended on render thread (update)",
                     Environment.CurrentManagedThreadId);
             }
             if (vis == null || !_initialized) return;

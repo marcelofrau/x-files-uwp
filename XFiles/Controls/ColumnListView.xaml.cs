@@ -475,6 +475,7 @@ namespace XFiles.Controls
         public void OnScrollVertical(double delta) { }
 
         public void OnSelectVisualizer() { }
+        public void OnSelectVisualizerMenu() { }
         public void OnToggleBatch() { }
     }
 

@@ -262,17 +262,47 @@ namespace XFiles.Navigation
                 nav.OnRefresh();
             }
 
-            // Start/Select — settings
+            // Start — settings
             if ((justPressed & GamepadButtons.Menu) != 0)
             {
                 nav.OnSettings();
             }
+
+            // View/Select — long-press detection (~500ms = ~15 ticks)
+            const int ViewLongPressTicks = 15;
             if ((justPressed & GamepadButtons.View) != 0)
             {
-                if (nav.IsMediaFullscreen || nav.IsMediaPlayerActive)
-                    nav.OnSelectVisualizer();
-                else
-                    nav.OnToggleBatch();
+                Log.Info("INPUT: View pressed — starting hold timer");
+                _viewHeld = true;
+                _viewHeldTicks = 0;
+                _viewLongPressHandled = false;
+                _viewCtxFullscreen = nav.IsMediaFullscreen || nav.IsMediaPlayerActive;
+            }
+            if (_viewHeld && (pressed & GamepadButtons.View) != 0)
+            {
+                _viewHeldTicks++;
+                if (_viewHeldTicks >= ViewLongPressTicks && !_viewLongPressHandled)
+                {
+                    Log.Info("Button: View long-press triggered");
+                    if (_viewCtxFullscreen)
+                        nav.OnSelectVisualizerMenu();
+                    _viewLongPressHandled = true;
+                }
+            }
+            if ((justReleased & GamepadButtons.View) != 0)
+            {
+                if (_viewHeld && !_viewLongPressHandled)
+                {
+                    Log.Info("Button: View short press");
+                    if (_viewCtxFullscreen)
+                        nav.OnSelectVisualizer();
+                    else
+                        nav.OnToggleBatch();
+                }
+                _viewHeld = false;
+                _viewHeldTicks = 0;
+                _viewLongPressHandled = false;
+                _viewCtxFullscreen = false;
             }
 
             // LB, RB — continuous seek while held
@@ -327,6 +357,11 @@ namespace XFiles.Navigation
         private bool _yHeld;
         private int _yHeldTicks;
         private bool _yLongPressHandled;
+
+        private bool _viewHeld;
+        private int _viewHeldTicks;
+        private bool _viewLongPressHandled;
+        private bool _viewCtxFullscreen;
 
         private double _stickAccumY;
         private double _stickAccumX;

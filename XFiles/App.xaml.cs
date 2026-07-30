@@ -10,19 +10,12 @@ using Windows.UI.Xaml.Media.Animation;
 using Windows.UI.Xaml.Navigation;
 using XFiles.Controls;
 using XFiles.Navigation;
-#if XRAY_ENABLED
-using XrayLib;
-#endif
 
 namespace XFiles
 {
     sealed partial class App : Application
     {
         public static GamepadInputService GamepadInput { get; private set; }
-#if XRAY_ENABLED
-        private static Xray _xray;
-        private DispatcherTimer _xrayTimer;
-#endif
         private Windows.Media.Playback.MediaPlayer _bootChimePlayer;
 
         public App()
@@ -97,20 +90,6 @@ namespace XFiles
             {
                 Log.Warn("App: failed to load log level, using default Info", ex);
             }
-
-#if XRAY_ENABLED
-            _xray = Xray.Start("x-files", cfg =>
-            {
-                cfg.AppId = "com.xfiles.uwp";
-                cfg.Version = "0.1.0";
-                cfg.Logger = Log.Logger;
-            });
-            Log.Info("Xray agent started on port {Port}", _xray.BoundPort);
-
-            _xrayTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
-            _xrayTimer.Tick += (s, ev) => _xray?.Update();
-            _xrayTimer.Start();
-#endif
 
             Frame rootFrame = Window.Current.Content as Frame;
 
@@ -333,14 +312,6 @@ namespace XFiles
             Log.Info("App resuming");
             try
             {
-#if XRAY_ENABLED
-                _xray = Xray.Start("x-files", cfg =>
-                {
-                    cfg.AppId = "com.xfiles.uwp";
-                    cfg.Version = "0.1.0";
-                });
-                _xrayTimer?.Start();
-#endif
                 GamepadInput?.Start();
                 Window.Current.CoreWindow.PointerCursor = null;
                 Log.Dbg("GamepadInputService restarted");

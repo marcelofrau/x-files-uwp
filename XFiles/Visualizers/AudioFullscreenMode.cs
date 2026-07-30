@@ -31,6 +31,10 @@ namespace XFiles.Visualizers
         WaveformTunnel,
         GeissFluid,
         Xbox360Boot,
-        ThreeDoMusicTiles
+        InvertedBars,
+        ThreeDO,
+        ThreeDWave,
+        ComancheTerrain,
+        SynthwaveVuMeter
     }
 }

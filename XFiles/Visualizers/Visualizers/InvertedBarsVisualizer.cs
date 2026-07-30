@@ -4,10 +4,10 @@ using Windows.UI;
 
 namespace XFiles.Visualizers.Visualizers
 {
-    public sealed class ThreeDoTileVisualizer : IAudioVisualizer
+    public sealed class InvertedBarsVisualizer : IAudioVisualizer
     {
-        public string Name => "3DO Music Tiles";
-        public string Id => "3do-music-tiles";
+        public string Name => "Inverted Bars";
+        public string Id => "inverted-bars";
 
         private CanvasDevice _device;
         private float _width, _height, _time;

@@ -332,7 +332,7 @@ namespace XFiles.Audio
                 {
                     long netAlloc = GC.GetAllocatedBytesForCurrentThread() - allocBefore;
                     int tid = Environment.CurrentManagedThreadId;
-                    Log.Info("AudioLevelService[TID={Tid}]: NoGCRegion started, size={Size}MB setupAlloc={Setup}KB totalMem={Total}KB",
+                    Log.Verb("AudioLevelService[TID={Tid}]: NoGCRegion started, size={Size}MB setupAlloc={Setup}KB totalMem={Total}KB",
                         tid, NoGcRegionSize / (1024 * 1024), netAlloc / 1024, GC.GetTotalMemory(false) / 1024);
                 }
                 _graph.Start();
@@ -393,7 +393,7 @@ namespace XFiles.Audio
                 {
                     long netAlloc = GC.GetAllocatedBytesForCurrentThread() - allocBefore;
                     int tid = Environment.CurrentManagedThreadId;
-                    Log.Info("AudioLevelService[TID={Tid}]: NoGCRegion started, size={Size}MB setupAlloc={Setup}KB totalMem={Total}KB",
+                    Log.Verb("AudioLevelService[TID={Tid}]: NoGCRegion started, size={Size}MB setupAlloc={Setup}KB totalMem={Total}KB",
                         tid, NoGcRegionSize / (1024 * 1024), netAlloc / 1024, GC.GetTotalMemory(false) / 1024);
                 }
                 _graph.Start();
@@ -441,7 +441,7 @@ namespace XFiles.Audio
                 {
                     long netAlloc = GC.GetAllocatedBytesForCurrentThread() - allocBefore;
                     int tid = Environment.CurrentManagedThreadId;
-                    Log.Info("AudioLevelService[TID={Tid}]: NoGCRegion restarted (Resume) size={Size}MB setupAlloc={Setup}KB totalMem={Total}KB",
+                    Log.Verb("AudioLevelService[TID={Tid}]: NoGCRegion restarted (Resume) size={Size}MB setupAlloc={Setup}KB totalMem={Total}KB",
                         tid, NoGcRegionSize / (1024 * 1024), netAlloc / 1024, GC.GetTotalMemory(false) / 1024);
                 }
                 _graph.Start();
@@ -662,7 +662,7 @@ namespace XFiles.Audio
                 {
                     long netAlloc = GC.GetAllocatedBytesForCurrentThread() - allocBefore;
                     int tid = Environment.CurrentManagedThreadId;
-                    Log.Info("AudioLevelService[TID={Tid}]: NoGCRegion restarted (SwapSource) size={Size}MB setupAlloc={Setup}KB totalMem={Total}KB",
+                    Log.Verb("AudioLevelService[TID={Tid}]: NoGCRegion restarted (SwapSource) size={Size}MB setupAlloc={Setup}KB totalMem={Total}KB",
                         tid, NoGcRegionSize / (1024 * 1024), netAlloc / 1024, GC.GetTotalMemory(false) / 1024);
                 }
                 _graph.Start();
@@ -691,11 +691,9 @@ namespace XFiles.Audio
                 Log.Info("AudioLevelService: OnQuantumStarted first call TID={Tid}", Environment.CurrentManagedThreadId);
             }
 
-            var gcSnap = GcSnapshot.Take();
             AudioFrame frame = null;
             try { frame = frameOutput.GetFrame(); }
             catch { Interlocked.Exchange(ref _isProcessing, 0); return; }
-            gcSnap.LogIfGen2("OnQuantumStarted.GetFrame");
 
             if (frame == null) { Interlocked.Exchange(ref _isProcessing, 0); return; }
 
@@ -933,9 +931,7 @@ namespace XFiles.Audio
                 if (_isAnalyzing && _frameReady)
                 {
                     _frameReady = false;
-                    var snap = GcSnapshot.Take();
                     ProcessFrameFromBuffer();
-                    snap.LogIfGen2("FftWorker.ProcessFrame");
                 }
             }
         }
@@ -950,7 +946,7 @@ namespace XFiles.Audio
                 try { GC.EndNoGCRegion(); } catch { }
                 long totalFreed = memBefore - GC.GetTotalMemory(true);
                 int tid = Environment.CurrentManagedThreadId;
-                Log.Info("AudioLevelService[TID={Tid}]: NoGCRegion ended, totalMem={Total}KB estimatedFreed={Freed}KB",
+                Log.Verb("AudioLevelService[TID={Tid}]: NoGCRegion ended, totalMem={Total}KB estimatedFreed={Freed}KB",
                     tid, GC.GetTotalMemory(false) / 1024, Math.Max(0, totalFreed) / 1024);
             }
         }
