@@ -1,5 +1,6 @@
 using System;
 using Microsoft.Graphics.Canvas;
+using Microsoft.Graphics.Canvas.Geometry;
 using Windows.UI;
 
 namespace XFiles.Visualizers.Visualizers
@@ -12,6 +13,8 @@ namespace XFiles.Visualizers.Visualizers
         private CanvasDevice _device;
         private float _width, _height, _time;
         private float _zScroll;
+        private float[] _circWaveform;
+        private int _circWaveformCount;
 
         private const int Rings = 12;
         private const int Angles = 80;
@@ -42,6 +45,9 @@ namespace XFiles.Visualizers.Visualizers
             _time = data.Time;
             _zScroll += ScrollSpeed;
             if (_zScroll > MaxZ) _zScroll -= MaxZ;
+
+            _circWaveform = data.Waveform;
+            _circWaveformCount = data.WaveformCount;
 
             float bass = 0f, treble = 0f;
             int halfBands = Math.Min(6, data.BandLevels.Length);
@@ -140,10 +146,8 @@ namespace XFiles.Visualizers.Visualizers
                     float perspS = FocalLen / (sparkZ + NearPlane);
                     float sparkR = 0.05f * perspS * scale;
                     float sparkAngle = (_time * 3f + i * 2.1f + sparkZ) % (MathF.PI * 2f);
-
                     float bandS = _smoothBands[i % AudioData.BandCount];
                     float dist = (BaseRadius * 1.2f + bandS * 0.3f) * perspS * scale;
-
                     float sx = cx + dist * MathF.Cos(sparkAngle);
                     float sy = cy + dist * MathF.Sin(sparkAngle);
                     float invZS = 1f - sparkZ / MaxZ;
@@ -151,6 +155,50 @@ namespace XFiles.Visualizers.Visualizers
                     ds.FillCircle(sx, sy, sparkR + _smoothTreble * 1.5f, sparkColor);
                 }
             }
+
+            DrawCenterWaveform(ds, cx, cy, scale);
+        }
+
+        private void DrawCenterWaveform(CanvasDrawingSession ds, float cx, float cy, float scale)
+        {
+            if (_circWaveform == null || _circWaveformCount <= 1) return;
+
+            float r = scale * 0.20f;
+            float waveAmp = r * 0.35f;
+            int steps = Math.Min(_circWaveformCount, 60);
+            int step = Math.Max(1, _circWaveformCount / steps);
+            var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
+
+            for (int s = 1; s >= 0; s--)
+            {
+                float opacity = s == 0 ? 1f : 0.3f;
+                float thick = s == 0 ? 1.5f : 4f;
+                byte baseA = (byte)(200 * opacity);
+
+                float prevX = 0, prevY = 0;
+                bool first = true;
+
+                for (int i = 0; i <= _circWaveformCount; i += step)
+                {
+                    int idx = Math.Min(i, _circWaveformCount - 1);
+                    float t = (float)idx / _circWaveformCount;
+                    float angle = t * MathF.PI * 2f - MathF.PI * 0.5f + _time * 0.1f;
+                    float val = _circWaveform[idx] * waveAmp;
+                    float x = cx + (r + val) * MathF.Cos(angle);
+                    float y = cy + (r + val) * MathF.Sin(angle);
+
+                    if (!first)
+                    {
+                        byte a = (byte)(baseA * (0.6f + 0.4f * Math.Abs(_circWaveform[idx])));
+                        ds.DrawLine(prevX, prevY, x, y,
+                            Color.FromArgb(a, 200, 220, 255), thick, strokeStyle);
+                    }
+                    else first = false;
+                    prevX = x; prevY = y;
+                }
+            }
+
+            ds.FillCircle(cx, cy, 2f, Color.FromArgb(200, 255, 255, 255));
         }
 
         public void Resize(float width, float height) { _width = width; _height = height; }

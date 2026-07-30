@@ -31,7 +31,11 @@ namespace XFiles.Visualizers
             typeof(Visualizers.WaveformTunnelVisualizer),
             typeof(Visualizers.GeissVisualizer),
             typeof(Visualizers.Xbox360BootVisualizer),
-            typeof(Visualizers.ThreeDoTileVisualizer)
+            typeof(Visualizers.InvertedBarsVisualizer),
+            typeof(Visualizers.ThreeDOVisualizer),
+            typeof(Visualizers.ThreeDWaveVisualizer),
+            typeof(Visualizers.ComancheVisualizer),
+            typeof(Visualizers.SynthwaveVuMeterVisualizer)
         };
 
         public static int Count => VisualizerTypes.Length;
@@ -72,7 +76,11 @@ namespace XFiles.Visualizers
                 case AudioFullscreenMode.WaveformTunnel: index = 21; break;
                 case AudioFullscreenMode.GeissFluid: index = 22; break;
                 case AudioFullscreenMode.Xbox360Boot: index = 23; break;
-                case AudioFullscreenMode.ThreeDoMusicTiles: index = 24; break;
+                case AudioFullscreenMode.InvertedBars: index = 24; break;
+                case AudioFullscreenMode.ThreeDO: index = 25; break;
+                case AudioFullscreenMode.ThreeDWave: index = 26; break;
+                case AudioFullscreenMode.ComancheTerrain: index = 27; break;
+                case AudioFullscreenMode.SynthwaveVuMeter: index = 28; break;
                 default: index = -1; break;
             }
             if (index < 0 || index >= VisualizerTypes.Length)

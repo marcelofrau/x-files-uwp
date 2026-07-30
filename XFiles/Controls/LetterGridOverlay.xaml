@@ -25,8 +25,6 @@
                 <Border Background="#252830" Height="1" Margin="0,0,0,12" />
 
                 <GridView x:Name="LetterGrid"
-                          Style="{StaticResource RetroListViewStyle}"
-                          ItemContainerStyle="{StaticResource RetroListViewItemStyle}"
                           SelectionMode="Single"
                           Padding="0">
                     <GridView.ItemsPanel>

@@ -23,6 +23,7 @@ namespace XFiles.Visualizers.Visualizers
         private const int RayCount = 36;
         private const int WaveformPoints = 120;
         private const int RingCount = 4;
+        private const int VuBarCount = 10;
 
         private struct RingPulse { public float Phase, Speed, MaxRadius, Width; }
         private readonly RingPulse[] _rings = new RingPulse[RingCount];
@@ -86,6 +87,7 @@ namespace XFiles.Visualizers.Visualizers
             DrawRays(ds);
             DrawSphereGlow(ds);
             DrawSphere(ds);
+            DrawVuMeter(ds);
             DrawWaveformRing(ds);
         }
 
@@ -186,6 +188,31 @@ namespace XFiles.Visualizers.Visualizers
             ds.DrawCircle(cx, cy, r, Color.FromArgb(edgeA, 160, 190, 180), 1.5f);
         }
 
+        private void DrawVuMeter(CanvasDrawingSession ds)
+        {
+            float r = _radius * 0.55f;
+            float cx = _cx, cy = _cy;
+            float totalW = r * 1.6f;
+            float barW = totalW / VuBarCount;
+            float startX = cx - totalW * 0.5f;
+            float baseY = cy;
+
+            for (int i = 0; i < VuBarCount; i++)
+            {
+                int bandIdx = (i * AudioData.BandCount) / VuBarCount;
+                bandIdx = Math.Min(bandIdx, AudioData.BandCount - 1);
+                float level = _smoothBands[bandIdx];
+                float height = 2f + level * r * 1.2f;
+                float x = startX + i * barW;
+                byte green = (byte)(80 + level * 175 + _smoothBeat * 40);
+                byte alpha = (byte)(160 + level * 80 + _smoothBeat * 15);
+                ds.FillRectangle(x, baseY - height * 0.5f, barW - 1, height,
+                    Color.FromArgb(alpha, 20, green, 30));
+                ds.DrawRectangle(x, baseY - height * 0.5f, barW - 1, height,
+                    Color.FromArgb((byte)(alpha * 0.6f), 200, 255, 200), 0.5f);
+            }
+        }
+
         private void DrawWaveformRing(CanvasDrawingSession ds)
         {
             if (_waveform == null || _waveformCount <= 1) return;
@@ -229,6 +256,22 @@ namespace XFiles.Visualizers.Visualizers
 
         public void Resize(float width, float height) { _width = width; _height = height; }
         public void Dispose() { _device = null; }
+
+        private static Color HslToRgb(float h, float s, float l)
+        {
+            h -= MathF.Floor(h); float hue = h * 360f;
+            float c = (1f - MathF.Abs(2f * l - 1f)) * s;
+            float x = c * (1f - MathF.Abs((hue / 60f) % 2f - 1f));
+            float m = l - c / 2f;
+            float r, g, b;
+            if (hue < 60) { r = c; g = x; b = 0; }
+            else if (hue < 120) { r = x; g = c; b = 0; }
+            else if (hue < 180) { r = 0; g = c; b = x; }
+            else if (hue < 240) { r = 0; g = x; b = c; }
+            else if (hue < 300) { r = x; g = 0; b = c; }
+            else { r = c; g = 0; b = x; }
+            return Color.FromArgb(255, (byte)((r + m) * 255), (byte)((g + m) * 255), (byte)((b + m) * 255));
+        }
 
         public void ConfigurePipeline(PostProcessPipeline pipeline)
         {

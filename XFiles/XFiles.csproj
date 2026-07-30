@@ -45,7 +45,7 @@
          ID3_PARSE_DEBUG    — Id3Tag per-frame parsing details
     -->
     <NoWarn>;2008</NoWarn>
-    <DebugType>full</DebugType>
+    <!-- <DebugType>full</DebugType> -->
     <PlatformTarget>x64</PlatformTarget>
     <UseVSHostingProcess>false</UseVSHostingProcess>
     <ErrorReport>prompt</ErrorReport>
@@ -54,12 +54,11 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
     <OutputPath>bin\x64\Release\</OutputPath>
     <DefineConstants>TRACE;NETFX_CORE;WINDOWS_UWP;AUDIO_ANALYSIS</DefineConstants>
-    <Optimize>true</Optimize>
+    <!-- <Optimize>false</Optimize> -->
     <NoWarn>;2008</NoWarn>
-    <DebugType>pdbonly</DebugType>
+    <!-- <DebugType>full</DebugType> -->
     <PlatformTarget>x64</PlatformTarget>
     <UseVSHostingProcess>false</UseVSHostingProcess>
-    <ErrorReport>prompt</ErrorReport>
     <Prefer32Bit>true</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
@@ -94,12 +93,6 @@
     <PackageReference Include="ZXing.Net">
       <Version>0.16.9</Version>
     </PackageReference>
-  </ItemGroup>
-  <ItemGroup Condition="Exists('..\..\XrayLib\XrayLib\XrayLib.csproj')">
-    <ProjectReference Include="..\..\XrayLib\XrayLib\XrayLib.csproj">
-      <Project>{8A3C3E6E-5B9D-4F7A-B2C1-D4E8F6A9B0C2}</Project>
-      <Name>XrayLib</Name>
-    </ProjectReference>
   </ItemGroup>
   <ItemGroup Condition="Exists('$(MSBuildProgramFiles32)\Microsoft SDKs\UAP\v10.0\ExtensionsSDKs\WindowsMobile$(TargetPlatformVersion)')">
     <SDKReference Include="WindowsMobile, Version=$(TargetPlatformVersion)" />
@@ -215,7 +208,6 @@
     <Compile Include="Services\ProgressStream.cs" />
     <Compile Include="Audio\IMemoryBufferAccess.cs" />
     <Compile Include="Audio\AudioLevelService.cs" />
-    <Compile Include="Audio\GcSnapshot.cs" />
     <Compile Include="Audio\FftHelper.cs" />
     <Compile Include="Controls\VuMeterBar.xaml.cs">
       <DependentUpon>VuMeterBar.xaml</DependentUpon>
@@ -227,7 +219,6 @@
     <Compile Include="Visualizers\PostProcessPipeline.cs" />
     <Compile Include="Visualizers\VisualizerRegistry.cs" />
     <Compile Include="Visualizers\Visualizers\RadialSpectrumVisualizer.cs" />
-    <Compile Include="Visualizers\Visualizers\WaveformVisualizer.cs" />
     <Compile Include="Visualizers\Visualizers\PlasmaVisualizer.cs" />
     <Compile Include="Visualizers\Visualizers\StarfieldVisualizer.cs" />
     <Compile Include="Visualizers\Visualizers\SpiralSpectrumVisualizer.cs" />
@@ -247,10 +238,15 @@
     <Compile Include="Visualizers\Visualizers\CircularRadialSpectrumVisualizer.cs" />
     <Compile Include="Visualizers\Visualizers\RetroOscilloscopeVisualizer.cs" />
     <Compile Include="Visualizers\Visualizers\InfernoCoreVisualizer.cs" />
-    <Compile Include="Visualizers\Visualizers\WaveformTunnelVisualizer.cs" />
     <Compile Include="Visualizers\Visualizers\GeissVisualizer.cs" />
     <Compile Include="Visualizers\Visualizers\Xbox360BootVisualizer.cs" />
-    <Compile Include="Visualizers\Visualizers\ThreeDoTileVisualizer.cs" />
+    <Compile Include="Visualizers\Visualizers\InvertedBarsVisualizer.cs" />
+    <Compile Include="Visualizers\Visualizers\ThreeDOVisualizer.cs" />
+    <Compile Include="Visualizers\Visualizers\ThreeDWaveVisualizer.cs" />
+    <Compile Include="Visualizers\Visualizers\ComancheVisualizer.cs" />
+    <Compile Include="Visualizers\Visualizers\SynthwaveVuMeterVisualizer.cs" />
+    <Compile Include="Visualizers\Visualizers\WaveformVisualizer.cs" />
+    <Compile Include="Visualizers\Visualizers\WaveformTunnelVisualizer.cs" />
   </ItemGroup>
   <ItemGroup>
     <ApplicationDefinition Include="App.xaml">
@@ -366,6 +362,7 @@
     <AppxManifest Include="Package.appxmanifest">
       <SubType>Designer</SubType>
     </AppxManifest>
+    <Content Include="Default.rd.xml" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Controls\README.md" />
@@ -377,7 +374,6 @@
     <None Include="..\docs\ASSETS-GUIDE.md" />
     <None Include="..\docs\AUDIO-VISUALIZATION.md" />
     <None Include="Visualizers\Shaders\RadialSpectrum.hlsl" />
-    <None Include="Visualizers\Shaders\Waveform.hlsl" />
     <None Include="Visualizers\Shaders\Plasma.hlsl" />
   </ItemGroup>
   <ItemGroup>

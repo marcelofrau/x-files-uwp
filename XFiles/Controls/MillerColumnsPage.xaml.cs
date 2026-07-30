@@ -76,7 +76,6 @@ namespace XFiles.Controls
 
         public MillerColumnsPage()
         {
-            Log.Dbg("MillerColumnsPage.ctor");
             this.InitializeComponent();
             _fullscreenProgressHandler = () =>
             {
@@ -99,6 +98,13 @@ namespace XFiles.Controls
                         FsAudioProgress.Value = Math.Max(0, Math.Min(100, (current.TotalSeconds / total.TotalSeconds) * 100));
                         FsCurrentTimeText.Text = FormatFsTime(current);
                         FsTotalTimeText.Text = FormatFsTime(total);
+
+                        if (!_fsAudioEnded && current >= total - TimeSpan.FromSeconds(0.5))
+                        {
+                            _fsAudioEnded = true;
+                            Log.Info("FsAudio: position reached end — auto-advancing");
+                            NavigateAudioTrack(1);
+                        }
                     }
                 }
             };
@@ -130,7 +136,6 @@ namespace XFiles.Controls
 
             VideoTrackMenuControl.SubtitleSelected += OnVideoSubtitleSelected;
             VideoTrackMenuControl.AudioTrackSelected += OnVideoAudioTrackSelected;
-
             var v = Package.Current.Id.Version;
             var version = $"{v.Major}.{v.Minor}.{v.Build}.{v.Revision}";
             VersionText.Text = $"v{version}";
@@ -279,13 +284,6 @@ namespace XFiles.Controls
             PdfFullScreen.OnClosed = markOverlayClosed;
             VideoTrackMenuControl.OnClosed = markOverlayClosed;
             OpProgressDialog.OnClosed = markOverlayClosed;
-
-            _gcDiagTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-            _gcDiagTimer.Tick += OnGcDiagTick;
-            _gcDiagPrevGen0 = GC.CollectionCount(0);
-            _gcDiagPrevGen1 = GC.CollectionCount(1);
-            _gcDiagPrevGen2 = GC.CollectionCount(2);
-            _gcDiagTimer.Start();
 
             UpdateClipboardIndicator();
         }
@@ -1253,9 +1251,10 @@ namespace XFiles.Controls
 
             _router.Add(new OverlayHandler(33,
                 () => AudioFullScreenPanel.Visibility == Visibility.Visible,
-                (k, r) => true,
+                (k, r) => _fsPickerVisible ? false : true,
                 (k) =>
                 {
+                    if (_fsPickerVisible) return false;
                     if (k == VirtualKey.GamepadB) { CloseAudioFullscreen(); UpdateMediaPlayerFocusUI(); }
                     else if (k == VirtualKey.GamepadA) { ToggleAudioFullscreenPlayPause(); }
                     return true;
@@ -1295,6 +1294,13 @@ namespace XFiles.Controls
         {
             if (_router.RouteDPad(VirtualKey.GamepadDPadUp, isRepeat)) return;
 
+            if (_fsPickerVisible)
+            {
+                if (FsVisualizerList.SelectedIndex > 0)
+                    FsVisualizerList.SelectedIndex--;
+                return;
+            }
+
             if (_isMediaPlayerActive) { MediaPreview.StopPlayer(); UpdateMediaPlayerFocusUI(); }
 
             var before = CurrentList.SelectedIndex;
@@ -1315,6 +1321,13 @@ namespace XFiles.Controls
         public void OnDPadDown(bool isRepeat = false)
         {
             if (_router.RouteDPad(VirtualKey.GamepadDPadDown, isRepeat)) return;
+
+            if (_fsPickerVisible)
+            {
+                if (FsVisualizerList.SelectedIndex < FsVisualizerList.Items.Count - 1)
+                    FsVisualizerList.SelectedIndex++;
+                return;
+            }
 
             if (_isMediaPlayerActive) { MediaPreview.StopPlayer(); UpdateMediaPlayerFocusUI(); }
 
@@ -1364,6 +1377,8 @@ namespace XFiles.Controls
         public void OnConfirm()
         {
             if (_router.RouteButton(VirtualKey.GamepadA)) return;
+
+            if (_fsPickerVisible) { ApplyFsPickerSelection(); return; }
 
             if (ErrorOverlay.Visibility == Visibility.Visible) { Log.Dbg("OnConfirm: → HideError"); HideError(); return; }
             if (_isMediaPlayerActive)
@@ -1498,6 +1513,8 @@ namespace XFiles.Controls
             }
 
             if (_router.RouteButton(VirtualKey.GamepadB)) return;
+
+            if (_fsPickerVisible) { CloseFsPicker(); return; }
 
             if (ErrorOverlay.Visibility == Visibility.Visible) { Log.Dbg("OnBack: → HideError"); HideError(); return; }
             if (_isMediaPlayerActive)
@@ -1801,7 +1818,8 @@ namespace XFiles.Controls
             || OverwriteDialogControl.IsDialogVisible
             || FileOperationConfirmDialogControl.IsDialogVisible
             || FolderBrowserDialogControl.IsOpen
-            || OpProgressDialog.IsOpen;
+            || OpProgressDialog.IsOpen
+            || _fsPickerVisible;
 
         private bool IsAnyFullscreen =>
             ImageFullScreen.IsOpen || PdfFullScreen.IsOpen
@@ -2856,39 +2874,6 @@ namespace XFiles.Controls
             _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Low, _fullscreenProgressHandler);
         }
 
-        private void OnGcDiagTick(object sender, object e)
-        {
-            int gen0 = GC.CollectionCount(0);
-            int gen1 = GC.CollectionCount(1);
-            int gen2 = GC.CollectionCount(2);
-            long mem = GC.GetTotalMemory(false);
-            int d0 = gen0 - _gcDiagPrevGen0;
-            int d1 = gen1 - _gcDiagPrevGen1;
-            int d2 = gen2 - _gcDiagPrevGen2;
-            _gcDiagPrevGen0 = gen0;
-            _gcDiagPrevGen1 = gen1;
-            _gcDiagPrevGen2 = gen2;
-            if (d0 > 0 || d1 > 0 || d2 > 0)
-            {
-                int tid = Environment.CurrentManagedThreadId;
-                long threadAlloc = GC.GetAllocatedBytesForCurrentThread();
-                long threadDelta = threadAlloc - _gcDiagPrevThreadAlloc;
-                _gcDiagPrevThreadAlloc = threadAlloc;
-                ulong appMem = Windows.System.MemoryManager.AppMemoryUsage / 1024;
-                long nativeMem = (long)appMem * 1024 > mem ? (long)appMem - mem / 1024 : 0;
-                Log.Info("GC-DIAG[TID={Tid}]: gen0={D0:+0;-0;0} gen1={D1:+0;-0;0} gen2={D2:+0;-0;0} heap={Mem}KB app={App}KB native={Native}KB tAlloc={TAlloc}KB",
-                    tid, d0, d1, d2, mem / 1024, appMem, nativeMem, threadDelta / 1024);
-                if (d2 > 0)
-                {
-                    string st = Environment.StackTrace;
-                    int idx = st.IndexOf('\n', st.IndexOf('\n') + 1); // skip first two lines (at OnGcDiagTick)
-                    if (idx > 0) st = st.Substring(0, Math.Min(idx + 80, st.Length));
-                    Log.Dbg("GC-DIAG: gen2 trigger — TID={Tid} alloc={Alloc}KB stack={Stack}",
-                        tid, threadDelta / 1024, st.Replace("\r\n", " ").Replace("\n", " "));
-                }
-            }
-        }
-
         private static string FormatFsTime(TimeSpan ts)
         {
             if (ts.TotalHours >= 1)
@@ -3063,7 +3048,11 @@ namespace XFiles.Controls
             (AudioFullscreenMode.WaveformTunnel, "Waveform Tunnel"),
             (AudioFullscreenMode.GeissFluid, "Geiss Fluid"),
             (AudioFullscreenMode.Xbox360Boot, "Xbox 360 Boot"),
-            (AudioFullscreenMode.ThreeDoMusicTiles, "3DO Music Tiles")
+            (AudioFullscreenMode.InvertedBars, "Inverted Bars"),
+            (AudioFullscreenMode.ThreeDO, "3DO Interactive Music Player"),
+            (AudioFullscreenMode.ThreeDWave, "3D Wave"),
+            (AudioFullscreenMode.ComancheTerrain, "Comanche Terrain"),
+            (AudioFullscreenMode.SynthwaveVuMeter, "Synthwave VU Meter")
         };
 
         private DispatcherTimer _fsModeOsdTimer;
@@ -3115,12 +3104,52 @@ namespace XFiles.Controls
                     _fsVisualizerMode, viz?.GetType().Name ?? "null");
                 if (viz != null)
                 {
-                    AudioLevelService.Instance.QuantumSkipN = (viz.Id == "waveform" || viz.Id == "waveform-tunnel") ? 1 : 2;
+                    AudioLevelService.Instance.QuantumSkipN = 1;
                     FsVisualizerCanvas.AttachService(AudioLevelService.Instance);
                     FsVisualizerCanvas.Activate(viz);
                     FsVisualizerCanvas.Visibility = Visibility.Visible;
                 }
             }
+        }
+
+        public void OnSelectVisualizerMenu()
+        {
+            Log.Info("OnSelectVisualizerMenu: opening picker");
+            _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+            {
+                _fsPickerItems = new List<(AudioFullscreenMode Mode, string Label)>(_fsModeOrder.Length - 1);
+                var labels = new List<string>(_fsModeOrder.Length - 1);
+                for (int i = 1; i < _fsModeOrder.Length; i++)
+                {
+                    _fsPickerItems.Add(_fsModeOrder[i]);
+                    labels.Add(_fsModeOrder[i].Label);
+                }
+                FsVisualizerList.ItemsSource = labels;
+                int currentIdx = _fsPickerItems.FindIndex(e => e.Mode == _fsVisualizerMode);
+                FsVisualizerList.SelectedIndex = currentIdx >= 0 ? currentIdx : 0;
+                FsVisualizerPicker.Visibility = Visibility.Visible;
+                _fsPickerVisible = true;
+            });
+        }
+
+        private void CloseFsPicker()
+        {
+            Log.Info("CloseFsPicker");
+            FsVisualizerPicker.Visibility = Visibility.Collapsed;
+            FsVisualizerList.ItemsSource = null;
+            _fsPickerItems = null;
+            _fsPickerVisible = false;
+        }
+
+        private void ApplyFsPickerSelection()
+        {
+            if (_fsPickerItems == null || FsVisualizerList.SelectedIndex < 0) { CloseFsPicker(); return; }
+            var selected = _fsPickerItems[FsVisualizerList.SelectedIndex];
+            Log.Info("ApplyFsPickerSelection: mode={Mode} label={Label}", selected.Mode, selected.Label);
+            CloseFsPicker();
+            _fsVisualizerMode = selected.Mode;
+            ApplyAudioVisualizerMode();
+            ShowModeOsd(selected.Label);
         }
 
         private void ShowModeOsd(string label)
@@ -3223,6 +3252,7 @@ namespace XFiles.Controls
         private int _fsSelectedAudioIndex = 0;
         
         private bool _fsSuppressTrackEvent;
+        private bool _fsAudioEnded;
         private Windows.Media.Playback.MediaPlaybackItem _fsPlaybackItem;
 
         private double _seekCooldown;
@@ -3250,18 +3280,12 @@ namespace XFiles.Controls
         private DispatcherTimer _mediaLoadTimer;
         private string _pendingMediaPath;
 
-        // GC diagnostic: log collection count every 1s to detect GC-related audio stutter
-        private DispatcherTimer _gcDiagTimer;
-        private int _gcDiagPrevGen0, _gcDiagPrevGen1, _gcDiagPrevGen2;
-        private long _gcDiagPrevThreadAlloc;
-
         public void StopAllTimers()
         {
             _fullscreenProgressTimer.Stop();
             _fsHideTimer.Stop();
             _fsOsdHideTimer.Stop();
             _mediaLoadTimer.Stop();
-            _gcDiagTimer?.Stop();
             ImageFullScreen?.Close();
             MediaPreview?.StopPlayer();
             if (_isAudioFullscreen) CloseAudioFullscreen();
@@ -3293,6 +3317,8 @@ namespace XFiles.Controls
         private Windows.UI.Xaml.Media.Imaging.BitmapImage _fsAlbumArtBitmap;
         private MetadataGuesser _fsMetadataGuesser = new MetadataGuesser();
         private int _fsGeneration;
+        private bool _fsPickerVisible;
+        private List<(AudioFullscreenMode Mode, string Label)> _fsPickerItems;
 
         // MediaPlayer/Session helpers for fullscreen video + audio (migrated from MediaElement)
         private Windows.Media.Playback.MediaPlayer FsVideoPlayer => VideoFullScreenPlayer.MediaPlayer;
@@ -3307,6 +3333,7 @@ namespace XFiles.Controls
             bool wasAlreadyFullscreen = _isAudioFullscreen;
             _audioFullscreenPath = filePath;
             _isAudioFullscreen = true;
+            _fsAudioEnded = false;
 
             MediaPreview.Stop();
 
@@ -3572,6 +3599,7 @@ namespace XFiles.Controls
 
             var nextFile = audioFiles[nextIdx];
             _audioFullscreenPath = nextFile.FullPath;
+            _fsAudioEnded = false;
 
             // Show placeholder immediately
             FsTitleText.Text = System.IO.Path.GetFileNameWithoutExtension(nextFile.FullPath);

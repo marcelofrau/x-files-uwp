@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Directives xmlns="http://schemas.microsoft.com/netfx/2013/01/metadata">
+  <Application>
+    <Assembly Name="*Application*" Dynamic="Required All" />
+    <Assembly Name="SharpCompress" Dynamic="Required All" />
+    <Assembly Name="Serilog" Dynamic="Required All" />
+    <Assembly Name="Serilog.Sinks.File" Dynamic="Required All" />
+    <Assembly Name="Serilog.Sinks.Debug" Dynamic="Required All" />
+    <Assembly Name="sqlite-net-pcl" Dynamic="Required All" />
+    <Assembly Name="SQLitePCLRaw.bundle_green" Dynamic="Required All" />
+    <Assembly Name="SQLitePCLRaw.core" Dynamic="Required All" />
+    <Assembly Name="SQLitePCLRaw.provider.e_sqlite3" Dynamic="Required All" />
+    <Assembly Name="MoonSharp" Dynamic="Required All" />
+    <Assembly Name="ZXing.Net" Dynamic="Required All" />
+    <Assembly Name="Win2D.uwp" Dynamic="Required All" />
+  </Application>
+</Directives>
