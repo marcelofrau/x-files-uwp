@@ -1141,40 +1141,8 @@
                        Visibility="Collapsed" />
 
             <!-- Track info overlay (non-default visualizer modes) -->
-            <Border x:Name="FsTrackInfoBorder" Grid.Row="0" Grid.RowSpan="3"
-                    HorizontalAlignment="Right" VerticalAlignment="Top"
-                    Margin="0,28,28,0"
-                    Background="#991A1D23" CornerRadius="8" Padding="18,14"
-                    Visibility="Collapsed">
-                <Grid MaxWidth="400">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Image x:Name="FsTrackInfoCoverArt"
-                           Grid.Column="0"
-                           Width="80" Height="80"
-                           Stretch="UniformToFill"
-                           Margin="0,0,14,0"
-                           Visibility="Collapsed" />
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="FsTrackInfoTitle"
-                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
-                                   FontSize="18" Foreground="{StaticResource XFilesForegroundBrush}"
-                                   TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
-                        <TextBlock x:Name="FsTrackInfoArtist"
-                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                                   FontSize="13" Foreground="{StaticResource XFilesTextMutedBrush}"
-                                   TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
-                                   Margin="0,4,0,0" />
-                        <TextBlock x:Name="FsTrackInfoAlbum"
-                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                                   FontSize="11" Foreground="{StaticResource XFilesTextDimBrush}"
-                                   TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
-                                   Margin="0,2,0,0" />
-                    </StackPanel>
-                </Grid>
-            </Border>
+            <!-- OSD removed: FsTrackInfoBorder (not working) -->
+
         </Grid>
 
         <!-- Fullscreen video overlay -->

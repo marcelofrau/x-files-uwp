@@ -57,7 +57,7 @@ namespace XFiles.Visualizers.Visualizers
             float minDim = Math.Min(_width, _height);
             float timeAngle = _scrollOffset;
             float burstScale = 1f + _smoothBeat * 0.3f;
-            var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
+            var strokeStyle = AudioVisualizerBase.RoundCapStroke;
             int totalPoints = AudioData.BandCount * PointsPerBand;
 
             for (int p = 0; p < totalPoints - 1; p++)
@@ -90,7 +90,7 @@ namespace XFiles.Visualizers.Visualizers
             float minDim = Math.Min(_width, _height);
             float timeAngle = _scrollOffset;
             float burstScale = 1f + _smoothBeat * 0.3f;
-            var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
+            var strokeStyle = AudioVisualizerBase.RoundCapStroke;
             int totalPoints = AudioData.BandCount * PointsPerBand;
 
             for (int p = 0; p < totalPoints - 1; p++)
@@ -117,10 +117,8 @@ namespace XFiles.Visualizers.Visualizers
 
             float orbRadius = minDim * 0.03f * (1f + _smoothBeat * 0.5f);
             float orbHue = (_time * 0.1f) % 1.0f;
-            var orbGeo = CanvasGeometry.CreateEllipse(ds, cx, cy, orbRadius, orbRadius);
-            ds.FillGeometry(orbGeo, HslToRgb(orbHue, 0.9f, 0.7f + _smoothBeat * 0.3f));
-            var coreGeo = CanvasGeometry.CreateEllipse(ds, cx, cy, orbRadius * 0.4f, orbRadius * 0.4f);
-            ds.FillGeometry(coreGeo, Color.FromArgb(255, 255, 255, 255));
+            ds.FillEllipse(cx, cy, orbRadius, orbRadius, HslToRgb(orbHue, 0.9f, 0.7f + _smoothBeat * 0.3f));
+            ds.FillEllipse(cx, cy, orbRadius * 0.4f, orbRadius * 0.4f, Color.FromArgb(255, 255, 255, 255));
             DrawBandRing(ds, cx, cy, minDim);
         }
 
@@ -131,7 +129,7 @@ namespace XFiles.Visualizers.Visualizers
             float minDim = Math.Min(_width, _height);
             float baseRadius = minDim * 0.2f;
             float beatScale = 1f + _smoothBeat * 0.15f;
-            var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
+            var strokeStyle = AudioVisualizerBase.RoundCapStroke;
 
             // Glow pass
             for (int i = 0; i < _waveformCount - 1; i++)
@@ -160,7 +158,7 @@ namespace XFiles.Visualizers.Visualizers
         private void DrawBandRing(CanvasDrawingSession ds, float cx, float cy, float minDim)
         {
             float ringRadius = minDim * 0.42f;
-            var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
+            var strokeStyle = AudioVisualizerBase.RoundCapStroke;
             for (int i = 0; i < AudioData.BandCount; i++)
             {
                 float angle = (float)i / AudioData.BandCount * 2f * (float)Math.PI - (float)Math.PI / 2f;

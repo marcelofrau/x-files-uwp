@@ -14,8 +14,11 @@ namespace XFiles.Audio
 {
     public sealed class AudioLevelService : IDisposable
     {
+        public static AudioLevelService Instance { get; } = new AudioLevelService();
         public const int BandCount = 26;
         public const int FftSize = 2048;
+        public int QuantumSkipN { get; set; } = 1; // process every Nth quantum callback
+        private const long NoGcRegionSize = 128 * 1024 * 1024L;
 
         private AudioGraph _graph;
         private AudioFileInputNode _fileInputNode;
@@ -63,12 +66,15 @@ namespace XFiles.Audio
         private bool _isAnalyzing;
         private int _isProcessing;
         private bool _gcRegionActive;
+        private int _quantumSkipCount;
+
         private CancellationTokenSource _swapCts;
         private float _decayFactor = 0.85f;
         private float _peakHoldDuration = 1.5f;
         private float _peakDecayFactor = 0.92f;
         private int _quantumLogCounter;
         private bool _firstBandDataLogged;
+        private bool _quantumTidLogged;
         private string _currentFilePath;
 
 #if AUDIO_ANALYSIS
@@ -118,7 +124,7 @@ namespace XFiles.Audio
         public event EventHandler MediaEnded;
         public event EventHandler MediaFailed;
 
-        public AudioLevelService()
+        private AudioLevelService()
         {
 #if AUDIO_ANALYSIS
             InitBandMappings(48000);
@@ -247,6 +253,7 @@ namespace XFiles.Audio
         private async Task CreateGraphCommon(bool createDeviceOutput)
         {
             var settings = new AudioGraphSettings(Windows.Media.Render.AudioRenderCategory.GameMedia);
+            settings.DesiredSamplesPerQuantum = 4800;
             var graphResult = await AudioGraph.CreateAsync(settings);
             if (graphResult.Status != AudioGraphCreationStatus.Success)
             {
@@ -317,9 +324,17 @@ namespace XFiles.Audio
 
                 _fileInputNode.Start();
 
-                try { _gcRegionActive = GC.TryStartNoGCRegion(256 * 1024); } catch { }
                 _isAnalyzing = true;
                 Log.Info("AudioLevelService: IsAnalyzing=true (LoadViaStorageFile)");
+                long allocBefore = GC.GetAllocatedBytesForCurrentThread();
+                try { if (GC.TryStartNoGCRegion(NoGcRegionSize)) _gcRegionActive = true; } catch { }
+                if (_gcRegionActive)
+                {
+                    long netAlloc = GC.GetAllocatedBytesForCurrentThread() - allocBefore;
+                    int tid = Environment.CurrentManagedThreadId;
+                    Log.Info("AudioLevelService[TID={Tid}]: NoGCRegion started, size={Size}MB setupAlloc={Setup}KB totalMem={Total}KB",
+                        tid, NoGcRegionSize / (1024 * 1024), netAlloc / 1024, GC.GetTotalMemory(false) / 1024);
+                }
                 _graph.Start();
                 _isGraphRunning = true;
                 MediaOpened?.Invoke(this, EventArgs.Empty);
@@ -327,7 +342,6 @@ namespace XFiles.Audio
             catch (Exception ex)
             {
                 Log.Warn("AudioLevelService: LoadViaStorageFile failed", ex);
-                EndGcRegion();
                 MediaFailed?.Invoke(this, EventArgs.Empty);
                 Stop();
             }
@@ -371,9 +385,17 @@ namespace XFiles.Audio
 
                 _mediaSourceNode.Start();
 
-                try { _gcRegionActive = GC.TryStartNoGCRegion(256 * 1024); } catch { }
                 _isAnalyzing = true;
                 Log.Info("AudioLevelService: IsAnalyzing=true (LoadViaStream)");
+                long allocBefore = GC.GetAllocatedBytesForCurrentThread();
+                try { if (GC.TryStartNoGCRegion(NoGcRegionSize)) _gcRegionActive = true; } catch { }
+                if (_gcRegionActive)
+                {
+                    long netAlloc = GC.GetAllocatedBytesForCurrentThread() - allocBefore;
+                    int tid = Environment.CurrentManagedThreadId;
+                    Log.Info("AudioLevelService[TID={Tid}]: NoGCRegion started, size={Size}MB setupAlloc={Setup}KB totalMem={Total}KB",
+                        tid, NoGcRegionSize / (1024 * 1024), netAlloc / 1024, GC.GetTotalMemory(false) / 1024);
+                }
                 _graph.Start();
                 _isGraphRunning = true;
                 MediaOpened?.Invoke(this, EventArgs.Empty);
@@ -381,7 +403,6 @@ namespace XFiles.Audio
             catch (Exception ex)
             {
                 Log.Warn("AudioLevelService: LoadViaStream failed", ex);
-                EndGcRegion();
                 MediaFailed?.Invoke(this, EventArgs.Empty);
                 Stop();
             }
@@ -399,6 +420,7 @@ namespace XFiles.Audio
             try
             {
                 _graph.Stop();
+                EndGcRegion();
                 _isGraphRunning = false;
                 Log.Info("AudioLevelService: paused");
             }
@@ -413,6 +435,15 @@ namespace XFiles.Audio
             if (_graph == null) return;
             try
             {
+                long allocBefore = GC.GetAllocatedBytesForCurrentThread();
+                try { if (GC.TryStartNoGCRegion(NoGcRegionSize)) _gcRegionActive = true; } catch { }
+                if (_gcRegionActive)
+                {
+                    long netAlloc = GC.GetAllocatedBytesForCurrentThread() - allocBefore;
+                    int tid = Environment.CurrentManagedThreadId;
+                    Log.Info("AudioLevelService[TID={Tid}]: NoGCRegion restarted (Resume) size={Size}MB setupAlloc={Setup}KB totalMem={Total}KB",
+                        tid, NoGcRegionSize / (1024 * 1024), netAlloc / 1024, GC.GetTotalMemory(false) / 1024);
+                }
                 _graph.Start();
                 _isGraphRunning = true;
                 Log.Info("AudioLevelService: resumed");
@@ -457,11 +488,6 @@ namespace XFiles.Audio
             _isGraphRunning = false;
             Interlocked.Exchange(ref _isProcessing, 0);
 
-#if AUDIO_ANALYSIS
-            StopFftWorker();
-#endif
-            EndGcRegion();
-
             if (_mediaSourceNode != null)
             {
                 try { _mediaSourceNode.Dispose(); } catch { }
@@ -471,6 +497,7 @@ namespace XFiles.Audio
             if (_graph != null)
             {
                 try { _graph.Stop(); } catch { }
+                EndGcRegion();
                 try { _graph.QuantumStarted -= OnQuantumStarted; } catch { }
 
                 if (_fileInputNode != null)
@@ -483,6 +510,9 @@ namespace XFiles.Audio
                 _frameOutputNode = null;
                 _graph = null;
             }
+
+            _swapCts?.Dispose();
+            _swapCts = null;
 
             _currentFilePath = null;
             _firstBandDataLogged = false;
@@ -513,6 +543,7 @@ namespace XFiles.Audio
                 return;
 
             _swapCts?.Cancel();
+            _swapCts?.Dispose();
             _swapCts = new CancellationTokenSource();
 
             if (_graph == null)
@@ -527,6 +558,8 @@ namespace XFiles.Audio
             if (_isGraphRunning)
             {
                 try { _graph.Stop(); } catch { }
+                EndGcRegion();
+                Interlocked.Exchange(ref _isProcessing, 0);
                 _isGraphRunning = false;
             }
 
@@ -623,9 +656,15 @@ namespace XFiles.Audio
 
             try
             {
-                if (!_gcRegionActive)
-                    try { _gcRegionActive = GC.TryStartNoGCRegion(256 * 1024); } catch { }
-
+                long allocBefore = GC.GetAllocatedBytesForCurrentThread();
+                try { if (GC.TryStartNoGCRegion(NoGcRegionSize)) _gcRegionActive = true; } catch { }
+                if (_gcRegionActive)
+                {
+                    long netAlloc = GC.GetAllocatedBytesForCurrentThread() - allocBefore;
+                    int tid = Environment.CurrentManagedThreadId;
+                    Log.Info("AudioLevelService[TID={Tid}]: NoGCRegion restarted (SwapSource) size={Size}MB setupAlloc={Setup}KB totalMem={Total}KB",
+                        tid, NoGcRegionSize / (1024 * 1024), netAlloc / 1024, GC.GetTotalMemory(false) / 1024);
+                }
                 _graph.Start();
                 _isGraphRunning = true;
                 MediaOpened?.Invoke(this, EventArgs.Empty);
@@ -633,7 +672,6 @@ namespace XFiles.Audio
             catch (Exception ex)
             {
                 Log.Warn("AudioLevelService: SwapSource post-startup failed", ex);
-                EndGcRegion();
                 Stop();
             }
         }
@@ -642,13 +680,22 @@ namespace XFiles.Audio
         {
             if (!_isAnalyzing) return;
             if (Interlocked.CompareExchange(ref _isProcessing, 1, 0) != 0) return;
+            if (++_quantumSkipCount % QuantumSkipN != 0) { Interlocked.Exchange(ref _isProcessing, 0); return; }
 
             var frameOutput = _frameOutputNode;
             if (frameOutput == null) { Interlocked.Exchange(ref _isProcessing, 0); return; }
 
+            if (!_quantumTidLogged)
+            {
+                _quantumTidLogged = true;
+                Log.Info("AudioLevelService: OnQuantumStarted first call TID={Tid}", Environment.CurrentManagedThreadId);
+            }
+
+            var gcSnap = GcSnapshot.Take();
             AudioFrame frame = null;
             try { frame = frameOutput.GetFrame(); }
             catch { Interlocked.Exchange(ref _isProcessing, 0); return; }
+            gcSnap.LogIfGen2("OnQuantumStarted.GetFrame");
 
             if (frame == null) { Interlocked.Exchange(ref _isProcessing, 0); return; }
 
@@ -879,16 +926,18 @@ namespace XFiles.Audio
             Log.Dbg("AudioLevelService: FFT worker started");
             while (true)
             {
-                _fftSignal.Wait();
-                if (!_isAnalyzing) break;
-
-                if (_frameReady)
+                if (_fftSignal.Wait(100))
+                {
+                    _fftSignal.Reset();
+                }
+                if (_isAnalyzing && _frameReady)
                 {
                     _frameReady = false;
+                    var snap = GcSnapshot.Take();
                     ProcessFrameFromBuffer();
+                    snap.LogIfGen2("FftWorker.ProcessFrame");
                 }
             }
-            Log.Dbg("AudioLevelService: FFT worker exiting");
         }
 #endif
 
@@ -896,14 +945,18 @@ namespace XFiles.Audio
         {
             if (_gcRegionActive)
             {
-                try { GC.EndNoGCRegion(); } catch { }
                 _gcRegionActive = false;
+                long memBefore = GC.GetTotalMemory(false);
+                try { GC.EndNoGCRegion(); } catch { }
+                long totalFreed = memBefore - GC.GetTotalMemory(true);
+                int tid = Environment.CurrentManagedThreadId;
+                Log.Info("AudioLevelService[TID={Tid}]: NoGCRegion ended, totalMem={Total}KB estimatedFreed={Freed}KB",
+                    tid, GC.GetTotalMemory(false) / 1024, Math.Max(0, totalFreed) / 1024);
             }
         }
 
         public void Dispose()
         {
-            EndGcRegion();
             Stop();
         }
     }

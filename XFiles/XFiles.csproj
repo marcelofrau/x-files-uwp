@@ -215,6 +215,7 @@
     <Compile Include="Services\ProgressStream.cs" />
     <Compile Include="Audio\IMemoryBufferAccess.cs" />
     <Compile Include="Audio\AudioLevelService.cs" />
+    <Compile Include="Audio\GcSnapshot.cs" />
     <Compile Include="Audio\FftHelper.cs" />
     <Compile Include="Controls\VuMeterBar.xaml.cs">
       <DependentUpon>VuMeterBar.xaml</DependentUpon>

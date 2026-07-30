@@ -141,7 +141,7 @@ namespace XFiles.Visualizers.Visualizers
             float cx = _width * 0.5f, cy = _height * 0.5f, fov = _width * 0.8f;
             float hue = 0.55f - _smoothAvgFreq * 0.15f;
             float sat = 0.6f + _smoothBeat * 0.4f, lum = 0.7f + _smoothBeat * 0.3f;
-            var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
+            var strokeStyle = AudioVisualizerBase.RoundCapStroke;
 
             for (int i = 0; i < StarCount; i++)
             {
@@ -183,16 +183,13 @@ namespace XFiles.Visualizers.Visualizers
                 {
                     float glowSize = size * 3.5f;
                     byte glowA = (byte)Math.Min(255, (int)(alpha * 60));
-                    var glowGeo = CanvasGeometry.CreateCircle(ds, screenX, screenY, glowSize);
-                    ds.FillGeometry(glowGeo, Color.FromArgb(glowA, starColor.R, starColor.G, starColor.B));
+                    ds.FillCircle(screenX, screenY, glowSize, Color.FromArgb(glowA, starColor.R, starColor.G, starColor.B));
                 }
 
-                var starGeo = CanvasGeometry.CreateCircle(ds, screenX, screenY, size);
-                ds.FillGeometry(starGeo, Color.FromArgb(a, r, g, b));
+                ds.FillCircle(screenX, screenY, size, Color.FromArgb(a, r, g, b));
                 if (z < 0.3f && size > 2f)
                 {
-                    var coreGeo = CanvasGeometry.CreateCircle(ds, screenX, screenY, size * 0.4f);
-                    ds.FillGeometry(coreGeo, Color.FromArgb((byte)Math.Min(255, a + 40), 255, 255, 255));
+                    ds.FillCircle(screenX, screenY, size * 0.4f, Color.FromArgb((byte)Math.Min(255, a + 40), 255, 255, 255));
                 }
             }
         }
@@ -200,7 +197,7 @@ namespace XFiles.Visualizers.Visualizers
         private void DrawPlanets(CanvasDrawingSession ds)
         {
             float cx = _width * 0.5f, cy = _height * 0.5f, fov = _width * 0.8f;
-            var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
+            var strokeStyle = AudioVisualizerBase.RoundCapStroke;
 
             for (int i = 0; i < PlanetCount; i++)
             {
@@ -215,13 +212,11 @@ namespace XFiles.Visualizers.Visualizers
 
                 // Atmospheric glow (larger, semi-transparent)
                 byte glowA = (byte)Math.Min(255, (int)(60 / z));
-                var glowGeo = CanvasGeometry.CreateCircle(ds, screenX, cy, size * 1.4f);
-                ds.FillGeometry(glowGeo, Color.FromArgb(glowA, glowColor.R, glowColor.G, glowColor.B));
+                ds.FillCircle(screenX, cy, size * 1.4f, Color.FromArgb(glowA, glowColor.R, glowColor.G, glowColor.B));
 
                 // Planet body
                 byte planetA = (byte)Math.Min(255, (int)(220 / z));
-                var planetGeo = CanvasGeometry.CreateCircle(ds, screenX, cy, size);
-                ds.FillGeometry(planetGeo, Color.FromArgb(planetA, planetColor.R, planetColor.G, planetColor.B));
+                ds.FillCircle(screenX, cy, size, Color.FromArgb(planetA, planetColor.R, planetColor.G, planetColor.B));
 
                 // Ring (stroked ellipse)
                 if (_planetHasRing[i])
@@ -231,8 +226,7 @@ namespace XFiles.Visualizers.Visualizers
                     float ringThickness = Math.Max(1.5f, size * 0.15f);
                     byte ringA = (byte)Math.Min(255, (int)(140 / z));
                     Color ringColor = HslToRgb(_planetHue[i] + 0.05f, 0.3f, 0.55f);
-                    var ringGeo = CanvasGeometry.CreateEllipse(ds, screenX, cy, ringRX, ringRY);
-                    ds.DrawGeometry(ringGeo, Color.FromArgb(ringA, ringColor.R, ringColor.G, ringColor.B), ringThickness, strokeStyle);
+                    ds.DrawEllipse(screenX, cy, ringRX, ringRY, Color.FromArgb(ringA, ringColor.R, ringColor.G, ringColor.B), ringThickness, strokeStyle);
                 }
             }
         }
@@ -246,7 +240,7 @@ namespace XFiles.Visualizers.Visualizers
             float baseRadius = minDim * 0.12f;
             float amplitude = minDim * 0.08f;
 
-            var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
+            var strokeStyle = AudioVisualizerBase.RoundCapStroke;
 
             // Cyan/white color
             Color glowColor = Color.FromArgb(40, 100, 220, 255);

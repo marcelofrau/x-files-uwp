@@ -22,6 +22,7 @@ namespace XFiles.Visualizers.Visualizers
         private const int Symmetry = 12;
         private readonly Vector2[] _polyBuffer = new Vector2[4];
         private readonly Vector2[] _triBuffer = new Vector2[3];
+        private Microsoft.Graphics.Canvas.Geometry.CanvasStrokeStyle _lineStrokeStyle;
 
         public void Initialize(CanvasDevice device) { _device = device; }
 
@@ -60,7 +61,7 @@ namespace XFiles.Visualizers.Visualizers
         }
 
         public void Resize(float width, float height) { _width = width; _height = height; }
-        public void Dispose() { _device = null; }
+        public void Dispose() { _device = null; _lineStrokeStyle?.Dispose(); }
 
         private void DrawBackgroundKaleidoscope(CanvasDrawingSession ds, float cx, float cy, float maxR)
         {
@@ -155,11 +156,15 @@ namespace XFiles.Visualizers.Visualizers
         {
             float angleStep = (float)(Math.PI * 2.0 / Symmetry);
             float lineRotation = _time * 0.15f;
-            var strokeStyle = new Microsoft.Graphics.Canvas.Geometry.CanvasStrokeStyle
+            if (_lineStrokeStyle == null)
             {
-                StartCap = CanvasCapStyle.Round,
-                EndCap = CanvasCapStyle.Round
-            };
+                _lineStrokeStyle = new Microsoft.Graphics.Canvas.Geometry.CanvasStrokeStyle
+                {
+                    StartCap = CanvasCapStyle.Round,
+                    EndCap = CanvasCapStyle.Round
+                };
+            }
+            var strokeStyle = _lineStrokeStyle;
 
             for (int ring = 1; ring <= 4; ring++)
             {

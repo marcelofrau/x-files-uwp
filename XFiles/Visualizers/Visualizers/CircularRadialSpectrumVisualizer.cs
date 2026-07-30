@@ -60,15 +60,13 @@ namespace XFiles.Visualizers.Visualizers
         private void DrawOuterRing(CanvasDrawingSession ds, float cx, float cy, float minDim)
         {
             float ringR = minDim * 0.42f;
-            var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
+            var strokeStyle = AudioVisualizerBase.RoundCapStroke;
             Color ringColor = Color.FromArgb(40, 100, 200, 255);
-            var ringGeo = CanvasGeometry.CreateEllipse(ds, cx, cy, ringR, ringR);
-            ds.DrawGeometry(ringGeo, ringColor, 1f, strokeStyle);
+            ds.DrawEllipse(cx, cy, ringR, ringR, ringColor, 1f, strokeStyle);
 
             float ringR2 = minDim * 0.43f;
             Color ringColor2 = Color.FromArgb(20, 100, 200, 255);
-            var ringGeo2 = CanvasGeometry.CreateEllipse(ds, cx, cy, ringR2, ringR2);
-            ds.DrawGeometry(ringGeo2, ringColor2, 0.5f, strokeStyle);
+            ds.DrawEllipse(cx, cy, ringR2, ringR2, ringColor2, 0.5f, strokeStyle);
         }
 
         private void DrawRadialBars(CanvasDrawingSession ds, float cx, float cy, float minDim)
@@ -76,7 +74,7 @@ namespace XFiles.Visualizers.Visualizers
             float innerR = minDim * 0.15f;
             float maxBarLen = minDim * 0.28f;
             int barCount = AudioData.BandCount;
-            var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
+            var strokeStyle = AudioVisualizerBase.RoundCapStroke;
 
             for (int i = 0; i < barCount; i++)
             {
@@ -104,7 +102,7 @@ namespace XFiles.Visualizers.Visualizers
                 {
                     float tipR = innerR + barLen;
                     float tipGlow = 2f + level * 3f;
-                    ds.FillGeometry(CanvasGeometry.CreateCircle(ds, x2, y2, tipGlow),
+                    ds.FillCircle(x2, y2, tipGlow,
                         Color.FromArgb((byte)Math.Min(255, (int)(100 * level)), barColor.R, barColor.G, barColor.B));
                 }
             }
@@ -114,8 +112,7 @@ namespace XFiles.Visualizers.Visualizers
         {
             float ringR = minDim * 0.14f;
             Color ringColor = Color.FromArgb(60, 100, 200, 255);
-            var ringGeo = CanvasGeometry.CreateEllipse(ds, cx, cy, ringR, ringR);
-            ds.DrawGeometry(ringGeo, ringColor, 1.5f);
+            ds.DrawEllipse(cx, cy, ringR, ringR, ringColor, 1.5f);
         }
 
         private void DrawCenterEnergy(CanvasDrawingSession ds, float cx, float cy, float minDim)
@@ -124,18 +121,18 @@ namespace XFiles.Visualizers.Visualizers
             float hue = (_time * 0.1f) % 1.0f;
             Color c = HslToRgb(hue, 0.9f, 0.6f + _smoothBeat * 0.3f);
 
-            ds.FillGeometry(CanvasGeometry.CreateEllipse(ds, cx, cy, energyR * 2.5f, energyR * 2.5f),
+            ds.FillEllipse(cx, cy, energyR * 2.5f, energyR * 2.5f,
                 Color.FromArgb(15, c.R, c.G, c.B));
-            ds.FillGeometry(CanvasGeometry.CreateEllipse(ds, cx, cy, energyR * 1.5f, energyR * 1.5f),
+            ds.FillEllipse(cx, cy, energyR * 1.5f, energyR * 1.5f,
                 Color.FromArgb(35, c.R, c.G, c.B));
-            ds.FillGeometry(CanvasGeometry.CreateEllipse(ds, cx, cy, energyR, energyR), c);
-            ds.FillGeometry(CanvasGeometry.CreateEllipse(ds, cx, cy, energyR * 0.3f, energyR * 0.3f), Colors.White);
+            ds.FillEllipse(cx, cy, energyR, energyR, c);
+            ds.FillEllipse(cx, cy, energyR * 0.3f, energyR * 0.3f, Colors.White);
         }
 
         private void DrawHUDLines(CanvasDrawingSession ds, float cx, float cy, float minDim)
         {
             float lineR = minDim * 0.44f;
-            var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
+            var strokeStyle = AudioVisualizerBase.RoundCapStroke;
             Color lineColor = Color.FromArgb(30, 100, 200, 255);
 
             for (int i = 0; i < 4; i++)
@@ -154,7 +151,7 @@ namespace XFiles.Visualizers.Visualizers
                 float dotR = minDim * 0.45f;
                 float dx = cx + (float)Math.Cos(angle) * dotR;
                 float dy = cy + (float)Math.Sin(angle) * dotR;
-                ds.FillGeometry(CanvasGeometry.CreateCircle(ds, dx, dy, 1.5f), lineColor);
+                ds.FillCircle(dx, dy, 1.5f, lineColor);
             }
         }
 

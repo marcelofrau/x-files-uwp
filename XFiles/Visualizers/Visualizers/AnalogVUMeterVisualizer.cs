@@ -164,11 +164,8 @@ namespace XFiles.Visualizers.Visualizers
 
             // 7. Capa do Pivô (Pino Preto Analógico)
             float pivotR = w * 0.045f;
-            using (var geo = CanvasGeometry.CreateCircle(ds, pivotX, y + h * 0.78f, pivotR))
-            {
-                ds.FillGeometry(geo, Color.FromArgb(255, 35, 32, 30));
-                ds.DrawGeometry(geo, Color.FromArgb(255, 70, 65, 60), 1f);
-            }
+            ds.FillCircle(pivotX, y + h * 0.78f, pivotR, Color.FromArgb(255, 35, 32, 30));
+            ds.DrawCircle(pivotX, y + h * 0.78f, pivotR, Color.FromArgb(255, 70, 65, 60), 1f);
 
             // 8. R�tulo da Banda
             float labelY = y + h * 0.60f;
@@ -212,10 +209,7 @@ namespace XFiles.Visualizers.Visualizers
             byte a = (byte)Math.Clamp((int)(12 * glow), 0, 255);
             Color warmGlow = Color.FromArgb(a, 255, 180, 80);
 
-            using (var geo = CanvasGeometry.CreateEllipse(ds, _width * 0.5f, _height * 0.5f, _width * 0.48f, _height * 0.42f))
-            {
-                ds.FillGeometry(geo, warmGlow);
-            }
+            ds.FillEllipse(_width * 0.5f, _height * 0.5f, _width * 0.48f, _height * 0.42f, warmGlow);
         }
 
         public void Resize(float width, float height) { _width = width; _height = height; }

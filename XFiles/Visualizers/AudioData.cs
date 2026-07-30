@@ -37,6 +37,22 @@ namespace XFiles.Visualizers
         public static AudioData FromService(Audio.AudioLevelService service, float time,
             float[] bands, float[] peaks, float[] mags, float[] wave)
         {
+            if (service.BandLevels.Length < BandCount || service.BandPeaks.Length < BandCount ||
+                service.Magnitudes.Length < FftBinCount || service.Waveform.Length < Audio.AudioLevelService.FftSize)
+            {
+                Log.Warn("AudioData.FromService: array size mismatch — " +
+                    "bandLevels={SLen} bands={BLen} bandPeaks={SPeaksLen} peaks={BPeaksLen} " +
+                    "magnitudes={SMagLen} mags={BMagLen} waveform={SWaveLen} wave={BWaveLen}",
+                    service.BandLevels.Length, bands.Length,
+                    service.BandPeaks.Length, peaks.Length,
+                    service.Magnitudes.Length, mags.Length,
+                    service.Waveform.Length, wave.Length);
+                return new AudioData(
+                    bands, peaks, mags, wave,
+                    service.WaveformCount,
+                    service.Beat,
+                    time);
+            }
             System.Array.Copy(service.BandLevels, bands, BandCount);
             System.Array.Copy(service.BandPeaks, peaks, BandCount);
             System.Array.Copy(service.Magnitudes, mags, FftBinCount);

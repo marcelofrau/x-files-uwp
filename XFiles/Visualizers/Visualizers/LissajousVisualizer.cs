@@ -60,11 +60,7 @@ namespace XFiles.Visualizers.Visualizers
             float minDim = Math.Min(_width, _height);
             float baseRadius = minDim * 0.32f;
 
-            var strokeStyle = new CanvasStrokeStyle
-            {
-                StartCap = CanvasCapStyle.Round,
-                EndCap = CanvasCapStyle.Round
-            };
+            var strokeStyle = AudioVisualizerBase.RoundCapStroke;
 
             for (int layer = 0; layer < CurveLayers; layer++)
             {
@@ -108,15 +104,17 @@ namespace XFiles.Visualizers.Visualizers
                     }
                     builder.EndFigure(CanvasFigureLoop.Open);
 
-                    var path = CanvasGeometry.CreatePath(builder);
-                    ds.DrawGeometry(path, Color.FromArgb(alpha, curveColor.R, curveColor.G, curveColor.B), thickness, strokeStyle);
+                    using (var path = CanvasGeometry.CreatePath(builder))
+                    {
+                        ds.DrawGeometry(path, Color.FromArgb(alpha, curveColor.R, curveColor.G, curveColor.B), thickness, strokeStyle);
+                    }
                 }
             }
 
             float dotRadius = 4f + _smoothBeat * 6f;
             float dotHue = (_time * 0.15f) % 1.0f;
-            ds.FillGeometry(CanvasGeometry.CreateCircle(ds, cx, cy, dotRadius), HslToRgb(dotHue, 1f, 0.8f));
-            ds.FillGeometry(CanvasGeometry.CreateCircle(ds, cx, cy, dotRadius * 0.3f), Colors.White);
+            ds.FillCircle(cx, cy, dotRadius, HslToRgb(dotHue, 1f, 0.8f));
+            ds.FillCircle(cx, cy, dotRadius * 0.3f, Colors.White);
         }
 
         private static Color HslToRgb(float h, float s, float l)

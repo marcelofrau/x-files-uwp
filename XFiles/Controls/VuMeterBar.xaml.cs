@@ -29,6 +29,8 @@ namespace XFiles.Controls
         private readonly float[] _prevLevels = new float[BarCount];
         private readonly float[] _prevPeaks = new float[BarCount];
         private readonly int[] _prevLitSegments = new int[BarCount];
+        private readonly double[] _prevPeakY = new double[BarCount];
+        private readonly double[] _prevPeakOpacity = new double[BarCount];
 
         private static readonly SolidColorBrush DimBrush = new SolidColorBrush(ColorFromHex("#1A1D23"));
         private static readonly SolidColorBrush GreenBrush = new SolidColorBrush(ColorFromHex("#93C43C"));
@@ -235,15 +237,28 @@ namespace XFiles.Controls
 
                     int peakFromBottom = SegmentsPerBar - 1 - peakSegment;
                     double peakY = _segmentYPositions[peakFromBottom];
-                    _peakIndicators[b].Margin = new Thickness(0, peakY, 0, 0);
-                    _peakIndicators[b].Opacity = 1.0;
+
+                    if (Math.Abs(peakY - _prevPeakY[b]) > 0.001)
+                    {
+                        _prevPeakY[b] = peakY;
+                        _peakIndicators[b].Margin = new Thickness(0, peakY, 0, 0);
+                    }
+                    if (Math.Abs(1.0 - _prevPeakOpacity[b]) > 0.001)
+                    {
+                        _prevPeakOpacity[b] = 1.0;
+                        _peakIndicators[b].Opacity = 1.0;
+                    }
 
                     double peakRatio = (double)peakSegment / (SegmentsPerBar - 1);
                     _peakIndicators[b].Fill = GetSegmentColor(peakRatio);
                 }
                 else
                 {
-                    _peakIndicators[b].Opacity = 0;
+                    if (Math.Abs(0.0 - _prevPeakOpacity[b]) > 0.001)
+                    {
+                        _prevPeakOpacity[b] = 0.0;
+                        _peakIndicators[b].Opacity = 0;
+                    }
                 }
             }
         }
@@ -265,6 +280,8 @@ namespace XFiles.Controls
             {
                 _prevLitSegments[b] = 0;
                 _prevPeaks[b] = 0f;
+                _prevPeakY[b] = -1;
+                _prevPeakOpacity[b] = -1;
 
                 for (int s = 0; s < SegmentsPerBar; s++)
                 {

@@ -66,8 +66,7 @@ namespace XFiles.Visualizers.Visualizers
             {
                 float ringRadius = minDim * (0.12f + ring * 0.08f);
                 float ringAlpha = 20 + ring * 5;
-                var ringGeo = CanvasGeometry.CreateEllipse(ds, cx, cy, ringRadius, ringRadius);
-                ds.DrawGeometry(ringGeo, Color.FromArgb((byte)ringAlpha, 80, 80, 120), 0.5f);
+                ds.DrawEllipse(cx, cy, ringRadius, ringRadius, Color.FromArgb((byte)ringAlpha, 80, 80, 120), 0.5f);
             }
 
             // Draw orbiting circles
@@ -102,27 +101,23 @@ namespace XFiles.Visualizers.Visualizers
                     // Draw glow circle (larger, dimmer)
                     float glowRadius = circleRadius * 2.2f;
                     byte glowAlpha = (byte)Math.Min(255, (int)(12 + bandLevel * 18));
-                    var glowGeo = CanvasGeometry.CreateEllipse(ds, orbX, orbY, glowRadius, glowRadius);
-                    ds.FillGeometry(glowGeo, Color.FromArgb(glowAlpha, circleColor.R, circleColor.G, circleColor.B));
+                    ds.FillEllipse(orbX, orbY, glowRadius, glowRadius, Color.FromArgb(glowAlpha, circleColor.R, circleColor.G, circleColor.B));
 
                     // Extra outer haze
                     float hazeRadius = circleRadius * 3.5f;
                     byte hazeAlpha = (byte)Math.Min(255, (int)(4 + bandLevel * 6));
-                    var hazeGeo = CanvasGeometry.CreateEllipse(ds, orbX, orbY, hazeRadius, hazeRadius);
-                    ds.FillGeometry(hazeGeo, Color.FromArgb(hazeAlpha, circleColor.R, circleColor.G, circleColor.B));
+                    ds.FillEllipse(orbX, orbY, hazeRadius, hazeRadius, Color.FromArgb(hazeAlpha, circleColor.R, circleColor.G, circleColor.B));
 
                     // Draw main circle
                     byte mainAlpha = (byte)Math.Min(255, (int)(180 + bandLevel * 75));
-                    var mainGeo = CanvasGeometry.CreateEllipse(ds, orbX, orbY, circleRadius, circleRadius);
-                    ds.FillGeometry(mainGeo, Color.FromArgb(mainAlpha, circleColor.R, circleColor.G, circleColor.B));
+                    ds.FillEllipse(orbX, orbY, circleRadius, circleRadius, Color.FromArgb(mainAlpha, circleColor.R, circleColor.G, circleColor.B));
 
                     // Bright core for high-energy circles
                     if (bandLevel > 0.4f)
                     {
                         float coreRadius = circleRadius * 0.35f;
                         byte coreAlpha = (byte)Math.Min(255, (int)(200 * bandLevel));
-                        var coreGeo = CanvasGeometry.CreateEllipse(ds, orbX, orbY, coreRadius, coreRadius);
-                        ds.FillGeometry(coreGeo, Color.FromArgb(coreAlpha, 255, 255, 220));
+                        ds.FillEllipse(orbX, orbY, coreRadius, coreRadius, Color.FromArgb(coreAlpha, 255, 255, 220));
                     }
 
                     // Lens flare streaks on bright circles
@@ -130,7 +125,7 @@ namespace XFiles.Visualizers.Visualizers
                     {
                         float flareSz = circleRadius * 2.5f * bandLevel;
                         byte flareA = (byte)Math.Min(255, (int)(20 * bandLevel));
-                        var fStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
+                        var fStyle = AudioVisualizerBase.RoundCapStroke;
                         Color fColor = Color.FromArgb(flareA, circleColor.R, circleColor.G, circleColor.B);
                         ds.DrawLine(orbX - flareSz, orbY, orbX + flareSz, orbY, fColor, 0.8f, fStyle);
                         ds.DrawLine(orbX, orbY - flareSz, orbX, orbY + flareSz, fColor, 0.8f, fStyle);
@@ -150,22 +145,18 @@ namespace XFiles.Visualizers.Visualizers
             float centerHue = (_time * 0.1f) % 1.0f;
             Color centerColor = HslToRgb(centerHue, 1f, 0.7f + _smoothBeat * 0.3f);
 
-            var outerGlow2 = CanvasGeometry.CreateEllipse(ds, cx, cy, centerRadius * 4f, centerRadius * 4f);
-            ds.FillGeometry(outerGlow2, Color.FromArgb(4, centerColor.R, centerColor.G, centerColor.B));
+            ds.FillEllipse(cx, cy, centerRadius * 4f, centerRadius * 4f, Color.FromArgb(4, centerColor.R, centerColor.G, centerColor.B));
 
-            var outerGlow = CanvasGeometry.CreateEllipse(ds, cx, cy, centerRadius * 2f, centerRadius * 2f);
-            ds.FillGeometry(outerGlow, Color.FromArgb(8, centerColor.R, centerColor.G, centerColor.B));
+            ds.FillEllipse(cx, cy, centerRadius * 2f, centerRadius * 2f, Color.FromArgb(8, centerColor.R, centerColor.G, centerColor.B));
 
-            var centerGeo = CanvasGeometry.CreateEllipse(ds, cx, cy, centerRadius, centerRadius);
-            ds.FillGeometry(centerGeo, centerColor);
+            ds.FillEllipse(cx, cy, centerRadius, centerRadius, centerColor);
 
-            var centerCoreGeo = CanvasGeometry.CreateEllipse(ds, cx, cy, centerRadius * 0.3f, centerRadius * 0.3f);
-            ds.FillGeometry(centerCoreGeo, Colors.White);
+            ds.FillEllipse(cx, cy, centerRadius * 0.3f, centerRadius * 0.3f, Colors.White);
 
             // Center lens flare streaks
             float flareLen = centerRadius * 3f * (1f + _smoothBeat * 0.4f);
             byte flareAlpha = (byte)Math.Min(255, (int)(30 + _smoothBeat * 40));
-            var flareStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
+            var flareStyle = AudioVisualizerBase.RoundCapStroke;
             Color flareColor = Color.FromArgb(flareAlpha, centerColor.R, centerColor.G, centerColor.B);
             ds.DrawLine(cx - flareLen, cy, cx + flareLen, cy, flareColor, 1f, flareStyle);
             ds.DrawLine(cx, cy - flareLen, cx, cy + flareLen, flareColor, 1f, flareStyle);

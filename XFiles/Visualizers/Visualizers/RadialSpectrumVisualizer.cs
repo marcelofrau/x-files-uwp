@@ -55,7 +55,7 @@ namespace XFiles.Visualizers.Visualizers
             float innerRadius = minDim * 0.15f;
             float maxBarHeight = minDim * 0.30f;
             float barWidth = (2f * (float)Math.PI * innerRadius) / AudioData.BandCount * 0.6f;
-            var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
+            var strokeStyle = AudioVisualizerBase.RoundCapStroke;
 
             for (int i = 0; i < AudioData.BandCount; i++)
             {
@@ -67,8 +67,7 @@ namespace XFiles.Visualizers.Visualizers
                 ds.DrawLine(x1, y1, x2, y2, BandColors[i], barWidth, strokeStyle);
             }
 
-            var circleGeo = CanvasGeometry.CreateCircle(ds, cx, cy, innerRadius - 2f);
-            ds.DrawGeometry(circleGeo, Color.FromArgb(80, 255, 255, 255), 1.5f);
+            ds.DrawCircle(cx, cy, innerRadius - 2f, Color.FromArgb(80, 255, 255, 255), 1.5f);
         }
 
         private void DrawPeaks(CanvasDrawingSession ds)
@@ -85,8 +84,7 @@ namespace XFiles.Visualizers.Visualizers
                 float angle = (float)i / AudioData.BandCount * 2f * (float)Math.PI - (float)Math.PI / 2f;
                 float r = innerRadius + peak * maxBarHeight;
                 float px = cx + (float)Math.Cos(angle) * r, py = cy + (float)Math.Sin(angle) * r;
-                var geo = CanvasGeometry.CreateCircle(ds, px, py, 2.5f);
-                ds.FillGeometry(geo, Color.FromArgb(200, 255, 255, 255));
+                ds.FillCircle(px, py, 2.5f, Color.FromArgb(200, 255, 255, 255));
             }
         }
 
@@ -94,7 +92,7 @@ namespace XFiles.Visualizers.Visualizers
         {
             float cx = _width * 0.5f, cy = _height * 0.5f;
             float minDim = Math.Min(_width, _height);
-            var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
+            var strokeStyle = AudioVisualizerBase.RoundCapStroke;
 
             // Pulsing concentric rings with color rotation
             for (int ring = 1; ring <= 5; ring++)
@@ -103,8 +101,7 @@ namespace XFiles.Visualizers.Visualizers
                 float hue = (ring * 0.12f + _time * 0.06f) % 1.0f;
                 Color c = HslToRgb(hue, 0.8f, 0.3f + _smoothBeat * 0.2f);
                 byte a = (byte)(30 + _smoothBeat * 40);
-                var geo = CanvasGeometry.CreateCircle(ds, cx, cy, ringR);
-                ds.DrawGeometry(geo, Color.FromArgb(a, c.R, c.G, c.B), 1.5f);
+                ds.DrawCircle(cx, cy, ringR, Color.FromArgb(a, c.R, c.G, c.B), 1.5f);
             }
 
             // Rotating radial spokes with shifting hue

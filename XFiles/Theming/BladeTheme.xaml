@@ -85,6 +85,7 @@
     <Style x:Key="RetroListViewItemStyle" TargetType="ListViewItem">
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="UseSystemFocusVisuals" Value="False" />
+        <Setter Property="IsTabStop" Value="False" />
         <Setter Property="FocusVisualMargin" Value="0" />
         <Setter Property="Foreground" Value="#F0F0F0" />
         <Setter Property="Padding" Value="0" />
