@@ -13,17 +13,9 @@ namespace XFiles.Visualizers
         private CanvasDevice _device;
         private CanvasRenderTarget _feedbackBuffer;
         private CanvasRenderTarget _sceneBuffer;
-        private CanvasRenderTarget _caTempBuffer;
         private CanvasRenderTarget _bloomBlur;
         private CanvasRenderTarget _bloomBlend;
         private CanvasRenderTarget _noiseTexture;
-        private static readonly CanvasGradientStop[] _vignetteStops = new CanvasGradientStop[]
-        {
-            new CanvasGradientStop { Position = 0f, Color = Color.FromArgb(0, 0, 0, 0) },
-            new CanvasGradientStop { Position = 0.5f, Color = Color.FromArgb(0, 0, 0, 0) },
-            new CanvasGradientStop { Position = 1f, Color = Color.FromArgb(255, 0, 0, 0) }
-        };
-        private CanvasSolidColorBrush _scanlineBrush;
         private float _width, _height;
         private bool _disposed;
         private float _time;
@@ -74,7 +66,6 @@ namespace XFiles.Visualizers
             _height = height;
             _feedbackBuffer?.Dispose(); _feedbackBuffer = null;
             _sceneBuffer?.Dispose(); _sceneBuffer = null;
-            _caTempBuffer?.Dispose(); _caTempBuffer = null;
             _bloomBlur?.Dispose(); _bloomBlur = null;
             _bloomBlend?.Dispose(); _bloomBlend = null;
             _noiseTexture?.Dispose(); _noiseTexture = null;
@@ -215,20 +206,13 @@ namespace XFiles.Visualizers
         {
             float offset = ChromaticAberration;
 
-            // Copy scene -> temp buffer (source for both passes)
-            EnsureCaTempBuffer();
-            using (var copyDs = _caTempBuffer.CreateDrawingSession())
-            {
-                copyDs.DrawImage(_sceneBuffer);
-            }
-
-            // Red channel: shift left (read from temp, write to scene)
+            // Red channel: shift left
             using (var redDs = _sceneBuffer.CreateDrawingSession())
             {
                 var redMatrix = Matrix3x2.CreateTranslation(-offset, 0);
                 var redEffect = new ColorMatrixEffect
                 {
-                    Source = _caTempBuffer,
+                    Source = _sceneBuffer,
                     ColorMatrix = new Matrix5x4
                     {
                         M11 = 1, M12 = 0, M13 = 0, M14 = 0,
@@ -244,13 +228,13 @@ namespace XFiles.Visualizers
                 redDs.Transform = prevTransform;
             }
 
-            // Blue channel: shift right (read from temp, write to scene)
+            // Blue channel: shift right
             using (var blueDs = _sceneBuffer.CreateDrawingSession())
             {
                 var blueMatrix = Matrix3x2.CreateTranslation(offset, 0);
                 var blueEffect = new ColorMatrixEffect
                 {
-                    Source = _caTempBuffer,
+                    Source = _sceneBuffer,
                     ColorMatrix = new Matrix5x4
                     {
                         M11 = 0, M12 = 0, M13 = 0, M14 = 0,
@@ -267,25 +251,17 @@ namespace XFiles.Visualizers
             }
         }
 
-        private void EnsureCaTempBuffer()
-        {
-            if (_caTempBuffer == null || _caTempBuffer.Size.Width != _width || _caTempBuffer.Size.Height != _height)
-            {
-                _caTempBuffer?.Dispose();
-                _caTempBuffer = new CanvasRenderTarget(_device, _width, _height, 96);
-            }
-        }
-
         private void ApplyScanlines(CanvasDrawingSession ds)
         {
             float lineSpacing = _height / ScanlineCount;
             float alpha = (byte)(255 * ScanlineIntensity);
 
-            if (_scanlineBrush == null)
-                _scanlineBrush = new CanvasSolidColorBrush(_device, Color.FromArgb((byte)alpha, 0, 0, 0));
-            for (float y = 0; y < _height; y += lineSpacing)
+            using (var brush = new CanvasSolidColorBrush(_device, Color.FromArgb((byte)alpha, 0, 0, 0)))
             {
-                ds.FillRectangle(0, y, _width, 1, _scanlineBrush);
+                for (float y = 0; y < _height; y += lineSpacing)
+                {
+                    ds.FillRectangle(0, y, _width, 1, brush);
+                }
             }
         }
 
@@ -345,12 +321,16 @@ namespace XFiles.Visualizers
             float cy = _height * 0.5f;
             float radius = (float)Math.Sqrt(cx * cx + cy * cy);
 
-            // Reuse static stops array — positions are invariant
-            _vignetteStops[2] = new CanvasGradientStop { Position = 1f, Color = Color.FromArgb((byte)(255 * amount), 0, 0, 0) };
+            var stops = new CanvasGradientStop[]
+            {
+                new CanvasGradientStop { Position = 0f, Color = Color.FromArgb(0, 0, 0, 0) },
+                new CanvasGradientStop { Position = 0.5f, Color = Color.FromArgb(0, 0, 0, 0) },
+                new CanvasGradientStop { Position = 1f, Color = Color.FromArgb((byte)(255 * amount), 0, 0, 0) }
+            };
 
             using (var brush = new CanvasRadialGradientBrush(
                 _device,
-                _vignetteStops,
+                stops,
                 CanvasEdgeBehavior.Clamp,
                 CanvasAlphaMode.Premultiplied))
             {
@@ -394,14 +374,10 @@ namespace XFiles.Visualizers
             if (_disposed) return;
             _disposed = true;
             _feedbackBuffer?.Dispose(); _sceneBuffer?.Dispose();
-            _caTempBuffer?.Dispose();
             _bloomBlur?.Dispose(); _bloomBlend?.Dispose();
             _noiseTexture?.Dispose();
-            _scanlineBrush?.Dispose();
             _feedbackBuffer = null; _sceneBuffer = null;
-            _caTempBuffer = null;
             _bloomBlur = null; _bloomBlend = null; _noiseTexture = null;
-            _scanlineBrush = null;
             _device = null;
         }
     }

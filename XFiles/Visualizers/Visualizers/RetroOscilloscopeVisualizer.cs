@@ -229,10 +229,7 @@ namespace XFiles.Visualizers.Visualizers
             Color glow = Color.FromArgb(a, 40, 220, 40);
 
             // Usando com instru��o usando (using) para descarte de mem�ria correto
-            using (var geo = CanvasGeometry.CreateEllipse(ds, _width * 0.5f, _height * 0.5f, _width * 0.45f, _height * 0.40f))
-            {
-                ds.FillGeometry(geo, glow);
-            }
+            ds.FillEllipse(_width * 0.5f, _height * 0.5f, _width * 0.45f, _height * 0.40f, glow);
         }
 
         private void DrawVignette(CanvasDrawingSession ds)

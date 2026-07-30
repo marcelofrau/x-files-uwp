@@ -110,7 +110,7 @@ namespace XFiles.Visualizers.Visualizers
                 int segCount = 90;
                 float twoPi = (float)(Math.PI * 2.0);
                 float waveAmp = Math.Min(r * 0.15f, 30f) * alpha;
-                var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
+                var strokeStyle = AudioVisualizerBase.RoundCapStroke;
 
                 float prevAngle = 0f;
                 float prevWave = _waveform != null && _waveformCount > 0 ? _waveform[0] : 0f;
@@ -142,19 +142,19 @@ namespace XFiles.Visualizers.Visualizers
             float hue = (_time * 0.08f) % 1.0f;
             Color c = HslToRgb(hue, 1f, 0.75f + _smoothBeat * 0.25f);
 
-            ds.FillGeometry(CanvasGeometry.CreateEllipse(ds, cx, cy, r * 5f, r * 5f),
+            ds.FillEllipse(cx, cy, r * 5f, r * 5f,
                 Color.FromArgb(10, c.R, c.G, c.B));
-            ds.FillGeometry(CanvasGeometry.CreateEllipse(ds, cx, cy, r * 3f, r * 3f),
+            ds.FillEllipse(cx, cy, r * 3f, r * 3f,
                 Color.FromArgb(15, c.R, c.G, c.B));
-            ds.FillGeometry(CanvasGeometry.CreateEllipse(ds, cx, cy, r * 1.5f, r * 1.5f),
+            ds.FillEllipse(cx, cy, r * 1.5f, r * 1.5f,
                 Color.FromArgb(40, c.R, c.G, c.B));
-            ds.FillGeometry(CanvasGeometry.CreateEllipse(ds, cx, cy, r, r), c);
-            ds.FillGeometry(CanvasGeometry.CreateEllipse(ds, cx, cy, r * 0.3f, r * 0.3f), Colors.White);
+            ds.FillEllipse(cx, cy, r, r, c);
+            ds.FillEllipse(cx, cy, r * 0.3f, r * 0.3f, Colors.White);
 
             // Lens flare streaks
             float flareLen = r * 5f * (1f + _smoothBeat * 0.5f);
             byte flareAlpha = (byte)Math.Min(255, (int)(50 + _smoothBeat * 70));
-            var fStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
+            var fStyle = AudioVisualizerBase.RoundCapStroke;
             Color fColor = Color.FromArgb(flareAlpha, c.R, c.G, c.B);
             ds.DrawLine(cx - flareLen, cy, cx + flareLen, cy, fColor, 1.5f, fStyle);
             ds.DrawLine(cx, cy - flareLen, cx, cy + flareLen, fColor, 1.5f, fStyle);
@@ -167,7 +167,7 @@ namespace XFiles.Visualizers.Visualizers
         private void DrawRadialGlows(CanvasDrawingSession ds, float cx, float cy)
         {
             float maxR = Math.Min(_width, _height) * 0.45f;
-            var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
+            var strokeStyle = AudioVisualizerBase.RoundCapStroke;
             int lineCount = 16;
             for (int i = 0; i < lineCount; i++)
             {

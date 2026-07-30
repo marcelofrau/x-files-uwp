@@ -101,12 +101,11 @@ namespace XFiles.Visualizers.Visualizers
         private void DrawLensFlare(CanvasDrawingSession ds, float cx, float cy, float intensity)
         {
             float radius = 60f * intensity;
-            var flareGeo = CanvasGeometry.CreateEllipse(ds, cx, cy, radius, radius);
             Color flareColor = Color.FromArgb((byte)(intensity * 25), 255, 200, 255);
-            ds.FillGeometry(flareGeo, flareColor);
+            ds.FillEllipse(cx, cy, radius, radius, flareColor);
 
             float lineLen = radius * 1.5f;
-            var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
+            var strokeStyle = AudioVisualizerBase.RoundCapStroke;
             int lineCount = 8;
             for (int i = 0; i < lineCount; i++)
             {

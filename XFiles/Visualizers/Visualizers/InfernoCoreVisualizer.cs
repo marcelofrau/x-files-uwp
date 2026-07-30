@@ -23,6 +23,19 @@ namespace XFiles.Visualizers.Visualizers
 
         private const int PlasmaGrid = 8;
         private float[,,] _plasmaNoise;
+        private readonly float[,] _verts = new float[8, 3];
+        private readonly float[,] _projected = new float[8, 2];
+        private readonly float[] _depth = new float[8];
+
+        private static readonly float[,] _corners = new float[8, 3] {
+            {-1,-1,-1}, {1,-1,-1}, {1,1,-1}, {-1,1,-1},
+            {-1,-1,1}, {1,-1,1}, {1,1,1}, {-1,1,1}
+        };
+        private static readonly int[,] _edges = new int[12, 2] {
+            {0,1},{1,2},{2,3},{3,0},
+            {4,5},{5,6},{6,7},{7,4},
+            {0,4},{1,5},{2,6},{3,7}
+        };
 
         public void Initialize(CanvasDevice device) { _device = device; InitPlasmaNoise(); }
 
@@ -124,21 +137,16 @@ namespace XFiles.Visualizers.Visualizers
             float cosY = (float)Math.Cos(_cubeAngleY), sinY = (float)Math.Sin(_cubeAngleY);
             float cosZ = (float)Math.Cos(_cubeAngleZ), sinZ = (float)Math.Sin(_cubeAngleZ);
 
-            float[,] verts = new float[8, 3];
-            float[,] projected = new float[8, 2];
-            float[] depth = new float[8];
+            float[,] verts = _verts;
+            float[,] projected = _projected;
+            float[] depth = _depth;
             float half = size * 0.5f;
-
-            float[,] corners = new float[8, 3] {
-                {-1,-1,-1}, {1,-1,-1}, {1,1,-1}, {-1,1,-1},
-                {-1,-1,1}, {1,-1,1}, {1,1,1}, {-1,1,1}
-            };
 
             for (int i = 0; i < 8; i++)
             {
-                float x = corners[i, 0] * half;
-                float y = corners[i, 1] * half;
-                float z = corners[i, 2] * half;
+                float x = _corners[i, 0] * half;
+                float y = _corners[i, 1] * half;
+                float z = _corners[i, 2] * half;
 
                 float y1 = y * cosX - z * sinX;
                 float z1 = y * sinX + z * cosX;
@@ -152,19 +160,12 @@ namespace XFiles.Visualizers.Visualizers
                 projected[i, 1] = cy + y3 * fov;
                 depth[i] = z2;
             }
-
-            int[,] edges = new int[12, 2] {
-                {0,1},{1,2},{2,3},{3,0},
-                {4,5},{5,6},{6,7},{7,4},
-                {0,4},{1,5},{2,6},{3,7}
-            };
-
             float cubeHue = (_time * 0.05f) % 1.0f;
             Color edgeColor = HslToRgb(cubeHue, 0.9f, 0.5f + _smoothBeat * 0.3f);
 
             for (int e = 0; e < 12; e++)
             {
-                int a = edges[e, 0], b = edges[e, 1];
+                int a = _edges[e, 0], b = _edges[e, 1];
                 float avgDepth = (depth[a] + depth[b]) * 0.5f;
                 float depthFade = Math.Max(0.15f, 1f - avgDepth * 0.003f);
 
@@ -202,7 +203,7 @@ namespace XFiles.Visualizers.Visualizers
 
             for (int i = 0; i < 8; i++)
             {
-                ds.FillGeometry(CanvasGeometry.CreateCircle(ds, projected[i, 0], projected[i, 1], 2.5f + _smoothBeat * 1.5f),
+                ds.FillCircle(projected[i, 0], projected[i, 1], 2.5f + _smoothBeat * 1.5f,
                     Color.FromArgb(200, 255, 200, 100));
             }
         }
@@ -214,8 +215,7 @@ namespace XFiles.Visualizers.Visualizers
             float flashR = Math.Max(_width, _height) * 0.6f * _flashIntensity;
             byte a = (byte)Math.Min(255, (int)(60 * _flashIntensity));
             Color flashColor = Color.FromArgb(a, 255, 180, 60);
-            var geo = CanvasGeometry.CreateEllipse(ds, cx, cy, flashR, flashR);
-            ds.FillGeometry(geo, flashColor);
+            ds.FillEllipse(cx, cy, flashR, flashR, flashColor);
         }
 
         private void DrawRadialEnergy(CanvasDrawingSession ds)
@@ -223,7 +223,7 @@ namespace XFiles.Visualizers.Visualizers
             float cx = _width * 0.5f, cy = _height * 0.5f;
             float maxR = Math.Min(_width, _height) * 0.45f;
             int lineCount = 16;
-            var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
+            var strokeStyle = AudioVisualizerBase.RoundCapStroke;
 
             for (int i = 0; i < lineCount; i++)
             {

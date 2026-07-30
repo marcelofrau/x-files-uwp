@@ -24,6 +24,9 @@ namespace XFiles.Visualizers.Visualizers
         private float _smoothBass, _smoothBeat;
         private const float AudioSmooth = 0.20f;
 
+        private float[] _yBuffer;
+        private int _yBufferWidth;
+
         public void Initialize(CanvasDevice device) { _device = device; }
 
         public void Update(AudioData data, TimeSpan elapsed)
@@ -95,8 +98,15 @@ namespace XFiles.Visualizers.Visualizers
             // Limite superior onde o terreno para de desenhar (evita tela toda azul)
             float maxTerrainScreenY = _height * 0.35f;
 
-            float[] yBuffer = new float[screenWidthInt + stepX];
-            for (int i = 0; i < yBuffer.Length; i++) yBuffer[i] = _height;
+            float[] yBuffer = _yBuffer;
+            int needed = screenWidthInt + stepX;
+            if (yBuffer == null || needed > _yBufferWidth)
+            {
+                _yBufferWidth = needed;
+                _yBuffer = new float[needed];
+                yBuffer = _yBuffer;
+            }
+            for (int i = 0; i < needed; i++) yBuffer[i] = _height;
 
             float distanceStep = 0.6f;
             float maxDistance = 35f;

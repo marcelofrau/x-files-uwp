@@ -104,8 +104,7 @@ namespace XFiles.Visualizers.Visualizers
 
             float glowR = _radius * 3f * (1f + _smoothBass * 0.4f + _smoothBeat * 0.3f);
             byte glowA = (byte)Math.Min(200, (int)(30 + _smoothBeat * 60 + _smoothBass * 30));
-            var glow = CanvasGeometry.CreateCircle(ds, _cx, _cy, glowR);
-            ds.FillGeometry(glow, Color.FromArgb(glowA, 30, 180, 30));
+            ds.FillCircle(_cx, _cy, glowR, Color.FromArgb(glowA, 30, 180, 30));
         }
 
         private void DrawGlowRings(CanvasDrawingSession ds)
@@ -158,13 +157,11 @@ namespace XFiles.Visualizers.Visualizers
         {
             float pulseR = _radius * (1.4f + _smoothBass * 0.5f + _smoothBeat * 0.4f);
             byte alpha = (byte)(40 + _smoothBeat * 60 + _smoothBass * 30);
-            var glow = CanvasGeometry.CreateCircle(ds, _cx, _cy, pulseR);
-            ds.FillGeometry(glow, Color.FromArgb(alpha, 180, 255, 180));
+            ds.FillCircle(_cx, _cy, pulseR, Color.FromArgb(alpha, 180, 255, 180));
 
             float innerR = _radius * 1.1f;
             byte innerA = (byte)(60 + _smoothBeat * 50);
-            var innerGlow = CanvasGeometry.CreateCircle(ds, _cx, _cy, innerR);
-            ds.FillGeometry(innerGlow, Color.FromArgb(innerA, 220, 255, 220));
+            ds.FillCircle(_cx, _cy, innerR, Color.FromArgb(innerA, 220, 255, 220));
         }
 
         private void DrawSphere(CanvasDrawingSession ds)
@@ -174,22 +171,16 @@ namespace XFiles.Visualizers.Visualizers
             float cx = _cx, cy = _cy;
 
             float shadowOff = r * 0.08f;
-            var shadow = CanvasGeometry.CreateCircle(ds, cx + shadowOff, cy + shadowOff * 0.5f, r);
-            ds.FillGeometry(shadow, Color.FromArgb((byte)(50 * pr), 0, 0, 0));
+            ds.FillCircle(cx + shadowOff, cy + shadowOff * 0.5f, r, Color.FromArgb((byte)(50 * pr), 0, 0, 0));
 
-            var sphere = CanvasGeometry.CreateCircle(ds, cx, cy, r);
-            ds.FillGeometry(sphere, Color.FromArgb(255, 190, 210, 200));
+            ds.FillCircle(cx, cy, r, Color.FromArgb(255, 190, 210, 200));
 
             byte hiA = (byte)(180 * pr);
-            var highlight = CanvasGeometry.CreateEllipse(ds,
-                cx - r * 0.3f, cy - r * 0.35f,
-                r * 0.5f, r * 0.3f);
-            ds.FillGeometry(highlight, Color.FromArgb(hiA, 255, 255, 255));
+            ds.FillEllipse(cx - r * 0.3f, cy - r * 0.35f,
+                r * 0.5f, r * 0.3f, Color.FromArgb(hiA, 255, 255, 255));
 
-            var hiSoft = CanvasGeometry.CreateEllipse(ds,
-                cx - r * 0.25f, cy - r * 0.30f,
-                r * 0.7f, r * 0.45f);
-            ds.FillGeometry(hiSoft, Color.FromArgb((byte)(35 * pr), 255, 255, 255));
+            ds.FillEllipse(cx - r * 0.25f, cy - r * 0.30f,
+                r * 0.7f, r * 0.45f, Color.FromArgb((byte)(35 * pr), 255, 255, 255));
 
             byte edgeA = (byte)(90 * pr);
             ds.DrawCircle(cx, cy, r, Color.FromArgb(edgeA, 160, 190, 180), 1.5f);

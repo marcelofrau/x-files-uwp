@@ -1,6 +1,7 @@
 using System;
 using System.Buffers;
 using Microsoft.Graphics.Canvas;
+using Microsoft.Graphics.Canvas.Geometry;
 using Microsoft.Graphics.Canvas.UI;
 using Microsoft.Graphics.Canvas.UI.Xaml;
 using Windows.Foundation;
@@ -11,11 +12,25 @@ namespace XFiles.Visualizers
 {
     public sealed class AudioVisualizerBase : UserControl
     {
+        public static readonly CanvasStrokeStyle RoundCapStroke = new CanvasStrokeStyle
+        {
+            StartCap = CanvasCapStyle.Round,
+            EndCap = CanvasCapStyle.Round
+        };
+
+        public static readonly CanvasStrokeStyle SquareCapStroke = new CanvasStrokeStyle
+        {
+            StartCap = CanvasCapStyle.Square,
+            EndCap = CanvasCapStyle.Square
+        };
+
         private readonly CanvasAnimatedControl _canvas;
         private readonly object _lock = new object();
         private IAudioVisualizer _visualizer;
         private Audio.AudioLevelService _service;
         private PostProcessPipeline _pipeline;
+        private IAudioVisualizer _drawCapturedVis;
+        private readonly Action<CanvasDrawingSession> _drawSceneAction;
         private float _elapsed;
         private bool _initialized;
         private float _cachedWidth;
@@ -23,6 +38,11 @@ namespace XFiles.Visualizers
 
         private float _bassLevel;
         private float _beatLevel;
+        private int _gcLogCounter;
+        private long _lastAllocBytes;
+
+        private const long VizNoGcRegionSize = 128 * 1024 * 1024L;
+        private bool _vizGcRegionActive;
 
         private readonly float[] _bandBuffer = new float[AudioData.BandCount];
         private readonly float[] _peakBuffer = new float[AudioData.BandCount];
@@ -35,12 +55,18 @@ namespace XFiles.Visualizers
             {
                 ClearColor = Windows.UI.Colors.Black
             };
+            _drawSceneAction = OnDrawScene;
 
             _canvas.Draw += OnCanvasDraw;
             _canvas.Update += OnCanvasUpdate;
             _canvas.SizeChanged += OnCanvasSizeChanged;
 
             Content = _canvas;
+        }
+
+        private void OnDrawScene(CanvasDrawingSession sceneDs)
+        {
+            _drawCapturedVis?.Draw(sceneDs);
         }
 
         /// <summary>
@@ -102,6 +128,14 @@ namespace XFiles.Visualizers
             {
                 vis = _visualizer;
             }
+
+            // End NoGCRegion on render thread if visualizer was deactivated
+            if (vis == null && _vizGcRegionActive)
+            {
+                _vizGcRegionActive = false;
+                try { GC.EndNoGCRegion(); } catch { }
+                Log.Info("VIS[TID={Tid}]: NoGCRegion ended on render thread", Environment.CurrentManagedThreadId);
+            }
             if (vis == null) return;
 
             try
@@ -120,7 +154,40 @@ namespace XFiles.Visualizers
                         vis.Resize(_cachedWidth, _cachedHeight);
                         _pipeline.Resize(_cachedWidth, _cachedHeight);
                     }
+
+                    // Start per-thread NoGCRegion for render thread (.NET Core 2.x)
+                    if (!_vizGcRegionActive)
+                    {
+                        int tid = Environment.CurrentManagedThreadId;
+                        try
+                        {
+                            if (GC.TryStartNoGCRegion(VizNoGcRegionSize))
+                            {
+                                _vizGcRegionActive = true;
+                                Log.Info("VIS[TID={Tid}]: NoGCRegion started {Size}MB", tid, VizNoGcRegionSize / (1024 * 1024));
+                            }
+                            else
+                                Log.Warn("VIS[TID={Tid}]: NoGCRegion TryStart returned false", tid);
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Warn("VIS[TID={Tid}]: NoGCRegion TryStart threw {Ex}", tid, ex.GetType().Name);
+                        }
+                    }
+
                     _initialized = true;
+                }
+
+                _gcLogCounter++;
+                if (_gcLogCounter % 60 == 0)
+                {
+                    long now = GC.GetAllocatedBytesForCurrentThread();
+                    long delta = now - _lastAllocBytes;
+                    _lastAllocBytes = now;
+                    int tid = Environment.CurrentManagedThreadId;
+                    Log.Dbg("VIS-ALLOC[TID={Tid}]: allocRate={Rate}KB/s perFrame={Frame}B totalThread={Thread}KB heap={Heap}KB",
+                        tid, delta / 1024, delta / 60, now / 1024, GC.GetTotalMemory(false) / 1024);
+                    _gcLogCounter = 0;
                 }
 
                 var ds = args.DrawingSession;
@@ -128,7 +195,8 @@ namespace XFiles.Visualizers
                 if (_pipeline != null)
                 {
                     vis.ConfigurePipeline(_pipeline);
-                    _pipeline.Draw(ds, (sceneDs) => vis.Draw(sceneDs), _bassLevel, _beatLevel);
+                    _drawCapturedVis = vis;
+                    _pipeline.Draw(ds, _drawSceneAction, _bassLevel, _beatLevel);
                 }
                 else
                 {
@@ -137,6 +205,13 @@ namespace XFiles.Visualizers
             }
             catch (Exception ex)
             {
+                if (_vizGcRegionActive)
+                {
+                    _vizGcRegionActive = false;
+                    int tid = Environment.CurrentManagedThreadId;
+                    try { GC.EndNoGCRegion(); } catch { }
+                    Log.Warn("VIS: NoGCRegion ended after draw error TID={Tid}", tid);
+                }
                 Log.Err("AudioVisualizerBase.OnCanvasDraw", ex);
             }
         }
@@ -149,6 +224,15 @@ namespace XFiles.Visualizers
             lock (_lock)
             {
                 vis = _visualizer;
+            }
+
+            // End NoGCRegion on render thread if deactivated
+            if (vis == null && _vizGcRegionActive)
+            {
+                _vizGcRegionActive = false;
+                try { GC.EndNoGCRegion(); } catch { }
+                Log.Info("VIS[TID={Tid}]: NoGCRegion ended on render thread (update)",
+                    Environment.CurrentManagedThreadId);
             }
             if (vis == null || !_initialized) return;
 

@@ -1,4 +1,5 @@
 using System;
+using System.Numerics;
 using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.Geometry;
 using Windows.Foundation;
@@ -13,6 +14,10 @@ namespace XFiles.Visualizers.Visualizers
 
         private CanvasDevice _device;
         private float _width, _height, _time;
+
+        private readonly Vector2[] _topFace = new Vector2[4];
+        private readonly Vector2[] _leftFace = new Vector2[4];
+        private readonly Vector2[] _rightFace = new Vector2[4];
 
         private const int GridX = 8;
         private const int GridZ = 6;
@@ -72,16 +77,14 @@ namespace XFiles.Visualizers.Visualizers
             float outerH = _height * 0.2f * (1f + beatPulse * 0.5f);
             byte outerA = (byte)Math.Min(255, (int)(4 + beatPulse * 20));
             Color outerC = HslToRgb(hue, 0.5f, 0.2f);
-            var outerGeo = CanvasGeometry.CreateEllipse(ds, cx, cy, outerR, outerH);
-            ds.FillGeometry(outerGeo, Color.FromArgb(outerA, outerC.R, outerC.G, outerC.B));
+            ds.FillEllipse(cx, cy, outerR, outerH, Color.FromArgb(outerA, outerC.R, outerC.G, outerC.B));
 
             // Inner glow — tighter, brighter on beat
             float innerR = _width * 0.18f * (1f + beatPulse * 0.8f);
             float innerH = _height * 0.1f * (1f + beatPulse * 0.7f);
             byte innerA = (byte)Math.Min(255, (int)(3 + beatPulse * 28));
             Color innerC = HslToRgb((hue + 0.05f) % 1.0f, 0.6f, 0.3f);
-            var innerGeo = CanvasGeometry.CreateEllipse(ds, cx, cy, innerR, innerH);
-            ds.FillGeometry(innerGeo, Color.FromArgb(innerA, innerC.R, innerC.G, innerC.B));
+            ds.FillEllipse(cx, cy, innerR, innerH, Color.FromArgb(innerA, innerC.R, innerC.G, innerC.B));
 
             // Core flash — small, bright white on strong beats
             if (beatPulse > 0.3f)
@@ -89,8 +92,7 @@ namespace XFiles.Visualizers.Visualizers
                 float coreR = _width * 0.06f * beatPulse;
                 float coreH = _height * 0.04f * beatPulse;
                 byte coreA = (byte)Math.Min(200, (int)(beatPulse * 120));
-                var coreGeo = CanvasGeometry.CreateEllipse(ds, cx, cy, coreR, coreH);
-                ds.FillGeometry(coreGeo, Color.FromArgb(coreA, 255, 255, 255));
+                ds.FillEllipse(cx, cy, coreR, coreH, Color.FromArgb(coreA, 255, 255, 255));
             }
         }
 
@@ -139,7 +141,7 @@ namespace XFiles.Visualizers.Visualizers
             }
         }
 
-        private static void DrawVoxelBlock(CanvasDrawingSession ds, float sx, float sy,
+        private void DrawVoxelBlock(CanvasDrawingSession ds, float sx, float sy,
             float w, float h, float blockH, Color color)
         {
             float hw = w * 0.5f;
@@ -147,49 +149,45 @@ namespace XFiles.Visualizers.Visualizers
 
             float topY = sy - blockH;
 
-            var topGeo = CanvasGeometry.CreatePolygon(ds, new[]
-            {
-                new System.Numerics.Vector2(sx, topY - hh),
-                new System.Numerics.Vector2(sx + hw, topY),
-                new System.Numerics.Vector2(sx, topY + hh),
-                new System.Numerics.Vector2(sx - hw, topY)
-            });
+            _topFace[0] = new Vector2(sx, topY - hh);
+            _topFace[1] = new Vector2(sx + hw, topY);
+            _topFace[2] = new Vector2(sx, topY + hh);
+            _topFace[3] = new Vector2(sx - hw, topY);
 
             Color topColor = Color.FromArgb(255,
                 (byte)Math.Min(255, (int)(color.R * 1.3f)),
                 (byte)Math.Min(255, (int)(color.G * 1.3f)),
                 (byte)Math.Min(255, (int)(color.B * 1.3f)));
-            ds.FillGeometry(topGeo, topColor);
 
-            var leftGeo = CanvasGeometry.CreatePolygon(ds, new[]
-            {
-                new System.Numerics.Vector2(sx - hw, topY),
-                new System.Numerics.Vector2(sx, topY + hh),
-                new System.Numerics.Vector2(sx, sy + hh),
-                new System.Numerics.Vector2(sx - hw, sy)
-            });
+            _leftFace[0] = new Vector2(sx - hw, topY);
+            _leftFace[1] = new Vector2(sx, topY + hh);
+            _leftFace[2] = new Vector2(sx, sy + hh);
+            _leftFace[3] = new Vector2(sx - hw, sy);
 
             Color leftColor = Color.FromArgb(255,
                 (byte)(color.R * 0.70f),
                 (byte)(color.G * 0.70f),
                 (byte)(color.B * 0.70f));
-            ds.FillGeometry(leftGeo, leftColor);
 
-            var rightGeo = CanvasGeometry.CreatePolygon(ds, new[]
-            {
-                new System.Numerics.Vector2(sx, topY + hh),
-                new System.Numerics.Vector2(sx + hw, topY),
-                new System.Numerics.Vector2(sx + hw, sy),
-                new System.Numerics.Vector2(sx, sy + hh)
-            });
+            _rightFace[0] = new Vector2(sx, topY + hh);
+            _rightFace[1] = new Vector2(sx + hw, topY);
+            _rightFace[2] = new Vector2(sx + hw, sy);
+            _rightFace[3] = new Vector2(sx, sy + hh);
 
             Color rightColor = Color.FromArgb(255,
                 (byte)(color.R * 0.45f),
                 (byte)(color.G * 0.45f),
                 (byte)(color.B * 0.45f));
-            ds.FillGeometry(rightGeo, rightColor);
 
-            ds.DrawGeometry(topGeo, Color.FromArgb(200, 255, 255, 255), 1.0f);
+            using (var topGeo = CanvasGeometry.CreatePolygon(ds, _topFace))
+            using (var leftGeo = CanvasGeometry.CreatePolygon(ds, _leftFace))
+            using (var rightGeo = CanvasGeometry.CreatePolygon(ds, _rightFace))
+            {
+                ds.FillGeometry(topGeo, topColor);
+                ds.FillGeometry(leftGeo, leftColor);
+                ds.FillGeometry(rightGeo, rightColor);
+                ds.DrawGeometry(topGeo, Color.FromArgb(200, 255, 255, 255), 1.0f);
+            }
         }
 
         private static Color HslToRgb(float h, float s, float l)

@@ -51,7 +51,7 @@ namespace XFiles.Visualizers.Visualizers
             float cx = _width * 0.5f, cy = _height * 0.5f;
             float minDim = Math.Min(_width, _height);
             float scroll = _time * TunnelSpeed;
-            var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
+            var strokeStyle = AudioVisualizerBase.RoundCapStroke;
 
             for (int ring = RingCount; ring >= 1; ring--)
             {
@@ -124,10 +124,8 @@ namespace XFiles.Visualizers.Visualizers
             // Center orb
             float orbRadius = minDim * 0.025f * (1f + _smoothBeat * 0.5f);
             float orbHue = (_time * 0.1f) % 1.0f;
-            var orbGeo = CanvasGeometry.CreateEllipse(ds, cx, cy, orbRadius, orbRadius);
-            ds.FillGeometry(orbGeo, HslToRgb(orbHue, 0.9f, 0.7f + _smoothBeat * 0.3f));
-            var coreGeo = CanvasGeometry.CreateEllipse(ds, cx, cy, orbRadius * 0.35f, orbRadius * 0.35f);
-            ds.FillGeometry(coreGeo, Color.FromArgb(255, 255, 255, 255));
+            ds.FillEllipse(cx, cy, orbRadius, orbRadius, HslToRgb(orbHue, 0.9f, 0.7f + _smoothBeat * 0.3f));
+            ds.FillEllipse(cx, cy, orbRadius * 0.35f, orbRadius * 0.35f, Color.FromArgb(255, 255, 255, 255));
         }
 
         private float GetWaveformSample(int index)

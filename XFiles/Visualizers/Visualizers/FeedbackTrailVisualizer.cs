@@ -26,6 +26,8 @@ namespace XFiles.Visualizers.Visualizers
         private float[,] _trailX, _trailY;
         private int _trailHead;
         private const int TrailDepth = 20;
+        private readonly float[] _frameX = new float[PointsPerSegment];
+        private readonly float[] _frameY = new float[PointsPerSegment];
 
         public void Initialize(CanvasDevice device)
         {
@@ -61,7 +63,7 @@ namespace XFiles.Visualizers.Visualizers
             _driftX = Math.Clamp(_driftX, -maxDrift, maxDrift);
             _driftY = Math.Clamp(_driftY, -maxDrift, maxDrift);
 
-            ComputeCurrentFrame(out float[] frameX, out float[] frameY);
+            ComputeCurrentFrame(_frameX, _frameY);
 
             for (int t = TrailDepth - 1; t > 0; t--)
                 for (int p = 0; p < PointsPerSegment; p++)
@@ -71,8 +73,8 @@ namespace XFiles.Visualizers.Visualizers
                 }
             for (int p = 0; p < PointsPerSegment; p++)
             {
-                _trailX[0, p] = frameX[p];
-                _trailY[0, p] = frameY[p];
+                _trailX[0, p] = _frameX[p];
+                _trailY[0, p] = _frameY[p];
             }
         }
 
@@ -93,7 +95,7 @@ namespace XFiles.Visualizers.Visualizers
                 byte a = (byte)(alpha * 255);
                 float thickness = (1f + (1f - age) * 3.5f) * (1f + _smoothBeat * 0.5f);
 
-                var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
+                var strokeStyle = AudioVisualizerBase.RoundCapStroke;
                 for (int p = 0; p < PointsPerSegment - 1; p++)
                 {
                     ds.DrawLine(_trailX[t, p], _trailY[t, p],
@@ -108,10 +110,8 @@ namespace XFiles.Visualizers.Visualizers
         public void Resize(float width, float height) { _width = width; _height = height; }
         public void Dispose() { _device = null; }
 
-        private void ComputeCurrentFrame(out float[] frameX, out float[] frameY)
+        private void ComputeCurrentFrame(float[] frameX, float[] frameY)
         {
-            frameX = new float[PointsPerSegment];
-            frameY = new float[PointsPerSegment];
             float cx = _width * 0.5f + _driftX, cy = _height * 0.5f + _driftY;
             float minDim = Math.Min(_width, _height);
             float baseRadius = minDim * 0.3f;
@@ -134,10 +134,10 @@ namespace XFiles.Visualizers.Visualizers
         {
             float r = 5f + _smoothBeat * 12f;
             Color c = HslToRgb((_time * 0.12f) % 1.0f, 1f, 0.85f);
-            ds.FillGeometry(CanvasGeometry.CreateEllipse(ds, cx, cy, r * 2f, r * 2f),
+            ds.FillEllipse(cx, cy, r * 2f, r * 2f,
                 Color.FromArgb(20, c.R, c.G, c.B));
-            ds.FillGeometry(CanvasGeometry.CreateEllipse(ds, cx, cy, r, r), c);
-            ds.FillGeometry(CanvasGeometry.CreateEllipse(ds, cx, cy, r * 0.3f, r * 0.3f), Colors.White);
+            ds.FillEllipse(cx, cy, r, r, c);
+            ds.FillEllipse(cx, cy, r * 0.3f, r * 0.3f, Colors.White);
         }
 
         private static Color HslToRgb(float h, float s, float l)

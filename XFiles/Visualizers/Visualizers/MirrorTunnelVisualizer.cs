@@ -54,7 +54,7 @@ namespace XFiles.Visualizers.Visualizers
             float cx = _width * 0.5f, cy = _height * 0.5f;
             float scroll = _time * TunnelSpeed;
             float warp = 1f + _smoothBeat * 0.15f;
-            var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Square, EndCap = CanvasCapStyle.Square };
+            var strokeStyle = AudioVisualizerBase.SquareCapStroke;
 
             for (int ring = RingCount; ring >= 1; ring--)
             {
@@ -89,17 +89,17 @@ namespace XFiles.Visualizers.Visualizers
                     byte da = (byte)Math.Min(255, (int)(255 * dotAlpha));
                     var dotColor = HslToRgb(((float)bandIdx / AudioData.BandCount + _time * 0.03f) % 1.0f, 1f, 0.7f);
                     var c = Color.FromArgb(da, dotColor.R, dotColor.G, dotColor.B);
-                    ds.FillGeometry(CanvasGeometry.CreateCircle(ds, x1, y1, dotSize), c);
-                    ds.FillGeometry(CanvasGeometry.CreateCircle(ds, x2, y1, dotSize), c);
-                    ds.FillGeometry(CanvasGeometry.CreateCircle(ds, x2, y2, dotSize), c);
-                    ds.FillGeometry(CanvasGeometry.CreateCircle(ds, x1, y2, dotSize), c);
+                    ds.FillCircle(x1, y1, dotSize, c);
+                    ds.FillCircle(x2, y1, dotSize, c);
+                    ds.FillCircle(x2, y2, dotSize, c);
+                    ds.FillCircle(x1, y2, dotSize, c);
                 }
             }
 
             float centerSize = 4f + _smoothBeat * 6f;
             float centerHue = (_time * 0.15f) % 1.0f;
-            ds.FillGeometry(CanvasGeometry.CreateEllipse(ds, cx, cy, centerSize, centerSize), HslToRgb(centerHue, 1f, 0.8f + _smoothBeat * 0.2f));
-            ds.FillGeometry(CanvasGeometry.CreateEllipse(ds, cx, cy, centerSize * 0.3f, centerSize * 0.3f), Colors.White);
+            ds.FillEllipse(cx, cy, centerSize, centerSize, HslToRgb(centerHue, 1f, 0.8f + _smoothBeat * 0.2f));
+            ds.FillEllipse(cx, cy, centerSize * 0.3f, centerSize * 0.3f, Colors.White);
 
             // Spectrum bars at bottom of each ring, receding into depth
             const int BarCount = 14;

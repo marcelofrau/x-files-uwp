@@ -8,6 +8,7 @@ using Windows.Media.Core;
 using Windows.Media.Playback;
 using Windows.Storage.Streams;
 using Windows.System;
+using Windows.UI.Core;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Input;
@@ -23,10 +24,11 @@ namespace XFiles.Controls
     public sealed partial class MediaPreviewControl : UserControl
     {
         private DispatcherTimer _progressTimer;
+        private readonly DispatchedHandler _progressUpdateHandler;
         private bool _isAudioMode;
+        private bool _ownsAudioService;
         private string _currentFilePath;
         private Uri _currentSourceUri;
-        private AudioLevelService _audioLevelService;
         private bool _isPlaying;
         private bool _isLoadingPlayback;
         private bool _hasEnded;
@@ -57,8 +59,8 @@ namespace XFiles.Controls
         {
             get
             {
-                if (_isAudioMode && _audioLevelService != null)
-                    return _audioLevelService.Position;
+                if (_isAudioMode)
+                    return AudioLevelService.Instance.Position;
                 return Session?.Position ?? TimeSpan.Zero;
             }
         }
@@ -67,16 +69,10 @@ namespace XFiles.Controls
         {
             this.InitializeComponent();
             this.Unloaded += OnUnloaded;
-            _audioLevelService = new AudioLevelService();
+            _progressUpdateHandler = UpdateProgress;
             _metadataGuesser = new MetadataGuesser();
-#if AUDIO_ANALYSIS
-            VuMeter.AttachService(_audioLevelService);
-#endif
             _progressTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
             _progressTimer.Tick += OnProgressTimerTick;
-            _audioLevelService.MediaOpened += OnAudioMediaOpened;
-            _audioLevelService.MediaEnded += OnAudioMediaEnded;
-            _audioLevelService.MediaFailed += OnAudioMediaFailed;
             Player.MediaOpened += OnMediaPlayerOpened;
             Player.MediaEnded += OnMediaPlayerEnded;
             Player.MediaFailed += OnMediaPlayerFailed;
@@ -153,7 +149,7 @@ namespace XFiles.Controls
                 AlbumText.Visibility = Visibility.Collapsed;
                 _ = LoadMetadataAsync(filePath);
                 _isLoadingPlayback = true;
-                _ = _audioLevelService.SwapSourceAsync(filePath);
+                _ = AudioLevelService.Instance.SwapSourceAsync(filePath);
             }
             else
             {
@@ -196,10 +192,14 @@ namespace XFiles.Controls
             Log.Info("MediaPreviewControl.StartAudioPlayback: starting for {Path}", filePath ?? "(null)");
             try
             {
+                AudioLevelService.Instance.MediaOpened += OnAudioMediaOpened;
+                AudioLevelService.Instance.MediaEnded += OnAudioMediaEnded;
+                AudioLevelService.Instance.MediaFailed += OnAudioMediaFailed;
 #if AUDIO_ANALYSIS
-                VuMeter.AttachService(_audioLevelService);
+                VuMeter.AttachService(AudioLevelService.Instance);
 #endif
-                await _audioLevelService.LoadAndPlay(filePath);
+                await AudioLevelService.Instance.LoadAndPlay(filePath);
+                _ownsAudioService = true;
             }
             catch (Exception ex)
             {
@@ -220,7 +220,7 @@ namespace XFiles.Controls
             if (_isPlaying)
             {
                 if (_isAudioMode)
-                    _audioLevelService.Pause();
+                    AudioLevelService.Instance.Pause();
                 else
                     Player.Pause();
                 _isPlaying = false;
@@ -230,30 +230,46 @@ namespace XFiles.Controls
             }
             if (_isAudioMode)
             {
-                _audioLevelService.Stop();
+                AudioLevelService.Instance.MediaOpened -= OnAudioMediaOpened;
+                AudioLevelService.Instance.MediaEnded -= OnAudioMediaEnded;
+                AudioLevelService.Instance.MediaFailed -= OnAudioMediaFailed;
+                if (_ownsAudioService)
+                {
+                    AudioLevelService.Instance.Stop();
+                    _ownsAudioService = false;
+                }
 #if AUDIO_ANALYSIS
                 VuMeter.DetachService();
 #endif
+            }
+            else
+            {
+                Player.Pause();
+                Player.Source = null;
             }
             _metadataCts?.Cancel();
             _metadataCts = null;
             _currentFilePath = null;
         }
 
-		public void Stop()
+        public void Stop()
 		{
 			_progressTimer.Stop();
 			_metadataCts?.Cancel();
 			_metadataCts = null;
 			if (_isAudioMode)
 			{
-				if (_audioLevelService != null)
+				AudioLevelService.Instance.MediaOpened -= OnAudioMediaOpened;
+				AudioLevelService.Instance.MediaEnded -= OnAudioMediaEnded;
+				AudioLevelService.Instance.MediaFailed -= OnAudioMediaFailed;
+				if (_ownsAudioService)
 				{
-					_audioLevelService.Stop();
-#if AUDIO_ANALYSIS
-					VuMeter.DetachService();
-#endif
+					AudioLevelService.Instance.Stop();
+					_ownsAudioService = false;
 				}
+#if AUDIO_ANALYSIS
+				VuMeter.DetachService();
+#endif
 			}
 			else
 			{
@@ -314,7 +330,7 @@ namespace XFiles.Controls
             if (_isAudioMode)
             {
                 if (string.IsNullOrEmpty(_currentFilePath)) return;
-                if (!_audioLevelService.IsFileLoaded && !_isLoadingPlayback)
+                if (!AudioLevelService.Instance.IsFileLoaded && !_isLoadingPlayback)
                 {
                     _isLoadingPlayback = true;
                     _hasEnded = false;
@@ -326,8 +342,8 @@ namespace XFiles.Controls
                     return;
                 }
                 if (_isLoadingPlayback) return;
-                _audioLevelService.TogglePlayPause();
-                _isPlaying = _audioLevelService.IsPlaying;
+                AudioLevelService.Instance.TogglePlayPause();
+                _isPlaying = AudioLevelService.Instance.IsPlaying;
                 if (_isPlaying) _hasEnded = false;
             }
             else
@@ -461,7 +477,7 @@ namespace XFiles.Controls
             await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
             {
                 Log.Info("MediaPreview: {File} — audio ended, cleaning up, firing AudioTrackEnded", _currentFilePath ?? "(null)");
-                _audioLevelService.Stop();
+                AudioLevelService.Instance.Stop();
 #if AUDIO_ANALYSIS
                 VuMeter.DetachService();
 #endif
@@ -479,7 +495,7 @@ namespace XFiles.Controls
             await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
             {
                 Log.Info("AudioLevelService media failed — cleaning up");
-                _audioLevelService.Stop();
+                AudioLevelService.Instance.Stop();
 #if AUDIO_ANALYSIS
                 VuMeter.DetachService();
 #endif
@@ -581,7 +597,7 @@ namespace XFiles.Controls
 
         private void OnProgressTimerTick(object sender, object e)
         {
-            _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Low, () => UpdateProgress());
+            _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Low, _progressUpdateHandler);
         }
 
         private void UpdateProgress()
@@ -589,10 +605,10 @@ namespace XFiles.Controls
             TimeSpan total;
             TimeSpan current;
 
-            if (_isAudioMode && _audioLevelService != null && _audioLevelService.IsFileLoaded)
+            if (_isAudioMode && AudioLevelService.Instance.IsFileLoaded)
             {
-                total = _audioLevelService.Duration;
-                current = _audioLevelService.Position;
+                total = AudioLevelService.Instance.Duration;
+                current = AudioLevelService.Instance.Position;
             }
             else if (Session != null)
             {
@@ -653,14 +669,9 @@ namespace XFiles.Controls
             _metadataCts?.Cancel();
             _metadataCts?.Dispose();
             _metadataCts = null;
-            if (_audioLevelService != null)
-            {
-                _audioLevelService.MediaOpened -= OnAudioMediaOpened;
-                _audioLevelService.MediaEnded -= OnAudioMediaEnded;
-                _audioLevelService.MediaFailed -= OnAudioMediaFailed;
-                _audioLevelService.Dispose();
-                _audioLevelService = null;
-            }
+            AudioLevelService.Instance.MediaOpened -= OnAudioMediaOpened;
+            AudioLevelService.Instance.MediaEnded -= OnAudioMediaEnded;
+            AudioLevelService.Instance.MediaFailed -= OnAudioMediaFailed;
         }
 
         public void HandleButton(VirtualKey key)
@@ -676,13 +687,13 @@ namespace XFiles.Controls
 
         public void Seek(TimeSpan offset)
         {
-            if (_isAudioMode && _audioLevelService != null && _audioLevelService.IsFileLoaded)
+            if (_isAudioMode && AudioLevelService.Instance.IsFileLoaded)
             {
-                var total = _audioLevelService.Duration;
-                var newPos = _audioLevelService.Position + offset;
+                var total = AudioLevelService.Instance.Duration;
+                var newPos = AudioLevelService.Instance.Position + offset;
                 if (newPos < TimeSpan.Zero) newPos = TimeSpan.Zero;
                 if (total.TotalSeconds > 0 && newPos > total) newPos = total;
-                _audioLevelService.Seek(newPos);
+                AudioLevelService.Instance.Seek(newPos);
             }
             else if (Session != null && Player.Source != null)
             {
@@ -711,7 +722,7 @@ namespace XFiles.Controls
 
         public async Task OpenFullscreen()
         {
-            if (_isAudioMode && _audioLevelService != null && _audioLevelService.IsFileLoaded)
+            if (_isAudioMode && AudioLevelService.Instance.IsFileLoaded)
             {
                 var page = VisualTreeHelper.GetParent(this) as FrameworkElement;
                 while (page != null && !(page is MillerColumnsPage))
@@ -719,7 +730,7 @@ namespace XFiles.Controls
                 if (page is MillerColumnsPage millerPage)
                 {
                     var filePath = _currentFilePath;
-                    var position = _audioLevelService.Position;
+                    var position = AudioLevelService.Instance.Position;
                     StopPlayer();
                     PlayerStateChanged?.Invoke(this, EventArgs.Empty);
                     await millerPage.OpenFullscreenForFile(filePath, position);
