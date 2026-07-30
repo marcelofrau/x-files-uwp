@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.UI;
 using Microsoft.Graphics.Canvas.UI.Xaml;
@@ -8,14 +9,6 @@ using Windows.UI.Xaml.Controls;
 
 namespace XFiles.Visualizers
 {
-    /// <summary>
-    /// Hosts a CanvasAnimatedControl and drives the IAudioVisualizer lifecycle.
-    /// Uses composition (not inheritance) because CanvasAnimatedControl is sealed.
-    /// Thread safety: Activate/Deactivate may be called from UI thread while
-    /// Draw/Update fire on the composition thread. A lock protects _visualizer access.
-    /// Post-processing: wraps visualizer output with MilkDrop-style effects
-    /// (feedback trails, bloom/glare, vignette depth).
-    /// </summary>
     public sealed class AudioVisualizerBase : UserControl
     {
         private readonly CanvasAnimatedControl _canvas;
@@ -28,9 +21,13 @@ namespace XFiles.Visualizers
         private float _cachedWidth;
         private float _cachedHeight;
 
-        // Cached audio data for pipeline (read from Update, used in Draw)
         private float _bassLevel;
         private float _beatLevel;
+
+        private readonly float[] _bandBuffer = new float[AudioData.BandCount];
+        private readonly float[] _peakBuffer = new float[AudioData.BandCount];
+        private readonly float[] _magBuffer = new float[AudioData.FftBinCount];
+        private readonly float[] _waveBuffer = new float[Audio.AudioLevelService.FftSize];
 
         public AudioVisualizerBase()
         {
@@ -98,14 +95,6 @@ namespace XFiles.Visualizers
             }
         }
 
-        /// <summary>
-        /// Invalidate the canvas to trigger a redraw.
-        /// </summary>
-        public void Invalidate()
-        {
-            _canvas?.Invalidate();
-        }
-
         private void OnCanvasDraw(ICanvasAnimatedControl sender, CanvasAnimatedDrawEventArgs args)
         {
             IAudioVisualizer vis;
@@ -165,7 +154,7 @@ namespace XFiles.Visualizers
 
             if (_service != null && _service.IsAnalyzing)
             {
-                var data = AudioData.FromService(_service, _elapsed);
+                var data = AudioData.FromService(_service, _elapsed, _bandBuffer, _peakBuffer, _magBuffer, _waveBuffer);
                 vis.Update(data, args.Timing.ElapsedTime);
 
                 // Cache bass/beat for pipeline

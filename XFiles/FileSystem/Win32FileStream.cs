@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.IO;
 using System.Runtime.InteropServices;
 
@@ -94,25 +95,34 @@ namespace XFiles.FileSystem
 
             byte[] readBuf = buffer;
             int readOffset = offset;
+            byte[] poolBuf = null;
 
-            // If offset != 0, Win32 ReadFile needs a contiguous buffer
             if (offset != 0)
             {
-                readBuf = new byte[count];
+                poolBuf = ArrayPool<byte>.Shared.Rent(count);
+                readBuf = poolBuf;
                 readOffset = 0;
             }
 
-            uint bytesRead;
-            bool ok = ReadFile(_handle, readBuf, (uint)count, out bytesRead, IntPtr.Zero);
+            try
+            {
+                uint bytesRead;
+                bool ok = ReadFile(_handle, readBuf, (uint)count, out bytesRead, IntPtr.Zero);
 
-            if (!ok || bytesRead == 0)
-                return 0;
+                if (!ok || bytesRead == 0)
+                    return 0;
 
-            if (offset != 0)
-                Array.Copy(readBuf, 0, buffer, offset, (int)bytesRead);
+                if (offset != 0)
+                    Array.Copy(readBuf, 0, buffer, offset, (int)bytesRead);
 
-            _position += bytesRead;
-            return (int)bytesRead;
+                _position += bytesRead;
+                return (int)bytesRead;
+            }
+            finally
+            {
+                if (poolBuf != null)
+                    ArrayPool<byte>.Shared.Return(poolBuf);
+            }
         }
 
         public override long Seek(long offset, SeekOrigin origin)
