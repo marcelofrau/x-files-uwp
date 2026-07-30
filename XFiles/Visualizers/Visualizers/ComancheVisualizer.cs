@@ -16,9 +16,9 @@ namespace XFiles.Visualizers.Visualizers
         private static readonly Color SkyHorizon = Color.FromArgb(255, 255, 150, 118);
         private static readonly Color ColorValley = Color.FromArgb(255, 38, 66, 40);
         private static readonly Color ColorLowland = Color.FromArgb(255, 92, 108, 58);
-        private static readonly Color ColorHighland = Color.FromArgb(255, 150, 120, 78);
-        private static readonly Color ColorRock = Color.FromArgb(255, 108, 90, 82);
-        private static readonly Color ColorSnow = Color.FromArgb(255, 235, 235, 244);
+        private static readonly Color ColorHighland = Color.FromArgb(255, 130, 105, 62);
+        private static readonly Color ColorRock = Color.FromArgb(255, 145, 112, 78);
+        private static readonly Color ColorSnow = Color.FromArgb(255, 230, 220, 205);
 
         private const int ColumnCount = 168;
         private const int MinColumnCount = 72;
@@ -27,10 +27,10 @@ namespace XFiles.Visualizers.Visualizers
         private const float MaxDistance = 260f;
         private const float StepGrowth = 1.045f;
         private const float BaseStep = 1.4f;
-        private const float MaxHeightScale = 46f;
+        private const float MaxHeightScale = 32f;
         private const float HoverOffset = 24f;
         private const float NearBoostRadius = 40f;
-        private const float SpikeScale = 20f;
+        private const float SpikeScale = 10f;
         private const float FovDeg = 75f;
         private const float NoiseScale = 0.045f;
 
@@ -43,6 +43,14 @@ namespace XFiles.Visualizers.Visualizers
 
         private int _activeColumnCount = ColumnCount;
         private float _smoothFrameSeconds = 1f / 60f;
+        private CloudParticle[] _clouds;
+        private float _cloudTime;
+        private const int CloudCount = 14;
+
+        private struct CloudParticle
+        {
+            public float X, Y, W, H, Speed, BaseAlpha;
+        }
         private float _qualityCooldown;
         private const float HighLoadThreshold = 0.020f;
         private const float LowLoadThreshold = 0.014f;
@@ -77,6 +85,7 @@ namespace XFiles.Visualizers.Visualizers
             float followRate = 1f - MathF.Exp(-2.4f * dt);
             _camHeight += (desiredHeight - _camHeight) * followRate;
 
+            UpdateClouds(dt);
             UpdateAdaptiveQuality(elapsed);
         }
 
@@ -107,6 +116,8 @@ namespace XFiles.Visualizers.Visualizers
             DrawSky(ds);
             DrawSunGlow(ds);
             DrawTerrain(ds);
+            DrawSunset(ds);
+            DrawClouds(ds);
         }
 
         public void Resize(float width, float height) { _width = width; _height = height; }
@@ -132,6 +143,73 @@ namespace XFiles.Visualizers.Visualizers
             float r = _height * 0.09f * (1f + _smoothBeat * 0.25f);
             ds.FillEllipse(cx, cy, r * 1.8f, r * 1.8f, Color.FromArgb(40, 255, 200, 140));
             ds.FillEllipse(cx, cy, r, r, Color.FromArgb(220, 255, 225, 180));
+        }
+
+        private void InitClouds()
+        {
+            _clouds = new CloudParticle[CloudCount];
+            var rng = new Random(137);
+            for (int i = 0; i < CloudCount; i++)
+            {
+                _clouds[i] = new CloudParticle
+                {
+                    X = (float)rng.NextDouble() * _width,
+                    Y = (float)rng.NextDouble() * _height * 0.32f,
+                    W = 40f + (float)rng.NextDouble() * 120f,
+                    H = 12f + (float)rng.NextDouble() * 20f,
+                    Speed = 6f + (float)rng.NextDouble() * 10f,
+                    BaseAlpha = 0.08f + (float)rng.NextDouble() * 0.12f
+                };
+            }
+        }
+
+        private void DrawSunset(CanvasDrawingSession ds)
+        {
+            float horizonY = _height * 0.55f;
+            float glowHeight = _height * 0.35f;
+            var sunsetBrush = new CanvasLinearGradientBrush(
+                ds,
+                Color.FromArgb(0, 255, 200, 160),
+                Color.FromArgb(90, 255, 140, 70))
+            {
+                StartPoint = new Vector2(0, horizonY - glowHeight),
+                EndPoint = new Vector2(0, horizonY + _height * 0.04f)
+            };
+            ds.FillRectangle(0, horizonY - glowHeight, _width, glowHeight + _height * 0.04f, sunsetBrush);
+            sunsetBrush.Dispose();
+        }
+
+        private void DrawClouds(CanvasDrawingSession ds)
+        {
+            if (_clouds == null) return;
+            float beatPulse = 1f + _smoothBeat * 0.4f;
+            float bandBoost = _smoothBass * 0.3f;
+            foreach (var cloud in _clouds)
+            {
+                float alpha = Math.Min(cloud.BaseAlpha + bandBoost, 0.35f);
+                float w = cloud.W * beatPulse;
+                float h = cloud.H * beatPulse;
+                var brush = new CanvasSolidColorBrush(ds, Color.FromArgb(
+                    (byte)(alpha * 255f),
+                    220, 225, 235));
+                ds.FillRoundedRectangle(cloud.X - w * 0.5f, cloud.Y - h * 0.5f, w, h, h * 0.5f, h * 0.5f, brush);
+                brush.Dispose();
+            }
+        }
+
+        private void UpdateClouds(float dt)
+        {
+            if (_clouds == null && _width > 0 && _height > 0)
+                InitClouds();
+            if (_clouds == null) return;
+            _cloudTime += dt;
+            float wind = 1f + _smoothBass * 0.5f + _smoothBeat * 0.3f;
+            for (int i = 0; i < _clouds.Length; i++)
+            {
+                _clouds[i].X += _clouds[i].Speed * wind * dt;
+                if (_clouds[i].X - _clouds[i].W > _width)
+                    _clouds[i].X = -_clouds[i].W;
+            }
         }
 
         private void DrawTerrain(CanvasDrawingSession ds)
@@ -169,6 +247,10 @@ namespace XFiles.Visualizers.Visualizers
                     if (distance < NearBoostRadius)
                         h += bandEnergy * SpikeScale * (1f - distance / NearBoostRadius);
 
+                    float heightFade = Math.Clamp((distance - NearZ) / 45f, 0f, 1f);
+                    heightFade = heightFade * heightFade * (3f - 2f * heightFade);
+                    h *= heightFade;
+
                     float screenY = horizonY + (_camHeight - h) / distance * scaleY;
                     if (screenY < clipTop) screenY = clipTop;
 
@@ -194,10 +276,10 @@ namespace XFiles.Visualizers.Visualizers
         private static Color GetTerrainColor(float h)
         {
             float n = Math.Clamp(h / MaxHeightScale, 0f, 1.5f);
-            if (n < 0.18f) return LerpColor(ColorValley, ColorLowland, n / 0.18f);
-            if (n < 0.5f) return LerpColor(ColorLowland, ColorHighland, (n - 0.18f) / 0.32f);
-            if (n < 0.85f) return LerpColor(ColorHighland, ColorRock, (n - 0.5f) / 0.35f);
-            return LerpColor(ColorRock, ColorSnow, Math.Clamp((n - 0.85f) / 0.3f, 0f, 1f));
+            if (n < 0.28f) return LerpColor(ColorValley, ColorLowland, n / 0.28f);
+            if (n < 0.60f) return LerpColor(ColorLowland, ColorHighland, (n - 0.28f) / 0.32f);
+            if (n < 0.90f) return LerpColor(ColorHighland, ColorRock, (n - 0.60f) / 0.30f);
+            return LerpColor(ColorRock, ColorSnow, Math.Clamp((n - 0.90f) / 0.15f, 0f, 1f));
         }
 
         private static Color LerpColor(Color a, Color b, float t)
@@ -223,7 +305,7 @@ namespace XFiles.Visualizers.Visualizers
             float n = acc / sum;
             float ridge = 1f - MathF.Abs(n * 2f - 1f);
             float shaped = MathF.Pow(Math.Clamp(ridge, 0f, 1f), 1.6f);
-            return shaped * MaxHeightScale * (0.65f + _smoothBass * 0.45f);
+            return shaped * MaxHeightScale * (0.65f + _smoothBass * 0.25f);
         }
 
         private static float ValueNoise(float x, float z)

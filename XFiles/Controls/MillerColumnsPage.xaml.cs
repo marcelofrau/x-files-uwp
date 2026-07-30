@@ -3127,6 +3127,10 @@ namespace XFiles.Controls
                 FsVisualizerList.ItemsSource = labels;
                 int currentIdx = _fsPickerItems.FindIndex(e => e.Mode == _fsVisualizerMode);
                 FsVisualizerList.SelectedIndex = currentIdx >= 0 ? currentIdx : 0;
+                var currentModeEntry = _fsModeOrder.FirstOrDefault(m => m.Mode == _fsVisualizerMode);
+                FsPickerCurrentLabel.Text = "Current: " + (currentModeEntry.Label ?? _fsVisualizerMode.ToString());
+                FsPickerCurrentLabel.Visibility = Visibility.Visible;
+                FsVisualizerList.ScrollIntoView(FsVisualizerList.SelectedItem);
                 FsVisualizerPicker.Visibility = Visibility.Visible;
                 _fsPickerVisible = true;
             });
@@ -3137,6 +3141,8 @@ namespace XFiles.Controls
             Log.Info("CloseFsPicker");
             FsVisualizerPicker.Visibility = Visibility.Collapsed;
             FsVisualizerList.ItemsSource = null;
+            FsPickerCurrentLabel.Visibility = Visibility.Collapsed;
+            FsPickerCurrentLabel.Text = "";
             _fsPickerItems = null;
             _fsPickerVisible = false;
         }

@@ -1150,13 +1150,17 @@
                         <TextBlock Text="SELECT VISUALIZER"
                                    Foreground="#66FFFFFF"
                                    FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                                   FontSize="11" Padding="20,4,20,8" />
+                                   FontSize="11" Padding="20,4,20,4" />
+                        <TextBlock x:Name="FsPickerCurrentLabel"
+                                   Foreground="{StaticResource XFilesAccentBrush}"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                   FontSize="13" Padding="20,0,20,8" />
                         <Border Background="#252830" Height="1" Margin="12,0,12,4" />
                         <ListView x:Name="FsVisualizerList"
                                   Style="{StaticResource RetroListViewStyle}"
                                   ItemContainerStyle="{StaticResource RetroListViewItemStyle}"
-                                  ScrollViewer.VerticalScrollBarVisibility="Hidden"
-                                  ScrollViewer.VerticalScrollMode="Disabled"
+                                  ScrollViewer.VerticalScrollBarVisibility="Visible"
+                                  ScrollViewer.VerticalScrollMode="Auto"
                                   SelectionMode="Single">
                             <ListView.ItemTemplate>
                                 <DataTemplate>
