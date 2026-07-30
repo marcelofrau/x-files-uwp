@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -188,33 +189,43 @@ namespace XFiles.FileSystem
                             return OperationResult.Failed;
                         }
 
-                        var buffer = new byte[CopyChunkSize];
+                        var buffer = ArrayPool<byte>.Shared.Rent(CopyChunkSize);
                         long totalCopied = 0;
                         int bytesRead;
+                        int chunkCount = 0;
+                        const int progressInterval = 32;
 
-                        do
+                        try
                         {
-                            if (token.IsCancellationRequested) return OperationResult.Cancelled;
-
-                            bytesRead = readStream.Read(buffer, 0, CopyChunkSize);
-                            if (bytesRead > 0)
+                            do
                             {
-                                writeStream.Write(buffer, 0, bytesRead);
-                                totalCopied += bytesRead;
+                                if (token.IsCancellationRequested) return OperationResult.Cancelled;
 
-                                if (fileTotalBytes > 0)
+                                bytesRead = readStream.Read(buffer, 0, CopyChunkSize);
+                                if (bytesRead > 0)
                                 {
-                                    progress?.Report(new OperationProgress
+                                    writeStream.Write(buffer, 0, bytesRead);
+                                    totalCopied += bytesRead;
+                                    chunkCount++;
+
+                                    if (fileTotalBytes > 0 && (chunkCount % progressInterval == 0 || totalCopied >= fileTotalBytes))
                                     {
-                                        FileName = fileName,
-                                        PercentComplete = (double)totalCopied / fileTotalBytes * 100.0,
-                                        BytesCopied = fileBytesCopied + totalCopied,
-                                        TotalBytes = fileBytesCopied + fileTotalBytes
-                                    });
+                                        progress?.Report(new OperationProgress
+                                        {
+                                            FileName = fileName,
+                                            PercentComplete = (double)totalCopied / fileTotalBytes * 100.0,
+                                            BytesCopied = fileBytesCopied + totalCopied,
+                                            TotalBytes = fileBytesCopied + fileTotalBytes
+                                        });
+                                    }
                                 }
                             }
+                            while (bytesRead > 0);
                         }
-                        while (bytesRead > 0);
+                        finally
+                        {
+                            ArrayPool<byte>.Shared.Return(buffer);
+                        }
                     }
                 }
                 return OperationResult.Success;
@@ -222,7 +233,6 @@ namespace XFiles.FileSystem
             catch (Exception ex)
             {
                 Log.Warn("FileOperations.CopyFileStreaming exception: {File}", ex, sourcePath);
-                // Clean up partial dest file
                 try { DeleteFileFromAppW(destPath); } catch { }
                 return OperationResult.Failed;
             }
@@ -1140,11 +1150,13 @@ namespace XFiles.FileSystem
                 startIdx = 1;
             }
 
-            for (int i = startIdx; ; i++)
+            int maxAttempts = 10000;
+            for (int i = startIdx; i < startIdx + maxAttempts; i++)
             {
                 string candidate = Path.Combine(dir, $"{baseName} ({i}){ext}");
                 if (CheckPathType(candidate) == null) return candidate;
             }
+            return path;
         }
 
         private static string GetUniqueDirectoryPath(string path)
@@ -1169,11 +1181,13 @@ namespace XFiles.FileSystem
                 startIdx = 1;
             }
 
-            for (int i = startIdx; ; i++)
+            int maxAttempts = 10000;
+            for (int i = startIdx; i < startIdx + maxAttempts; i++)
             {
                 string candidate = Path.Combine(parent, $"{baseName} ({i})");
                 if (CheckPathType(candidate) == null) return candidate;
             }
+            return path;
         }
 
         /// <summary>
@@ -1203,11 +1217,13 @@ namespace XFiles.FileSystem
                 startIdx = 1;
             }
 
-            for (int i = startIdx; ; i++)
+            int maxAttempts = 10000;
+            for (int i = startIdx; i < startIdx + maxAttempts; i++)
             {
                 string candidate = Path.Combine(dir, $"{baseName} (Copy {i}){ext}");
                 if (CheckPathType(candidate) == null) return candidate;
             }
+            return path;
         }
 
         private static long GetFileSize(string path)
@@ -1316,22 +1332,14 @@ namespace XFiles.FileSystem
                             return OperationResult.Failed;
                         }
 
-                        // Save to MemoryStream first (avoids SharpCompress SaveTo using System.IO)
-                        using (var zipStream = new MemoryStream())
+                        using (var writeStream = Win32FileWriteStream.Create(zipPath))
                         {
-                            archive.SaveTo(zipStream, new SharpCompress.Writers.WriterOptions(SharpCompress.Common.CompressionType.Deflate));
-                            zipStream.Position = 0;
-
-                            // Write to disk via P/Invoke
-                            using (var writeStream = Win32FileWriteStream.Create(zipPath))
+                            if (writeStream == null)
                             {
-                                if (writeStream == null)
-                                {
-                                    Log.Warn("FileOperations.CreateZip: cannot create zip file {Path}", zipPath);
-                                    return OperationResult.Failed;
-                                }
-                                zipStream.CopyTo(writeStream);
+                                Log.Warn("FileOperations.CreateZip: cannot create zip file {Path}", zipPath);
+                                return OperationResult.Failed;
                             }
+                            archive.SaveTo(writeStream, new SharpCompress.Writers.WriterOptions(SharpCompress.Common.CompressionType.Deflate));
                         }
                     }
 
@@ -1407,20 +1415,14 @@ namespace XFiles.FileSystem
                             });
                         }
 
-                        using (var zipStream = new MemoryStream())
+                        using (var writeStream = Win32FileWriteStream.Create(zipPath))
                         {
-                            archive.SaveTo(zipStream, new SharpCompress.Writers.WriterOptions(SharpCompress.Common.CompressionType.Deflate));
-                            zipStream.Position = 0;
-
-                            using (var writeStream = Win32FileWriteStream.Create(zipPath))
+                            if (writeStream == null)
                             {
-                                if (writeStream == null)
-                                {
-                                    Log.Warn("FileOperations.CreateZip(multi): cannot create zip file {Path}", zipPath);
-                                    return OperationResult.Failed;
-                                }
-                                zipStream.CopyTo(writeStream);
+                                Log.Warn("FileOperations.CreateZip(multi): cannot create zip file {Path}", zipPath);
+                                return OperationResult.Failed;
                             }
+                            archive.SaveTo(writeStream, new SharpCompress.Writers.WriterOptions(SharpCompress.Common.CompressionType.Deflate));
                         }
                     }
 

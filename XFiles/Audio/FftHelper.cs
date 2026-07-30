@@ -1,9 +1,31 @@
 using System;
+using System.Buffers;
 
 namespace XFiles.Audio
 {
     internal static class FftHelper
     {
+        private static float[] _hammingWindow;
+        private static readonly object _hammingLock = new object();
+
+        private static float[] GetHammingWindow(int n)
+        {
+            if (_hammingWindow != null && _hammingWindow.Length == n)
+                return _hammingWindow;
+
+            lock (_hammingLock)
+            {
+                if (_hammingWindow != null && _hammingWindow.Length == n)
+                    return _hammingWindow;
+
+                var window = new float[n];
+                for (int i = 0; i < n; i++)
+                    window[i] = 0.54f - 0.46f * (float)Math.Cos(2.0 * Math.PI * i / (n - 1));
+                _hammingWindow = window;
+                return window;
+            }
+        }
+
         public static void Compute(float[] real, float[] imag, bool inverse)
         {
             int n = real.Length;
@@ -82,21 +104,23 @@ namespace XFiles.Audio
         public static void ApplyHammingWindow(float[] data, int length)
         {
             int n = Math.Min(length, data.Length);
+            var window = GetHammingWindow(n);
             for (int i = 0; i < n; i++)
-            {
-                float window = 0.54f - 0.46f * (float)Math.Cos(2.0 * Math.PI * i / (n - 1));
-                data[i] *= window;
-            }
+                data[i] *= window[i];
+        }
+
+        public static void ComputeMagnitudes(float[] real, float[] imag, int binCount, float[] result)
+        {
+            int count = Math.Min(binCount, Math.Min(real.Length / 2, result.Length));
+            for (int i = 0; i < count; i++)
+                result[i] = (float)Math.Sqrt(real[i] * real[i] + imag[i] * imag[i]);
         }
 
         public static float[] ComputeMagnitudes(float[] real, float[] imag, int binCount)
         {
             int count = Math.Min(binCount, real.Length / 2);
             float[] magnitudes = new float[count];
-            for (int i = 0; i < count; i++)
-            {
-                magnitudes[i] = (float)Math.Sqrt(real[i] * real[i] + imag[i] * imag[i]);
-            }
+            ComputeMagnitudes(real, imag, binCount, magnitudes);
             return magnitudes;
         }
     }

@@ -1,9 +1,8 @@
+using System;
+using System.Buffers;
+
 namespace XFiles.Visualizers
 {
-    /// <summary>
-    /// Snapshot of audio data for a single frame. Passed to visualizers each update tick.
-    /// Arrays are defensive copies — safe to read from UI thread while audio thread writes.
-    /// </summary>
     public readonly struct AudioData
     {
         public const int BandCount = 26;
@@ -35,17 +34,9 @@ namespace XFiles.Visualizers
             Time = time;
         }
 
-        /// <summary>
-        /// Create a snapshot from the live AudioLevelService arrays.
-        /// Defensive copies ensure thread safety.
-        /// </summary>
-        public static AudioData FromService(Audio.AudioLevelService service, float time)
+        public static AudioData FromService(Audio.AudioLevelService service, float time,
+            float[] bands, float[] peaks, float[] mags, float[] wave)
         {
-            var bands = new float[BandCount];
-            var peaks = new float[BandCount];
-            var mags = new float[FftBinCount];
-            var wave = new float[Audio.AudioLevelService.FftSize];
-
             System.Array.Copy(service.BandLevels, bands, BandCount);
             System.Array.Copy(service.BandPeaks, peaks, BandCount);
             System.Array.Copy(service.Magnitudes, mags, FftBinCount);

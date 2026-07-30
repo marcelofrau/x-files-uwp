@@ -21,6 +21,19 @@ namespace XFiles.Visualizers.Visualizers
         private static byte[] _shaderBytecode;
         private static bool _shaderLoaded;
         private static bool _shaderAttempted;
+        private PixelShaderEffect _shaderEffect;
+
+        private static readonly string[] ShaderBandLevelProps = BuildShaderProps("uBandLevels");
+        private static readonly string[] ShaderBandPeakProps = BuildShaderProps("uBandPeaks");
+        private readonly float[] _bandLevels = new float[AudioData.BandCount];
+
+        private static string[] BuildShaderProps(string prefix)
+        {
+            var props = new string[AudioData.BandCount];
+            for (int i = 0; i < AudioData.BandCount; i++)
+                props[i] = $"{prefix}[{i}]";
+            return props;
+        }
 
         public void Initialize(CanvasDevice device) { _device = device; }
 
@@ -48,7 +61,7 @@ namespace XFiles.Visualizers.Visualizers
         }
 
         public void Resize(float width, float height) { _width = width; _height = height; }
-        public void Dispose() { _device = null; }
+        public void Dispose() { _device = null; _shaderEffect?.Dispose(); _shaderEffect = null; }
 
         private bool TryDrawWithShader(CanvasDrawingSession ds)
         {
@@ -61,26 +74,27 @@ namespace XFiles.Visualizers.Visualizers
             if (!_shaderLoaded) return false;
             try
             {
-                var shader = new PixelShaderEffect(_shaderBytecode);
-                var props = shader.Properties;
+                if (_shaderEffect == null)
+                    _shaderEffect = new PixelShaderEffect(_shaderBytecode);
+
+                var props = _shaderEffect.Properties;
                 props["uResolution"] = new System.Numerics.Vector2(_width, _height);
                 props["uTime"] = _time;
                 props["uBeat"] = _smoothBeat;
-                float[] levels = BuildBandLevels();
+                BuildBandLevels(_bandLevels);
                 for (int i = 0; i < AudioData.BandCount; i++)
-                    props[$"uBandLevels[{i}]"] = levels[i];
+                    props[ShaderBandLevelProps[i]] = _bandLevels[i];
                 for (int i = 0; i < AudioData.BandCount; i++)
-                    props[$"uBandPeaks[{i}]"] = 0f;
+                    props[ShaderBandPeakProps[i]] = 0f;
                 ds.Clear(Colors.Black);
-                ds.DrawImage(shader);
+                ds.DrawImage(_shaderEffect);
                 return true;
             }
             catch { _shaderLoaded = false; return false; }
         }
 
-        private float[] BuildBandLevels()
+        private void BuildBandLevels(float[] levels)
         {
-            var levels = new float[AudioData.BandCount];
             for (int i = 0; i < AudioData.BandCount; i++)
             {
                 if (i < 6) levels[i] = _smoothBass;
@@ -89,7 +103,6 @@ namespace XFiles.Visualizers.Visualizers
                 else if (i < 20) levels[i] = (_smoothMid + _smoothTreble) * 0.5f;
                 else levels[i] = _smoothTreble;
             }
-            return levels;
         }
 
         private static byte[] LoadShaderBytecode()
@@ -99,8 +112,7 @@ namespace XFiles.Visualizers.Visualizers
                 var task = Windows.Storage.StorageFile.GetFileFromApplicationUriAsync(new Uri("ms-appx:///Assets/Shaders/Plasma.cso"));
                 var file = task.AsTask().GetAwaiter().GetResult();
                 var buffer = Windows.Storage.FileIO.ReadBufferAsync(file).AsTask().GetAwaiter().GetResult();
-                byte[] data;
-                Windows.Security.Cryptography.CryptographicBuffer.CopyToByteArray(buffer, out data);
+                Windows.Security.Cryptography.CryptographicBuffer.CopyToByteArray(buffer, out byte[] data);
                 return data;
             }
             catch { return null; }

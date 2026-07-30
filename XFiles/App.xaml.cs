@@ -23,6 +23,7 @@ namespace XFiles
         private static Xray _xray;
         private DispatcherTimer _xrayTimer;
 #endif
+        private Windows.Media.Playback.MediaPlayer _bootChimePlayer;
 
         public App()
         {
@@ -187,10 +188,12 @@ namespace XFiles
                     new Uri("ms-appx:///Assets/mac-startup.mp3"));
                 var stream = await file.OpenReadAsync();
                 var source = Windows.Media.Core.MediaSource.CreateFromStream(stream, stream.ContentType);
-                var player = new Windows.Media.Playback.MediaPlayer();
-                player.Volume = 0.4;
-                player.Source = source;
-                player.Play();
+                _bootChimePlayer = new Windows.Media.Playback.MediaPlayer();
+                _bootChimePlayer.Volume = 0.4;
+                _bootChimePlayer.Source = source;
+                _bootChimePlayer.MediaEnded += (s, e) => _bootChimePlayer = null;
+                _bootChimePlayer.MediaFailed += (s, e) => _bootChimePlayer = null;
+                _bootChimePlayer.Play();
                 Log.Info("Boot chime playing");
             }
             catch (Exception ex)

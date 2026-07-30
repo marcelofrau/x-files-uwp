@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.IO;
 using System.Runtime.InteropServices;
 
@@ -79,22 +80,30 @@ namespace XFiles.FileSystem
             if (_disposed) throw new ObjectDisposedException(nameof(Win32FileWriteStream));
 
             byte[] writeBuf = buffer;
-            int writeOffset = offset;
+            byte[] poolBuf = null;
 
             if (offset != 0)
             {
-                writeBuf = new byte[count];
-                Array.Copy(buffer, offset, writeBuf, 0, count);
-                writeOffset = 0;
+                poolBuf = ArrayPool<byte>.Shared.Rent(count);
+                Array.Copy(buffer, offset, poolBuf, 0, count);
+                writeBuf = poolBuf;
             }
 
-            uint bytesWritten;
-            bool ok = WriteFile(_handle, writeBuf, (uint)count, out bytesWritten, IntPtr.Zero);
+            try
+            {
+                uint bytesWritten;
+                bool ok = WriteFile(_handle, writeBuf, (uint)count, out bytesWritten, IntPtr.Zero);
 
-            if (!ok)
-                throw new IOException($"WriteFile failed, Win32 error={Marshal.GetLastWin32Error()}");
+                if (!ok)
+                    throw new IOException($"WriteFile failed, Win32 error={Marshal.GetLastWin32Error()}");
 
-            _position += bytesWritten;
+                _position += bytesWritten;
+            }
+            finally
+            {
+                if (poolBuf != null)
+                    ArrayPool<byte>.Shared.Return(poolBuf);
+            }
         }
 
         public override long Seek(long offset, SeekOrigin origin)

@@ -440,7 +440,7 @@ namespace XFiles.FileSystem
             if (data[0] == 0x37 && data[1] == 0x80)
             {
                 // .n64 byte-swapped: swap each pair
-                header = new byte[data.Length];
+                header = new byte[0x40];
                 Array.Copy(data, header, Math.Min(data.Length, 0x40));
                 for (int i = 0; i < 0x3E; i += 2)
                 {
@@ -452,7 +452,7 @@ namespace XFiles.FileSystem
             else if (data[0] == 0x40 && data[1] == 0x12)
             {
                 // .v64 word-swapped: swap 4-byte words
-                header = new byte[data.Length];
+                header = new byte[0x40];
                 Array.Copy(data, header, Math.Min(data.Length, 0x40));
                 for (int i = 0; i < 0x3C; i += 4)
                 {

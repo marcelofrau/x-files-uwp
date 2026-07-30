@@ -77,6 +77,7 @@ namespace XFiles.Controls
         {
             Log.Dbg("MillerColumnsPage.ctor");
             this.InitializeComponent();
+            this.Unloaded += OnUnloaded;
             this.KeyDown += OnKeyDown;
             this.PointerPressed += OnPointerPressed;
             this.Loaded += OnLoaded;
@@ -112,6 +113,32 @@ namespace XFiles.Controls
 
             _ = _navigator.LoadRootAsync();
             RegisterInputHandlers();
+        }
+
+        private void OnUnloaded(object sender, RoutedEventArgs e)
+        {
+            Log.Dbg("MillerColumnsPage.OnUnloaded");
+            _navigator.ColumnsChanged -= OnColumnsChanged;
+            _navigator.PreviewChanged -= OnPreviewChanged;
+            _navigator.LoadingChanged -= OnLoadingChanged;
+            _navigator.Error -= OnError;
+            _fullscreenProgressTimer.Tick -= OnFullscreenProgressTick;
+            _fsHideTimer.Tick -= OnFsHideTimerTick;
+            _mediaLoadTimer.Tick -= OnMediaLoadTimerTick;
+            _previewDebounceTimer.Tick -= OnPreviewDebounceTick;
+            PreviewCodeView.NavigationStarting -= OnPreviewNavigationStarting;
+            PreviewCodeView.NavigationCompleted -= OnPreviewNavigationCompleted;
+            MediaPreview.PlayerStateChanged -= OnMediaPlayerStateChanged;
+            MediaPreview.AudioTrackEnded -= OnMediaPreviewAudioEnded;
+            MediaPreview.VideoTrackEnded -= OnMediaPreviewVideoEnded;
+            VideoTrackMenuControl.SubtitleSelected -= OnVideoSubtitleSelected;
+            VideoTrackMenuControl.AudioTrackSelected -= OnVideoAudioTrackSelected;
+            _fsOsdHideTimer.Tick -= OnFsOsdHideTick;
+            _fsAudioOsdHideTimer.Tick -= OnFsAudioOsdHideTick;
+            _coverArtCts?.Cancel();
+            _coverArtCts?.Dispose();
+            _coverArtCts = null;
+            StopAllTimers();
         }
 
         private bool _isMediaPlayerActive;
@@ -2426,7 +2453,6 @@ namespace XFiles.Controls
         {
             _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
             {
-                FsVideoPlayer.MediaOpened -= OnFsVideoMediaOpened;
                 EnumerateAllTracks();
             });
         }
@@ -2595,6 +2621,8 @@ namespace XFiles.Controls
                                     TimedMetadataTrackPresentationMode.PlatformPresented);
                                 if (_fsPlaybackItem != null)
                                     _fsSelectedSubtitleIndex = _fsSubtitles.IndexOf(track);
+                                else
+                                    MediaPreview.SelectSubtitleTrack(track.EmbeddedIndex);
                                 Log.Info("OnVideoSubtitleSelected: enabled embedded subtitle '{Name}'", track.GetDisplayName());
                                 return;
                             }
@@ -2619,23 +2647,31 @@ namespace XFiles.Controls
         {
             try
             {
-                var playbackItem = _fsPlaybackItem ?? MediaPreview.CurrentPlaybackItem;
-                if (playbackItem == null) return;
+                Log.Info("OnVideoAudioTrackSelected: trackIndex={Index} isFs={IsFs}",
+                    trackIndex, _fsPlaybackItem != null);
 
-                if (trackIndex >= 0 && trackIndex < playbackItem.AudioTracks.Count)
+                if (_fsPlaybackItem != null)
                 {
-                    playbackItem.AudioTracks.SelectedIndex = trackIndex;
-
-                    if (_fsPlaybackItem != null)
+                    if (trackIndex >= 0 && trackIndex < _fsPlaybackItem.AudioTracks.Count)
                     {
+                        _fsPlaybackItem.AudioTracks.SelectedIndex = trackIndex;
                         _fsSelectedAudioIndex = trackIndex;
+
                         string name = trackIndex < _fsAudioTracks.Count
                             ? _fsAudioTracks[trackIndex].DisplayName
                             : $"Track {trackIndex + 1}";
                         ShowFsOsd($"Audio: {name}");
-                    }
+                        Log.Info("OnVideoAudioTrackSelected: selected audio track {Index} '{Name}'", trackIndex, name);
 
-                    Log.Info("OnVideoAudioTrackSelected: selected audio track {Index}", trackIndex);
+                        var pos = FsVideoSession.Position;
+                        FsVideoPlayer.Pause();
+                        FsVideoSession.Position = pos;
+                        FsVideoPlayer.Play();
+                    }
+                }
+                else
+                {
+                    MediaPreview.SwitchAudioTrack(trackIndex);
                 }
             }
             catch (Exception ex)
@@ -3181,6 +3217,7 @@ namespace XFiles.Controls
         private List<AudioTrackInfo> _fsAudioTracks;
         private int _fsSelectedSubtitleIndex = -1;
         private int _fsSelectedAudioIndex = 0;
+        
         private bool _fsSuppressTrackEvent;
         private Windows.Media.Playback.MediaPlaybackItem _fsPlaybackItem;
 

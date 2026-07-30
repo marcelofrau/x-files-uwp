@@ -32,6 +32,7 @@ namespace XFiles.Controls
         private bool _hasEnded;
         private MetadataGuesser _metadataGuesser;
         private CancellationTokenSource _metadataCts;
+        
 
         private MediaPlaybackItem _currentPlaybackItem;
         private List<SubtitleTrack> _currentSubtitleTracks = new List<SubtitleTrack>();
@@ -65,6 +66,7 @@ namespace XFiles.Controls
         public MediaPreviewControl()
         {
             this.InitializeComponent();
+            this.Unloaded += OnUnloaded;
             _audioLevelService = new AudioLevelService();
             _metadataGuesser = new MetadataGuesser();
 #if AUDIO_ANALYSIS
@@ -213,34 +215,30 @@ namespace XFiles.Controls
             }
         }
 
-		public void StopPlayer()
-		{
-			if (_isPlaying)
-			{
-				if (_isAudioMode)
-					_audioLevelService.Pause();
-				else
-					Player.Pause();
-				_isPlaying = false;
-				_progressTimer.Stop();
-				UpdatePlayPauseIcon();
-				PlayerStateChanged?.Invoke(this, EventArgs.Empty);
-			}
-			if (_isAudioMode)
-			{
-				_audioLevelService.MediaOpened -= OnAudioMediaOpened;
-				_audioLevelService.MediaEnded -= OnAudioMediaEnded;
-				_audioLevelService.MediaFailed -= OnAudioMediaFailed;
-				_audioLevelService.Dispose();
-				_audioLevelService = null;
+        public void StopPlayer()
+        {
+            if (_isPlaying)
+            {
+                if (_isAudioMode)
+                    _audioLevelService.Pause();
+                else
+                    Player.Pause();
+                _isPlaying = false;
+                _progressTimer.Stop();
+                UpdatePlayPauseIcon();
+                PlayerStateChanged?.Invoke(this, EventArgs.Empty);
+            }
+            if (_isAudioMode)
+            {
+                _audioLevelService.Stop();
 #if AUDIO_ANALYSIS
-				VuMeter.DetachService();
+                VuMeter.DetachService();
 #endif
-			}
-			_metadataCts?.Cancel();
-			_metadataCts = null;
-			_currentFilePath = null;
-		}
+            }
+            _metadataCts?.Cancel();
+            _metadataCts = null;
+            _currentFilePath = null;
+        }
 
 		public void Stop()
 		{
@@ -284,25 +282,39 @@ namespace XFiles.Controls
                 Session.Position = position;
         }
 
-		public void TogglePlayPause()
-		{
-			Log.Dbg("MediaPreviewControl.TogglePlayPause: audio={IsAudio} playing={IsPlaying} loading={IsLoading} fileLoaded={FileLoaded} file={File}",
-				_isAudioMode, _isPlaying, _isLoadingPlayback, _audioLevelService?.IsFileLoaded ?? false, _currentFilePath ?? "(null)");
-			if (_audioLevelService == null)
-			{
-				_audioLevelService = new AudioLevelService();
-				_audioLevelService.MediaOpened += OnAudioMediaOpened;
-				_audioLevelService.MediaEnded += OnAudioMediaEnded;
-				_audioLevelService.MediaFailed += OnAudioMediaFailed;
-			}
-			if (_isAudioMode)
-			{
+        public void SelectSubtitleTrack(int index)
+        {
+            _currentSubtitleIndex = index;
+        }
+
+        public void SwitchAudioTrack(int trackIndex)
+        {
+            if (_isAudioMode) return;
+            if (_currentPlaybackItem == null) return;
+            if (trackIndex < 0 || trackIndex >= _currentPlaybackItem.AudioTracks.Count)
+            {
+                Log.Warn("MediaPreviewControl.SwitchAudioTrack: trackIndex {Index} out of range (count={Count})",
+                    trackIndex, _currentPlaybackItem.AudioTracks.Count);
+                return;
+            }
+
+            Log.Info("MediaPreviewControl.SwitchAudioTrack: switching to track {Index}", trackIndex);
+            _currentPlaybackItem.AudioTracks.SelectedIndex = trackIndex;
+            _currentAudioIndex = trackIndex;
+
+            var pos = Session.Position;
+            Player.Pause();
+            Session.Position = pos;
+            if (_isPlaying)
+                Player.Play();
+        }
+
+        public void TogglePlayPause()
+        {
+            if (_isAudioMode)
+            {
                 if (string.IsNullOrEmpty(_currentFilePath)) return;
-                bool fileMismatch = _audioLevelService.IsFileLoaded
-                    && !string.IsNullOrEmpty(_currentFilePath)
-                    && _audioLevelService.CurrentFilePath != _currentFilePath;
-                if (fileMismatch) _audioLevelService.Stop();
-                if ((!_audioLevelService.IsFileLoaded || fileMismatch) && !_isLoadingPlayback)
+                if (!_audioLevelService.IsFileLoaded && !_isLoadingPlayback)
                 {
                     _isLoadingPlayback = true;
                     _hasEnded = false;
@@ -316,20 +328,7 @@ namespace XFiles.Controls
                 if (_isLoadingPlayback) return;
                 _audioLevelService.TogglePlayPause();
                 _isPlaying = _audioLevelService.IsPlaying;
-                if (!_isPlaying)
-                {
-                    Log.Dbg("MediaPreviewControl.TogglePlayPause: resume failed, forcing reload");
-                    _audioLevelService.Stop();
-                    _isLoadingPlayback = true;
-                    _hasEnded = false;
-                    _isPlaying = true;
-                    UpdatePlayPauseIcon();
-                    _progressTimer.Start();
-                    PlayerStateChanged?.Invoke(this, EventArgs.Empty);
-                    _ = StartAudioPlayback(_currentFilePath);
-                    return;
-                }
-                _hasEnded = false;
+                if (_isPlaying) _hasEnded = false;
             }
             else
             {
@@ -496,7 +495,9 @@ namespace XFiles.Controls
             await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
             {
                 Log.Verb("Media opened: {Duration}", Session.NaturalDuration);
+
                 _isPlaying = Session.PlaybackState == Windows.Media.Playback.MediaPlaybackState.Playing;
+
                 UpdatePlayPauseIcon();
                 if (_isPlaying)
                     _progressTimer.Start();
@@ -504,6 +505,7 @@ namespace XFiles.Controls
                     _progressTimer.Stop();
                 UpdateProgress();
                 EnumeratePreviewTracks();
+
                 PlayerStateChanged?.Invoke(this, EventArgs.Empty);
             });
         }
@@ -517,6 +519,7 @@ namespace XFiles.Controls
 
             if (_currentPlaybackItem == null) return;
 
+            int subCount = 0;
             for (int i = 0; i < _currentPlaybackItem.TimedMetadataTracks.Count; i++)
             {
                 var track = _currentPlaybackItem.TimedMetadataTracks[i];
@@ -526,9 +529,11 @@ namespace XFiles.Controls
                     _currentSubtitleTracks.Add(new SubtitleTrack
                     {
                         Language = lang,
-                        EmbeddedIndex = i,
+                        Title = track.Label ?? lang,
+                        EmbeddedIndex = subCount,
                         IsExternal = false
                     });
+                    subCount++;
                 }
             }
 
@@ -539,6 +544,7 @@ namespace XFiles.Controls
                 _currentAudioTracks.Add(new AudioTrackInfo
                 {
                     Language = lang,
+                    Title = track.Label ?? lang,
                     Index = i
                 });
             }
@@ -633,6 +639,28 @@ namespace XFiles.Controls
             if (ts.TotalHours >= 1)
                 return $"{(int)ts.TotalHours}:{ts.Minutes:D2}:{ts.Seconds:D2}";
             return $"{ts.Minutes}:{ts.Seconds:D2}";
+        }
+
+        private void OnUnloaded(object sender, RoutedEventArgs e)
+        {
+            _progressTimer.Stop();
+            _progressTimer.Tick -= OnProgressTimerTick;
+            Player.MediaOpened -= OnMediaPlayerOpened;
+            Player.MediaEnded -= OnMediaPlayerEnded;
+            Player.MediaFailed -= OnMediaPlayerFailed;
+            _currentPlaybackItem?.Source?.Dispose();
+            _currentPlaybackItem = null;
+            _metadataCts?.Cancel();
+            _metadataCts?.Dispose();
+            _metadataCts = null;
+            if (_audioLevelService != null)
+            {
+                _audioLevelService.MediaOpened -= OnAudioMediaOpened;
+                _audioLevelService.MediaEnded -= OnAudioMediaEnded;
+                _audioLevelService.MediaFailed -= OnAudioMediaFailed;
+                _audioLevelService.Dispose();
+                _audioLevelService = null;
+            }
         }
 
         public void HandleButton(VirtualKey key)
