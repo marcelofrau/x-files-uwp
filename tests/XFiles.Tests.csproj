@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <Nullable>disable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>disable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.9.0" />
+    <PackageReference Include="MSTest.TestAdapter" Version="3.2.0" />
+    <PackageReference Include="MSTest.TestFramework" Version="3.2.0" />
+    <PackageReference Include="System.Text.Encoding.CodePages" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\XFiles\Audio\FftHelper.cs" Link="Linked\Audio\FftHelper.cs" />
+    <Compile Include="..\XFiles\FileSystem\EncodingDetector.cs" Link="Linked\FileSystem\EncodingDetector.cs" />
+    <Compile Include="..\XFiles\FileSystem\Id3Tag.cs" Link="Linked\FileSystem\Id3Tag.cs" />
+    <Compile Include="..\XFiles\FileSystem\RomHeaderParser.cs" Link="Linked\FileSystem\RomHeaderParser.cs" />
+    <Compile Include="..\XFiles\Metadata\FilenameParser.cs" Link="Linked\Metadata\FilenameParser.cs" />
+    <Compile Include="..\XFiles\Metadata\TrackMetadata.cs" Link="Linked\Metadata\TrackMetadata.cs" />
+  </ItemGroup>
+
+</Project>
