@@ -5,80 +5,129 @@
 `Windows.Gaming.Input.Gamepad` (native UWP API, no SDL — unlike `dosbox-pure-uwp`,
 which uses SDL_GameController + UWP fallback because it also runs on non-UWP platforms via
 the shared libretro core). Here we don't have that cross-platform requirement, so we use
-the native API directly, which is simpler:
+the native API directly.
 
-```csharp
-var gamepads = Gamepad.Gamepads;        // IReadOnlyList<Gamepad>
-var reading = gamepad.GetCurrentReading(); // GamepadReading { Buttons, LeftThumbstickX/Y, ... }
-```
-
-`Gamepad.GamepadAdded` / `Gamepad.GamepadRemoved` events handle hotplug (controller
-connected/disconnected at runtime).
+`Gamepad.GamepadAdded` / `Gamepad.GamepadRemoved` handle hotplug. **Known pitfall**:
+a gamepad connected before app start does not fire `GamepadAdded` — `GamepadInputService`
+also enumerates `Gamepad.Gamepads` on startup.
 
 ## GamepadInputService — Responsibilities
 
-1. Poll every frame/tick (via `CompositionTarget.Rendering` or `DispatcherTimer` at ~16ms).
-2. Compare current vs previous `GamepadButtons` (bitwise) → detect "JustPressed" (rising
+1. Poll every tick via `DispatcherTimer` (~33ms).
+2. Compare current vs previous `GamepadButtons` bitmask → detect "JustPressed" (rising
    edge) and "JustReleased".
-3. D-pad: repeat-while-held, with initial delay (e.g. 400ms) then fast repeat
-   (e.g. 100ms) — same logic as `dosbox_uwpMain.cpp` from the sibling project.
-4. Left Thumbstick: mapped to the same events as D-pad when beyond a deadzone
-   (~0.5), allowing navigation with the analog stick as well.
-5. Translate raw state into semantic events and pass to the active `INavigable` (the
-   `ColumnNavigator`, see `ARCHITECTURE.md`).
+3. D-pad: repeat-while-held, initial delay (~300ms) then fast repeat (~80ms).
+4. Left thumbstick: mapped to D-pad events beyond a deadzone (~0.5). Right thumbstick:
+   scroll events for preview pane / editor viewport.
+5. Translate raw state into semantic events and forward to `InputRouter` (which dispatches
+   to the active `INavigable`).
+
+Long-press / hold detection lives in the service:
+
+| Hold | Detection | Event |
+|---|---|---|
+| **Y** long-press | `_yHeld` while pressed, fires once | `OnContextMenuLongPress()` → favorite toggle |
+| **View** short-press | released before 15 ticks (~500ms) | fullscreen → `OnSelectVisualizer()`; browser → `OnToggleBatch()` |
+| **View** long-press | ≥15 ticks while held | fullscreen → `OnSelectVisualizerMenu()` (picker) |
+| **LB/RB** held | continuous seek | `OnSeekRepeat(±5)` at ~60ms cooldown after initial `OnSeekBack/Forward()` |
+
+## InputRouter — Overlay Dispatch
+
+`Navigation/InputRouter.cs` routes raw `VirtualKey`/button events to the active overlay
+handler instead of the main page:
+
+```csharp
+public interface IInputHandler
+{
+    int Priority { get; }   // higher = wins when multiple active
+    bool IsActive { get; }
+    bool OnDPad(VirtualKey key, bool isRepeat);
+    bool OnButton(VirtualKey key);
+}
+```
+
+- `InputRouter.Add(handler)` / `Remove(handler)` — overlays register/unregister on show/hide
+  (e.g. `TextEditorOverlay`, `StartMenu`, dialogs, fullscreen modes).
+- `RouteDPad(...)` / `RouteButton(...)` — walks handlers by priority, first `IsActive`
+  handler consumes the event; returns `false` if nothing active (main page handles it).
+- `OverlayHandler` — convenience wrapper around `Func<VirtualKey,bool,bool>` delegates so
+  overlays don't need to implement the interface by hand.
+
+If no overlay is active, the input falls through to the page itself, which implements
+`INavigable`.
 
 ## `INavigable` Contract
+
+`Navigation/INavigable.cs` — the page (and each fullscreen surface) implements this to
+receive semantic events:
 
 ```csharp
 public interface INavigable
 {
-    void OnDPad(bool up);       // true = up/left (previous), false = down/right (next)
-    void OnDPadLeft();          // go up a level (equivalent to Back)
-    void OnDPadRight();         // go down a level (equivalent to Confirm on folder)
-    void OnConfirm();           // A button
-    void OnBack();              // B button
-    void OnContextMenu();       // Y button
-    void OnPageUp();            // LB
-    void OnPageDown();          // RB
+    bool IsMediaFullscreen { get; }
+    bool IsMediaPlayerActive { get; }
+    void OnDPadUp(bool isRepeat = false);
+    void OnDPadDown(bool isRepeat = false);
+    void OnDPadLeft();
+    void OnDPadRight();
+    void OnConfirm();            // A
+    void OnBack();               // B
+    void OnContextMenu();        // Y
+    void OnContextMenuLongPress(); // Y held → favorites
+    void OnRefresh();            // X
+    void OnPaste();              // paste clipboard (batch/file ops)
+    void OnSettings();           // Start
+    void OnPageUp();             // LB (browser)
+    void OnPageDown();           // RB (browser)
+    void OnSeekBack();           // LB (media)
+    void OnSeekForward();        // RB (media)
+    void OnSeekRepeat(int seconds); // LB/RB held
+    void OnTriggerHeld(float leftTrigger, float rightTrigger);
+    void OnLeftStickMove(float x, float y);
+    void OnRightStickMove(float x, float y);
+    void OnScrollHorizontal(double delta);
+    void OnScrollVertical(double delta);
+    void OnSelectVisualizer();      // View short (media)
+    void OnSelectVisualizerMenu();  // View long (media)
+    void OnToggleBatch();           // View short (browser)
 }
 ```
 
-Same "shape" used by `FrontendMenu`/`FileBrowser` in `dosbox-pure-uwp` (see exploration
-report in `docs/frontend`/`docs/filebrowser` in that repo) — intentional decision to
-keep the proven pattern.
-
-## Button Table (MVP)
+## Button Table
 
 | Physical Button | Semantic Event | X-Files Action |
 |---|---|---|
-| D-pad Up / Left Stick Up | `OnDPad(up: true)` | move selection up in Current column (wrap-around) |
-| D-pad Down / Left Stick Down | `OnDPad(up: false)` | move selection down in Current column (wrap-around) |
-| D-pad Left / Left Stick Left | `OnDPadLeft()` | go up a level (equivalent to B) |
-| D-pad Right / Left Stick Right | `OnDPadRight()` | enter selected folder (equivalent to A on folder) |
-| A | `OnConfirm()` | folder → drill-in; file → contextual default action (e.g. open with associated app) |
-| B | `OnBack()` | go up a level; if already at root, no effect (or exit app, to be defined) |
-| Y | `OnContextMenu()` | opens `FileActionSheet` over selected item |
-| X | (reserved) | toggle preview mode (e.g. force hex) — post-MVP |
-| LB | `OnPageUp()` | scroll one page up in Current column |
-| RB | `OnPageDown()` | scroll one page down in Current column |
-| Start/Menu | (reserved) | open settings/theme — post-MVP |
+| D-pad Up / Left Stick Up | `OnDPadUp` | move selection up in Current column |
+| D-pad Down / Left Stick Down | `OnDPadDown` | move selection down |
+| D-pad Left / Left Stick Left | `OnDPadLeft` | go up a level (equivalent to B) |
+| D-pad Right / Left Stick Right | `OnDPadRight` | enter selected folder |
+| A | `OnConfirm` | folder → drill-in; file → contextual default action (play/toggle) |
+| B | `OnBack` | go up a level; close fullscreen; exit overlay |
+| Y | `OnContextMenu` | open `FileActionSheet` over selected item |
+| Y (hold ~500ms) | `OnContextMenuLongPress` | add/remove favorite |
+| X | `OnRefresh` | refresh current directory |
+| Start/Menu | `OnSettings` | open Start menu (settings, logs, favorites, search, about) |
+| View (short) | `OnSelectVisualizer` / `OnToggleBatch` | media: cycle visualizer; browser: toggle batch mode |
+| View (long ~500ms) | `OnSelectVisualizerMenu` | media: open visualizer picker |
+| LB / RB | `OnPageUp`/`OnPageDown` (browser), `OnSeekBack`/`OnSeekForward` (media) | page up/down; seek 5s |
+| LB/RB held | `OnSeekRepeat(±5)` | continuous seek |
+| LT / RT | `OnTriggerHeld` | secondary action (see page impl) |
+| Right Stick | `OnRightStickMove`/`OnScroll*` | scroll preview / editor / adjust volume (media) |
 
-## Navigation Rules (ported from dosbox-pure-uwp FileBrowser.cpp)
+## Navigation Rules
 
-- **Wrap-around**: moving down on the last item returns to the first; moving up on
-  the first item goes to the last.
-- **Scroll-follows-selection**: if the selected index goes outside the visible window (up or
-  down), the list scrolls automatically to keep it visible, with a "look ahead" margin
-  (e.g. 2-3 items before scrolling at the limit).
-- **Empty/separator entry skipping**: if visual separators exist in the
-  list in the future (e.g. "Folders" / "Files" headers), navigation must automatically skip
-  them (same `do { } while` logic seen in `FileBrowser.cpp:706-733`).
+- **Wrap-around**: moving down on the last item returns to the first; moving up on the
+  first item goes to the last.
+- **Scroll-follows-selection**: if the selected index leaves the visible window, the list
+  scrolls to keep it visible.
+- **Folder-first sorting** with `..` always at top when applicable (see `FILEBROWSER.md`).
 
 ## Input Edge Cases
 
-- No controller connected: display empty-state message ("Connect a controller") instead of
-  crashing — `GamepadInputService` must expose observable `IsControllerConnected`.
-- Multiple controllers connected: MVP uses only `Gamepad.Gamepads[0]` (first
-  detected). Multi-user support is in the backlog.
-- Debounce: analog stick deadzone threshold (0.5) prevents unwanted navigation
-  "chattering" from stick drift.
+- **No controller connected**: app stays usable, shows a "connect a controller" hint;
+  no crash. `GamepadInputService` exposes `IsControllerConnected`.
+- **Multiple controllers**: MVP uses `Gamepad.Gamepads[0]` (first detected). Multi-user is
+  in the backlog.
+- **Analog chattering**: deadzones (main 0.5, stick 0.18, scroll 0.15) prevent drift inputs.
+- **Hotplug**: enumerated on startup + `GamepadAdded`/`GamepadRemoved` handled; no phantom
+  inputs on connect/disconnect (validated in `docs/PHASE2-TESTS.md`).

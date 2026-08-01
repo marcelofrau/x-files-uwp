@@ -1,61 +1,58 @@
 # File-Type Icon Mappings
 
-Maps file extensions to Papirus icon names and project asset filenames.
+File explorer icons (listing columns + preview pane) map file extensions to Papirus
+24px icons, stored in `Assets/FileTypes/` and referenced as
+`ms-appx:///Assets/FileTypes/<name>-24.png`.
 
-## Format
+> Source: Papirus icon theme (GPL-3.0, matches app license). Conversion workflow and
+> naming rules: see `.opencode/skills/fileexplorer-icons/SKILL.md`.
 
-| Extension | MIME Type | Papirus Icon | Asset (48px) | Asset (64px) |
-|-----------|-----------|-------------|-------------|-------------|
-| `.txt` | text/plain | text-x-generic | filetype-text-x-generic-48.png | filetype-text-x-generic-64.png |
+## Naming Convention
 
-## Mappings
+| Asset | Pattern |
+|---|---|
+| File-type icons | `filetype-{category}-{name}-24.png` |
+| Folder icons | `folder-{color}-24.png` (orange/blue/green/yellow/magenta/...; color runtime-selectable) |
+| Drive icon | `drive-harddisk-24.png` |
+| Generic file | `file-generic-24.png` |
+| Archive (zip/7z/rar virtual folder) | `file-archive-24.png` |
+| Favorites | `favorite-24.png` / `favorites-24.png` / `file-favorite-24.png` |
 
-| Extension | MIME Type | Papirus Icon | Asset (48px) |
-|-----------|-----------|-------------|-------------|
-| `.txt` | text/plain | text-x-generic | filetype-text-x-generic-48.png |
-| `.log` | text/plain | text-x-generic | filetype-text-x-generic-48.png |
-| `.cfg` | text/plain | text-x-generic | filetype-text-x-generic-48.png |
-| `.py` | text/x-python | text-x-python | filetype-text-x-python-48.png |
-| `.js` | text/javascript | text-x-javascript | filetype-text-x-javascript-48.png |
-| `.ts` | text/typescript | text-x-typescript | filetype-text-x-typescript-48.png |
-| `.html` | text/html | text-html | filetype-text-html-48.png |
-| `.css` | text/css | text-css | filetype-text-css-48.png |
-| `.json` | application/json | application-json | filetype-application-json-48.png |
-| `.xml` | application/xml | application-xml | filetype-application-xml-48.png |
-| `.pdf` | application/pdf | application-x-pdf | filetype-application-x-pdf-48.png |
-| `.png` | image/png | image-x-generic | filetype-image-x-generic-48.png |
-| `.jpg` | image/jpeg | image-jpeg | filetype-image-jpeg-48.png |
-| `.jpeg` | image/jpeg | image-jpeg | filetype-image-jpeg-48.png |
-| `.gif` | image/gif | image-gif | filetype-image-gif-48.png |
-| `.svg` | image/svg+xml | image-svg+xml | filetype-image-svg+xml-48.png |
-| `.mp3` | audio/mpeg | audio-mpeg | filetype-audio-mpeg-48.png |
-| `.wav` | audio/wav | audio-x-wav | filetype-audio-x-wav-48.png |
-| `.mp4` | video/mp4 | video-mp4 | filetype-video-mp4-48.png |
-| `.zip` | application/zip | application-x压缩包 | filetype-application-x压缩包-48.png |
-| `.7z` | application/x-7z | application-x-7z | filetype-application-x-7z-48.png |
-| `.tar` | application/x-tar | application-x-tar | filetype-application-x-tar-48.png |
-| `.gz` | application/gzip | application-x-gzip | filetype-application-x-gzip-48.png |
-| `.exe` | application/x-msdos-program | application-x-executable | filetype-application-x-executable-48.png |
-| `.dll` | application/x-sharedlib | application-x-sharedlib | filetype-application-x-sharedlib-48.png |
-| `.rs` | text/x-rust | text-x-rust | filetype-text-x-rust-48.png |
-| `.go` | text/x-go | text-x-go | filetype-text-x-go-48.png |
-| `.c` | text/x-c | text-x-c | filetype-text-x-c-48.png |
-| `.cpp` | text/x-c++ | text-x-c++ | filetype-text-x-c++-48.png |
-| `.cs` | text/x-csharp | text-x-csharp | filetype-text-x-csharp-48.png |
-| `.java` | text/x-java | text-x-java | filetype-text-x-java-48.png |
-| `.rb` | text/x-ruby | text-x-ruby | filetype-text-x-ruby-48.png |
-| `.sh` | application/x-shellscript | application-x-shellscript | filetype-application-x-shellscript-48.png |
-| `.md` | text/markdown | text-markdown | filetype-text-markdown-48.png |
-| `.nfo` | text/plain | text-x-generic | filetype-text-x-generic-48.png |
-| `.diz` | text/plain | text-x-generic | filetype-text-x-generic-48.png |
+All file-type icons are **24×24 PNG** (`-24.png`). Directory: `XFiles/Assets/FileTypes/`
+(61 icons as of v1.2.0).
 
-## Generic Fallbacks
+## Resolution Order (`ColumnListView.xaml.cs`)
 
-| Type | Papirus Icon | Asset |
-|------|-------------|-------|
-| Unknown file | text-x-generic | filetype-text-x-generic-48.png |
-| Folder | — | filetype-folder-48.png |
+1. `IsVirtual` (favorites root / archive root) → drive / favorite icon.
+2. Directory → `folder-{color}-24.png`.
+3. `.zip`/`.7z`/`.rar` → `file-archive-24.png`.
+4. Known extension → lookup in the static `ExtIcons` dictionary
+   (`ColumnListView.xaml.cs:63`).
+5. Unknown extension → `file-generic-24.png`.
 
----
+## Representative Mappings
 
-*Add new mappings as file types are encountered.*
+| Extension | Asset |
+|---|---|
+| `.png`/`.jpg`/`.jpeg`/`.bmp`/`.gif`/`.svg`/`.tiff`/`.tga`/`.webp`/`.heic` | `filetype-image-{…}-24.png` |
+| `.mp4`/`.avi`/`.mkv`/`.webm`/`.flv`/`.wmv`/`.mov`/`.m4v`/`.ts`/`.vob`/`.3gp` | `filetype-video-{…}-24.png` |
+| `.mp3`/`.flac`/`.wav`/`.ogg`/`.m4a`/`.wma`/`.aac`/`.opus`/`.mid`/`.midi` | `filetype-audio-{…}-24.png` |
+| `.tar`/`.gz`/`.bz2`/`.xz`/`.tgz`/`.zst` | `filetype-application-tar/gzip-24.png` |
+| `.iso`/`.img`/`.cdi`/`.gdi`/`.cue`/`.nrg`/`.mdf`/`.ciso` | `filetype-application-iso-24.png` |
+| `.pdf` | `filetype-application-pdf-24.png` |
+| `.txt`/`.csv`/`.ini`/`.cfg`/`.yaml`/`.toml`/`.srt`/`.sql`/`.tex`/`.doc(x)`/`.xls(x)`/... | `filetype-text-generic-24.png` |
+| `.log`/`.out`/`.err`/`.env` | `filetype-text-log-24.png` |
+| `.md`/`.rst` | `filetype-text-markdown-24.png` |
+| `.py`/`.c`/`.cpp`/`.cs`/`.java`/`.js`/`.ts`/`.css`/`.xml`/`.go`/`.rs`/`.rb`/`.lua`/`.sh`/`.pl` | `filetype-text-{lang}-24.png` |
+| `.exe` | `filetype-application-executable-24.png` |
+
+ROM extensions (`.nes`, `.sfc`, `.gb`, `.gba`, `.gen`, `.sms`, ...) resolve through the
+ROM system→icon mapping — see `ROM-FORMATS.md`.
+
+## Adding a New File-Type Icon
+
+1. Export the Papirus SVG → 24×24 PNG (keep `-24.png` suffix).
+2. Drop it in `XFiles/Assets/FileTypes/` (add `<Content>` entry in `XFiles.csproj`).
+3. Add the extension → asset entry to the `ExtIcons` dictionary in
+   `ColumnListView.xaml.cs`.
+4. Full workflow: `.opencode/skills/fileexplorer-icons/SKILL.md`.

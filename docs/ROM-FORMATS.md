@@ -2,6 +2,7 @@
 
 Parses ROM file headers to extract game title and system name for the preview
 pane. Works for both raw ROM files and ROMs inside ZIP archives (No-Intro format).
+38 extensions across 25+ systems.
 
 ## Supported Systems
 
@@ -16,6 +17,29 @@ pane. Works for both raw ROM files and ROMs inside ZIP archives (No-Intro format
 | `.sms` | Master System | 0x7FF0 | 32 bytes | ASCII |
 | `.gg` | Game Gear | 0x7FF0 | 32 bytes | ASCII |
 | `.pce` / `.tg16` | PC Engine / TurboGrafx-16 | 0x120 | 32 bytes | ASCII |
+| `.a26` | Atari 2600 | — | — | filename fallback |
+| `.a52` | Atari 5200 | — | — | filename fallback |
+| `.a78` | Atari 7800 | — | — | filename fallback |
+| `.j64` / `.jag` | Atari Jaguar | — | — | filename fallback |
+| `.lnx` | Atari Lynx | — | — | filename fallback |
+| `.col` | ColecoVision | — | — | filename fallback |
+| `.int` | Intellivision | — | — | filename fallback |
+| `.sg` | SG-1000 | — | — | filename fallback |
+| `.msx` | MSX | — | — | filename fallback |
+| `.sna` / `.z80` | ZX Spectrum | — | — | filename fallback |
+| `.vec` | Vectrex | — | — | filename fallback |
+| `.n64` / `.z64` / `.v64` | Nintendo 64 | — | — | filename fallback |
+| `.nds` | Nintendo DS | — | — | filename fallback |
+| `.3ds` | Nintendo 3DS | — | — | filename fallback |
+| `.vb` | Virtual Boy | — | — | filename fallback |
+| `.ngp` / `.ngc` | Neo Geo Pocket | — | — | filename fallback |
+| `.ws` / `.wsc` | WonderSwan | — | — | filename fallback |
+| `.gcm` | GameCube | — | — | filename fallback |
+| `.gdi` / `.cdi` / `.chd` | Dreamcast / disc images | — | — | filename fallback |
+
+Systems with reliable header signatures (`NES`, `SNES`, `GB/GBC`, `GBA`,
+`Genesis/MD`, `SMS`, `GG`, `PCE/TG16`) get a real parsed title. The rest are
+recognized by extension and fall back to the filename (see `RomHeaderParser.cs`).
 
 ## Detection Details
 
@@ -82,12 +106,13 @@ ROM files render in the preview pane as:
 
 ## Cover Art and Metadata
 
-Cover art and game metadata are loaded from two sources with fallback chain:
+Cover art and game metadata loaded via fallback chain
+(`FilePreviewService` + `MillerColumnsPage`):
 
-### Primary: gamelist.xml (local)
+### 1. gamelist.xml (local)
 
-If `gamelist.xml` exists in the ROM's directory, parse it on directory entry
-(XmlReader streaming, no DOM overhead). Match by filename, name-without-ext,
+If `gamelist.xml` exists in the ROM's directory, `GamelistParser` parses it on
+directory entry (streaming XmlReader, no DOM). Match by filename, name-without-ext,
 or parent ZIP name for files inside archives.
 
 **Data**: name, description, developer, publisher, genre, players, rating,
@@ -95,15 +120,16 @@ release date, cover art image paths.
 
 **Cover art priority**: `<cover>` → `<image>` → `<thumbnail>` (local files).
 
-### Fallback: LibRetro Thumbnails (network)
+### 2. LibRetro Thumbnails (network)
 
-If no gamelist.xml or gamelist has no cover art, fetch from LibRetro:
+If no gamelist.xml or no local cover, fetch from LibRetro:
 
 - **URL**: `https://thumbnails.libretro.com/{system_name}/Named_Titles/{title}.png`
 - **Auth**: none required
-- **Matching**: tries exact title, then strips region `(USA)`, `(Europe)`, etc.
+- **Matching**: exact title, then stripped region variations (`(USA)`, `(Europe)`, ...)
 
-System name mapping:
+System name mapping (partial; full dict in `MillerColumnsPage.xaml.cs:4763`):
+
 | System | LibRetro Name |
 |--------|--------------|
 | NES | `Nintendo - Nintendo Entertainment System` |
@@ -115,26 +141,36 @@ System name mapping:
 | Master System | `Sega - Master System` |
 | Game Gear | `Sega - Game Gear` |
 | PC Engine | `NEC - PC Engine` |
+| Atari 2600/5200/7800/Jaguar/Lynx | `Atari - …` / `Atari - Jaguar` / `Atari - Lynx` |
+| ColecoVision | `Coleco - ColecoVision` |
+| Intellivision | `Mattel - Intellivision` |
+| Vectrex | `GCE - Vectrex` |
+| N64 / NDS / 3DS / Virtual Boy / GameCube | `Nintendo - …` |
+| Dreamcast | `Sega - Dreamcast` |
+| WonderSwan | `Bandai - WonderSwan` |
+| Neo Geo Pocket | `SNK - Neo Geo Pocket` |
 
-### Final Fallback: System Icon
+### 3. System Icon
 
-128x128 retro console icons from personal icon set. Shown when:
-- System not in LibRetro mapping
-- Cover not found (404)
-- Offline / network error
+Retro console icons from the icon set shown when: system not in LibRetro mapping,
+cover 404, or offline/network error.
 
-### Cache Strategy
+### Cache Strategy — SQLite, 30-day TTL
 
-No caching. Cover art fetched on demand each time a ROM is previewed.
-Gamelist cache: dictionary per directory (~3MB for 10k entries), cleared on
-directory change. No SQLite, no persistence between sessions.
+Cover-art lookups are **cached** in SQLite (`MetadataCache`): both hits and misses
+are recorded, and a URL that was already fetched (or already 404'd) within the last
+**30 days** is skipped — `IsLibRetroUrlCachedAsync(url)` → skip;
+`SetLibRetroThumbnailAsync(url, hitOrMiss)`. This prevents re-fetching every
+preview and rate-limiting the LibRetro service. Clearing the cache: Settings →
+Clear cache (also clears the metadata DB).
+
+> The shared `MetadataCache`/`MetadataCacheDb` SQLite database also serves music
+> metadata (see `Metadata/`); the ROM cover-art URL cache lives in the same DB.
 
 ### Implementation Notes
 
-- gamelist.xml parsed with XmlReader (streaming, no DOM overhead)
-- Dictionary indexed by filename and name-without-extension for O(1) lookup
-- Cover art: gamelist local → LibRetro (with title variations) → system icon
-- Cancel in-flight fetch when preview changes
-- Gamelist enrichment: name, description, genre, dev, publisher, players, rating, year
-- Preview panel shows metadata rows when gamelist data available
-- Description limited to 3 lines with truncation
+- `GamelistParser` streams with XmlReader (no DOM), dictionary indexed by filename
+  and name-without-extension for O(1) lookup.
+- Cover art: gamelist local → LibRetro (with title variations) → system icon.
+- In-flight fetch is cancelled when the preview changes.
+- Metadata rows shown when gamelist data available; description limited to 3 lines.

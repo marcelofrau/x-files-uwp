@@ -23,11 +23,12 @@ AudioLevelService (single engine: playback + analysis)
   │
   ├── AudioDeviceOutputNode (always created — provides hardware clock + audio output)
   ├── AudioFrameOutputNode → GetFrame() → raw PCM float buffer (real-time)
-  ├── FFT (Cooley-Tukey, 1024-point) → frequency bins
+  ├── FFT (Cooley-Tukey, 2048-point, background worker thread) → frequency bins
   ├── Band mapper → 26 logarithmic frequency bands
   ├── Ballistic: decay 0.85f, peak hold 1.5s, peak decay 0.92f
   ├── Sensitivity: power curve exponent 1.6 (compresses loud levels)
-  └── Exposes: float[] BandLevels[26], float[] BandPeaks[26]
+  └── Exposes: float[] BandLevels[26], float[] BandPeaks[26],
+              float[] Magnitudes[1024], float[] Waveform[2048], float Beat
 
 VuMeterBar (UserControl)
   ├── DispatcherTimer @ 60fps reads from AudioLevelService
@@ -116,21 +117,26 @@ Upper bands get progressively narrower, matching human auditory perception.
 | Parameter | Value |
 |---|---|
 | Algorithm | Cooley-Tukey radix-2 DIT |
-| Window size | 1024 samples |
+| Window size | 2048 samples |
 | Window function | Hamming |
 | Overlap | None (each quantum is independent) |
-| Output bins | 512 (N/2) |
-| Frequency resolution | ~46.9 Hz/bin @ 48kHz |
+| Output bins | 1024 (N/2) |
+| Frequency resolution | ~23.4 Hz/bin @ 48kHz |
 | Amplitude scaling | dB (20*log10), power-curved to 0.0–1.0 |
+| Compute location | Background worker thread (`Thread`), decoupled from the AudioGraph quantum thread |
+
+The full spectrum feeds the Win2D visualizers (`Magnitudes`, `Waveform`, `Beat`) — see
+`AUDIO-VISUALIZERS.md`.
 
 ## Performance
 
 1. **Zero allocations in hot path.** FFT input/output buffers and band arrays are
    pre-allocated in the service. Callbacks only write to existing arrays.
 
-2. **UI decoupled from audio thread.** `AudioLevelService` computes levels on the
-   AudioGraph thread. `VuMeterBar` reads them via 60fps `DispatcherTimer`. No
-   cross-thread mutation — only atomic float reads.
+2. **UI decoupled from audio thread.** `AudioLevelService` computes levels via a
+   background FFT worker thread (frames copied off the AudioGraph quantum thread).
+   `VuMeterBar`/visualizers read them via 60fps `DispatcherTimer`/Win2D loop. No
+   cross-thread mutation — only atomic float reads + defensive array copies.
 
 3. **`unsafe` for buffer access.** `IMemoryBufferByteAccess` COM interface required
    to read raw bytes from `AudioFrame`. Standard UWP pattern —

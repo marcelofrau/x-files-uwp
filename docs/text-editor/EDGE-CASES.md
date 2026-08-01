@@ -32,8 +32,8 @@ behaviors differ from modern browsers and must be handled.
 ### Highlight.js Integration
 
 1. **Re-highlighting cost**: Running `hljs.highlightBlock()` on every keystroke
-   is expensive for large files. For files > 512KB, syntax highlighting is
-   disabled entirely.
+   is expensive for large files. For files > 4MB (read-only tier), highlighting
+   doesn't matter — the editor never loads them editable.
 
 2. **Highlight corruption**: After editing inside a highlighted `<code>` block,
    the highlight spans may become misaligned. Solution: re-highlight the
@@ -65,7 +65,7 @@ Steps 3-6 introduce latency. For fast typing, this can cause:
 - Lost keystrokes if sync is slower than typing speed
 
 **Mitigation**: Debounce sync to 50ms. Buffer keystrokes. For files without
-highlighting (< 512KB threshold is disabled), sync is faster (no hljs step).
+highlighting, sync is faster (no hljs step).
 
 ### Cursor Position Preservation
 
@@ -128,22 +128,16 @@ existing D-pad repeat logic).
 
 ## File Size Tiers
 
-### < 512KB — Full Edit
+Two tiers, threshold `FullEditMaxBytes = 4MB` (see `TextEditorService.cs`).
+
+### ≤ 4MB — Full Edit
 
 - Syntax highlight: ON
 - Undo: unlimited (JS undo stack)
 - Sync: immediate (no debounce needed)
 - All features available
 
-### 512KB–2MB — Degraded Edit
-
-- Syntax highlight: OFF (plain text in contentEditable)
-- Undo: limited to 50 operations (configurable constant)
-- Notification bar: "Syntax highlighting disabled — file too large for real-time highlighting"
-- Sync: debounced to 100ms
-- All editing features still available
-
-### > 2MB — Read-Only
+### > 4MB — Read-Only
 
 - No editing capability
 - Content displayed in read-only WebView (no contentEditable)
@@ -156,10 +150,8 @@ existing D-pad repeat logic).
 
 ```csharp
 // In TextEditorService.cs
-public const long FullEditMaxBytes = 512 * 1024;       // 512KB
-public const long DegradedEditMaxBytes = 2 * 1024 * 1024; // 2MB
-public const int LimitedUndoCount = 50;
-public const int SyncDebounceMs = 100;
+public const long FullEditMaxBytes = 4 * 1024 * 1024; // 4MB
+public enum FileTier { FullEdit, ReadOnly }
 ```
 
 ## Performance Considerations
@@ -189,9 +181,7 @@ Each character in the editor occupies:
 - ~1-4 bytes in the contentEditable div (depending on HTML structure)
 - ~1-4 bytes in the JS text buffer
 
-For a 512KB file: ~512KB × 3 copies ≈ 1.5MB. Acceptable.
-
-For a 2MB file: ~2MB × 3 copies ≈ 6MB. Still acceptable for read-only.
+For a 4MB file: ~4MB × 3 copies ≈ 12MB. Acceptable (read-only tier above this).
 
 ## Unicode Edge Cases
 
@@ -254,4 +244,4 @@ must be tested on:
 
 EdgeHTML performance on Xbox hardware is a known variable. If JS execution
 is too slow, the highlight threshold may need to be lowered (e.g., 256KB
-instead of 512KB).
+instead of 4MB).

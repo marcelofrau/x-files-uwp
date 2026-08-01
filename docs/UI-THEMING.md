@@ -1,72 +1,57 @@
 # UI and Theming — XAML with Custom ControlTemplate
 
-See `DECISIONS.md` (ADR-002) for why XAML instead of Win2D.
+See `DECISIONS.md` (ADR-002) for why XAML instead of Win2D, and ADR-009 for the Win2D
+exception (audio visualizers only).
 
 ## General Principle
 
-No control uses the default Fluent Design appearance (`ListView`/`GridView` "out of
-the box"). Every interactive control (file row, context menu button, etc.) has its own
-`Style`/`ControlTemplate`, defined in `Theming/RetroTheme.xaml` (a `ResourceDictionary`
+No control uses the default Fluent Design appearance (`ListView`/`GridView` "out of the
+box"). Every interactive control (file row, context menu button, dialog, etc.) has its own
+`Style`/`ControlTemplate`, defined in `Theming/BladeTheme.xaml` (a `ResourceDictionary`
 merged in `App.xaml`).
 
 ## Gamepad Focus (UWP Native — Do Not Reimplement)
 
-- `IsTabStop="True"` + `UseSystemFocusVisuals="False"` (to replace the default blue
-  rectangle with a custom visual indicator via `FocusVisualStyle` or `VisualStateManager`
-  in the `Focused`/`PointerFocused` state).
-- `XYFocusUp`/`XYFocusDown`/`XYFocusLeft`/`XYFocusRight` used to bind navigation
-  between the 3 columns when needed (e.g. focus transition between `Current` and `Preview`
-  when switching "modes" — normally each column manages its own focus internally via
-  `INavigable`, and `XYFocus` covers cases where the user uses the physical Xbox D-pad
-  instead of the `GamepadInputService` logical flow. Define explicitly to avoid relying on
-  system auto-heuristics, which may pick the wrong element in asymmetric layouts).
-- `IsFocusEngaged` not used in MVP (reserved for a future "lock focus" mode inside
-  a modal dialog, e.g. `FileActionSheet`).
+- `IsTabStop="True"` + `UseSystemFocusVisuals="False"` — replace the default blue
+  rectangle with a custom visual indicator via `VisualStateManager` states
+  (`Focused`/`PointerOver`/`Selected`) in each custom `ControlTemplate`.
+- `XYFocusUp`/`XYFocusDown`/`XYFocusLeft`/`XYFocusRight` bind navigation between the
+  columns and modal surfaces when the user uses the physical D-pad instead of the
+  `GamepadInputService` logical flow. Define explicitly to avoid relying on system
+  auto-heuristics, which may pick the wrong element in asymmetric layouts.
+- `IsFocusEngaged` is used in `TextEditorOverlay`/`StartMenu` to lock focus to the modal
+  surface — that's the intended UWP pattern for "trapped" focus in a dialog-style overlay.
 
 ## ResourceDictionary Structure
 
 ```
-Theming/RetroTheme.xaml
-├── Brushes                     (Background, Foreground, Selected, Accent, Border, ...)
-├── Typography                  (FontFamily monospace, sizes by role: Title/Item/Meta)
+Theming/BladeTheme.xaml
+├── Brushes                     (XFilesBackgroundBrush, XFilesAccentBrush, XFilesBorderBrush,
+│                                XFilesSelectedBackgroundBrush, XFilesDangerBrush, ...)
+├── Typography                  (XFilesTitleFont, XFilesBodyFont, XFilesMonoFontFamily — Oxanium)
 ├── Styles
-│   ├── ColumnItemStyle         (file/folder row — Normal/PointerOver/Focused/Selected)
-│   ├── ColumnHeaderStyle       (column header, e.g. current path)
-│   ├── ContextMenuItemStyle    (FileActionSheet row)
-│   └── StatusBarStyle          (footer with button hints — "A: Open  B: Back  Y: Menu")
+│   ├── RetroListViewStyle      (column list container)
+│   └── RetroListViewItemStyle  (file/folder row — Normal/PointerOver/Focused/Selected)
+└── Templates                   (ConfirmDialogButton, etc. — per-control)
 ```
 
-## Runtime-Editable Theme (JSON)
+Reference via `StaticResource`/`{ThemeResource}` from any XAML in the app. Brushes use the
+`XFiles*` prefix; typography uses `XFiles*Font*`; there is no per-widget naming scheme —
+one dictionary, one style set, used everywhere.
 
-`Theming/AppTheme.cs`:
-1. Reads `x-files-theme.json` from `ApplicationData.Current.LocalFolder` (creates with
-   defaults if it doesn't exist, on first run).
-2. Parses via `System.Text.Json` with `JsonCommentHandling.Skip` (allows `//` comments in
-   JSON, without needing manual stripping like `dosbox-pure-uwp` does with nlohmann/json).
-3. Populates `Brush`/`FontFamily` in the `ResourceDictionary` at runtime (via
-   `Application.Current.Resources["BrushName"] = new SolidColorBrush(...)`).
+## Typography
 
-JSON schema example (same philosophy as `PUREMENU-THEMING.md` from dosbox-pure-uwp,
-adapted):
+Custom font **Oxanium** embedded in `Assets/Fonts/` (`Oxanium-Regular.ttf`,
+`Oxanium-Bold.ttf`, `Oxanium-ExtraLight.ttf`) and referenced as
+`XFilesTitleFont`/`XFilesBodyFont`/`XFilesMonoFontFamily`. Fallback chain keeps
+`Consolas`/`Cascadia Mono` as monospace fallback for code previews.
 
-```jsonc
-{
-  // Colors in #AARRGGBB or #RRGGBB format
-  "background": "#0D0D0D",
-  "foreground": "#E0E0E0",
-  "accent": "#33AA55",
-  "selectedBackground": "#1F3D2B",
-  "border": "#333333",
-  "fontFamily": "Consolas" // swap for custom font embedded in Assets/Fonts if desired
-}
-```
+## No Runtime JSON Theme
 
-## Custom Font (Optional, Post-MVP)
-
-If we want a "retro terminal" visual identity like `dosbox-pure-uwp` (VCR OSD Mono font),
-embed `.ttf` in `Assets/Fonts/` and reference via
-`FontFamily="/Assets/Fonts/FontName.ttf#Font Name"`. Not part of initial scaffold —
-use `Consolas`/`Cascadia Mono` (already available on Windows) as default.
+`Theming/AppTheme.cs` (JSON theme loader) was **planned but never built** — the theme is
+XAML-only. `BladeTheme.xaml` is merged at `App.xaml` level and there is no
+`x-files-theme.json` parsing at runtime. A future theme selector would add it; see
+`SETTINGS-EXPANSION.md` and the `ROADMAP.md` backlog.
 
 ## Base Layout (3 Columns)
 
@@ -77,8 +62,35 @@ use `Consolas`/`Cascadia Mono` (already available on Windows) as default.
     <ColumnDefinition Width="1.75*" /> <!-- Current -->
     <ColumnDefinition Width="2.25*" /> <!-- Preview -->
   </Grid.ColumnDefinitions>
-  <!-- Controls/ColumnListView x3 (Parent, Current) + Controls/PreviewPane (Preview) -->
+  <!-- Controls/ColumnListView (Parent, Current) + Controls/MediaPreviewControl (Preview) -->
 </Grid>
 ```
-Proportions adjustable; values above are a reasonable starting point (yazi uses something
-similar — parent smaller, current medium, preview larger).
+
+Proportions adjustable; values above are the shipped default (yazi-style: parent smaller,
+current medium, preview larger).
+
+## Control Inventory (Controls/*.xaml)
+
+| Control | Purpose |
+|---|---|
+| `MillerColumnsPage` | Main page: 3 columns, preview, fullscreen media, OSD, batch mode |
+| `ColumnListView` | Reusable column list (parent + current) |
+| `MediaPreviewControl` | Preview pane: text/image/audio/video/PDF/ROM |
+| `FileActionSheet` | Y-button context menu |
+| `StartMenu` | Start button overlay (settings, logs, favorites, search, about) |
+| `TextEditorOverlay` | Fullscreen text editor (WebView + TextBox bridge) |
+| `FolderBrowserDialog` | Destination picker for copy/move/paste |
+| `AlertDialog` / `InputDialog` / `OverwriteDialog` | Modal prompts |
+| `FileOperationConfirmDialog` / `OperationProgressDialog` | Batch operation flow |
+| `SettingsPage` / `LogsPage` / `CounterPage` / `DirectoryTestPage` | Dev/utility pages |
+| `LetterGridOverlay` | Letter-jump grid for long listings |
+| `GamepadLegend` | Footer button hints ("A: Open  B: Back  Y: Menu") |
+| `ImageFullScreenOverlay` / `PdfFullScreenOverlay` | Fullscreen media viewers |
+| `ShareDialog` / `VideoTrackMenu` | QR share / video track picker |
+| `VuMeterBar` | Audio level indicator |
+| `DebugOverlay` | **Dead code** (see tech-debts) |
+
+## Custom Font / Further Styling (Backlog)
+
+- Theme selector UI (JSON runtime theme) — see `SETTINGS-EXPANSION.md`.
+- Empty-state visual pass and column transition animations — `ROADMAP.md` backlog.

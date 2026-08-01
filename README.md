@@ -13,8 +13,8 @@
   <img src="https://img.shields.io/badge/Platform-Xbox%20One%20%7C%20Series%20X%7CS-107C10?style=flat-square&logo=xbox" alt="Platform" />
   <img src="https://img.shields.io/badge/Stack-C%23%20%2F%20UWP%20%2F%20XAML-512BD4?style=flat-square&logo=dotnet" alt="Stack" />
   <img src="https://img.shields.io/badge/License-GPL--3.0-green?style=flat-square" alt="License" />
-  <img src="https://img.shields.io/badge/Status-Active%20Development-yellow?style=flat-square" alt="Status" />
-  <img src="https://img.shields.io/badge/Version-1.0.0-brightgreen?style=flat-square" alt="Version" />
+  <img src="https://img.shields.io/badge/Status-Released-brightgreen?style=flat-square" alt="Status" />
+  <img src="https://img.shields.io/badge/Version-1.2.0-brightgreen?style=flat-square" alt="Version" />
 </p>
 
 <p align="center">
@@ -62,15 +62,20 @@ Move the cursor over any file and instantly see its contents — no need to open
 | 💻 Code (40+ languages) | Syntax highlighting via highlight.js |
 | 🎵 Audio (MP3, FLAC, OGG, WAV) | ID3 metadata + album art + VU meter |
 | 🎬 Video (MP4, MKV, AVI) | Inline playback with transport controls |
+| 📖 PDF | Page preview + fullscreen viewer |
+| 🎮 ROMs (NES, SNES, GB/GBA, Genesis...) | Header-parsed title + system icon |
 | 📦 Archives (ZIP, 7Z, RAR) | Browse contents as virtual folders |
 
 ### 🎵 Built-in Audio Player
-Play music directly from the file browser with a real-time **26-bar spectrum analyzer**.
+Play music directly from the file browser with a real-time spectrum analyzer.
 Pause, seek, skip tracks, adjust volume — all from the gamepad. *Winamp vibes on your Xbox.*
 
 - 🔊 Real-time VU meter with green → yellow → red gradient
 - 🎨 Fullscreen mode with album art and track metadata
-- 📊 Multiple visualizer modes (cycle with **Select**)
+- ✨ **29 audio visualizers** (Win2D + HLSL shaders), cycle with **Select**,
+  picker via long-press **Select**
+- 🎼 **Metadata guesser** — ID3 tags + filename parsing + MusicBrainz enrichment,
+  cached in SQLite
 - 🔀 Auto-advance to next track
 - 🔉 Volume control via analog stick
 
@@ -81,7 +86,7 @@ Watch videos directly from the file browser with a clean fullscreen experience.
 - ⏪ Seek 5 seconds with **LB/RB**
 - 🔊 Volume control via left analog stick
 - 📝 Subtitle support (external `.srt` files auto-detected)
-- 🔀 Audio track switching (multi-language files)
+- 🔀 Audio track + subtitle track switching (multi-language files)
 - 🎯 Clean OSD with transport controls
 
 ### 📦 Archive Explorer
@@ -101,7 +106,29 @@ All the essentials, accessible from the **Y button** context menu:
 - 📦 Extract archives to any destination
 - 🗜️ Create ZIP from files or folders
 - 📁 Create new folder
+- ⭐ Add/remove favorites
 - 🔄 Refresh current directory
+
+### 🖊️ Text Editor
+Edit text files right on the couch with a fullscreen, gamepad-first editor:
+
+- 💡 Syntax highlighting for 40+ languages (highlight.js)
+- ⌨️ System virtual keyboard (gamepad-native, no hardware keyboard needed)
+- 📏 Three size tiers: full edit + highlight → edit without highlight → read-only
+- 💾 Save via **Start**; dirty-state confirmation on exit
+- 🔤 Encoding detection (UTF-8/16, Windows-1252) with BOM/line-ending preservation
+
+### 🔗 Share via QR
+Share any file or folder as a **QR code** in seconds:
+
+- 📤 Uploads to gofile.io, displays a scannable QR with a short URL
+- 📋 Share app logs the same way for easy bug reporting
+- ✅ Perfect for moving files between Xbox and phone/PC
+
+### ⚙️ Settings & Logs
+- 🎛️ Settings page: log level, metadata cache management
+- 📜 Built-in log viewer with daily rotation (last 10 sessions)
+- 🔍 Start menu with search, favorites, about — everything gamepad-driven
 
 ---
 
@@ -112,13 +139,14 @@ All the essentials, accessible from the **Y button** context menu:
 | 🕹️ **D-pad / Left Stick** | Navigate up/down |
 | **D-pad Right / A** | Enter folder · Play file · Toggle play-pause |
 | **D-pad Left / B** | Go back · Close fullscreen |
-| **LB / LT** | Page up (−8 items) · Seek backward |
-| **RB / RT** | Page down (+8 items) · Seek forward |
+| **LB / RB** | Page up/down in browser · Seek 5s in media (hold to repeat) |
 | **Y** | Context menu (rename, delete, create ZIP, extract...) |
+| **Y (hold)** | Add/remove favorite |
 | **X** | Refresh current directory |
 | **Right Analog Stick** | Scroll preview · Adjust volume (fullscreen) |
-| **Select** | Cycle audio visualizer · Open video track menu |
-| **Start** | Settings (coming soon) |
+| **Select** | Cycle audio visualizer (media) · Toggle batch mode (browser) |
+| **Select (hold)** | Visualizer picker (media) |
+| **Start** | Start menu: settings, logs, favorites, search, about |
 
 ---
 
@@ -222,8 +250,13 @@ See [DEPLOY-XBOX.md](docs/DEPLOY-XBOX.md) for detailed steps.
 | 🎮 Gamepad input | Native `Windows.Gaming.Input.Gamepad` polling with edge detection and repeat |
 | 🎨 Custom theme | Zero Fluent Design chrome — every control uses custom `ControlTemplate` |
 | 🎵 Audio playback | AudioGraph with stream fallback for USB drives + real-time FFT spectrum |
+| ✨ Audio visualizers | 29 Win2D/HLSL visualizers (VU meter, waveform, plasma, starfield...) |
 | 📦 Archive support | SharpCompress for ZIP/7Z/RAR — browse without extracting |
 | 📝 Syntax highlighting | Inlined highlight.js for 40+ languages (Aco theme) |
+| 🧠 Metadata guesser | ID3 + filename + MusicBrainz/Deezer enrichment, SQLite cache with cover art |
+| 📖 PDF viewer | Windows.Data.Pdf — page thumbnails + fullscreen |
+| 🎮 ROM preview | Header parsing for 35+ extensions, system icons |
+| 🔗 QR sharing | gofile.io upload + ZXing QR generation |
 | 📋 Logging | Serilog — every operation, input event, and exception logged with daily rotation |
 
 ---
@@ -238,8 +271,12 @@ See [DEPLOY-XBOX.md](docs/DEPLOY-XBOX.md) for detailed steps.
 | [FILEBROWSER.md](docs/FILEBROWSER.md) | FileEntry model, DirectoryScanner, sorting |
 | [ARCHIVES.md](docs/ARCHIVES.md) | ZIP/7Z/RAR via SharpCompress |
 | [AUDIO-VISUALIZATION.md](docs/AUDIO-VISUALIZATION.md) | VU meter architecture, AudioGraph, FFT |
+| [AUDIO-VISUALIZERS.md](docs/AUDIO-VISUALIZERS.md) | 29 Win2D visualizers, registry, shader pipeline |
+| [FILETYPE-ICONS.md](docs/FILETYPE-ICONS.md) | File-type icon mapping |
+| [ROM-FORMATS.md](docs/ROM-FORMATS.md) | ROM header parsing, systems/extensions |
+| [FILE-SHARING-QR.md](docs/FILE-SHARING-QR.md) | QR file sharing via gofile.io |
 | [UI-THEMING.md](docs/UI-THEMING.md) | ControlTemplate conventions |
-| [ROADMAP.md](docs/ROADMAP.md) | Phased implementation plan |
+| [ROADMAP.md](docs/ROADMAP.md) | Implementation status + remaining backlog |
 | [DECISIONS.md](docs/DECISIONS.md) | ADRs — why XAML, why SharpCompress, etc. |
 | [LOGGING.md](docs/LOGGING.md) | Log levels, debug flags, architecture, conventions |
 | [DEPLOY-XBOX.md](docs/DEPLOY-XBOX.md) | Developer Mode, Device Portal, sideload steps |
