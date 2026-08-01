@@ -164,7 +164,7 @@ namespace XFiles.Controls
 
         public Task<FileAction?> ShowAsync(FileEntry entry, bool isArchiveRoot = false)
         {
-            _tcs = new TaskCompletionSource<FileAction?>();
+            _tcs = new TaskCompletionSource<FileAction?>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             var actions = new List<ActionItem>();
 
@@ -334,7 +334,7 @@ namespace XFiles.Controls
 
         public Task<FileAction?> ShowExtractChoiceAsync(string archiveName)
         {
-            _tcs = new TaskCompletionSource<FileAction?>();
+            _tcs = new TaskCompletionSource<FileAction?>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             var actions = new List<ActionItem>();
             var accent = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x93, 0xC4, 0x3C));
@@ -373,7 +373,7 @@ namespace XFiles.Controls
 
         public Task<FileAction?> ShowBatchAsync(int selectedCount)
         {
-            _tcs = new TaskCompletionSource<FileAction?>();
+            _tcs = new TaskCompletionSource<FileAction?>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             var actions = new List<ActionItem>();
             var accent = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x93, 0xC4, 0x3C));
@@ -444,7 +444,7 @@ namespace XFiles.Controls
 
         public Task<FileAction?> ShowFavoritesActionsAsync(FileEntry entry)
         {
-            _tcs = new TaskCompletionSource<FileAction?>();
+            _tcs = new TaskCompletionSource<FileAction?>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             var actions = new List<ActionItem>();
             var accent = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x93, 0xC4, 0x3C));

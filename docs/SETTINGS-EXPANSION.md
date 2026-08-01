@@ -19,6 +19,11 @@ All settings use existing `XFilesSettings` + SQLite `AppSettingEntry` persistenc
 
 Remove dead code from the disabled debug overlay feature.
 
+> **DONE (Aug 2026)** — `DebugOverlay.xaml(.cs)` and `ScreenLogger.cs` deleted;
+> `Log.Screen` property, `WriteTo.Sink(Screen)` registration, and the commented
+> instantiation in `App.xaml.cs` removed; csproj entries cleaned. Serilog File/Debug
+> sinks remain.
+
 ### Files to Delete
 
 | File | Reason |

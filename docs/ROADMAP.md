@@ -97,13 +97,14 @@ dirty-state save confirmation, `Assets/editor.js`. **Done.** See `docs/text-edit
 
 See `docs/tech-debts/` for the full audit and remediation plan. High-level:
 
-- [ ] Decompose `MillerColumnsPage` god object (4960 lines, complexity 916)
-- [ ] `SubtitleDetector` — replace `System.IO` with P/Invoke
-- [ ] `PlasmaVisualizer` shader load — remove blocking `.GetResult()`
-- [ ] Remove dead debug overlay code (`DebugOverlay`, `ScreenLogger`)
-- [ ] Apply `RunContinuationsAsynchronously` to `TaskCompletionSource` instances
-- [ ] Turn off `VUMETER_DEBUG`/`AUDIO_LEVEL_DEBUG` in Debug config by default
-- [ ] Expand unit test coverage (`tests/`, MSTest, linked-source, net8.0)
+- [ ] Decompose `MillerColumnsPage` god object (4373 lines, complexity 916)
+- [x] `SubtitleDetector` — `System.IO` replaced with P/Invoke (Aug 2026)
+- [x] `PlasmaVisualizer` shader load — blocking `.GetResult()` removed (async load, Aug 2026)
+- [x] Dead debug overlay code removed (`DebugOverlay`, `ScreenLogger`, Aug 2026)
+- [x] `RunContinuationsAsynchronously` applied to all 19 `TaskCompletionSource` (Aug 2026)
+- [x] `VUMETER_DEBUG`/`AUDIO_LEVEL_DEBUG` turned OFF in Debug config (Aug 2026)
+- [x] Debug flags/`Prefer32Bit`/PT comments cleaned (Aug 2026)
+- [ ] Expand unit test coverage (`tests/`, MSTest, linked-source, net8.0) — **P0 done (45 tests)**, extend to `TextEditorService`/`MetadataCache`
 
 ---
 

@@ -24,7 +24,7 @@ namespace XFiles.Controls
 
         public Task<char?> ShowAsync()
         {
-            _tcs = new TaskCompletionSource<char?>();
+            _tcs = new TaskCompletionSource<char?>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             var letters = new List<char>();
             for (char c = 'A'; c <= 'Z'; c++)

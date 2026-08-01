@@ -104,7 +104,7 @@ namespace XFiles.Controls
             if (showNoButton)
                 NoLabel.Text = noLabel ?? "NO";
 
-            _tcs = new TaskCompletionSource<bool>();
+            _tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             Visibility = Visibility.Visible;
             Overlay.Visibility = Visibility.Visible;
             return _tcs.Task;

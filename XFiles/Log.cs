@@ -43,7 +43,6 @@ namespace XFiles
         private const string ActiveLogFile = "xfiles.log";
 
         public static Logger Logger => _logger;
-        public static ScreenLogger Screen { get; private set; }
 
         public static void Init()
         {
@@ -56,12 +55,10 @@ namespace XFiles
 
             _currentLogFile = Path.Combine(logsDir, ActiveLogFile);
 
-            Screen = new ScreenLogger();
             _levelSwitch = new LoggingLevelSwitch(LogEventLevel.Information);
 
             _logger = new LoggerConfiguration()
                 .MinimumLevel.ControlledBy(_levelSwitch)
-                .WriteTo.Sink(Screen)
                 .WriteTo.Debug(
                     outputTemplate: "[{Timestamp:HH:mm:ss.fff} {Level:u3}] {Message:lj}{NewLine}{Exception}")
                 .WriteTo.File(

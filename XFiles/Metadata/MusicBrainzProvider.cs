@@ -89,7 +89,7 @@ namespace XFiles.Metadata
             }
             finally
             {
-                try { await Task.Delay(1100); } catch { }
+                try { await Task.Delay(1100); } catch (Exception ex) { Log.Verb("MusicBrainz: rate-limit delay interrupted", ex); }
                 _rateLimiter.Release();
             }
         }

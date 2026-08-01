@@ -59,7 +59,7 @@ namespace XFiles.Controls
 
         public Task<StartMenuItem?> ShowAsync()
         {
-            _tcs = new TaskCompletionSource<StartMenuItem?>();
+            _tcs = new TaskCompletionSource<StartMenuItem?>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             _mainItems = new List<MenuItem>
             {

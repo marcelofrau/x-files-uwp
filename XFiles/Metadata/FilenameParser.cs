@@ -26,7 +26,10 @@ namespace XFiles.Metadata
                 if (!string.IsNullOrEmpty(dir))
                     parentDir = Path.GetFileName(dir);
             }
-            catch { }
+            catch
+            {
+                Log.Verb("FilenameParser: failed to extract parent dir from '{Path}'", filePath);
+            }
 
             ExtractTrackAndTitle(fileName, result);
 

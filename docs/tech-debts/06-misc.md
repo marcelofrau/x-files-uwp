@@ -2,7 +2,7 @@
 
 Findings from the Aug 2026 re-audit that don't fit the other categories.
 
-## HIGH: Debug Flags Left ON in Release-Bound Debug Config
+## FIXED: Debug Flags Left ON in Release-Bound Debug Config
 
 **File:** `XFiles/XFiles.csproj`
 
@@ -14,8 +14,8 @@ Findings from the Aug 2026 re-audit that don't fit the other categories.
 were left enabled after visualizer work. They spam the log at ~60fps on every playback
 and mask real log lines.
 
-**Fix:** remove both from `DefineConstants` (keep `AUDIO_ANALYSIS`). Docs claim all debug
-flags are OFF by default (`docs/LOGGING.md`) — the doc has been corrected to flag this.
+**Fixed (Aug 2026):** both removed from `DefineConstants` (`AUDIO_ANALYSIS` kept).
+`docs/LOGGING.md` already documents the flags as OFF by default — now matches reality.
 
 ## MEDIUM: Hardcoded Certificate Password
 
@@ -32,30 +32,29 @@ same key would not be acceptable for any Store/enterprise signing.
 **Fix:** drive from environment variable or build config; keep the local dev cert
 private key out of any CI packaging if it ever runs in a shared runner.
 
-## MEDIUM: `Prefer32Bit` in x64 Configs
+## FIXED: `Prefer32Bit` in x64 Configs
 
 **File:** `XFiles/XFiles.csproj`
 
-`<Prefer32Bit>true</Prefer32Bit>` appears in the x64 configuration blocks. For a
+`<Prefer32Bit>true</Prefer32Bit>` appeared in the x64 configuration blocks. For a
 x64-targeted UWP app this is inert but misleading.
 
-**Fix:** remove the `Prefer32Bit` lines from x64 configs (or set to `false`).
+**Fixed (Aug 2026):** removed from both x64 configs.
 
-## LOW: Non-English Comment
+## FIXED: Non-English Comments
 
-**File:** `Visualizers/Visualizers/RetroOscilloscopeVisualizer.cs:50`
+**Files:** `Visualizers/Visualizers/RetroOscilloscopeVisualizer.cs` — multiple comments
+were in Portuguese with mojibake accents (`C�PIA SEGURA...`, etc.).
 
-One comment is in Portuguese (the rest of the codebase is English). Cosmetic — fix
-opportunistically.
+**Fixed (Aug 2026):** all translated to English (the codebase is English-only).
 
-## LOW: Dead Debug Overlay Code
+## FIXED: Dead Debug Overlay Code
 
-- `Controls/DebugOverlay.xaml(.cs)` — control exists but is never instantiated
-  (`App.xaml.cs:110` comment: `// rootGrid.Children.Add(new DebugOverlay(Log.Screen));`).
-- `Log.Screen` (`ScreenLogger`) is still constructed and attached as a Serilog sink
-  (`Log.cs:59,64`) but has no consumer since the overlay is disabled — the in-app log
-  viewer reads session files instead.
+- `Controls/DebugOverlay.xaml(.cs)` — control existed but was never instantiated
+  (`App.xaml.cs:110` had the instantiation commented out).
+- `Log.Screen` (`ScreenLogger`) was still constructed and attached as a Serilog sink
+  (`Log.cs:59,64`) but had no consumer — the in-app log viewer reads session files instead.
 
-**Fix:** per `docs/SETTINGS-EXPANSION.md` Part 1 — delete `DebugOverlay.xaml(.cs)`,
-`ScreenLogger`, and the `Log.Screen` plumbing. Low risk (LogsPage reads files, not
-the screen buffer).
+**Fixed (Aug 2026):** deleted `DebugOverlay.xaml(.cs)`, `ScreenLogger.cs`, the `Log.Screen`
+property + `WriteTo.Sink(Screen)` registration, and the commented instantiation in
+`App.xaml.cs`. Serilog File/Debug sinks remain. LogsPage reads files, not the screen buffer.

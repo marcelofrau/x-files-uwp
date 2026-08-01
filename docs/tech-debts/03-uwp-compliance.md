@@ -5,23 +5,24 @@ methods silently fail or throw `UnauthorizedAccessException` on external drives.
 
 All filesystem access must use Win32 P/Invoke (`*FromAppW` variants).
 
-## HIGH: Remaining System.IO Usage
+## FIXED: Remaining System.IO Usage
 
 ### SubtitleDetector.cs
 
-**File:** `FileSystem/SubtitleDetector.cs:31,37` — still open (Aug 2026)
+**File:** `FileSystem/SubtitleDetector.cs:31,37` — was the only remaining `System.IO`
+filesystem enumeration (Aug 2026 audit).
 
 ```csharp
-// Line 31 — uses Directory.Exists (unreliable in UWP sandbox)
+// Old — unreliable in UWP sandbox
 if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) return results;
-
-// Line 37 — uses Directory.EnumerateFiles (not P/Invoke)
 foreach (string file in Directory.EnumerateFiles(dir))
 ```
 
-**Fix:** Replace with `CheckPathType(dir)` and `FindFirstFileExFromAppW` enumeration
-(already done in all other files). Pattern exists in `FileOperations.cs` and
-`ArchiveBrowser.cs` — copy the same P/Invoke approach.
+**Fixed (Aug 2026):** directory existence check now uses
+`FileOperations.CheckPathType(dir) != "directory"`; enumeration uses a local
+`FindFirstFileExFromAppW` + `FindNextFileW` P/Invoke block (same pattern as
+`FileOperations.cs`/`ArchiveBrowser.cs`), via `EnumerateFileNames(dir)`. No `System.IO`
+filesystem calls remain in the codebase.
 
 ## Status of Other Files
 
@@ -40,5 +41,5 @@ foreach (string file in Directory.EnumerateFiles(dir))
 | `TextEditorOverlay.xaml.cs` (font) | `File.ReadAllBytes` (:641) | **FIXED** — P/Invoke |
 | `FileOperations.cs` | — | `ReadAllBytesWin32` helper at :1442 (P/Invoke) |
 
-> Re-audit (Aug 2026): the only remaining `System.IO` filesystem *enumeration* is
-> `SubtitleDetector`. Everything else is P/Invoke.
+> Re-audit (Aug 2026): the only remaining `System.IO` filesystem *enumeration* was
+> `SubtitleDetector` — **fixed** (Aug 2026). Everything is now P/Invoke.

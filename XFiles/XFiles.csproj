@@ -34,7 +34,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
     <DebugSymbols>true</DebugSymbols>
     <OutputPath>bin\x64\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_UWP;AUDIO_ANALYSIS;VUMETER_DEBUG;AUDIO_LEVEL_DEBUG</DefineConstants>
+    <DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_UWP;AUDIO_ANALYSIS</DefineConstants>
     <!-- Debug flags: uncomment in DefineConstants above to enable
          AUDIO_ANALYSIS    — FFT processing + VU meter (comment out to test stutter without analysis overhead)
          GAMEPAD_POLL_DEBUG  — GamepadInputService polling (sticks, dpad state, button repeats)
@@ -49,7 +49,6 @@
     <PlatformTarget>x64</PlatformTarget>
     <UseVSHostingProcess>false</UseVSHostingProcess>
     <ErrorReport>prompt</ErrorReport>
-    <Prefer32Bit>true</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
     <OutputPath>bin\x64\Release\</OutputPath>
@@ -59,7 +58,6 @@
     <!-- <DebugType>full</DebugType> -->
     <PlatformTarget>x64</PlatformTarget>
     <UseVSHostingProcess>false</UseVSHostingProcess>
-    <Prefer32Bit>true</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
     <!-- SharpCompress: zip/7z/rar support. See docs/ARCHIVES.md -->
@@ -131,7 +129,6 @@
     <Compile Include="Metadata\MetadataGuesser.cs" />
     <Compile Include="Settings\XFilesSettings.cs" />
     <Compile Include="Log.cs" />
-    <Compile Include="ScreenLogger.cs" />
     <Compile Include="Controls\CounterPage.xaml.cs">
       <DependentUpon>CounterPage.xaml</DependentUpon>
     </Compile>
@@ -143,9 +140,6 @@
     </Compile>
     <Compile Include="Controls\ColumnListView.xaml.cs">
       <DependentUpon>ColumnListView.xaml</DependentUpon>
-    </Compile>
-    <Compile Include="Controls\DebugOverlay.xaml.cs">
-      <DependentUpon>DebugOverlay.xaml</DependentUpon>
     </Compile>
     <Compile Include="Controls\MillerColumnsPage.xaml.cs">
       <DependentUpon>MillerColumnsPage.xaml</DependentUpon>
@@ -275,10 +269,6 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Controls\ColumnListView.xaml">
-      <Generator>MSBuild:Compile</Generator>
-      <SubType>Designer</SubType>
-    </Page>
-    <Page Include="Controls\DebugOverlay.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>

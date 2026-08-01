@@ -107,7 +107,6 @@ namespace XFiles
 
                 var rootGrid = new Grid();
                 rootGrid.Children.Add(rootFrame);
-                // rootGrid.Children.Add(new DebugOverlay(Log.Screen)); // disabled for now
                 Window.Current.Content = rootGrid;
                 Window.Current.CoreWindow.PointerCursor = null;
             }

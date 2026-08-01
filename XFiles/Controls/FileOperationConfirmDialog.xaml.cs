@@ -44,7 +44,7 @@ namespace XFiles.Controls
             DeleteButton.BorderBrush = redBg;
             DeleteButtonText.Text = "DELETE";
 
-            _tcs = new TaskCompletionSource<bool>();
+            _tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             Visibility = Visibility.Visible;
             Overlay.Visibility = Visibility.Visible;
 
@@ -69,7 +69,7 @@ namespace XFiles.Controls
             DeleteButton.BorderBrush = greenBg;
             DeleteButtonText.Text = "MOVE";
 
-            _tcs = new TaskCompletionSource<bool>();
+            _tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             Visibility = Visibility.Visible;
             Overlay.Visibility = Visibility.Visible;
 

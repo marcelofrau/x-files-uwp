@@ -4415,7 +4415,7 @@ namespace XFiles.Controls
             // Conflict callback: shows OverwriteDialog on UI thread, returns 0=skip/1=overwrite/2=all
             var conflictCallback = new Func<string, Task<int>>(conflictFileName =>
             {
-                var tcs = new TaskCompletionSource<int>();
+                var tcs = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
                 _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, async () =>
                 {
                     try
@@ -4479,7 +4479,7 @@ namespace XFiles.Controls
             // Conflict callback: shows OverwriteDialog on UI thread, returns 0=skip/1=overwrite/2=all
             var conflictCallback = new Func<string, Task<int>>(conflictFileName =>
             {
-                var tcs = new TaskCompletionSource<int>();
+                var tcs = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
                 _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, async () =>
                 {
                     try
