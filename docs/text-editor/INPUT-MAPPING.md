@@ -19,18 +19,19 @@ Cursor and text manipulation via gamepad only. System keyboard is hidden.
 
 | Input | Action | JS Function | Repeat |
 |---|---|---|---|
-| D-pad Up | Move cursor left 1 char | `moveCursorLeft(1)` | Yes (initial 300ms, repeat 80ms) |
-| D-pad Down | Move cursor right 1 char | `moveCursorRight(1)` | Yes |
-| D-pad Left | Move cursor up 1 line | `moveCursorUp(1)` | No (single fire) |
-| D-pad Right | Move cursor down 1 line | `moveCursorDown(1)` | No |
+| D-pad Up | Move cursor up 1 line | `moveCursorUp(1)` | Yes |
+| D-pad Down | Move cursor down 1 line | `moveCursorDown(1)` | Yes |
+| D-pad Left | Move cursor left 1 char | `moveCursorLeft(1)` | Yes (initial 300ms, repeat 80ms) |
+| D-pad Right | Move cursor right 1 char | `moveCursorRight(1)` | Yes |
 | Left Stick Left | Jump word left | `jumpWordLeft()` | Yes (with repeat) |
 | Left Stick Right | Jump word right | `jumpWordRight()` | Yes |
 
-**Design note**: D-pad directions feel inverted (Up = left, Down = right) because
-the Miller column navigation already uses Up/Down for list navigation, and the user
-expects Up = "go back in text" (leftward) and Down = "go forward" (rightward).
-This matches the horizontal reading direction of text files. If testing reveals this
-feels wrong, swap the mapping.
+**Mapping is spatial** (Up = up in text, Right = right in text) — verified in
+`TextEditorOverlay.xaml.cs` (`HandleDPadUp` → `moveCursorUp`, etc.). An inverted
+mapping (D-pad Up = cursor left) was originally proposed to mirror the horizontal
+reading direction, but spatial mapping was kept because it matches user expectation
+and the D-pad directions in the Miller columns. Left stick gives word-level jumps;
+D-pad gives char/line movement.
 
 ### Face Buttons
 
@@ -110,23 +111,17 @@ Input mode ───[Select/B]──→ Navigate mode
 
 ## Cursor Direction Mapping (Navigate Mode)
 
-The D-pad-to-cursor mapping follows text reading direction, not spatial direction:
+Mapping is **spatial** (D-pad directions match text directions):
 
 ```
 Physical D-pad        Text cursor action
-    ↑                 ← (left, previous char)
-    ↓                 → (right, next char)
-    ←                 ↑ (up, previous line)
-    →                 ↓ (down, next line)
+    ↑                 ↑ (up, previous line)
+    ↓                 ↓ (down, next line)
+    ←                 ← (left, previous char)
+    →                 → (right, next char)
 ```
 
-**Rationale**: In horizontal text, "forward" is rightward. D-pad Down = "go forward"
-= rightward in text. D-pad Up = "go backward" = leftward. D-pad Left/Right map to
-vertical movement (up/down lines) because that's the remaining direction.
-
-**Alternative (spatial)**: If users prefer spatial mapping (Up = up in text,
-Right = right in text), this can be made configurable in a future version.
-The current mapping should be tested on real hardware before committing.
+Left stick adds word-level jumps; LB/RB paragraph jumps; LT/RT page jumps.
 
 ## Footer Legend
 

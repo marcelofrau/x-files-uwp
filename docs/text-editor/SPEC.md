@@ -1,5 +1,9 @@
 # Text Editor — Functional Specification
 
+> **Status: shipped** (v1.2.0). The two-tier model below reflects the implemented
+> `TextEditorService` (threshold 4MB — see `FileTier`). No syntax highlight or undo
+> tier exists; files over the threshold open read-only.
+
 ## Goal
 
 Gamepad-oriented text file editor built into X-Files, using the UWP system virtual
@@ -19,8 +23,7 @@ the file browser, not a separate app.
    keyboard — common operations available directly on gamepad.
 5. **Save and exit**: user presses Start to save, or B to exit with unsaved-changes
    confirmation.
-6. **Large file warning**: user opens a file > 512KB, sees notification bar explaining
-   no syntax highlight; file > 2MB opens read-only with warning.
+6. **Large file warning**: user opens a file > 4MB, sees read-only warning bar.
 
 ## Scope — MVP
 
@@ -32,11 +35,9 @@ the file browser, not a separate app.
 - Word wrap toggle (LB + RB simultaneously)
 - Undo / redo (JavaScript undo stack, bounded by file size)
 - Dirty state tracking with unsaved-changes confirmation on exit
-- File size tiers:
-  - **< 512KB**: full edit + syntax highlight + full undo
-  - **512KB–2MB**: edit enabled, syntax highlight OFF, notification bar warning,
-    undo limited to 50 operations
-  - **> 2MB**: read-only preview, notification bar explaining file too large to edit
+- File size tiers (2 tiers, threshold in `TextEditorService.FullEditMaxBytes` = 4MB):
+  - **≤ 4MB**: full edit + syntax highlight + undo
+  - **> 4MB**: read-only preview, notification bar explaining file too large to edit
 - Encoding: UTF-8 with BOM detection (see `ENCODING.md`)
 - Entry point: "Edit" action in `FileActionSheet` for text files
 - Footer legend updates when editor is open (new button labels)
@@ -55,11 +56,10 @@ the file browser, not a separate app.
 
 | Size | Mode | Syntax Highlight | Undo | Notification |
 |---|---|---|---|---|
-| < 512KB | Full edit | Yes | Unlimited (JS stack) | None |
-| 512KB–2MB | Edit (degraded) | No | Limited (50 ops) | Bar: "Syntax highlighting disabled — file too large" |
-| > 2MB | Read-only | No | N/A | Bar: "File too large to edit (>{size})" |
+| ≤ 4MB | Full edit | Yes | Yes (JS stack) | None |
+| > 4MB | Read-only | No | N/A | Bar: "File too large to edit (>{size})" |
 
-Thresholds are configurable constants in `TextEditorService.cs`.
+Threshold is `FullEditMaxBytes = 4 * 1024 * 1024` in `TextEditorService.cs`.
 
 ## Entry Points
 
@@ -78,18 +78,17 @@ Both entry points read the file, detect encoding, and open the `TextEditorOverla
 
 ## Completion Criteria
 
-- [ ] Editor opens for any file in `TextExtensions` without crash
-- [ ] Syntax highlighting visible for code files (JS, C#, Python, etc.)
-- [ ] D-pad moves cursor correctly in all 4 directions
-- [ ] Left stick jumps by word
-- [ ] System keyboard appears on Select press, closes on second Select
-- [ ] Text typed on system keyboard appears in editor with correct syntax highlighting
-- [ ] Backspace (B), Delete (X), Enter (Y) work in Navigate mode
-- [ ] Save writes file correctly (UTF-8 with BOM)
-- [ ] Dirty state tracked — exit with unsaved changes shows confirmation
-- [ ] File > 512KB opens without syntax highlight, notification bar visible
-- [ ] File > 2MB opens read-only, warning visible
-- [ ] Word wrap toggle works (LB+RB)
-- [ ] Undo/redo works (Ctrl+Z / Ctrl+Y via JS)
-- [ ] Footer legend updates when editor is open
-- [ ] No regression in existing file browsing, preview, or media playback
+- [x] Editor opens for any file in `TextExtensions` without crash
+- [x] Syntax highlighting visible for code files (JS, C#, Python, etc.)
+- [x] D-pad moves cursor correctly in all 4 directions (spatial mapping)
+- [x] Left stick jumps by word
+- [x] System keyboard appears on Select press, closes on second Select / B
+- [x] Text typed on system keyboard appears in editor with correct syntax highlighting
+- [x] Backspace (B), Delete (X), Enter (Y) work in Navigate mode
+- [x] Save writes file correctly (always UTF-8 with BOM; `LineEndingStyle` preserved)
+- [x] Dirty state tracked — exit with unsaved changes shows confirmation
+- [x] File > 4MB opens read-only, warning visible
+- [x] Word wrap toggle works (LB+RB)
+- [x] Undo/redo works (JS stack)
+- [x] Footer legend updates when editor is open
+- [x] No regression in existing file browsing, preview, or media playback

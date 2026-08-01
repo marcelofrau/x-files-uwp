@@ -2,9 +2,10 @@
 
 ## CRITICAL: MillerColumnsPage God Object
 
-**File:** `Controls/MillerColumnsPage.xaml.cs` — 3002 lines, complexity 702
+**File:** `Controls/MillerColumnsPage.xaml.cs` — **4373 lines** (Aug 2026 re-audit;
+was 3002 in Jul 2025), cyclomatic complexity ~916 (was 702).
 
-Single class with 16+ responsibilities:
+Single class with 20+ responsibilities:
 
 | # | Responsibility | Key methods |
 |---|---|---|
@@ -19,18 +20,27 @@ Single class with 16+ responsibilities:
 | 9 | File Action Sheet | `ShowFileActionSheetAsync` (79 lines, 11 action types) |
 | 10 | Error overlay | `ShowErrorOverlay`, `CopyErrorReport` |
 | 11 | Highlight.js integration | `EnsureHighlightAssetsLoadedAsync`, `BuildHighlightHtml` |
-| 12 | Audio visualizer | 24 visualizer modes, `CycleAudioVisualizer` |
+| 12 | Audio visualizer | 29 visualizer modes, `CycleAudioVisualizer` + picker |
 | 13 | Preview debouncing | `_previewDebounceTimer`, `_mediaLoadTimer` |
 | 14 | OSD system | `ShowOsd`, `HideOsd` with fade + auto-hide |
 | 15 | Volume control | `HandleVolumeChange`, `UpdateVolumeUI` |
 | 16 | Display request | `RequestDisplayRelease`/`RequestDisplayActivate` |
+| 17 | Batch mode | toggle, multi-select, batch ops |
+| 18 | Favorites | `FavoritesManager` integration, Y long-press |
+| 19 | ROM cover art | gamelist.xml + LibRetro fetch + SQLite cache |
+| 20 | Start menu / search / logs / about | overlay routing |
 
 **Suggested decomposition:**
 - `MediaPlayerController` — playback + fullscreen + OSD + volume (responsibilities 3-5, 14-15)
-- `FileOperationHandler` — paste/move/rename/delete/extract/zip (responsibility 6)
+- `FileOperationHandler` — paste/move/rename/delete/extract/zip + batch (responsibilities 6, 17)
 - `PreviewRenderer` — preview column + highlight.js (responsibilities 2, 11)
 - `InputRouter` — gamepad dispatch to overlays + navigation (responsibility 7)
 - `DialogManager` — overlay lifecycle (responsibility 8)
+- `RomCoverProvider` — gamelist + LibRetro + cache (responsibility 19)
+
+> **Re-audit note (Aug 2026):** grew 45% since the last audit with no decomposition.
+> This is now the top remediation priority — any new feature should go into a new
+> class, not this file.
 
 ## HIGH: Long Methods (>50 lines)
 
@@ -56,7 +66,7 @@ Single class with 16+ responsibilities:
 
 | File | Lines | Complexity |
 |---|---|---|
-| `Controls/MillerColumnsPage.xaml.cs` | 3002 | 702 |
+| `Controls/MillerColumnsPage.xaml.cs` | 4373 | ~916 |
 | `FileSystem/FileOperations.cs` | 966 | 162 |
 | `FileSystem/FilePreviewService.cs` | 599 | 65 |
 | `Controls/MediaPreviewControl.xaml.cs` | 538 | 110 |

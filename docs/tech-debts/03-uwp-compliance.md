@@ -9,7 +9,7 @@ All filesystem access must use Win32 P/Invoke (`*FromAppW` variants).
 
 ### SubtitleDetector.cs
 
-**File:** `FileSystem/SubtitleDetector.cs:31,37`
+**File:** `FileSystem/SubtitleDetector.cs:31,37` — still open (Aug 2026)
 
 ```csharp
 // Line 31 — uses Directory.Exists (unreliable in UWP sandbox)
@@ -22,29 +22,6 @@ foreach (string file in Directory.EnumerateFiles(dir))
 **Fix:** Replace with `CheckPathType(dir)` and `FindFirstFileExFromAppW` enumeration
 (already done in all other files). Pattern exists in `FileOperations.cs` and
 `ArchiveBrowser.cs` — copy the same P/Invoke approach.
-
-### MillerColumnsPage.xaml.cs
-
-**File:** `Controls/MillerColumnsPage.xaml.cs:543`
-
-```csharp
-// Uses System.IO.File.ReadAllBytes — fails on external drives
-var fontBytes = await Task.Run(() => System.IO.File.ReadAllBytes(fontFile.Path));
-```
-
-**Fix:** Use `Win32FileStream.OpenRead()` + manual byte read (same pattern as
-`FileOperations.ReadAllBytesWin32`).
-
-### TextEditorOverlay.xaml.cs
-
-**File:** `Controls/TextEditorOverlay.xaml.cs:641`
-
-```csharp
-// Same duplicate of the above
-var fontBytes = await Task.Run(() => System.IO.File.ReadAllBytes(fontFile.Path));
-```
-
-**Fix:** Same as above. Also consider extracting shared helper (see `05-code-duplication.md`).
 
 ## Status of Other Files
 
@@ -59,3 +36,9 @@ var fontBytes = await Task.Run(() => System.IO.File.ReadAllBytes(fontFile.Path))
 | `ExtractAsync` | Used `Directory.Exists/CreateDirectory` | All P/Invoke |
 | `ExtractFileAsync` | Used `Directory.Exists/CreateDirectory` | All P/Invoke |
 | `CreateZipAsync` | Used `File.ReadAllBytes` | Uses `Win32FileStream` |
+| `MillerColumnsPage.xaml.cs` (font) | `File.ReadAllBytes` (:543) | **FIXED** — P/Invoke |
+| `TextEditorOverlay.xaml.cs` (font) | `File.ReadAllBytes` (:641) | **FIXED** — P/Invoke |
+| `FileOperations.cs` | — | `ReadAllBytesWin32` helper at :1442 (P/Invoke) |
+
+> Re-audit (Aug 2026): the only remaining `System.IO` filesystem *enumeration* is
+> `SubtitleDetector`. Everything else is P/Invoke.

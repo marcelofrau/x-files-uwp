@@ -320,7 +320,7 @@ public static async Task<(string text, Encoding encoding, long size)>
   `FilePreviewService`)
 - Detect encoding from BOM bytes (see `ENCODING.md`)
 - Return text content, detected encoding, and file size
-- If file is > 2MB, return read-only flag
+- If file is > 4MB, return read-only flag (`FileTier.ReadOnly`)
 
 ### Writing
 

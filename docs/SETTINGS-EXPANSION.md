@@ -1,5 +1,9 @@
 # Settings Expansion — Feature Plan
 
+> **Status: planned / backlog.** Not yet implemented. Settings page currently has
+> 2 items (`Clear Cache`, `Log Level`) — the doc below is the full expansion plan.
+> Entry point: Start button → Start menu → Settings (`SettingsPage`).
+
 ## Overview
 
 Expand the Settings page from 2 items (Clear Cache, Log Level) to a full
@@ -27,7 +31,7 @@ Remove dead code from the disabled debug overlay feature.
 
 | File | Line(s) | Change |
 |---|---|---|
-| `App.xaml.cs` | 128 | Remove `// rootGrid.Children.Add(new DebugOverlay(Log.Screen));` |
+| `App.xaml.cs` | 110 | Remove `// rootGrid.Children.Add(new DebugOverlay(Log.Screen));` |
 | `Log.cs` | 46 | Remove `public static ScreenLogger Screen { get; private set; }` |
 | `Log.cs` | 59 | Remove `Screen = new ScreenLogger();` |
 | `Log.cs` | 64 | Remove `.WriteTo.Sink(Screen)` from Serilog pipeline |

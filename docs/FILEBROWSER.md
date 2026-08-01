@@ -1,7 +1,7 @@
 # File Browser — Data Model and Disk Access
 
-Reference: `dosbox-pure-uwp` (`Content/FileBrowser.cpp`, `vfs_implementation_uwp.cpp`,
-`dosbox_uwpMain.cpp`). C++ patterns validated on real Xbox, adapted to C#/XAML.
+Reference patterns validated on real Xbox in `dosbox-pure-uwp` (C++ UWP),
+adapted to C#/XAML.
 
 ---
 
@@ -32,64 +32,19 @@ On Xbox UWP, even with `broadFileSystemAccess`, standard CRT APIs are **blocked*
 | `MoveFileW` | `MoveFileFromAppW` |
 | `CreateDirectoryW` | `CreateDirectoryFromAppW` |
 
-Required header: `#include <fileapifromapp.h>` (C++). In C#, declare via P/Invoke
-with `[DllImport("kernel32.dll", CharSet = CharSet.Unicode)]` pointing to the
-`FromApp` version.
+Declare via P/Invoke with `[DllImport("kernel32.dll", CharSet = CharSet.Unicode)]`
+pointing to the `FromApp` version. These `*FromApp` variants **also work on desktop
+Windows 10+** — which is why the net8.0 unit tests (`tests/`) exercise real temp
+files/dirs without any UWP shim.
 
----
-
-## P/Invoke — Required C# Declarations
-
-```csharp
-using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.ComTypes;
-
-[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-public struct WIN32_FIND_DATA
-{
-    public uint dwFileAttributes;
-    public FILETIME ftCreationTime;
-    public FILETIME ftLastAccessTime;
-    public FILETIME ftLastWriteTime;
-    public uint nFileSizeHigh;
-    public uint nFileSizeLow;
-    public uint dwReserved0;
-    public uint dwReserved1;
-    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
-    public string cFileName;
-    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 14)]
-    public string cAlternateFileName;
-}
-
-private const uint FIND_FIRST_EX_LARGE_FETCH = 0x00000002;
-private const uint FILE_ATTRIBUTE_DIRECTORY = 0x10;
-private const int INVALID_HANDLE_VALUE = -1;
-
-[DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-private static extern IntPtr FindFirstFileExFromAppW(
-    string lpFileName,
-    FINDEX_INFO_LEVELS fInfoLevelId,
-    out WIN32_FIND_DATA lpFindFileData,
-    FINDEX_SEARCH_OPS fSearchOp,
-    IntPtr lpSearchFilter,
-    uint dwAdditionalFlags);
-
-[DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-private static extern bool FindNextFileW(IntPtr hFindFile, out WIN32_FIND_DATA lpFindFileData);
-
-[DllImport("kernel32.dll", SetLastError = true)]
-private static extern bool FindClose(IntPtr hFindFile);
-
-[DllImport("kernel32.dll")]
-private static extern uint GetLogicalDrives();
-
-public enum FINDEX_INFO_LEVELS { FindExInfoStandard = 0 }
-public enum FINDEX_SEARCH_OPS { FindExSearchNameMatch = 0 }
-```
+`FileOperations.cs` and `DirectoryScanner.cs` contain the working P/Invoke
+declarations — copy from there rather than re-typing structs.
 
 ---
 
 ## `FileEntry` (Base Model)
+
+`FileSystem/FileEntry.cs`:
 
 ```csharp
 public class FileEntry
@@ -97,52 +52,43 @@ public class FileEntry
     public string Name { get; set; }
     public string FullPath { get; set; }
     public bool IsDirectory { get; set; }
-    public bool IsArchive { get; set; }      // .zip/.7z/.rar — treated as "virtual folder"
+    public bool IsDrive { get; set; }        // root drive entry (e.g. "C:\")
+    public bool IsArchive { get; set; }      // .zip/.7z/.rar — behaves as "virtual folder"
     public long SizeBytes { get; set; }      // 0 for directories
     public DateTimeOffset? LastModified { get; set; }
 
     // Only present when the entry lives INSIDE a compressed file:
     public string ArchiveRootPath { get; set; }     // path to the .zip/.7z/.rar on real disk
     public string ArchiveInternalPath { get; set; } // relative path inside the archive
+    public bool IsVirtual { get; set; }             // archive/favorites virtual entry
 }
 ```
 
-`IsArchive` is derived from the extension (`.zip`, `.7z`, `.rar`) and makes the item behave like
-a folder in navigation (drill-in with A/D-pad right), even though it's physically a file.
+`IsArchive` is derived from the extension (`.zip`, `.7z`, `.rar`) and makes the item
+behave like a folder in navigation (drill-in with A / D-pad right), even though it's
+physically a file.
 
 ---
 
 ## `DirectoryScanner`
 
-Responsible for listing the contents of a **real** path (outside compressed files —
-that case is handled by `ArchiveBrowser`, see `ARCHIVES.md`).
+Lists the contents of a **real** path (compressed files → `ArchiveBrowser`, see
+`ARCHIVES.md`).
 
 ### Root Level (`path == null`/empty)
 
-```csharp
-uint drives = GetLogicalDrives(); // bitmask: bit 0 = A:, bit 1 = B:, etc.
-for (int i = 0; i < 26; i++)
-{
-    if ((drives & (1 << i)) != 0)
-    {
-        string driveLetter = $"{(char)('A' + i)}:\\";
-        entries.Add(new FileEntry { Name = driveLetter, IsDirectory = true });
-    }
-}
-```
+`GetLogicalDrives()` bitmask (bit 0 = A:, bit 1 = B:, ...) → one `FileEntry` per
+available drive (`IsDrive = true`), plus a synthetic `[App Data]` entry pointing to
+`ApplicationData.Current.LocalFolder.Path` (the app sandbox, always accessible).
+No specific USB detection — all drives listed identically.
 
-- Synthetic `[App Data]` entry pointing to
-  `ApplicationData.Current.LocalFolder.Path` (the app's own sandbox, always accessible
-  even without `broadFileSystemAccess`).
-- No specific USB detection — all drives are listed identically.
+### Non-Root — Directory Scan
 
-### Non-Root Level — Directory Scan
+**Do NOT use `StorageFolder.GetFoldersAsync()`/`GetFilesAsync()`** as the primary
+method — those APIs require `FutureAccessList` membership or declared folders, which
+doesn't cover "any USB drive connected to Xbox".
 
-**Do NOT use `StorageFolder.GetFoldersAsync()`/`GetFilesAsync()`** as the primary method —
-these APIs require the path to be in the `FutureAccessList` or inside declared
-folders, which doesn't cover "any USB drive connected to Xbox".
-
-Pattern validated in `FileBrowser.cpp:207-271`:
+Pattern (`DirectoryScanner.cs`):
 
 ```csharp
 string searchPath = Path.Combine(path, "*");
@@ -153,61 +99,34 @@ IntPtr hFind = FindFirstFileExFromAppW(
     FINDEX_SEARCH_OPS.FindExSearchNameMatch,
     IntPtr.Zero,
     FIND_FIRST_EX_LARGE_FETCH);
-
-if (hFind == new IntPtr(INVALID_HANDLE_VALUE))
-{
-    // Failed (AccessDenied, etc.) — add ".." so user can go back
-    entries.Add(new FileEntry { Name = "..", IsDirectory = true });
-    return;
-}
-
-var dirs = new List<FileEntry>();
-var files = new List<FileEntry>();
-
-do
-{
-    string name = findData.cFileName;
-    if (name == "." ) continue;
-    if (name == "..")
-    {
-        dirs.Insert(0, new FileEntry { Name = "..", IsDirectory = true });
-        continue;
-    }
-    bool isDir = (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-    var entry = new FileEntry
-    {
-        Name = name,
-        FullPath = Path.Combine(path, name),
-        IsDirectory = isDir,
-        SizeBytes = isDir ? 0 : (findData.nFileSizeHigh << 32) | findData.nFileSizeLow
-    };
-    if (isDir) dirs.Add(entry);
-    else files.Add(entry);
-}
-while (FindNextFileW(hFind, out findData));
-
-FindClose(hFind);
 ```
 
+- `..` entry added up front (parent path via `Directory.GetParent` — a pure path
+  computation, not enumeration).
+- `FindFirstFileExFromAppW` failure (`INVALID_HANDLE_VALUE`): log warning, return
+  just the `..` entry — never throw.
+- Runs on a background thread (`await Task.Run`) with a `CancellationToken` checked
+  per entry.
+- Directories and files collected separately, then merged by sort (below).
+
 ### Sorting
-1. `..` (go back) always first, when applicable.
-2. Directories in alphabetical order (case-insensitive).
-3. Files in alphabetical order (case-insensitive).
-4. Compressed archives (`IsArchive == true`) are mixed with normal files in
-   alphabetical sorting (not in a separate group) — keeps the list predictable.
+
+Applied in `ColumnListView.LoadAsync` (`Controls/ColumnListView.xaml.cs:340`):
+
+1. Directories first (`OrderBy(IsDirectory ? 0 : 1)`).
+2. `..` naturally lands at top (it's a directory; `".."` sorts before letters).
+3. Within each group, `StringComparer.OrdinalIgnoreCase` on `Name`.
+
+Archives are not special-cased in sorting — they sort with normal files.
 
 ---
 
-## Error Handling — dosbox-pure-uwp Pattern
+## Error Handling
 
-Precedent shows graceful/degraded handling:
-
-- **Scan failed** (`INVALID_HANDLE_VALUE`): adds `".."` without throwing exception → user
-  can go back. No error dialog shown.
-- **`ApplicationData.Current.LocalFolder`** fails: try/catch, log warning, continues without
-  `[App Data]` entry.
-- **`CreateFile2FromAppW` fails** (`INVALID_HANDLE_VALUE`): returns null/error without crashing.
-- **Drive without permission**: scan returns only `".."`, list stays nearly empty.
+- **Scan failed** → returns `[".."]` only; no exception, no dialog → user can go back.
+- **`ApplicationData.Current.LocalFolder` fails** → try/catch, log warning, continue
+  without `[App Data]` entry.
+- **Drive without permission** → scan returns only `..`, list stays nearly empty.
 
 Philosophy: **never crash** — always have a navigation exit available.
 
@@ -215,35 +134,24 @@ Philosophy: **never crash** — always have a navigation exit available.
 
 ## USB Drive Spin-Up Latency
 
-External USB drives on Xbox may enter sleep/spin-down after a period of inactivity.
-First access to the drive can take 5-15 seconds while the mechanical disk wakes up or
-USB power management responds. Subsequent navigations are normal (drive already active).
-
-**Expected behavior:** visible loading indicator during spin-up, scan returns normally
-after drive responds. Not a bug — natural hardware latency.
-
-**Future (post-MVP):** consider background warm-up when detecting drive via `GetLogicalDrives()`,
-or pre-loading listing from most recently accessed drive.
+External USB drives on Xbox may sleep/spin-down after inactivity. First access can
+take 5–15s while the disk wakes. Loading indicator shown during spin-up; subsequent
+navigations are normal. Not a bug — hardware latency.
 
 ---
 
 ## ACL — Post-Move Permission
 
 Files moved with `MoveFileFromAppW` **lose ACL inheritance** in UWP. They need
-`SetSecurityInfo` to grant access to `S-1-15-2-1` (ALL_APPLICATION_PACKAGES):
-
-```csharp
-// Only needed after MoveFileFromAppW. DeleteFileFromAppW doesn't need this.
-// Details in vfs_implementation_uwp.cpp:909-972 (function uwp_set_acl).
-```
-
-In practice: `Copy + Delete` can avoid this problem (or handle it in `FileOperations`).
+`SetSecurityInfo` to grant access to `S-1-15-2-1` (ALL_APPLICATION_PACKAGES) —
+handled by the move path in `FileOperations`. (Details in
+`dosbox-pure-uwp` `vfs_implementation_uwp.cpp:909-972`.)
 
 ---
 
 ## Path Normalization
 
-UWP is sensitive to forward slashes. Always normalize to backslash:
+UWP is sensitive to forward slashes. Normalize to backslash:
 
 ```csharp
 path = path.Replace('/', '\\');
@@ -251,41 +159,47 @@ path = path.Replace('/', '\\');
 
 ---
 
-## `System.IO` vs `StorageFile` — When to Use Each
+## `System.IO` vs P/Invoke — When to Use Each
 
 | Context | Use |
 |---|---|
 | List directory (DirectoryScanner) | P/Invoke `FindFirstFileExFromAppW` |
-| Open file for reading/writing | `CreateFile2FromAppW` or `System.IO.FileStream` |
-| Copy/Move/Delete | `System.IO.File.Copy/Move/Delete` (works with broadFileSystemAccess) |
-| Get app's LocalFolder | `ApplicationData.Current.LocalFolder` (standard UWP API) |
-| Read file content for preview | `System.IO.StreamReader` / `StorageFile` (both work) |
+| Open file for reading/writing | P/Invoke `CreateFile2FromAppW` (`Win32FileStream`) |
+| Copy/Move/Delete/Extract/Zip | P/Invoke (`FileOperations`) |
+| Pure path math (`GetParent`, `Combine`) | `System.IO` (no enumeration) |
+| Get app's LocalFolder | `ApplicationData.Current.LocalFolder` |
+| Read file content for preview | `FilePreviewService` (streams via `Win32FileStream`) |
+
+**Known violation pending fix:** `SubtitleDetector.cs:31,37` still uses
+`System.IO.Directory.Exists`/`EnumerateFiles` — see `docs/tech-debts/`.
 
 ---
 
 ## File Actions (`FileOperations`)
 
-Implemented as simple async operations on real paths (outside compressed files —
-inside compressed files, only read/extract makes sense):
+`FileSystem/FileOperations.cs` — P/Invoke based (no `StorageFile`), with
+`OperationResult` + `OperationProgress` (per-file index, bytes, percent):
 
-```csharp
-Task CopyAsync(string sourcePath, string destDir, IProgress<double> progress);
-Task MoveAsync(string sourcePath, string destDir);
-Task RenameAsync(string path, string newName);
-Task DeleteAsync(string path); // mandatory confirmation via dialog before calling
-```
+- `CopyAsync(source, destDir, progress, token)` + `CopyDirectoryAsync`
+- `MoveAsync(source, destDir, progress, token)` + `MoveDirectoryAsync`
+- `RenameAsync(path, newName)`
+- `DeleteAsync(path)` / `DeleteDirectoryAsync(path)`
+- `ExtractAsync` / `ExtractFileAsync` (archives, SharpCompress)
+- `CreateFolderAsync(folderPath)`
+- `CreateZipAsync(sourcePath | List<string>, zipPath, progress, token)`
+- `ScanPathsAsync(paths)` — pre-flight size/count for batch progress
+- `ListRecursiveAsync(path)` / `GetSingleRootFolder` / `GetCopyName` — helpers
 
-- Uses `System.IO` directly (not `StorageFile`) for the same reason as `DirectoryScanner`:
-  coverage of paths outside the declared sandbox, with `broadFileSystemAccess`.
-- "Copy/Move" operations require a second navigation step (choose destination
-  folder) — reuses the same `Current` column component, in a "destination selection
-  mode" (flag on the ViewModel, not a new screen).
+Operations run on background threads; the UI reports progress via
+`IProgress<OperationProgress>` and supports `CancellationToken`. Destination
+selection uses `FolderBrowserDialog` (a full directory browser modal), not a
+"mode" on the column. Deletes always require explicit confirmation dialog.
 
 ---
 
 ## Whitelisted Extensions vs Show All
 
-Unlike `dosbox-pure-uwp` (which filters by extension because only formats the
-emulator can load are relevant), X-Files is a generic file browser: **shows all
-files**, no extension whitelist. `IsArchive` just enables extra behavior
-(drill-in), doesn't filter visibility.
+X-Files is a generic file browser: **shows all files**, no extension whitelist
+(unlike `dosbox-pure-uwp`, which filters because only emulator-loadable formats
+matter). `IsArchive` just enables extra behavior (drill-in), doesn't filter
+visibility.

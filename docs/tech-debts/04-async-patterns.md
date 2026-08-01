@@ -1,8 +1,33 @@
 # Async Patterns Debt
 
+## HIGH: Blocking Call on Win2D Draw Thread
+
+**File:** `Visualizers/Visualizers/PlasmaVisualizer.cs:113-114` — **new in Aug 2026 audit**
+
+```csharp
+var file = task.AsTask().GetAwaiter().GetResult();
+var buffer = Windows.Storage.FileIO.ReadBufferAsync(file).AsTask().GetAwaiter().GetResult();
+```
+
+The shader is loaded synchronously on the `CanvasAnimatedControl.Draw` thread
+(composition thread, not UI). `.GetResult()` blocks that thread; if the underlying
+`IAsyncOperation` needs a UI-thread or thread-pool hop that's starved, this deadlocks
+or stutters rendering.
+
+**Fix:** load the embedded shader bytes once at `Initialize(CanvasDevice)` (or cache
+the `StorageFile`), with no `GetResult()` on the draw path.
+
+## MEDIUM: `_fftSignal.Wait(100)`
+
+**File:** `Audio/AudioLevelService.cs:927`
+
+SemaphoreSlim wait with a 100ms timeout on the FFT worker. Bounded, but verify the
+worker never exceeds its frame budget under load (it could stall the audio pipeline
+if the producer outruns the consumer repeatedly).
+
 ## MEDIUM: TaskCompletionSource Without RunContinuationsAsynchronously
 
-All 16 `TaskCompletionSource` instances in the codebase use the default constructor
+All **19** `TaskCompletionSource` instances in the codebase use the default constructor
 without `TaskCreationOptions.RunContinuationsAsynchronously`.
 
 When `SetResult()` is called, the continuation runs inline on the calling thread.
@@ -26,12 +51,16 @@ reentrancy issues.
 | `FileSystem/FilePreviewService.cs` | 399, 544 | `TaskCompletionSource<bool>` |
 | `Services/PdfPreviewService.cs` | 131 | `TaskCompletionSource<bool>` |
 
+(19 total as of Aug 2026 — new dialogs since Jul 2025 added 3 more; all still
+default-constructed.)
+
 ### Risk Assessment
 
 Current risk is **low** because all `SetResult()` calls happen from the UI thread
 (via `Dispatcher.RunAsync` or button click handlers), and all `await` sites are
 also on the UI thread. The continuations run synchronously on the UI thread,
-which is correct behavior.
+which is correct behavior. **Exception:** the new `PlasmaVisualizer` blocking call
+above is a real risk and is treated as HIGH.
 
 Risk increases if:
 - Any `SetResult()` moves to a background thread
@@ -50,5 +79,5 @@ _tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynch
 
 ### Recommendation
 
-Schedule as MEDIUM — not urgent, but apply `RunContinuationsAsynchronously`
-proactively during the next dialog refactor pass. Cost is zero, safety is improved.
+Apply `RunContinuationsAsynchronously` proactively during the next dialog refactor
+pass (cost zero, safety improved). Fix `PlasmaVisualizer` first.
