@@ -89,6 +89,21 @@ jobs:
           path: AppPackages/*.zip
           compression-level: 0
 
+  test:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Run unit tests
+        shell: pwsh
+        run: dotnet test tests/XFiles.Tests.csproj --configuration Release --nologo
+
   release:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')

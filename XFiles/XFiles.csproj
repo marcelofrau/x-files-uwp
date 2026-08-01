@@ -203,6 +203,7 @@
       <DependentUpon>TextEditorOverlay.xaml</DependentUpon>
     </Compile>
     <Compile Include="FileSystem\TextEditorService.cs" />
+    <Compile Include="FileSystem\EncodingDetector.cs" />
     <Compile Include="Services\PdfPreviewService.cs" />
     <Compile Include="Services\FileShareService.cs" />
     <Compile Include="Services\ProgressStream.cs" />
