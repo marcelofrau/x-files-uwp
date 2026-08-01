@@ -35,7 +35,7 @@ namespace XFiles.Controls
 
         public async Task<bool> ShowAsync()
         {
-            _tcs = new TaskCompletionSource<bool>();
+            _tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             _cacheWasCleared = false;
             Visibility = Visibility.Visible;
             Overlay.Visibility = Visibility.Visible;

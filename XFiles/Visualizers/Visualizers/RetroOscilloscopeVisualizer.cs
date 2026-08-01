@@ -47,7 +47,7 @@ namespace XFiles.Visualizers.Visualizers
             _smoothMid += (mid - _smoothMid) * AudioSmooth;
             _smoothBeat += (data.Beat - _smoothBeat) * 0.4f;
 
-            // 1. C�PIA SEGURA DOS DADOS DA ONDA (EVITA BUG DE REFER�NCIA)
+            // 1. Safe copy of waveform data (avoids reference bug)
             if (data.Waveform != null && data.WaveformCount > 0)
             {
                 _currentWaveformCount = Math.Min(data.WaveformCount, 2048);
@@ -83,7 +83,7 @@ namespace XFiles.Visualizers.Visualizers
             Color gridColor = Color.FromArgb(25, 40, 220, 40);
             Color subGridColor = Color.FromArgb(12, 40, 220, 40);
 
-            // Grade reticular principal 10x8 de oscilosc�pio
+            // Main 10x8 oscilloscope reticle grid
             float stepX = _width / 10f;
             for (int i = 1; i < 10; i++)
             {
@@ -98,7 +98,7 @@ namespace XFiles.Visualizers.Visualizers
                 ds.DrawLine(0, y, _width, y, gridColor, 1f);
             }
 
-            // Eixos centrais com marca��es de calibra��o
+            // Central axes with calibration markings
             float cx = _width * 0.5f;
             float cy = _height * 0.5f;
             Color centerColor = Color.FromArgb(60, 50, 255, 50);
@@ -106,7 +106,7 @@ namespace XFiles.Visualizers.Visualizers
             ds.DrawLine(cx, 0, cx, _height, centerColor, 1.5f);
             ds.DrawLine(0, cy, _width, cy, centerColor, 1.5f);
 
-            // Ticks de precis�o no centro
+            // Precision ticks at center
             for (float x = 0; x < _width; x += stepX * 0.2f)
                 ds.DrawLine(x, cy - 3f, x, cy + 3f, subGridColor, 1f);
 
@@ -160,8 +160,8 @@ namespace XFiles.Visualizers.Visualizers
             float cy = _height * 0.38f;
             float amplitude = _height * 0.32f;
 
-            Color phosphorGreen = Color.FromArgb(255, 180, 255, 180); // N�cleo brilhante
-            Color glowGreen = Color.FromArgb(120, 30, 240, 30);      // Halos de f�sforo
+            Color phosphorGreen = Color.FromArgb(255, 180, 255, 180); // Bright core
+            Color glowGreen = Color.FromArgb(120, 30, 240, 30);      // Phosphor halos
 
             using (var builder = new CanvasPathBuilder(ds))
             {
@@ -228,13 +228,13 @@ namespace XFiles.Visualizers.Visualizers
             byte a = (byte)Math.Clamp(15 * intensity, 0, 255);
             Color glow = Color.FromArgb(a, 40, 220, 40);
 
-            // Usando com instru��o usando (using) para descarte de mem�ria correto
+            // Using statement for correct memory disposal
             ds.FillEllipse(_width * 0.5f, _height * 0.5f, _width * 0.45f, _height * 0.40f, glow);
         }
 
         private void DrawVignette(CanvasDrawingSession ds)
         {
-            // Vinheta de borda escura simulo vidro curvo de monitor CRT
+            // Dark edge vignette simulating curved CRT monitor glass
             float w = _width, h = _height;
             float borderX = w * 0.08f;
             float borderY = h * 0.08f;
@@ -249,11 +249,11 @@ namespace XFiles.Visualizers.Visualizers
 
         public void ConfigurePipeline(PostProcessPipeline pipeline)
         {
-            // Efeito F�sforo de Reten��o CRT (Afterglow)
-            pipeline.FeedbackOpacity = 0.60f;    // Mant�m o feixe de el�trons esmaecendo suavemente
-            pipeline.FeedbackZoom = 1.001f;     // Lev�ssima expans�o do brilho
+            // CRT Phosphor Persistence Effect (Afterglow)
+            pipeline.FeedbackOpacity = 0.60f;    // Keeps the electron beam fading smoothly
+            pipeline.FeedbackZoom = 1.001f;     // Very slight glow expansion
             pipeline.FeedbackDecay = 0.04f;
-            pipeline.BloomAmount = 0.12f;       // Brilho intenso de f�sforo verde
+            pipeline.BloomAmount = 0.12f;       // Intense green phosphor glow
             pipeline.BloomBlur = 5f;
             pipeline.BloomThreshold = 0.35f;
         }

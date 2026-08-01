@@ -13,21 +13,21 @@ These are in cleanup/teardown paths where the operation is best-effort:
 | `Audio/AudioLevelService.cs` | 487 | `try { frame.Dispose(); } catch { }` | OK — frame disposal in callback |
 | `FileSystem/ArchiveBrowser.cs` | 340 | `try { archive.Dispose(); } catch { }` | OK — cache cleanup |
 
-## MEDIUM: Should Log But Don't
+## FIXED: Should Log But Don't
 
-| File | Line | Code | Risk |
+| File | Line | Code | Status |
 |---|---|---|---|
-| `FileSystem/TextEditorService.cs` | 374 | `catch { }` in encoding detection | Could mask encoding bugs; should log at Verbose |
-| `Metadata/FilenameParser.cs` | 29 | `catch { }` around `Path.GetDirectoryName` | Low risk but hides unexpected failures |
-| `Metadata/MusicBrainzProvider.cs` | 92 | `try { await Task.Delay(1100); } catch { }` | Delay cancellation in finally — acceptable but log at Verbose |
+| `FileSystem/EncodingDetector.cs` | ~76 | `catch { }` in UTF-16 heuristic | **Kept silent by design** — class is pure (no `Log` dep) so it links into unit tests; fallback is best-effort |
+| `Metadata/FilenameParser.cs` | 30 | `catch { }` around `Path.GetDirectoryName` | **Fixed (Aug 2026)** — `Log.Verb` |
+| `Metadata/MusicBrainzProvider.cs` | 92 | `try { await Task.Delay(1100); } catch { }` | **Fixed (Aug 2026)** — `Log.Verb` on delay interruption |
 | `Log.cs` | 104 | `catch { }` around stack trace walk | Would cause infinite recursion if logged — leave as-is |
 
 ## LOW: Already Fixed
 
 | File | Line | Previous | Fixed to |
 |---|---|---|---|
-| `Controls/SettingsPage.xaml.cs` | — | `catch { }` on cache count | `catch (Exception ex) { Log.Warning(...) }` |
-| `Metadata/MusicBrainzProvider.cs` | — | `catch { }` on JSON fallback | `catch (Exception) { Log.Warning(...) }` |
+| `Controls/SettingsPage.xaml.cs` | — | `catch { }` on cache count | `catch (Exception ex) { Log.Warn(...) }` |
+| `Metadata/MusicBrainzProvider.cs` | — | `catch { }` on JSON fallback | `catch (Exception) { Log.Warn(...) }` |
 
 ## Correct Patterns (no issues)
 

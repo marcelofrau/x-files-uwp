@@ -21,7 +21,7 @@ namespace XFiles.Controls
             Log.Info("InputDialog.ShowAsync: title=\"{Title}\" default=\"{Default}\"", title, defaultValue);
             TitleText.Text = title;
             InputBox.Text = defaultValue ?? "";
-            _tcs = new TaskCompletionSource<string>();
+            _tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
             Visibility = Visibility.Visible;
             Overlay.Visibility = Visibility.Visible;
 

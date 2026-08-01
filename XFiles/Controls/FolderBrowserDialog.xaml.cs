@@ -27,7 +27,7 @@ namespace XFiles.Controls
 
         public Task<string> ShowAsync(string initialPath = null)
         {
-            _tcs = new TaskCompletionSource<string>();
+            _tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
             _currentPath = initialPath;
 
             Visibility = Visibility.Visible;

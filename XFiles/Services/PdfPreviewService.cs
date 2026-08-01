@@ -128,7 +128,7 @@ namespace XFiles.FileSystem
                     var dispatcher = CoreApplication.MainView.CoreWindow?.Dispatcher;
                     if (dispatcher != null)
                     {
-                        var tcs = new TaskCompletionSource<bool>();
+                        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                         await dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
                         {
                             try

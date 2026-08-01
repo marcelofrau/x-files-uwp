@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.Effects;
 using Windows.Foundation;
@@ -19,8 +20,8 @@ namespace XFiles.Visualizers.Visualizers
         private const int GridStep = 6;
 
         private static byte[] _shaderBytecode;
-        private static bool _shaderLoaded;
-        private static bool _shaderAttempted;
+        private static volatile bool _shaderLoaded;
+        private static bool _shaderLoading;
         private PixelShaderEffect _shaderEffect;
 
         private static readonly string[] ShaderBandLevelProps = BuildShaderProps("uBandLevels");
@@ -35,7 +36,11 @@ namespace XFiles.Visualizers.Visualizers
             return props;
         }
 
-        public void Initialize(CanvasDevice device) { _device = device; }
+        public void Initialize(CanvasDevice device)
+        {
+            _device = device;
+            EnsureShaderLoading();
+        }
 
         public void Update(AudioData data, TimeSpan elapsed)
         {
@@ -56,8 +61,8 @@ namespace XFiles.Visualizers.Visualizers
         {
             if (_device == null || _width == 0 || _height == 0) return;
 
-            if (!TryDrawWithShader(ds))
-                DrawCpuFallback(ds);
+            if (_shaderLoaded && TryDrawWithShader(ds)) return;
+            DrawCpuFallback(ds);
         }
 
         public void Resize(float width, float height) { _width = width; _height = height; }
@@ -65,13 +70,7 @@ namespace XFiles.Visualizers.Visualizers
 
         private bool TryDrawWithShader(CanvasDrawingSession ds)
         {
-            if (!_shaderAttempted)
-            {
-                _shaderAttempted = true;
-                _shaderBytecode = LoadShaderBytecode();
-                _shaderLoaded = _shaderBytecode != null && _shaderBytecode.Length > 0;
-            }
-            if (!_shaderLoaded) return false;
+            if (!_shaderLoaded || _shaderBytecode == null) return false;
             try
             {
                 if (_shaderEffect == null)
@@ -105,17 +104,24 @@ namespace XFiles.Visualizers.Visualizers
             }
         }
 
-        private static byte[] LoadShaderBytecode()
+        /// <summary>
+        /// Load the embedded shader bytecode asynchronously (once per app run).
+        /// Never blocks the Win2D draw thread; the CPU fallback renders until ready.
+        /// </summary>
+        private static async Task EnsureShaderLoading()
         {
+            if (_shaderLoaded || _shaderLoading) return;
+            _shaderLoading = true;
             try
             {
-                var task = Windows.Storage.StorageFile.GetFileFromApplicationUriAsync(new Uri("ms-appx:///Assets/Shaders/Plasma.cso"));
-                var file = task.AsTask().GetAwaiter().GetResult();
-                var buffer = Windows.Storage.FileIO.ReadBufferAsync(file).AsTask().GetAwaiter().GetResult();
+                var file = await Windows.Storage.StorageFile.GetFileFromApplicationUriAsync(
+                    new Uri("ms-appx:///Assets/Shaders/Plasma.cso"));
+                var buffer = await Windows.Storage.FileIO.ReadBufferAsync(file);
                 Windows.Security.Cryptography.CryptographicBuffer.CopyToByteArray(buffer, out byte[] data);
-                return data;
+                _shaderBytecode = data;
+                _shaderLoaded = data != null && data.Length > 0;
             }
-            catch { return null; }
+            catch { _shaderLoaded = false; }
         }
 
         private void DrawCpuFallback(CanvasDrawingSession ds)

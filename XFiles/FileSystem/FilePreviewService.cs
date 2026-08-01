@@ -489,7 +489,7 @@ namespace XFiles.FileSystem
                 return;
             }
 
-            var tcs = new TaskCompletionSource<bool>();
+                var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             var softwareBitmap = decoded.Item1;
             int pw = decoded.Item2;
             int ph = decoded.Item3;
@@ -637,7 +637,7 @@ namespace XFiles.FileSystem
                 return;
             }
 
-            var tcs = new TaskCompletionSource<bool>();
+                var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             var softwareBitmap = decoded.Item1;
             int pw = decoded.Item2;
             int ph = decoded.Item3;

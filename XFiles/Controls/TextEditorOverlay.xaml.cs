@@ -613,7 +613,7 @@ namespace XFiles.Controls
         private Task<UnsavedDialogResult> ShowUnsavedDialog()
         {
             Log.Dbg("TextEditorOverlay: ShowUnsavedDialog — showing dialog");
-            _unsavedTcs = new TaskCompletionSource<UnsavedDialogResult>();
+            _unsavedTcs = new TaskCompletionSource<UnsavedDialogResult>(TaskCreationOptions.RunContinuationsAsynchronously);
             _isUnsavedDialogOpen = true;
             UnsavedOverlay.Visibility = Visibility.Visible;
             return _unsavedTcs.Task;

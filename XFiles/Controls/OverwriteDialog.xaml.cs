@@ -27,7 +27,7 @@ namespace XFiles.Controls
         public Task<int> ShowAsync(string fileName)
         {
             MessageText.Text = $"File already exists:\n{fileName}\n\nOverwrite?";
-            _tcs = new TaskCompletionSource<int>();
+            _tcs = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
             Visibility = Visibility.Visible;
             Overlay.Visibility = Visibility.Visible;
             return _tcs.Task;
