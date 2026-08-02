@@ -114,6 +114,17 @@ if (Test-Path $cerPath) {
     Write-Host "  xfiles.cer" -ForegroundColor Gray
 }
 
+# Copy liberate tools (loopback exemption helper scripts + README)
+$toolsDir = Join-Path $root 'tools'
+if (Test-Path $toolsDir) {
+    $destTools = Join-Path $distribDir 'tools'
+    New-Item -ItemType Directory -Path $destTools -Force | Out-Null
+    Get-ChildItem $toolsDir -File | ForEach-Object {
+        Copy-Item $_.FullName (Join-Path $destTools $_.Name)
+        Write-Host "  tools\$($_.Name)" -ForegroundColor Gray
+    }
+}
+
 # ── 6. Create distributable zip ──
 $zipName = "xfiles_${version}_${Platform}.zip"
 $zipPath = Join-Path $appDir $zipName

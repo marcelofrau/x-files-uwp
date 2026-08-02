@@ -48,6 +48,13 @@ Already included in the manifest — no action needed:
 These allow browsing external USB drives. Without them, the app can only see its own
 sandbox folder.
 
+## 6. Portal AppData Access
+
+To let X-Files reach the console's Device Portal (and browse other apps'
+`LocalAppData`), apply the loopback exemption after install and after reboot.
+See [PORTAL-APPDATA.md](PORTAL-APPDATA.md) — manual SSH steps, helper scripts
+in `tools/`, and the feature it unlocks.
+
 ## Troubleshooting
 
 - **App doesn't appear in Device Portal** → Install the signing certificate first:
