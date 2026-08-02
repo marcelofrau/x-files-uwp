@@ -35,6 +35,8 @@ namespace XFiles.Visualizers
         ThreeDO,
         ThreeDWave,
         ComancheTerrain,
-        SynthwaveVuMeter
+        SynthwaveVuMeter,
+        ClassicVUMeter,
+        NightCity
     }
 }

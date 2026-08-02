@@ -18,7 +18,11 @@
   <ItemGroup>
     <Compile Include="..\XFiles\Audio\FftHelper.cs" Link="Linked\Audio\FftHelper.cs" />
     <Compile Include="..\XFiles\FileSystem\EncodingDetector.cs" Link="Linked\FileSystem\EncodingDetector.cs" />
+    <Compile Include="..\XFiles\FileSystem\FileEntry.cs" Link="Linked\FileSystem\FileEntry.cs" />
+    <Compile Include="..\XFiles\FileSystem\Formatting.cs" Link="Linked\FileSystem\Formatting.cs" />
+    <Compile Include="..\XFiles\FileSystem\HighlightRenderer.cs" Link="Linked\FileSystem\HighlightRenderer.cs" />
     <Compile Include="..\XFiles\FileSystem\Id3Tag.cs" Link="Linked\FileSystem\Id3Tag.cs" />
+    <Compile Include="..\XFiles\FileSystem\RomCoverProvider.cs" Link="Linked\FileSystem\RomCoverProvider.cs" />
     <Compile Include="..\XFiles\FileSystem\RomHeaderParser.cs" Link="Linked\FileSystem\RomHeaderParser.cs" />
     <Compile Include="..\XFiles\Metadata\FilenameParser.cs" Link="Linked\Metadata\FilenameParser.cs" />
     <Compile Include="..\XFiles\Metadata\TrackMetadata.cs" Link="Linked\Metadata\TrackMetadata.cs" />

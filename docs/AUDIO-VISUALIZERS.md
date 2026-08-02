@@ -3,7 +3,7 @@
 ## Overview
 
 Fullscreen audio visualizer modes for the music player, rendered via Win2D (`Win2D.uwp`
-1.26.0). **Shipped: 29 Win2D visualizers** registered in `VisualizerRegistry`, plus the
+1.26.0). **Shipped: 31 Win2D visualizers** registered in `VisualizerRegistry`, plus the
 `Default` mode (album art + VU meter + metadata). View button (short) cycles modes;
 View long-press opens the visualizer picker.
 
@@ -192,10 +192,10 @@ XFiles/Visualizers/
 ├── AudioData.cs                    # Snapshot struct (26 bands, 1024 mags, 2048 waveform, beat, time)
 ├── IAudioVisualizer.cs             # Lifecycle interface (Initialize/Update/GetImage/Resize)
 ├── AudioVisualizerBase.cs          # UserControl hosting CanvasAnimatedControl
-├── VisualizerRegistry.cs           # 29 visualizer types + Create(index)/Resolve(mode)
-├── AudioFullscreenMode.cs          # Enum: Default + 29 modes
+├── VisualizerRegistry.cs           # 31 visualizer types + Create(index)/Resolve(mode)
+├── AudioFullscreenMode.cs          # Enum: Default + 31 modes
 ├── PostProcessPipeline.cs          # feedback/bloom/vignette/scanlines/grain/C.A. pipeline
-├── Visualizers/                    # 29 IAudioVisualizer implementations
+├── Visualizers/                    # 31 IAudioVisualizer implementations
 └── Shaders/                        # HLSL reference (not compiled at runtime)
 ```
 
@@ -237,7 +237,7 @@ runs the chain in a single GPU pass.
 
 ---
 
-## The 29 Visualizers
+## The 31 Visualizers
 
 | # | Mode (`AudioFullscreenMode`) | Visualizer class | Concept |
 |---|---|---|---|
@@ -270,6 +270,8 @@ runs the chain in a single GPU pass.
 | 27 | `ThreeDWave` | `ThreeDWaveVisualizer` | 3D height-field wave |
 | 28 | `ComancheTerrain` | `ComancheVisualizer` | Comanche-style scrolling terrain |
 | 29 | `SynthwaveVuMeter` | `SynthwaveVuMeterVisualizer` | synthwave sun + VU grid |
+| 30 | `ClassicVUMeter` | `ClassicVUMeterVisualizer` | nostalgic green/yellow/red LED VU + peak bars |
+| 31 | `NightCity` | `NightCityVisualizer` | After Dark "Starry Night" style: dark hills + dense town silhouette, rippling river reflection, puffy clouds, moon, twinkling stars, music-reactive random window lights |
 
 ### Signature visualizers
 
@@ -299,7 +301,7 @@ runs the chain in a single GPU pass.
 
 ## Mode Cycling
 
-`Default` → mode 1 → mode 2 → ... → mode 29 → `Default`. View (short) advances one;
+`Default` → mode 1 → mode 2 → ... → mode 31 → `Default`. View (short) advances one;
 View (hold) opens picker. OSD shows mode name 2s with fade-out. Track next/prev keeps
 the current mode. Volume changes are reflected (visualizers read magnitudes).
 Empty audio → static mode (no crash).

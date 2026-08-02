@@ -114,6 +114,15 @@ public interface INavigable
 | LT / RT | `OnTriggerHeld` | secondary action (see page impl) |
 | Right Stick | `OnRightStickMove`/`OnScroll*` | scroll preview / editor / adjust volume (media) |
 
+## In-App Controls Guide
+
+A fullscreen controller mapping reference is built into the app — **Start → Controls
+Guide**. It shows the gamepad reference image plus a section per screen
+(File Browser, Batch Mode, Audio/Video/Image/PDF Fullscreen, Text Editor, Visualizer
+Picker, Media Player). Source: `Controls/ControlsGuideOverlay.xaml(.cs)`. The mappings
+rendered there must stay in sync with this table.
+
+
 ## Navigation Rules
 
 - **Wrap-around**: moving down on the last item returns to the first; moving up on the

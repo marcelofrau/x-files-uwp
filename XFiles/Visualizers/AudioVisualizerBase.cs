@@ -236,16 +236,23 @@ namespace XFiles.Visualizers
             }
             if (vis == null || !_initialized) return;
 
-            if (_service != null && _service.IsAnalyzing)
+            try
             {
-                var data = AudioData.FromService(_service, _elapsed, _bandBuffer, _peakBuffer, _magBuffer, _waveBuffer);
-                vis.Update(data, args.Timing.ElapsedTime);
+                if (_service != null && _service.IsAnalyzing)
+                {
+                    var data = AudioData.FromService(_service, _elapsed, _bandBuffer, _peakBuffer, _magBuffer, _waveBuffer);
+                    vis.Update(data, args.Timing.ElapsedTime);
 
-                // Cache bass/beat for pipeline
-                float bass = 0;
-                for (int i = 0; i < 6; i++) bass += data.BandLevels[i];
-                _bassLevel = Math.Min(1f, bass / 6f);
-                _beatLevel = data.Beat;
+                    // Cache bass/beat for pipeline
+                    float bass = 0;
+                    for (int i = 0; i < 6; i++) bass += data.BandLevels[i];
+                    _bassLevel = Math.Min(1f, bass / 6f);
+                    _beatLevel = data.Beat;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Err("AudioVisualizerBase.OnCanvasUpdate", ex);
             }
         }
 

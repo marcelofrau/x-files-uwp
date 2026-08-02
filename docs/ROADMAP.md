@@ -97,14 +97,17 @@ dirty-state save confirmation, `Assets/editor.js`. **Done.** See `docs/text-edit
 
 See `docs/tech-debts/` for the full audit and remediation plan. High-level:
 
-- [ ] Decompose `MillerColumnsPage` god object (4373 lines, complexity 916)
+- [x] Decompose `MillerColumnsPage` god object (4960 → 8 partial files + 3 pure classes,
+      Aug 2026)
 - [x] `SubtitleDetector` — `System.IO` replaced with P/Invoke (Aug 2026)
 - [x] `PlasmaVisualizer` shader load — blocking `.GetResult()` removed (async load, Aug 2026)
 - [x] Dead debug overlay code removed (`DebugOverlay`, `ScreenLogger`, Aug 2026)
 - [x] `RunContinuationsAsynchronously` applied to all 19 `TaskCompletionSource` (Aug 2026)
 - [x] `VUMETER_DEBUG`/`AUDIO_LEVEL_DEBUG` turned OFF in Debug config (Aug 2026)
 - [x] Debug flags/`Prefer32Bit`/PT comments cleaned (Aug 2026)
-- [ ] Expand unit test coverage (`tests/`, MSTest, linked-source, net8.0) — **P0 done (45 tests)**, extend to `TextEditorService`/`MetadataCache`
+- [x] Extract pure helpers from `MillerColumnsPage` (`Formatting`, `HighlightRenderer`,
+      `RomCoverProvider`) + unit tests (Aug 2026)
+- [ ] Expand unit test coverage (`tests/`, MSTest, linked-source, net8.0) — **P0 done (75 tests)**, extend to `TextEditorService`/`MetadataCache`
 
 ---
 

@@ -17,7 +17,8 @@ namespace XFiles.Controls
         CloseApplication,
         Search,
         JumpToLetter,
-        SearchFiles
+        SearchFiles,
+        ControlsGuide
     }
 
     public class MenuItem
@@ -66,6 +67,7 @@ namespace XFiles.Controls
                 new MenuItem { Item = StartMenuItem.Search, Label = "Search", IconPath = IconBase + "startmenu-search-48.png" },
                 new MenuItem { IsSeparator = true },
                 new MenuItem { Item = StartMenuItem.Settings, Label = "Settings", IconPath = IconBase + "startmenu-settings-48.png" },
+                new MenuItem { Item = StartMenuItem.ControlsGuide, Label = "Controls Guide", IconPath = IconBase + "startmenu-guide-48.png" },
                 new MenuItem { Item = StartMenuItem.About, Label = "About", IconPath = IconBase + "startmenu-about-48.png" },
                 new MenuItem { Item = StartMenuItem.ViewLogs, Label = "View Logs", IconPath = IconBase + "startmenu-logs-48.png" },
                 new MenuItem { Item = StartMenuItem.CloseApplication, Label = "Close Application", IconPath = IconBase + "startmenu-close-48.png" }
