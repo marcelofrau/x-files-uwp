@@ -42,6 +42,10 @@ namespace XFiles.Visualizers.Visualizers
         private const float HorizonFraction = 0.66f;
         private const float AudioSmooth = 0.22f;
 
+        // Moon sits upper-right; building shading lights the face pointing at
+        // it, so the two must share the same horizontal position.
+        private const float MoonXFraction = 0.76f;
+
         // --- Stars -------------------------------------------------------
         private readonly float[] _starX = new float[StarCount];
         private readonly float[] _starY = new float[StarCount];
@@ -104,6 +108,33 @@ namespace XFiles.Visualizers.Visualizers
         private static readonly float[] WindowLitBase = { 0.95f, 0.97f, 0.98f };
         private static readonly float[] WindowRadScale = { 0.34f, 0.70f, 1.0f };
         private static readonly float[] LayerAlphaFactor = { 0.55f, 0.80f, 1.0f };
+
+        // Experimental building shading: set ShadingStrength to 0 to disable.
+        // 0.4 keeps the moon-lit face a whisper instead of a painted stripe.
+        private static readonly float ShadingStrength = 0.4f;
+        private static readonly float ShadingDepthFar = 0.35f;
+        private static readonly float ShadingDepthMid = 0.65f;
+        private static readonly float ShadingDepthNear = 1f;
+
+        // Reused per-frame gradient brushes for building shading. StartPoint /
+        // EndPoint / Opacity are mutated per piece, so no per-building allocs
+        // on the render thread (allocation is costly under NoGCRegion).
+        private CanvasLinearGradientBrush _shadeSide;
+        private CanvasLinearGradientBrush _shadeDark;
+        private CanvasLinearGradientBrush _shadeAo;
+        private bool _drawErrorLogged;
+
+        // --- Foreground band (avenue, bridge, shore, trees) -----------------
+        // Scrolls SLOWER than the near building layer so the waterline reads
+        // as a deeper plane than the skyline (buildings still pan fastest).
+        private float _fgOffset;
+        private const float FgSpeed = 0.00016f;
+        private const float FgBassKick = 0.28f;
+        private const float FgMaxSpeed = 0.00026f;
+        private int _fgBridgeType;
+        private const int BridgeTypeCount = 4;
+
+        private enum BridgeType { CableStayed, Arch, Suspension, Bowstring }
 
         private enum RoofStyle { Flat, Antenna, Spire, Setback, WaterTower, Dome, Dish, Billboard, Crenellation, Tanks, CellTower }
 
@@ -186,6 +217,17 @@ namespace XFiles.Visualizers.Visualizers
                 if (_layerOffset[l] > 1f) _layerOffset[l] -= 1f;
             }
 
+            // Foreground band drifts slower than the buildings; each full wrap
+            // swaps the bridge archetype so new structures enter from the
+            // right (no mid-frame pop).
+            float fgSpeed = Math.Min(FgSpeed * (1f + _smoothBass * FgBassKick), FgMaxSpeed);
+            _fgOffset += fgSpeed * dt * 60f;
+            if (_fgOffset >= 1f)
+            {
+                _fgOffset -= 1f;
+                _fgBridgeType = (_fgBridgeType + 1) % BridgeTypeCount;
+            }
+
             // Stars drift barely at all; accumulator is unbounded so the tiny
             // movement never snaps back (no position reset on layer wrap).
             float nearSpeed = Math.Min(
@@ -239,10 +281,27 @@ namespace XFiles.Visualizers.Visualizers
             if (_sceneTarget == null) return;
             if (_skylineDirty) { GenerateSkyline(); _skylineDirty = false; }
 
-            using (var sceneDs = _sceneTarget.CreateDrawingSession())
-                RenderScene(sceneDs);
+            try
+            {
+                using (var sceneDs = _sceneTarget.CreateDrawingSession())
+                    RenderScene(sceneDs);
 
-            ds.DrawImage(_sceneTarget);
+                ds.DrawImage(_sceneTarget);
+                _drawErrorLogged = false;
+            }
+            catch (Exception ex)
+            {
+                // A transient target/GPU error must never kill the frame: the
+                // water reflection still reads the last good scene target, so
+                // the foreground keeps drawing and the user sees a glitch
+                // instead of a jump. Log once per failure streak.
+                if (!_drawErrorLogged)
+                {
+                    _drawErrorLogged = true;
+                    Log.Warn("NightCity.Draw: scene render skipped ({Ex})", ex.GetType().Name);
+                }
+            }
+
             DrawWater(ds);
             DrawHorizonStructures(ds);
             DrawBridge(ds);
@@ -284,7 +343,7 @@ namespace XFiles.Visualizers.Visualizers
 
         private void DrawMoon(CanvasDrawingSession ds)
         {
-            float cx = _width * 0.76f;
+            float cx = _width * MoonXFraction;
             float cy = _height * 0.15f;
             float r = _height * 0.055f;
 
@@ -474,33 +533,35 @@ namespace XFiles.Visualizers.Visualizers
 
         public void Resize(float width, float height)
         {
+            // NEVER dispose here: Resize runs on the UI thread while Draw runs
+            // on the render thread, so disposing _sceneTarget mid-draw raced
+            // with DrawWater's GaussianBlur (Source = _sceneTarget ->
+            // "Effect source #0 is null") and the earlier DrawImage E_INVALIDARG.
+            // All disposal is deferred to the render thread: EnsureSceneTarget
+            // (size mismatch), GenerateSkyline + BakeWindowMasks (_skylineDirty),
+            // and Dispose(). The sprites are fixed-size and the sky brush is
+            // size-independent, so nothing else needs to happen here.
             _width = width;
             _height = height;
-
-            _sceneTarget?.Dispose();
-            _sceneTarget = null;
-            _cloudSprite?.Dispose();
-            _cloudSprite = null;
-            _glowSprite?.Dispose();
-            _glowSprite = null;
-            _skyBrush?.Dispose();
-            _skyBrush = null;
-            DisposeWindowMasks();
-
             _skylineDirty = true;
         }
 
         private void EnsureSceneTarget()
         {
+            // Clamp invalid/transient sizes: a zero- or NaN-sized render target
+            // makes DrawImage throw E_INVALIDARG ("Value does not fall within
+            // the expected range") and kills the whole frame.
+            float w = float.IsNaN(_width) || _width <= 0f ? 1f : _width;
+            float h = float.IsNaN(_height) || _height <= 0f ? 1f : _height;
             const float epsilon = 0.5f;
             bool sizeMismatch = _sceneTarget == null
-                || MathF.Abs((float)_sceneTarget.Size.Width - _width) > epsilon
-                || MathF.Abs((float)_sceneTarget.Size.Height - _height) > epsilon;
+                || MathF.Abs((float)_sceneTarget.Size.Width - w) > epsilon
+                || MathF.Abs((float)_sceneTarget.Size.Height - h) > epsilon;
 
             if (sizeMismatch)
             {
                 _sceneTarget?.Dispose();
-                _sceneTarget = new CanvasRenderTarget(_device, _width, _height, 96);
+                _sceneTarget = new CanvasRenderTarget(_device, w, h, 96);
             }
         }
 
@@ -510,35 +571,35 @@ namespace XFiles.Visualizers.Visualizers
             _buildingCount = 0;
             DisposeWindowMasks();
 
-            // 3 layers, denser than the "meio-termo" pass -> SimCity-style
-            // packed skyline, but still capped at 3 depths (no street/cars).
-            // gapChance is low but non-zero: keeps a few sky pockets so the
-            // silhouette doesn't read as one solid wall.
-            BuildLayer(28, 0.10f, 0.26f, 0.026f, 0.052f, 0, gapChance: 0.06f);
-            BuildLayer(20, 0.20f, 0.46f, 0.040f, 0.075f, 1, gapChance: 0.09f);
-            BuildLayer(13, 0.36f, 0.72f, 0.058f, 0.105f, 2, gapChance: 0.14f);
+            // Fixed seed: the city must regenerate IDENTICALLY on every resize,
+            // otherwise a SizeChanged reshuffles the whole skyline (visible
+            // "jump"). Building layout is pure function of this seed.
+            var rng = new Random(0x5EED);
+            BuildLayer(rng, 28, 0.10f, 0.26f, 0.026f, 0.052f, 0, gapChance: 0.06f);
+            BuildLayer(rng, 20, 0.20f, 0.46f, 0.040f, 0.075f, 1, gapChance: 0.09f);
+            BuildLayer(rng, 13, 0.36f, 0.72f, 0.058f, 0.105f, 2, gapChance: 0.14f);
 
             BakeWindowMasks();
         }
 
-        private void BuildLayer(int maxCount, float hLo, float hHi, float minW, float maxW, int layer, float gapChance)
+        private void BuildLayer(Random rng, int maxCount, float hLo, float hHi, float minW, float maxW, int layer, float gapChance)
         {
             float cursor = -0.02f;
             int built = 0;
             while (cursor < 1.05f && built < maxCount && _buildingCount < MaxBuildings)
             {
-                float w = minW + (float)_rng.NextDouble() * (maxW - minW);
+                float w = minW + (float)rng.NextDouble() * (maxW - minW);
 
-                if (_rng.NextDouble() < gapChance)
+                if (rng.NextDouble() < gapChance)
                 {
                     // Skip a slot: leaves visible sky/hill between buildings.
-                    cursor += w * (0.6f + (float)_rng.NextDouble() * 0.6f);
+                    cursor += w * (0.6f + (float)rng.NextDouble() * 0.6f);
                     continue;
                 }
 
-                float h = hLo + (float)_rng.NextDouble() * (hHi - hLo);
+                float h = hLo + (float)rng.NextDouble() * (hHi - hLo);
                 AddBuilding(cursor, w, h, layer);
-                cursor += w * (0.95f + (float)_rng.NextDouble() * 0.25f);
+                cursor += w * (0.95f + (float)rng.NextDouble() * 0.25f);
                 built++;
             }
         }
@@ -614,11 +675,95 @@ namespace XFiles.Visualizers.Visualizers
                 case BodyStyle.Setback: DrawSetbackTower(ds, i, x, w, h, horizonY, layer, body); break;
                 default:
                     ds.FillRectangle(x, y, w, h, body);
+                    ShadeRect(ds, x, y, w, h, layer);
                     DrawRoof(ds, i, x, y, w, h, horizonY, layer, body);
                     break;
             }
 
             DrawWindowMasks(ds, i, x, w, h, horizonY, layer);
+        }
+
+        /// <summary>
+        /// Per-piece depth treatment, applied only inside a building's actual
+        /// massing rect (tier/tower/base), never the bounding box: the face
+        /// pointing at the moon is lit (soft band + edge highlight), the far
+        /// face falls into shadow, plus base ambient occlusion. Disable via
+        /// ShadingStrength = 0.
+        /// </summary>
+        private static float ShadingForLayer(int layer)
+        {
+            float depth = layer == 0 ? ShadingDepthFar : layer == 1 ? ShadingDepthMid : ShadingDepthNear;
+            return depth * ShadingStrength;
+        }
+
+        private void ShadeRect(CanvasDrawingSession ds, float rx, float ry, float rw, float rh, int layer)
+        {
+            if (ShadingStrength <= 0f || rw < 3f || rh < 3f) return;
+            float depth = ShadingForLayer(layer);
+
+            // Smooth moon lighting: side weight ramps with signed distance to
+            // the moon, so a building passing underneath crossfades from one
+            // lit face to the other (front-facing = no sheen) instead of
+            // hard-flipping. No per-frame allocations (brushes reused).
+            float moonX = _width * MoonXFraction;
+            float u = (moonX - (rx + rw * 0.5f)) / Math.Max(rw, 8f);
+            float rightK = Math.Clamp(u * 1.2f, 0f, 1f); // moon to the right
+            float leftK = Math.Clamp(-u * 1.2f, 0f, 1f); // moon to the left
+
+            float lightW = Math.Min(rw * 0.22f, 40f);
+            if (_shadeSide == null)
+                _shadeSide = new CanvasLinearGradientBrush(ds,
+                    Color.FromArgb(46, 130, 158, 205),
+                    Color.FromArgb(0, 130, 158, 205));
+            if (rightK > 0.02f)
+            {
+                _shadeSide.Opacity = depth * rightK;
+                _shadeSide.StartPoint = new Vector2(rx + rw, 0);
+                _shadeSide.EndPoint = new Vector2(rx + rw - lightW, 0);
+                ds.FillRectangle(rx + rw - lightW, ry, lightW, rh, _shadeSide);
+                ds.DrawLine(rx + rw, ry, rx + rw, ry + rh,
+                    Color.FromArgb((byte)(85 * depth * rightK), 140, 168, 214), 1f);
+            }
+            if (leftK > 0.02f)
+            {
+                _shadeSide.Opacity = depth * leftK;
+                _shadeSide.StartPoint = new Vector2(rx, 0);
+                _shadeSide.EndPoint = new Vector2(rx + lightW, 0);
+                ds.FillRectangle(rx, ry, lightW, rh, _shadeSide);
+                ds.DrawLine(rx, ry, rx, ry + rh,
+                    Color.FromArgb((byte)(85 * depth * leftK), 140, 168, 214), 1f);
+            }
+
+            // Shadow on the face AWAY from the moon, weighted the same way.
+            float darkW = Math.Min(rw * 0.30f, 50f);
+            if (_shadeDark == null)
+                _shadeDark = new CanvasLinearGradientBrush(ds,
+                    Color.FromArgb(0, 0, 0, 0),
+                    Color.FromArgb(80, 0, 0, 0));
+            if (rightK > 0.02f)
+            {
+                _shadeDark.Opacity = depth * rightK;
+                _shadeDark.StartPoint = new Vector2(rx, 0);
+                _shadeDark.EndPoint = new Vector2(rx + darkW, 0);
+                ds.FillRectangle(rx, ry, darkW, rh, _shadeDark);
+            }
+            if (leftK > 0.02f)
+            {
+                _shadeDark.Opacity = depth * leftK;
+                _shadeDark.StartPoint = new Vector2(rx + rw - darkW, 0);
+                _shadeDark.EndPoint = new Vector2(rx + rw, 0);
+                ds.FillRectangle(rx + rw - darkW, ry, darkW, rh, _shadeDark);
+            }
+
+            float aoH = rh * 0.32f;
+            if (_shadeAo == null)
+                _shadeAo = new CanvasLinearGradientBrush(ds,
+                    Color.FromArgb(120, 0, 0, 0),
+                    Color.FromArgb(0, 0, 0, 0));
+            _shadeAo.StartPoint = new Vector2(0, ry + rh);
+            _shadeAo.EndPoint = new Vector2(0, ry + rh - aoH);
+            _shadeAo.Opacity = depth;
+            ds.FillRectangle(rx, ry + rh - aoH, rw, aoH, _shadeAo);
         }
 
         /// <summary>Wedding-cake silhouette: 2-3 rectangles stacked and centered, narrowing upward.</summary>
@@ -638,6 +783,7 @@ namespace XFiles.Visualizers.Visualizers
                 float tierY = baseY - tierH;
 
                 ds.FillRectangle(tierX, tierY, tierW, tierH, body);
+                ShadeRect(ds, tierX, tierY, tierW, tierH, layer);
 
                 baseY = tierY;
                 topX = tierX; topW = tierW;
@@ -655,10 +801,12 @@ namespace XFiles.Visualizers.Visualizers
 
             float leftX = x, leftY = horizonY - leftH;
             ds.FillRectangle(leftX, leftY, towerW, leftH, body);
+            ShadeRect(ds, leftX, leftY, towerW, leftH, layer);
             DrawRoof(ds, i * 10 + 1, leftX, leftY, towerW, leftH, horizonY, layer, body);
 
             float rightX = x + towerW + gap, rightY = horizonY - rightH;
             ds.FillRectangle(rightX, rightY, towerW, rightH, body);
+            ShadeRect(ds, rightX, rightY, towerW, rightH, layer);
             DrawRoof(ds, i * 10 + 2, rightX, rightY, towerW, rightH, horizonY, layer, body);
         }
 
@@ -668,10 +816,25 @@ namespace XFiles.Visualizers.Visualizers
             float baseH = h * 0.76f;
             float baseY = horizonY - baseH;
             ds.FillRectangle(x, baseY, w, baseH, body);
+            ShadeRect(ds, x, baseY, w, baseH, layer);
 
             float apexX = x + w * 0.5f;
             float apexY = baseY - (h - baseH);
             FillTriangle(ds, new Vector2(x, baseY), new Vector2(x + w, baseY), new Vector2(apexX, apexY), body);
+            float depth = ShadingForLayer(layer);
+            if (depth > 0f)
+            {
+                float moonX = _width * MoonXFraction;
+                float u = (moonX - apexX) / Math.Max(w, 8f);
+                float rightK = Math.Clamp(u * 1.2f, 0f, 1f);
+                float leftK = Math.Clamp(-u * 1.2f, 0f, 1f);
+                if (rightK > 0.02f)
+                    ds.DrawLine(x + w, baseY, apexX, apexY,
+                        Color.FromArgb((byte)(70 * depth * rightK), 140, 168, 214), 1f);
+                if (leftK > 0.02f)
+                    ds.DrawLine(x, baseY, apexX, apexY,
+                        Color.FromArgb((byte)(70 * depth * leftK), 140, 168, 214), 1f);
+            }
 
             if (Hash01(i, 9, 9, 555) > 0.7f)
                 ds.DrawLine(apexX, apexY, apexX, apexY - 14f, Color.FromArgb(255, 2, 3, 6), 1.2f);
@@ -683,6 +846,7 @@ namespace XFiles.Visualizers.Visualizers
             float mainH = h * (0.52f + Hash01(i, 10, 10, 222) * 0.16f);
             float mainY = horizonY - mainH;
             ds.FillRectangle(x, mainY, w, mainH, body);
+            ShadeRect(ds, x, mainY, w, mainH, layer);
 
             float towerW = w * (0.34f + Hash01(i, 11, 11, 333) * 0.24f);
             bool left = Hash01(i, 12, 12, 444) > 0.5f;
@@ -690,6 +854,7 @@ namespace XFiles.Visualizers.Visualizers
             float towerX = left ? x + margin : x + w - towerW - margin;
             float towerY = horizonY - h;
             ds.FillRectangle(towerX, towerY, towerW, h, body);
+            ShadeRect(ds, towerX, towerY, towerW, h, layer);
             DrawRoof(ds, i * 10 + 4, towerX, towerY, towerW, h, horizonY, layer, body);
         }
 
@@ -1150,12 +1315,21 @@ namespace XFiles.Visualizers.Visualizers
             Color shoreEdge = Color.FromArgb(255, 16, 24, 40);
             Color lamp = Color.FromArgb(210, 255, 214, 140);
 
+            // Scrolls with the camera but slower than the buildings: silhouettes
+            // sit on the far bank, the avenue/railing/lamps/trees live at the
+            // waterline. Positions are wrapped fractions so the pattern slides
+            // seamlessly. Shared _fgOffset keeps the whole waterline band glued
+            // together as one plane.
+            float nearOx = _fgOffset;
+
             // Distant shoreline silhouettes across the whole horizon.
             int nBuild = 30;
             for (int k = 0; k < nBuild; k++)
             {
                 int seed = 500 + k;
-                float x = _width * (k + Hash01(seed, 1, 1, 71)) / nBuild;
+                float fx = ((k + Hash01(seed, 1, 1, 71)) / nBuild + nearOx) % 1f;
+                if (fx < 0f) fx += 1f;
+                float x = fx * _width;
                 float w = _width * (0.010f + Hash01(seed, 2, 2, 72) * 0.022f);
                 float h = horizonY * (0.012f + Hash01(seed, 3, 3, 73) * 0.05f);
                 ds.FillRectangle(x, horizonY - h, w, h, shore);
@@ -1171,14 +1345,17 @@ namespace XFiles.Visualizers.Visualizers
 
             // Railing grid across the whole horizon -- same geometry as the
             // bridge guardrail so the two blend into one continuous fence.
+            // Rails stay full-width; only the pickets scroll.
             float deckH2 = Math.Max(2f, _height * 0.006f);
             float railTop = horizonY - deckH2 - _height * 0.010f;
             Color rail = Color.FromArgb(255, 34, 46, 68);
             ds.DrawLine(0, horizonY - deckH2, _width, horizonY - deckH2, rail, 1.2f);
             ds.DrawLine(0, railTop, _width, railTop, rail, 1.4f);
             float railPicket = Math.Max(_height * 0.018f, 5f);
-            for (float px = railPicket * 0.5f; px < _width; px += railPicket)
+            float picketFrac = railPicket / _width;
+            for (float p = picketFrac * 0.5f; p < 1f; p += picketFrac)
             {
+                float px = ((p + nearOx) % 1f + 1f) % 1f * _width;
                 ds.DrawLine(px, horizonY - deckH2, px, railTop, rail, 1f);
             }
 
@@ -1187,7 +1364,9 @@ namespace XFiles.Visualizers.Visualizers
             for (int k = 0; k < nLamps; k++)
             {
                 int seed = 600 + k;
-                float lx = _width * (k + 0.5f) / nLamps;
+                float fx = ((k + 0.5f) / nLamps + nearOx) % 1f;
+                if (fx < 0f) fx += 1f;
+                float lx = fx * _width;
                 float postH = _height * (0.016f + Hash01(seed, 7, 7, 77) * 0.008f);
                 ds.DrawLine(lx, horizonY, lx, horizonY - postH, Color.FromArgb(255, 16, 22, 36), 1.1f);
                 float gl = 0.7f + 0.3f * MathF.Sin(_time * 2.0f + seed);
@@ -1202,7 +1381,9 @@ namespace XFiles.Visualizers.Visualizers
             for (int k = 0; k < nTrees; k++)
             {
                 int seed = 700 + k;
-                float tx = _width * (k + 0.5f + Hash01(seed, 8, 8, 78) * 0.4f) / nTrees;
+                float fx = ((k + 0.5f + Hash01(seed, 8, 8, 78) * 0.4f) / nTrees + nearOx) % 1f;
+                if (fx < 0f) fx += 1f;
+                float tx = fx * _width;
                 float th = horizonY * (0.02f + Hash01(seed, 9, 9, 79) * 0.03f);
                 DrawTreeSilhouette(ds, tx, horizonY, th, seed);
             }
@@ -1211,9 +1392,27 @@ namespace XFiles.Visualizers.Visualizers
         private void DrawBridge(CanvasDrawingSession ds)
         {
             float horizonY = _height * HorizonFraction;
-            float deckY = horizonY;
             float bw = Math.Min(_width * 0.42f, _height * 0.9f);
-            float bx = _width * 0.5f - bw * 0.5f;
+
+            // Slides at foreground speed (slower than the buildings) so the
+            // whole scene pans together and the waterline stays a deeper plane
+            // than the skyline. Wrapped position + one wrap copy.
+            float ox = _fgOffset;
+            float fx = (0.5f + ox) % 1f;
+            if (fx < 0f) fx += 1f;
+            float bx = fx * _width - bw * 0.5f;
+
+            DrawBridgeSpan(ds, bx, bw, horizonY);
+
+            if (bx + bw > _width)
+                DrawBridgeSpan(ds, bx - _width, bw, horizonY);
+            else if (bx < 0f)
+                DrawBridgeSpan(ds, bx + _width, bw, horizonY);
+        }
+
+        private void DrawBridgeSpan(CanvasDrawingSession ds, float bx, float bw, float horizonY)
+        {
+            float deckY = horizonY;
             float deckH = Math.Max(2f, _height * 0.006f);
             Color steel = Color.FromArgb(255, 13, 19, 32);
             Color steelEdge = Color.FromArgb(255, 70, 88, 124);
@@ -1240,21 +1439,23 @@ namespace XFiles.Visualizers.Visualizers
                 ds.DrawLine(px, deckY - deckH, px, railTop, steel, 1f);
             }
 
-            // Cable-stayed towers with fanning stays and red beacons.
-            foreach (float tx in new[] { towerX0, towerX1 })
+            // Superstructure archetype. _fgBridgeType cycles once per full
+            // foreground wrap, so every pass of the river brings a different
+            // bridge without any mid-frame pop.
+            switch ((BridgeType)_fgBridgeType)
             {
-                ds.FillRectangle(tx - towerW * 0.5f, deckY - towerH, towerW, towerH, steel);
-                ds.DrawLine(tx - towerW * 0.5f, deckY - towerH, tx + towerW * 0.5f, deckY - towerH, steelEdge, 1f);
-                int nCables = 4;
-                for (int k = 0; k < nCables; k++)
-                {
-                    float t = (k + 1f) / (nCables + 1f);
-                    float deckX = tx > _width * 0.5f
-                        ? tx + (bx + bw - tx) * t
-                        : bx + (tx - bx) * t;
-                    ds.DrawLine(tx, deckY - towerH, deckX, deckY - deckH, steelEdge, 0.8f);
-                }
-                DrawBeacon(ds, tx, deckY - towerH - 1.5f, (int)(tx * 7f), LayerCount - 1, 1.8f);
+                case BridgeType.CableStayed:
+                    DrawCableStayed(ds, bx, bw, deckY, deckH, horizonY, steel, steelEdge, towerX0, towerX1, towerH, towerW);
+                    break;
+                case BridgeType.Arch:
+                    DrawArchBridge(ds, bx, bw, deckY, deckH, horizonY, steel, steelEdge);
+                    break;
+                case BridgeType.Suspension:
+                    DrawSuspensionBridge(ds, bx, bw, deckY, deckH, horizonY, steel, steelEdge, towerW);
+                    break;
+                case BridgeType.Bowstring:
+                    DrawBowstringBridge(ds, bx, bw, deckY, deckH, steel, steelEdge);
+                    break;
             }
 
             // Lamp posts along the deck + warm reflections in the water.
@@ -1280,6 +1481,134 @@ namespace XFiles.Visualizers.Visualizers
                 float px = bx + bw * (0.16f + k * 0.34f);
                 ds.FillRectangle(px - 1f, deckY, 2f, _height * 0.02f, steel);
             }
+        }
+
+        /// <summary>Two towers with stays fanning outward to the deck. Stay
+        /// direction uses the SPAN-local center so the fan is correct even when
+        /// the bridge is scrolled/wrapped (the old screen-center test broke it).</summary>
+        private void DrawCableStayed(CanvasDrawingSession ds, float bx, float bw, float deckY, float deckH, float horizonY,
+            Color steel, Color steelEdge, float towerX0, float towerX1, float towerH, float towerW)
+        {
+            float spanCenter = bx + bw * 0.5f;
+            foreach (float tx in new[] { towerX0, towerX1 })
+            {
+                ds.FillRectangle(tx - towerW * 0.5f, deckY - towerH, towerW, towerH, steel);
+                ds.DrawLine(tx - towerW * 0.5f, deckY - towerH, tx + towerW * 0.5f, deckY - towerH, steelEdge, 1f);
+                int nCables = 4;
+                for (int k = 0; k < nCables; k++)
+                {
+                    float t = (k + 1f) / (nCables + 1f);
+                    float deckX = tx > spanCenter
+                        ? tx + (bx + bw - tx) * t
+                        : bx + (tx - bx) * t;
+                    ds.DrawLine(tx, deckY - towerH, deckX, deckY - deckH, steelEdge, 0.8f);
+                }
+                DrawBeacon(ds, tx, deckY - towerH - 1.5f, (int)(tx * 7f), LayerCount - 1, 1.8f);
+            }
+        }
+
+        /// <summary>Rising parabolic steel arch over the deck with spandrel posts.</summary>
+        private void DrawArchBridge(CanvasDrawingSession ds, float bx, float bw, float deckY, float deckH, float horizonY,
+            Color steel, Color steelEdge)
+        {
+            float deckY0 = deckY - deckH;
+            float archRise = Math.Min(horizonY * 0.14f, _height * 0.075f);
+            float ctrlY = deckY0 - 2f * archRise;
+
+            // Faint back arch for depth, brighter front arch on top.
+            DrawParabolicCable(ds, bx + 1.2f, deckY0, bx + bw + 1.2f, deckY0, ctrlY + archRise * 0.12f,
+                Color.FromArgb(255, 9, 13, 22), 1.4f, 24);
+            DrawParabolicCable(ds, bx, deckY0, bx + bw, deckY0, ctrlY, steelEdge, 1.6f, 24);
+
+            for (int k = 1; k < 7; k++)
+            {
+                float t = k / 7f;
+                float x = bx + t * bw;
+                float arcY = BezierY(deckY0, deckY0, ctrlY, t);
+                ds.DrawLine(x, deckY0, x, arcY, steel, 1f);
+            }
+
+            DrawBeacon(ds, bx + bw * 0.5f, deckY0 - archRise - 1.5f, 777, LayerCount - 1, 1.8f);
+        }
+
+        /// <summary>Two tall towers, sagging main cable, back spans and vertical hangers.</summary>
+        private void DrawSuspensionBridge(CanvasDrawingSession ds, float bx, float bw, float deckY, float deckH, float horizonY,
+            Color steel, Color steelEdge, float towerW)
+        {
+            float deckY0 = deckY - deckH;
+            float suspH = Math.Min(horizonY * 0.17f, _height * 0.09f);
+            float ty = deckY - suspH;
+            float sx0 = bx + bw * 0.22f;
+            float sx1 = bx + bw * 0.78f;
+
+            foreach (float tx in new[] { sx0, sx1 })
+            {
+                ds.FillRectangle(tx - towerW * 0.5f, deckY - suspH, towerW, suspH, steel);
+                ds.DrawLine(tx - towerW * 0.5f, deckY - suspH, tx + towerW * 0.5f, deckY - suspH, steelEdge, 1f);
+                DrawBeacon(ds, tx, deckY - suspH - 1.5f, (int)(tx * 13f), LayerCount - 1, 1.8f);
+            }
+
+            // Back spans droop gently from the deck edge up to each tower top.
+            float backCtrl = (deckY0 + ty) * 0.5f + (deckY0 - ty) * 0.10f;
+            DrawParabolicCable(ds, bx, deckY0, sx0, ty, backCtrl, steelEdge, 0.9f, 10);
+            DrawParabolicCable(ds, bx + bw, deckY0, sx1, ty, backCtrl, steelEdge, 0.9f, 10);
+
+            // Main cable sags ~45% toward the deck between the tower tops.
+            float midCtrl = ty + (deckY0 - ty) * 0.45f;
+            DrawParabolicCable(ds, sx0, ty, sx1, ty, midCtrl, steelEdge, 0.9f, 16);
+
+            int nH = 7;
+            for (int k = 1; k < nH; k++)
+            {
+                float t = k / (float)nH;
+                float x = sx0 + (sx1 - sx0) * t;
+                float cableY = BezierY(ty, ty, midCtrl, t);
+                ds.DrawLine(x, cableY, x, deckY0, steel, 0.7f);
+            }
+        }
+
+        /// <summary>Slender tied arch (bowstring): thin parabolic rib + hangers to the deck.</summary>
+        private void DrawBowstringBridge(CanvasDrawingSession ds, float bx, float bw, float deckY, float deckH,
+            Color steel, Color steelEdge)
+        {
+            float deckY0 = deckY - deckH;
+            float rise = Math.Min(deckY * 0.10f, _height * 0.055f);
+            float ctrlY = deckY0 - 2f * rise;
+
+            DrawParabolicCable(ds, bx, deckY0, bx + bw, deckY0, ctrlY, steelEdge, 1.3f, 20);
+
+            int nH = 5;
+            for (int k = 1; k < nH; k++)
+            {
+                float t = k / (float)nH;
+                float x = bx + t * bw;
+                float arcY = BezierY(deckY0, deckY0, ctrlY, t);
+                ds.DrawLine(x, deckY0, x, arcY, steel, 0.7f);
+            }
+
+            DrawBeacon(ds, bx + bw * 0.5f, BezierY(deckY0, deckY0, ctrlY, 0.5f) - 1.5f, 991, LayerCount - 1, 1.8f);
+        }
+
+        /// <summary>Quadratic-bezier cable/arch polyline sampled into line segments.</summary>
+        private void DrawParabolicCable(CanvasDrawingSession ds, float x0, float y0, float x1, float y1, float ctrlY,
+            Color color, float width, int segs)
+        {
+            var prev = new Vector2(x0, y0);
+            for (int s = 1; s <= segs; s++)
+            {
+                float t = s / (float)segs;
+                float it = 1f - t;
+                float x = it * it * x0 + 2f * it * t * ((x0 + x1) * 0.5f) + t * t * x1;
+                float y = BezierY(y0, y1, ctrlY, t);
+                ds.DrawLine(prev.X, prev.Y, x, y, color, width);
+                prev = new Vector2(x, y);
+            }
+        }
+
+        private static float BezierY(float y0, float y1, float ctrlY, float t)
+        {
+            float it = 1f - t;
+            return it * it * y0 + 2f * it * t * ctrlY + t * t * y1;
         }
 
         private void DrawDeckTrees(CanvasDrawingSession ds, float bx, float bw, float deckY, float towerX0, float towerX1)
@@ -1461,6 +1790,12 @@ namespace XFiles.Visualizers.Visualizers
             _cloudSprite = null;
             _glowSprite?.Dispose();
             _glowSprite = null;
+            _shadeSide?.Dispose();
+            _shadeSide = null;
+            _shadeDark?.Dispose();
+            _shadeDark = null;
+            _shadeAo?.Dispose();
+            _shadeAo = null;
             DisposeWindowMasks();
             _device = null;
         }

@@ -75,13 +75,15 @@ namespace XFiles.Visualizers
 
         public void Resize(float width, float height)
         {
+            // NEVER dispose here: Resize runs on the UI thread while Draw runs
+            // on the render thread. Disposing _sceneBuffer/_bloomBlur etc.
+            // mid-draw made effect sources point at disposed targets
+            // ("Effect source #0 is null", D2DERR_BITMAP_BOUND_AS_TARGET).
+            // Recreation is deferred to the render thread: EnsureBuffers /
+            // EnsureBloomBuffers / EnsureNoiseTexture already rebuild a buffer
+            // whenever its size no longer matches _width/_height.
             _width = width;
             _height = height;
-            _feedbackBuffer?.Dispose(); _feedbackBuffer = null;
-            _sceneBuffer?.Dispose(); _sceneBuffer = null;
-            _bloomBlur?.Dispose(); _bloomBlur = null;
-            _bloomBlend?.Dispose(); _bloomBlend = null;
-            _noiseTexture?.Dispose(); _noiseTexture = null;
         }
 
         public void Draw(CanvasDrawingSession mainDs, Action<CanvasDrawingSession> drawContent, float bassLevel, float beatLevel)
