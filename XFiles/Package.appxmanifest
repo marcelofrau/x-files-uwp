@@ -9,7 +9,7 @@
   <Identity
     Name="XFiles.Xbox"
     Publisher="CN=ChangeMe"
-    Version="1.2.0.1112" />
+    Version="1.2.0.1129" />
 
   <mp:PhoneIdentity PhoneProductId="00000000-0000-0000-0000-000000000000" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
@@ -55,6 +55,8 @@
   -->
   <Capabilities>
     <Capability Name="internetClient" />
+    <Capability Name="internetClientServer" />
+    <Capability Name="privateNetworkClientServer" />
     <rescap:Capability Name="broadFileSystemAccess" />
     <rescap:Capability Name="runFullTrust" />
   </Capabilities>

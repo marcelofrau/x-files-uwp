@@ -28,6 +28,8 @@ certs/
 
 # Environment
 .env
+# Generated from .env at build time (see tools/generate-devportal-secrets.ps1)
+XFiles/DevPortalSecrets.g.cs
 
 # Release output
 distribute/

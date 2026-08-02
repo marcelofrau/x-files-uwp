@@ -100,6 +100,65 @@ namespace XFiles.FileSystem
             return new FileStream(handle, FileAccess.Read, bufferSize: 4096, isAsync: false);
         }
 
+        /// <summary>
+        /// Diagnostic: enumerate immediate child names of a directory via P/Invoke.
+        /// Returns empty list on failure; check win32Error for the reason.
+        /// "." and ".." are excluded.
+        /// </summary>
+        public static List<string> EnumerateDirectoryNames(string path, out int win32Error)
+        {
+            win32Error = 0;
+            var names = new List<string>();
+            if (string.IsNullOrEmpty(path)) { win32Error = 87; return names; } // ERROR_INVALID_PARAMETER
+
+            string pattern = path.EndsWith("\\") || path.EndsWith("/")
+                ? path + "*"
+                : path + "\\*";
+
+            IntPtr hFind = FindFirstFileExFromAppW(pattern, FINDEX_INFO_LEVELS.FindExInfoStandard,
+                out WIN32_FIND_DATA findData, FINDEX_SEARCH_OPS.FindExSearchNameMatch,
+                IntPtr.Zero, FIND_FIRST_EX_LARGE_FETCH);
+
+            if (hFind == new IntPtr(INVALID_HANDLE_VALUE))
+            {
+                win32Error = Marshal.GetLastWin32Error();
+                return names;
+            }
+
+            try
+            {
+                do
+                {
+                    string name = findData.cFileName;
+                    if (name == "." || name == "..") continue;
+                    names.Add(name);
+                }
+                while (FindNextFileW(hFind, out findData));
+            }
+            finally
+            {
+                FindClose(hFind);
+            }
+
+            return names;
+        }
+
+        /// <summary>
+        /// Diagnostic: try to open a file for read via P/Invoke.
+        /// Returns 0 on success, or the Win32 error code.
+        /// </summary>
+        public static int TestFileReadable(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return 87; // ERROR_INVALID_PARAMETER
+            IntPtr hFile = CreateFile2FromAppW(path, GENERIC_READ, FILE_SHARE_READ,
+                OPEN_EXISTING, IntPtr.Zero);
+            if (hFile == new IntPtr(INVALID_HANDLE_VALUE))
+                return Marshal.GetLastWin32Error();
+            var handle = new Microsoft.Win32.SafeHandles.SafeFileHandle(hFile, ownsHandle: true);
+            handle.Dispose();
+            return 0;
+        }
+
         public static async Task<List<FileEntry>> ScanAsync(string path, CancellationToken token = default)
         {
             if (string.IsNullOrEmpty(path))
