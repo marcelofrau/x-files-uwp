@@ -516,6 +516,7 @@ namespace XFiles.Controls
             var currentPath = _navigator.Current?.Path;
             if (string.IsNullOrEmpty(currentPath)) return;
             var zipPath = System.IO.Path.Combine(currentPath, zipName);
+            Log.Info("HandleBatchCreateZipAsync: zipPath={Zip}", zipPath);
 
             OpProgressDialog.Show("Creating ZIP", $"{entries.Count} items", zipPath);
             var result = await FileOperations.CreateZipAsync(entries.Select(e => e.FullPath).ToList(), zipPath, null, OpProgressDialog.CancelToken);
@@ -1083,8 +1084,8 @@ namespace XFiles.Controls
 
             var currentPath = _navigator.Current?.Path;
             if (string.IsNullOrEmpty(currentPath)) return;
-
             var zipPath = System.IO.Path.Combine(currentPath, zipName);
+            Log.Info("HandleCreateZipAsync: zipPath={Zip}", zipPath);
 
             OpProgressDialog.Show("Creating ZIP", entry.Name, zipPath);
             var result = await FileOperations.CreateZipAsync(entry.FullPath, zipPath, null, OpProgressDialog.CancelToken);

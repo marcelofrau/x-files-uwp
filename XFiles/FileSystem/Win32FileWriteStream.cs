@@ -53,7 +53,10 @@ namespace XFiles.FileSystem
                 IntPtr.Zero);
 
             if (hFile == (IntPtr)(-1))
+            {
+                Log.Warn("Win32FileWriteStream.Create: cannot open {Path} for write, Win32 error={Error}", filePath, Marshal.GetLastWin32Error());
                 return null;
+            }
 
             return new Win32FileWriteStream(hFile);
         }

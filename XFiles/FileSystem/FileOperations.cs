@@ -1274,10 +1274,12 @@ namespace XFiles.FileSystem
 
                     zipPath = GetUniqueFilePath(zipPath);
                     Log.Info("FileOperations.CreateZip: {Source} -> {Zip}", sourcePath, zipPath);
+                    var started = DateTime.UtcNow;
 
                     using (var archive = SharpCompress.Archives.Zip.ZipArchive.Create())
                     {
                         var pathType = CheckPathType(sourcePath);
+                        Log.Info("FileOperations.CreateZip: pathType={Type}", pathType ?? "null");
                         if (pathType == "file")
                         {
                             var fileName = System.IO.Path.GetFileName(sourcePath);
@@ -1289,6 +1291,7 @@ namespace XFiles.FileSystem
                                     return OperationResult.Failed;
                                 }
                                 archive.AddEntry(fileName, stream);
+                                Log.Verb("FileOperations.CreateZip: added {Entry} ({Size} bytes)", fileName, stream.Length);
                             }
 
                             progress?.Report(new OperationProgress
@@ -1300,6 +1303,7 @@ namespace XFiles.FileSystem
                         else if (pathType == "directory")
                         {
                             var files = EnumerateFilesRecursive(sourcePath);
+                            Log.Info("FileOperations.CreateZip: enumerated {Count} files from {Source}", files.Count, sourcePath);
                             int fileIndex = 0;
                             foreach (var file in files)
                             {
@@ -1314,6 +1318,7 @@ namespace XFiles.FileSystem
                                         continue;
                                     }
                                     archive.AddEntry(entryName, stream);
+                                    Log.Verb("FileOperations.CreateZip: added {Entry} ({Size} bytes)", entryName, stream.Length);
                                 }
 
                                 fileIndex++;
@@ -1325,6 +1330,7 @@ namespace XFiles.FileSystem
                                     FileTotal = files.Count
                                 });
                             }
+                            Log.Info("FileOperations.CreateZip: added {Count} entries total", fileIndex);
                         }
                         else
                         {
@@ -1343,6 +1349,7 @@ namespace XFiles.FileSystem
                         }
                     }
 
+                    Log.Info("FileOperations.CreateZip: done — {Zip} ({Size} bytes) in {Ms}ms", zipPath, GetFileSizePInvoke(zipPath), (DateTime.UtcNow - started).TotalMilliseconds);
                     return OperationResult.Success;
                 }
                 catch (Exception ex)
@@ -1366,6 +1373,7 @@ namespace XFiles.FileSystem
 
                     zipPath = GetUniqueFilePath(zipPath);
                     Log.Info("FileOperations.CreateZip(multi): {Count} sources -> {Zip}", sourcePaths.Count, zipPath);
+                    var started = DateTime.UtcNow;
 
                     using (var archive = SharpCompress.Archives.Zip.ZipArchive.Create())
                     {
@@ -1375,6 +1383,7 @@ namespace XFiles.FileSystem
                         foreach (var sourcePath in sourcePaths)
                         {
                             var pathType = CheckPathType(sourcePath);
+                            Log.Verb("FileOperations.CreateZip(multi): source {Source} type={Type}", sourcePath, pathType ?? "null");
                             if (pathType == "file")
                             {
                                 allFiles.Add(sourcePath);
@@ -1388,6 +1397,7 @@ namespace XFiles.FileSystem
                                 Log.Warn("FileOperations.CreateZip(multi): source not found {Source}", sourcePath);
                             }
                         }
+                        Log.Info("FileOperations.CreateZip(multi): {Count} files to compress", allFiles.Count);
 
                         foreach (var file in allFiles)
                         {
@@ -1403,6 +1413,7 @@ namespace XFiles.FileSystem
                                     continue;
                                 }
                                 archive.AddEntry(entryName, stream);
+                                Log.Verb("FileOperations.CreateZip(multi): added {Entry} ({Size} bytes)", entryName, stream.Length);
                             }
 
                             fileIndex++;
@@ -1414,6 +1425,7 @@ namespace XFiles.FileSystem
                                 FileTotal = allFiles.Count
                             });
                         }
+                        Log.Info("FileOperations.CreateZip(multi): added {Count} entries total", fileIndex);
 
                         using (var writeStream = Win32FileWriteStream.Create(zipPath))
                         {
@@ -1426,6 +1438,7 @@ namespace XFiles.FileSystem
                         }
                     }
 
+                    Log.Info("FileOperations.CreateZip(multi): done — {Zip} ({Size} bytes) in {Ms}ms", zipPath, GetFileSizePInvoke(zipPath), (DateTime.UtcNow - started).TotalMilliseconds);
                     return OperationResult.Success;
                 }
                 catch (Exception ex)
