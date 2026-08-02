@@ -329,8 +329,10 @@ namespace XFiles.Controls
 
         public void HandleButton(VirtualKey key)
         {
-            Log.Verb("TextEditorOverlay.HandleButton: key={Key} unsavedOpen={Unsaved} keyboard={Keyboard} readOnly={RO}",
-                key, _isUnsavedDialogOpen, _isKeyboardVisible, _isReadOnly);
+#if DEBUG_EDITOR_INPUT
+            Log.Info("EDITOR-DBG: HandleButton key={Key} unsavedOpen={Unsaved} keyboard={Keyboard} readOnly={RO} webViewReady={Wv}",
+                key, _isUnsavedDialogOpen, _isKeyboardVisible, _isReadOnly, _webViewReady);
+#endif
 
             if (_isUnsavedDialogOpen) { HandleUnsavedDialogButton(key); return; }
 
@@ -341,8 +343,24 @@ namespace XFiles.Controls
                     else { Log.Verb("HandleButton: B → AttemptCloseAsync"); _ = AttemptCloseAsync(); }
                     break;
                 case VirtualKey.GamepadX:
-                    Log.Verb("HandleButton: X → backspace");
-                    if (!_isReadOnly) { InvokeJs("editor.backspace()"); PullJsLogs("backspace"); }
+#if DEBUG_EDITOR_INPUT
+                    Log.Info("EDITOR-DBG: X → backspace (keyboard={Keyboard} readOnly={RO} webViewReady={Wv})",
+                        _isKeyboardVisible, _isReadOnly, _webViewReady);
+#endif
+                    if (_isReadOnly)
+                    {
+#if DEBUG_EDITOR_INPUT
+                        Log.Info("EDITOR-DBG: X suppressed — read-only");
+#endif
+                    }
+                    else
+                    {
+                        InvokeJs("editor.backspace()");
+                        PullJsLogs("backspace");
+#if DEBUG_EDITOR_INPUT
+                        Log.Info("EDITOR-DBG: X backspace dispatched");
+#endif
+                    }
                     break;
                 case VirtualKey.GamepadY:
                     Log.Verb("HandleButton: Y → newline");
@@ -471,12 +489,20 @@ namespace XFiles.Controls
             {
                 string newChars = currentText.Substring(_lastKeyboardText.Length);
                 string escaped = newChars.Replace("\\", "\\\\").Replace("'", "\\'").Replace("\n", "\\n").Replace("\r", "\\r");
+#if DEBUG_EDITOR_INPUT
+                Log.Info("EDITOR-DBG: Bridge INSERT {N} chars [{Chars}] (prev={Prev} now={Now})",
+                    newChars.Length, newChars, _lastKeyboardText.Length, currentText.Length);
+#endif
                 _ = InvokeJs($"editor.insertText('{escaped}')");
                 Log.Dbg("TextEditorOverlay: keyboard input forwarded: {Chars}", newChars);
             }
             else if (currentText.Length < _lastKeyboardText.Length)
             {
                 int deleted = _lastKeyboardText.Length - currentText.Length;
+#if DEBUG_EDITOR_INPUT
+                Log.Info("EDITOR-DBG: Bridge DELETE {N} chars (prev={Prev} now={Now})",
+                    deleted, _lastKeyboardText.Length, currentText.Length);
+#endif
                 for (int i = 0; i < deleted; i++)
                     _ = InvokeJs("editor.backspace()");
             }
@@ -492,6 +518,9 @@ namespace XFiles.Controls
                 e.Key == VirtualKey.GamepadLeftShoulder || e.Key == VirtualKey.GamepadRightShoulder ||
                 e.Key == VirtualKey.GamepadLeftTrigger || e.Key == VirtualKey.GamepadRightTrigger)
             {
+#if DEBUG_EDITOR_INPUT
+                Log.Info("EDITOR-DBG: Bridge KeyDown {Key} → marked handled", e.Key);
+#endif
                 e.Handled = true;
             }
         }

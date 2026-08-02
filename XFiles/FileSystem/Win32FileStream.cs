@@ -60,11 +60,15 @@ namespace XFiles.FileSystem
                 IntPtr.Zero);
 
             if (hFile == (IntPtr)(-1))
+            {
+                Log.Warn("Win32FileStream.OpenRead: cannot open {Path} for read, Win32 error={Error}", filePath, Marshal.GetLastWin32Error());
                 return null;
+            }
 
             long length;
             if (!GetFileSizeEx(hFile, out length))
             {
+                Log.Warn("Win32FileStream.OpenRead: GetFileSizeEx failed for {Path}, Win32 error={Error}", filePath, Marshal.GetLastWin32Error());
                 CloseHandle(hFile);
                 return null;
             }

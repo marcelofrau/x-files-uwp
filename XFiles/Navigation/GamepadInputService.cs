@@ -120,6 +120,15 @@ namespace XFiles.Navigation
             var justPressed = (pressed ^ _prevButtons) & pressed;
             var justReleased = (pressed ^ _prevButtons) & _prevButtons;
 
+#if DEBUG_EDITOR_INPUT
+            if (justPressed != 0) Log.Info("INPUT-DBG: justPressed={Buttons}", justPressed);
+            if (justReleased != 0) Log.Info("INPUT-DBG: justReleased={Buttons}", justReleased);
+            double dbgLx = reading.LeftThumbstickX, dbgLy = reading.LeftThumbstickY;
+            double dbgRx = reading.RightThumbstickX, dbgRy = reading.RightThumbstickY;
+            if (Math.Abs(dbgLx) > 0.3 || Math.Abs(dbgLy) > 0.3 || Math.Abs(dbgRx) > 0.3 || Math.Abs(dbgRy) > 0.3)
+                Log.Info("INPUT-DBG: sticks L=({Lx:F2},{Ly:F2}) R=({Rx:F2},{Ry:F2})", dbgLx, dbgLy, dbgRx, dbgRy);
+#endif
+
             // Log raw button state at Verbose every 300 ticks (~5s)
             _tickCount++;
 #if GAMEPAD_POLL_DEBUG
@@ -258,7 +267,9 @@ namespace XFiles.Navigation
             // X — refresh current directory
             if ((justPressed & GamepadButtons.X) != 0)
             {
-                Log.Verb("Button: X (Refresh)");
+#if DEBUG_EDITOR_INPUT
+                Log.Info("INPUT-DBG: X pressed (Refresh dispatch)");
+#endif
                 nav.OnRefresh();
             }
 
