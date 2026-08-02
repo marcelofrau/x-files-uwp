@@ -110,7 +110,12 @@ namespace XFiles.Controls
             _router.Add(new OverlayHandler(62,
                 () => AboutOverlay.Visibility == Visibility.Visible,
                 (k, r) => true,
-                (k) => { if (k == VirtualKey.GamepadB) HideAbout(); return true; }));
+                (k) =>
+                {
+                    if (k == VirtualKey.GamepadB) HideAbout();
+                    else if (k == VirtualKey.GamepadY) ReRunPortalProbe();
+                    return true;
+                }));
 
             _router.Add(new OverlayHandler(60,
                 () => StartMenuControl.IsOpen,
@@ -744,11 +749,28 @@ namespace XFiles.Controls
         {
             Log.Dbg("Showing About overlay");
             AboutOverlay.Visibility = Visibility.Visible;
+            AboutPortalStatusText.Text = DevicePortalService.ProbeStatus;
+            DevicePortalService.ProbeAsync();
         }
 
         private void HideAbout()
         {
             AboutOverlay.Visibility = Visibility.Collapsed;
+        }
+
+        private void ReRunPortalProbe()
+        {
+            Log.Info("About: re-running Device Portal probe (Y)");
+            AboutPortalStatusText.Text = "Probing portal… (full results in Log viewer)";
+            DevicePortalService.ProbeCompleted += OnPortalProbeCompleted;
+            DevicePortalService.ProbeAsync(force: true);
+        }
+
+        private void OnPortalProbeCompleted()
+        {
+            DevicePortalService.ProbeCompleted -= OnPortalProbeCompleted;
+            _ = Dispatcher.RunAsync(CoreDispatcherPriority.Normal,
+                () => AboutPortalStatusText.Text = DevicePortalService.ProbeStatus);
         }
 
         private bool IsAnyOverlayVisible =>

@@ -34,7 +34,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
     <DebugSymbols>true</DebugSymbols>
     <OutputPath>bin\x64\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_UWP;AUDIO_ANALYSIS</DefineConstants>
+    <DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_UWP;AUDIO_ANALYSIS;DEBUG_EDITOR_INPUT</DefineConstants>
     <!-- Debug flags: uncomment in DefineConstants above to enable
          AUDIO_ANALYSIS    — FFT processing + VU meter (comment out to test stutter without analysis overhead)
          GAMEPAD_POLL_DEBUG  — GamepadInputService polling (sticks, dpad state, button repeats)
@@ -43,6 +43,7 @@
          POINTER_DEBUG      — TextEditorOverlay pointer/mouse coordinates
          EDITOR_JS_DEBUG    — TextEditorOverlay JS log lines pulled from editor
          ID3_PARSE_DEBUG    — Id3Tag per-frame parsing details
+         DEBUG_EDITOR_INPUT — full gamepad input tracing while testing the text editor virtual keyboard
     -->
     <NoWarn>;2008</NoWarn>
     <!-- <DebugType>full</DebugType> -->
@@ -214,6 +215,8 @@
     <Compile Include="Services\PdfPreviewService.cs" />
     <Compile Include="Services\FileShareService.cs" />
     <Compile Include="Services\ProgressStream.cs" />
+    <Compile Include="Services\DevicePortalService.cs" />
+    <Compile Include="DevPortalSecrets.g.cs" />
     <Compile Include="Audio\IMemoryBufferAccess.cs" />
     <Compile Include="Audio\AudioLevelService.cs" />
     <Compile Include="Audio\FftHelper.cs" />
@@ -629,7 +632,7 @@
     <Content Include="Assets\GamepadButtons\full-gamepad.png" />
   </ItemGroup>
   <PropertyGroup>
-    <PreBuildEvent>powershell -ExecutionPolicy Bypass -NoProfile -File "$(SolutionDir)tools\increment-version.ps1"</PreBuildEvent>
+    <PreBuildEvent>powershell -ExecutionPolicy Bypass -NoProfile -File "$(SolutionDir)tools\increment-version.ps1" &amp; powershell -ExecutionPolicy Bypass -NoProfile -File "$(SolutionDir)tools\generate-devportal-secrets.ps1"</PreBuildEvent>
     <PostBuildEvent>powershell -ExecutionPolicy Bypass -NoProfile -Command "$pkgDir = '$(SolutionDir)AppPackages'; if (Test-Path $pkgDir) { $dirs = Get-ChildItem $pkgDir -Directory | Sort-Object Name; if ($dirs.Count -gt 3) { $toDelete = $dirs | Select-Object -First ($dirs.Count - 3); $toDelete | Remove-Item -Recurse -Force; Write-Host '[cleanup] Removed' $toDelete.Count 'old package(s), kept last 3' } }"</PostBuildEvent>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(VisualStudioVersion)' == '' or '$(VisualStudioVersion)' &lt; '14.0' ">
