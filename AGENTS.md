@@ -15,7 +15,7 @@ All documentation, code, comments, and commit messages MUST be in English.
 
 ## Status
 **Released** — latest release `v1.2.0.{build}` (see `docs/RELEASE.md`). Feature-complete
-for the planned MVP plus post-MVP features (audio player, 29 visualizers, text editor,
+for the planned MVP plus post-MVP features (audio player, 31 visualizers, text editor,
 QR file sharing, batch operations, ROM preview, PDF viewer, settings, log viewer).
 Docs in `docs/` reflect the shipped state. See `docs/ROADMAP.md` for the remaining backlog.
 Unit tests live in `tests/` (xUnit, linked-source, net8.0 — run on desktop, not UWP).
@@ -71,7 +71,7 @@ PDF, QR share). Cross-cutting: `Metadata/*` (MusicBrainz/Deezer + SQLite cache),
 | `docs/ARCHIVES.md` | zip/7z/rar via SharpCompress, archive-as-virtual-folder |
 | `docs/UI-THEMING.md` | ControlTemplate conventions, BladeTheme |
 | `docs/AUDIO-VISUALIZATION.md` | VU meter architecture, AudioGraph, FFT |
-| `docs/AUDIO-VISUALIZERS.md` | 29 Win2D visualizers, registry, shader pipeline |
+| `docs/AUDIO-VISUALIZERS.md` | 31 Win2D visualizers, registry, shader pipeline |
 | `docs/FILETYPE-ICONS.md` | File-type icon mapping (Papirus, `-24.png` scheme) |
 | `docs/ROM-FORMATS.md` | ROM header parsing, systems/extensions, cache |
 | `docs/FILE-SHARES.md` | SMB/UNC feasibility (deferred, not implemented) |
@@ -110,7 +110,7 @@ PDF, QR share). Cross-cutting: `Metadata/*` (MusicBrainz/Deezer + SQLite cache),
 | `XFiles/FileSystem/FilePreviewService.cs` | Text/image preview, highlight.js integration |
 | `XFiles/FileSystem/TextEditorService.cs` | Text file I/O, encoding detection, size tiers |
 | `XFiles/Audio/AudioLevelService.cs` | AudioGraph playback + VU meter FFT |
-| `XFiles/Visualizers/VisualizerRegistry.cs` | 29 Win2D audio visualizers |
+| `XFiles/Visualizers/VisualizerRegistry.cs` | 31 Win2D audio visualizers |
 | `XFiles/Metadata/MetadataGuesser.cs` | ID3 + filename + MusicBrainz/Deezer + SQLite cache |
 | `XFiles/Services/FileShareService.cs` | gofile.io upload + QR code share |
 | `XFiles/Theming/BladeTheme.xaml` | Custom ControlTemplate/Style resource dictionary |

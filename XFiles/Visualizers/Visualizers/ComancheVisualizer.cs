@@ -27,8 +27,9 @@ namespace XFiles.Visualizers.Visualizers
         private const float MaxDistance = 260f;
         private const float StepGrowth = 1.045f;
         private const float BaseStep = 1.4f;
-        private const float MaxHeightScale = 32f;
-        private const float HoverOffset = 24f;
+        private const float MaxHeightScale = 42f;
+        private const float HoverOffset = 12f;
+        private const float HorizonFraction = 0.50f;
         private const float NearBoostRadius = 40f;
         private const float SpikeScale = 10f;
         private const float FovDeg = 75f;
@@ -116,7 +117,6 @@ namespace XFiles.Visualizers.Visualizers
             DrawSky(ds);
             DrawSunGlow(ds);
             DrawTerrain(ds);
-            DrawSunset(ds);
             DrawClouds(ds);
         }
 
@@ -125,7 +125,7 @@ namespace XFiles.Visualizers.Visualizers
 
         private void DrawSky(CanvasDrawingSession ds)
         {
-            float horizonY = _height * 0.55f;
+            float horizonY = _height * HorizonFraction;
             var brush = new CanvasLinearGradientBrush(ds, SkyTop, SkyHorizon)
             {
                 StartPoint = new Vector2(0, 0),
@@ -163,22 +163,6 @@ namespace XFiles.Visualizers.Visualizers
             }
         }
 
-        private void DrawSunset(CanvasDrawingSession ds)
-        {
-            float horizonY = _height * 0.55f;
-            float glowHeight = _height * 0.35f;
-            var sunsetBrush = new CanvasLinearGradientBrush(
-                ds,
-                Color.FromArgb(0, 255, 200, 160),
-                Color.FromArgb(90, 255, 140, 70))
-            {
-                StartPoint = new Vector2(0, horizonY - glowHeight),
-                EndPoint = new Vector2(0, horizonY + _height * 0.04f)
-            };
-            ds.FillRectangle(0, horizonY - glowHeight, _width, glowHeight + _height * 0.04f, sunsetBrush);
-            sunsetBrush.Dispose();
-        }
-
         private void DrawClouds(CanvasDrawingSession ds)
         {
             if (_clouds == null) return;
@@ -214,11 +198,11 @@ namespace XFiles.Visualizers.Visualizers
 
         private void DrawTerrain(CanvasDrawingSession ds)
         {
-            float horizonY = _height * 0.55f;
+            float horizonY = _height * HorizonFraction;
             float colWidth = _width / _activeColumnCount;
             float fovRad = FovDeg * MathF.PI / 180f;
-            float scaleY = _height * 1.0f;
-            float clipTop = horizonY - _height * 0.42f;
+            float scaleY = _height * 1.42f;
+            float clipTop = 0f;
 
             for (int c = 0; c < _activeColumnCount; c++)
             {

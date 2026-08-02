@@ -28,6 +28,27 @@ namespace XFiles.Controls
         private static readonly string IconBase = "ms-appx:///Assets/Views/StartMenu/";
         private static readonly string[] LogLevels = { "Verbose", "Debug", "Info", "Warning", "Error" };
 
+        private static List<SettingsMenuItem> BuildMenuItems(string cacheDesc, string logLevel)
+        {
+            return new List<SettingsMenuItem>
+            {
+                new SettingsMenuItem
+                {
+                    Label = "Clear Cache",
+                    Description = cacheDesc,
+                    IconPath = IconBase + "startmenu-close-48.png",
+                    Action = "clear-cache"
+                },
+                new SettingsMenuItem
+                {
+                    Label = "Log Level",
+                    Description = $"Current: {logLevel}",
+                    IconPath = IconBase + "startmenu-settings-48.png",
+                    Action = "log-level"
+                }
+            };
+        }
+
         public SettingsPage()
         {
             this.InitializeComponent();
@@ -55,25 +76,8 @@ namespace XFiles.Controls
 
             CacheStatsText.Text = $"{cacheCount} cached entries";
 
-            var items = new List<SettingsMenuItem>
-            {
-                new SettingsMenuItem
-                {
-                    Label = "Clear Cache",
-                    Description = $"Remove all {cacheCount} cached metadata and cover art entries",
-                    IconPath = IconBase + "startmenu-close-48.png",
-                    Action = "clear-cache"
-                },
-                new SettingsMenuItem
-                {
-                    Label = "Log Level",
-                    Description = $"Current: {currentLevel}",
-                    IconPath = IconBase + "startmenu-settings-48.png",
-                    Action = "log-level"
-                }
-            };
-
-            SettingsList.ItemsSource = items;
+            SettingsList.ItemsSource = BuildMenuItems(
+                $"Remove all {cacheCount} cached metadata and cover art entries", currentLevel);
             SettingsList.SelectedIndex = 0;
             SettingsList.Focus(FocusState.Programmatic);
 
@@ -132,24 +136,8 @@ namespace XFiles.Controls
                         Log.Info("SettingsPage: cleared {Count} cache entries", cleared);
                         _cacheWasCleared = true;
 
-                        var items = new List<SettingsMenuItem>
-                        {
-                            new SettingsMenuItem
-                            {
-                                Label = "Clear Cache",
-                                Description = "Remove all 0 cached metadata and cover art entries",
-                                IconPath = IconBase + "startmenu-close-48.png",
-                                Action = "clear-cache"
-                            },
-                            new SettingsMenuItem
-                            {
-                                Label = "Log Level",
-                                Description = $"Current: {Log.GetCurrentLevel()}",
-                                IconPath = IconBase + "startmenu-settings-48.png",
-                                Action = "log-level"
-                            }
-                        };
-                        SettingsList.ItemsSource = items;
+                        SettingsList.ItemsSource = BuildMenuItems(
+                            "Remove all 0 cached metadata and cover art entries", Log.GetCurrentLevel());
                         SettingsList.SelectedIndex = 0;
                     }
                     catch (Exception ex)
@@ -175,24 +163,8 @@ namespace XFiles.Controls
                 Log.Info("SettingsPage: log level changed to {Level}", newLevel);
 
                 // Refresh the item description
-                var items = new List<SettingsMenuItem>
-                {
-                    new SettingsMenuItem
-                    {
-                        Label = "Clear Cache",
-                        Description = "Remove cached metadata and cover art entries",
-                        IconPath = IconBase + "startmenu-close-48.png",
-                        Action = "clear-cache"
-                    },
-                    new SettingsMenuItem
-                    {
-                        Label = "Log Level",
-                        Description = $"Current: {newLevel}",
-                        IconPath = IconBase + "startmenu-settings-48.png",
-                        Action = "log-level"
-                    }
-                };
-                SettingsList.ItemsSource = items;
+                SettingsList.ItemsSource = BuildMenuItems(
+                    "Remove cached metadata and cover art entries", newLevel);
                 SettingsList.SelectedIndex = 1;
                 SettingsList.Focus(FocusState.Programmatic);
             }

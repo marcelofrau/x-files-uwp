@@ -16,22 +16,26 @@ Scope: `XFiles/**/*.cs` + `XFiles/**/*.xaml`.
 
 | Category | CRITICAL | HIGH | MEDIUM | LOW |
 |---|---|---|---|---|
-| [Architecture](01-architecture.md) | 1 | 2 | 3 | — |
+| [Architecture](01-architecture.md) | — | 2 | 3 | — |
 | [Error Handling](02-error-handling.md) | — | — | 2 | 1 |
 | [UWP Compliance](03-uwp-compliance.md) | — | — | — | — |
 | [Async Patterns](04-async-patterns.md) | — | — | 1 | — |
 | [Code Duplication](05-code-duplication.md) | — | — | — | 2 |
 | [Miscellaneous](06-misc.md) | — | — | 1 | — |
-| **Total** | **1** | **2** | **4** | **3** |
+| **Total** | **0** | **2** | **4** | **3** |
 
 > Aug 2026 quick-win sweep closed: debug flags, `Prefer32Bit`, PT comments, dead
 > `DebugOverlay`/`ScreenLogger`, `SubtitleDetector` P/Invoke, `PlasmaVisualizer`
 > blocking shader load, all 19 TCS, 2 of 3 empty catches. See per-file docs.
+> **Aug 2026 god object sweep closed the CRITICAL:** `MillerColumnsPage` split into 8
+> partial files + 3 extracted pure classes (see `01-architecture.md`).
 
 ## Priority Order
 
-1. **Architecture** — `MillerColumnsPage` god object is the #1 maintainability blocker
-   (4373 lines, grew ~45% since Jul 2025 audit). Decomposition is the next big task.
+1. **Architecture** — `MillerColumnsPage` god object (4960 lines) was the #1
+   maintainability blocker. **Resolved Aug 2026**: split into 8 partial files + 3
+   extracted pure classes (test coverage 45 → 75). Remaining: method-level refactors
+   (long methods) + optional controller extraction — see `01-architecture.md`.
 2. **Error Handling** — two remaining `catch { }` are accepted by design (pure class +
    infinite-recursion guard).
 3. **Miscellaneous** — hardcoded cert password (`dev`) in csproj; drive from env var
@@ -52,9 +56,9 @@ Scope: `XFiles/**/*.cs` + `XFiles/**/*.xaml`.
 
 Delta vs the Jul 2025 audit:
 
-- `MillerColumnsPage.xaml.cs` grew 3002 → **4373 lines**; complexity ~916 (was 702).
+- `MillerColumnsPage.xaml.cs` grew 3002 → **4960 lines**; complexity ~916 (was 702).
   Batch mode, favorites, ROM covers, and 29 visualizers were added to the same class.
-  Decomposition is now the top remediation priority.
+  **Resolved Aug 2026**: decomposed into 8 partial files + 3 pure classes.
 - `TaskCompletionSource` instances: 16 → **19** (new dialogs added more; all still
   default-constructed without `RunContinuationsAsynchronously`).
 - **New:** `PlasmaVisualizer.cs:113-114` calls `.GetAwaiter().GetResult()` on the Win2D
@@ -69,10 +73,13 @@ Delta vs the Jul 2025 audit:
 - **New:** `tests/XFiles.Tests.csproj` (MSTest, net8.0, linked-source) — P0 coverage for
   `FftHelper`, `EncodingDetector` (extracted from `TextEditorService`), `RomHeaderParser`,
   `Id3Tag`, `FilenameParser`; wired into CI. `TextEditorService`/`Id3Tag` still lack
-  direct coverage (Log/`FromApp` deps).
+  direct coverage (Log/`FromApp` deps). **Aug 2026:** + `Formatting`,
+  `HighlightRenderer`, `RomCoverProvider` (pure classes extracted from
+  `MillerColumnsPage`) — 75 tests total.
 - **Quick-win sweep (Aug 2026):** debug flags OFF, `Prefer32Bit` removed, PT comments
   fixed (EN), dead `DebugOverlay`+`ScreenLogger` deleted, `SubtitleDetector` → P/Invoke,
   `PlasmaVisualizer` shader load async (no draw-thread block), all 19 `TaskCompletionSource`
-  → `RunContinuationsAsynchronously`, empty catches logged at Verbose. Remaining:
-  god object decomposition, cert password env var, `AudioLevelService._fftSignal.Wait(100)`
+  → `RunContinuationsAsynchronously`, empty catches logged at Verbose. **God object
+  decomposition done** (8 partials + 3 pure classes). Remaining:
+  cert password env var, `AudioLevelService._fftSignal.Wait(100)`
   budget check.

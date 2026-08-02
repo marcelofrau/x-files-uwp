@@ -1,72 +1,76 @@
 # Architecture Debt
 
-## CRITICAL: MillerColumnsPage God Object
+## CRITICAL (RESOLVED): MillerColumnsPage God Object
 
-**File:** `Controls/MillerColumnsPage.xaml.cs` — **4373 lines** (Aug 2026 re-audit;
-was 3002 in Jul 2025), cyclomatic complexity ~916 (was 702).
+**Before (Aug 2026):** `Controls/MillerColumnsPage.xaml.cs` — **4960 lines** (4372
+non-blank), cyclomatic complexity ~916 (was 3002/702 in Jul 2025). Single class with
+20+ responsibilities, no `#region`, fields interleaved between methods.
 
-Single class with 20+ responsibilities:
+**After (Aug 2026):** mechanical split into **8 partial files** + **3 extracted pure
+classes**. The page is now `partial` across files; no behavior change (build + 75 unit
+tests green, XAML untouched).
 
-| # | Responsibility | Key methods |
+### Split (partial files, `XFiles/Controls/`)
+
+| File | Lines | Content |
 |---|---|---|
-| 1 | Column navigation | `DrillIn`, `DrillOut`, `UpdateUIAsync` |
-| 2 | Preview rendering | `UpdatePreviewColumnAsync` (162 lines) |
-| 3 | Media playback (inline) | `HandlePlayPause`, `HandleStopPlayer` |
-| 4 | Fullscreen video | `ShowMediaFullscreenAsync`, `OnFsVideoMediaEnded` |
-| 5 | Fullscreen audio | `LoadAudioFullscreenMetadataAsync`, `OnFsAudioTrackChanged` |
-| 6 | File operations | `HandlePasteAsync`, `HandleMoveAsync`, `HandleRenameAsync`, `HandleExtractAsync` |
-| 7 | Gamepad input routing | `OnConfirm`, `OnBack`, `OnDPadUp/Down/Left/Right`, `OnTriggerHeld` |
-| 8 | Dialog management | 8+ overlay show/hide methods |
-| 9 | File Action Sheet | `ShowFileActionSheetAsync` (79 lines, 11 action types) |
-| 10 | Error overlay | `ShowErrorOverlay`, `CopyErrorReport` |
-| 11 | Highlight.js integration | `EnsureHighlightAssetsLoadedAsync`, `BuildHighlightHtml` |
-| 12 | Audio visualizer | 29 visualizer modes, `CycleAudioVisualizer` + picker |
-| 13 | Preview debouncing | `_previewDebounceTimer`, `_mediaLoadTimer` |
-| 14 | OSD system | `ShowOsd`, `HideOsd` with fade + auto-hide |
-| 15 | Volume control | `HandleVolumeChange`, `UpdateVolumeUI` |
-| 16 | Display request | `RequestDisplayRelease`/`RequestDisplayActivate` |
-| 17 | Batch mode | toggle, multi-select, batch ops |
-| 18 | Favorites | `FavoritesManager` integration, Y long-press |
-| 19 | ROM cover art | gamelist.xml + LibRetro fetch + SQLite cache |
-| 20 | Start menu / search / logs / about | overlay routing |
+| `MillerColumnsPage.xaml.cs` | 381 | Core: fields, ctor, lifecycle, nav events, `UpdateUIAsync` |
+| `MillerColumnsPage.Preview.cs` | 668 | Preview column, highlight.js wiring, debounce |
+| `MillerColumnsPage.Navigation.cs` | 1151 | Input handlers + `INavigable` contract |
+| `MillerColumnsPage.FileOps.cs` | 1117 | Batch mode + action sheet + copy/move/rename/delete/extract/zip |
+| `MillerColumnsPage.Media.cs` | 1316 | Fullscreen video/audio, OSD, visualizer, tracks, seek |
+| `MillerColumnsPage.RomCover.cs` | 142 | ROM cover fetch (local file + LibRetro) |
+| `MillerColumnsPage.Error.cs` | 178 | Error overlay + share report |
+| `Converters.cs` | 63 | `BooleanToColumnWidthConverter` + `BooleanToBrushConverter` |
 
-**Suggested decomposition:**
-- `MediaPlayerController` — playback + fullscreen + OSD + volume (responsibilities 3-5, 14-15)
-- `FileOperationHandler` — paste/move/rename/delete/extract/zip + batch (responsibilities 6, 17)
-- `PreviewRenderer` — preview column + highlight.js (responsibilities 2, 11)
-- `InputRouter` — gamepad dispatch to overlays + navigation (responsibility 7)
-- `DialogManager` — overlay lifecycle (responsibility 8)
-- `RomCoverProvider` — gamelist + LibRetro + cache (responsibility 19)
+### Extracted pure classes (testable, `XFiles/FileSystem/`)
 
-> **Re-audit note (Aug 2026):** grew 45% since the last audit with no decomposition.
-> This is now the top remediation priority — any new feature should go into a new
-> class, not this file.
+| File | Content | Tests |
+|---|---|---|
+| `Formatting.cs` | `FormatSize`/`FormatBytes` (deduped duplicates), `FormatFsTime`, `FormatCount` | `FormattingTests` (13) |
+| `HighlightRenderer.cs` | `GetHighlightLang`, `HtmlEncode`, `BuildSvgHtml`, `BuildHighlightHtml` | `HighlightRendererTests` (9) |
+| `RomCoverProvider.cs` | `BuildTitleVariations`, `LibRetroSystemNames` | `RomCoverProviderTests` (8) |
+
+### Remaining (method-level, not file-level)
+
+- Long methods below (`UpdatePreviewColumnAsync`, `OnConfirm`, ...) still need
+  refactoring — the split changed file layout, not method complexity.
+- Optional next step (deferred, high risk): extract real controllers
+  (`MediaPlayerController`, `FileOperationHandler`) that own XAML named elements.
+- Each partial carries the original 30-using block; unused usings per file are a
+  cosmetic cleanup.
+
+> **Re-audit note (Aug 2026):** grew 45% since the last audit. God object decomposition
+> (partial split + pure-class extraction) is now **done** — this entry tracked as
+> resolved. Any new feature should still go into a new class, not the page file.
 
 ## HIGH: Long Methods (>50 lines)
 
 | File | Method | Lines | Nesting |
 |---|---|---|---|
 | `GamepadInputService.cs` | `OnTick()` | 206 | 4+ |
-| `MillerColumnsPage.xaml.cs` | `UpdatePreviewColumnAsync()` | 162 | 3 |
-| `MillerColumnsPage.xaml.cs` | `OnConfirm()` | 118 | 4+ |
+| `MillerColumnsPage.Preview.cs` | `UpdatePreviewColumnAsync()` | 162 | 3 |
+| `MillerColumnsPage.Navigation.cs` | `OnConfirm()` | 118 | 4+ |
 | `FileOperations.cs` | `ExtractAsync()` | 110 | 4+ |
-| `MillerColumnsPage.xaml.cs` | `ShowFileActionSheetAsync()` | 79 | 2 |
+| `MillerColumnsPage.FileOps.cs` | `ShowFileActionSheetAsync()` | 79 | 2 |
 | `FilePreviewService.cs` | `LoadImagePreview()` | 82 | 2 |
 | `FilePreviewService.cs` | `LoadImagePreviewFromStream()` | 82 | 2 |
 | `TextEditorService.cs` | `DetectEncoding()` | 82 | 3 |
-| `MillerColumnsPage.xaml.cs` | `HandleExtractAsync()` | 87 | 3 |
-| `MillerColumnsPage.xaml.cs` | `HandleMoveAsync()` | 71 | 3 |
+| `MillerColumnsPage.FileOps.cs` | `HandleExtractAsync()` | 87 | 3 |
+| `MillerColumnsPage.FileOps.cs` | `HandleMoveAsync()` | 71 | 3 |
 | `FileOperations.cs` | `CreateZipAsync()` | 91 | 4+ |
 | `FileOperations.cs` | `ExtractFileAsync()` | 83 | 3 |
-| `MillerColumnsPage.xaml.cs` | `HandlePasteAsync()` | 62 | 3 |
-| `MillerColumnsPage.xaml.cs` | `OnVideoSubtitleSelected()` | 67 | 4+ |
-| `MillerColumnsPage.xaml.cs` | `HandleExtractFileAsync()` | 63 | 3 |
+| `MillerColumnsPage.FileOps.cs` | `HandlePasteAsync()` | 62 | 3 |
+| `MillerColumnsPage.Media.cs` | `OnVideoSubtitleSelected()` | 67 | 4+ |
+| `MillerColumnsPage.FileOps.cs` | `HandleExtractFileAsync()` | 63 | 3 |
 
 ## HIGH: Files >400 Lines
 
 | File | Lines | Complexity |
 |---|---|---|
-| `Controls/MillerColumnsPage.xaml.cs` | 4373 | ~916 |
+| `Controls/MillerColumnsPage.Media.cs` | 1316 | partial (org.) |
+| `Controls/MillerColumnsPage.Navigation.cs` | 1151 | partial (org.) |
+| `Controls/MillerColumnsPage.FileOps.cs` | 1117 | partial (org.) |
 | `FileSystem/FileOperations.cs` | 966 | 162 |
 | `FileSystem/FilePreviewService.cs` | 599 | 65 |
 | `Controls/MediaPreviewControl.xaml.cs` | 538 | 110 |
@@ -92,7 +96,7 @@ Single class with 20+ responsibilities:
 
 | File | `using` count |
 |---|---|
-| `MillerColumnsPage.xaml.cs` | 23 |
+| `MillerColumnsPage.Preview.cs` | 30 (partials share the original using block; some unused) |
 | `MediaPreviewControl.xaml.cs` | 18 |
 | `App.xaml.cs` | 13 |
 | `AudioLevelService.cs` | 11 |

@@ -35,7 +35,9 @@ namespace XFiles.Visualizers
             typeof(Visualizers.ThreeDOVisualizer),
             typeof(Visualizers.ThreeDWaveVisualizer),
             typeof(Visualizers.ComancheVisualizer),
-            typeof(Visualizers.SynthwaveVuMeterVisualizer)
+            typeof(Visualizers.SynthwaveVuMeterVisualizer),
+            typeof(Visualizers.ClassicVUMeterVisualizer),
+            typeof(Visualizers.NightCityVisualizer)
         };
 
         public static int Count => VisualizerTypes.Length;
@@ -81,6 +83,8 @@ namespace XFiles.Visualizers
                 case AudioFullscreenMode.ThreeDWave: index = 26; break;
                 case AudioFullscreenMode.ComancheTerrain: index = 27; break;
                 case AudioFullscreenMode.SynthwaveVuMeter: index = 28; break;
+                case AudioFullscreenMode.ClassicVUMeter: index = 29; break;
+                case AudioFullscreenMode.NightCity: index = 30; break;
                 default: index = -1; break;
             }
             if (index < 0 || index >= VisualizerTypes.Length)

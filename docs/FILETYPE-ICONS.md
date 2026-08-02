@@ -49,6 +49,35 @@ All file-type icons are **24×24 PNG** (`-24.png`). Directory: `XFiles/Assets/Fi
 ROM extensions (`.nes`, `.sfc`, `.gb`, `.gba`, `.gen`, `.sms`, ...) resolve through the
 ROM system→icon mapping — see `ROM-FORMATS.md`.
 
+## Large Preview Icons (128px)
+
+The "No Preview" (Unsupported) panel in the preview column shows the file's own icon at
+**128×128** (`-128.png`), downscaled to the 96×96 display size — no upscaling blur.
+
+- Resolution: `EntryViewModel.GetLargeFileIcon(fileName)` (`ColumnListView.xaml.cs`) —
+  resolves via the same `ExtIcons` dictionary, swapping the `-24` suffix for `-128`;
+  unknown extensions fall back to `file-generic-128.png`.
+- Sources: rendered from Papirus **64×64** SVGs (the largest populated size in the
+  local Papirus checkout; SVG is vector, so Inkscape renders a crisp 128px at
+  `--export-width=128`).
+- Asset set (only types that can reach the Unsupported panel — previewable types never
+  show here):
+
+| Asset | Papirus source (64x64/mimetypes) | Extensions |
+|---|---|---|
+| `filetype-application-iso-128.png` | `application-x-cd-image` | iso/img/cdi/gdi/cue/nrg/mdf |
+| `filetype-application-executable-128.png` | `application-x-executable` | exe/msi/appx/dll/so/dylib |
+| `filetype-application-tar-128.png` | `application-x-tar` | tar/bz2/xz/tgz/zst |
+| `filetype-application-gzip-128.png` | `application-x-gzip` | gz |
+| `file-archive-128.png` | `application-x-archive` | zip/7z/rar |
+| `filetype-text-generic-128.png` | `text-x-generic` | doc/docx/xls/xlsx/ppt/pptx/odt/ods/rtf/ass |
+| `filetype-text-c-128.png` | `text-x-csrc` | asm/s/v/vh |
+| `filetype-image-svg-128.png` | `image-svg+xml` | svg |
+| `filetype-image-pbm-128.png` | `image-x-portable-bitmap` | pbm/pgm/ppm |
+| `filetype-image-tga-128.png` | `image-x-tga` | tga |
+| `filetype-image-jpeg-128.png` | `image-jpeg` | raw/cr2/nef/arw |
+| `file-generic-128.png` | `application-octet-stream` | unmapped |
+
 ## Adding a New File-Type Icon
 
 1. Export the Papirus SVG → 24×24 PNG (keep `-24.png` suffix).

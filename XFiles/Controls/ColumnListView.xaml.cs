@@ -244,6 +244,14 @@ namespace XFiles.Controls
             return GenericIcon;
         }
 
+        public static string GetLargeFileIcon(string fileName)
+        {
+            string icon = GetFileIcon(fileName);
+            if (icon.EndsWith("-24.png", StringComparison.OrdinalIgnoreCase))
+                return icon.Substring(0, icon.Length - 7) + "-128.png";
+            return icon;
+        }
+
         public string SizeDisplay => IsDirectory ? "" : FormatSize(SizeBytes);
 
         public bool IsDotDot { get; set; }

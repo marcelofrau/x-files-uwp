@@ -49,7 +49,7 @@ namespace XFiles.Visualizers
                     service.Waveform.Length, wave.Length);
                 return new AudioData(
                     bands, peaks, mags, wave,
-                    service.WaveformCount,
+                    Math.Min(service.WaveformCount, wave.Length),
                     service.Beat,
                     time);
             }
@@ -60,7 +60,7 @@ namespace XFiles.Visualizers
 
             return new AudioData(
                 bands, peaks, mags, wave,
-                service.WaveformCount,
+                Math.Min(service.WaveformCount, wave.Length),
                 service.Beat,
                 time);
         }

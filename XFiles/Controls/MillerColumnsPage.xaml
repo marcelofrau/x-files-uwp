@@ -14,6 +14,7 @@
             TrueBrush="{StaticResource XFilesAccentBrush}"
             FalseBrush="{StaticResource XFilesTextMutedBrush}" />
         <local:BooleanToColumnWidthConverter x:Key="BatchCheckWidthConverter" />
+        <local:BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
     </Page.Resources>
 
     <Grid>
@@ -392,14 +393,22 @@
                         <Image x:Name="PreviewUnsupportedIcon"
                                Width="96" Height="96"
                                HorizontalAlignment="Center"
-                               Margin="0,0,0,20"
-                               Opacity="0.5" />
-                        <TextBlock Text="No Preview"
+                               Margin="0,0,0,16" />
+                        <TextBlock x:Name="PreviewUnsupportedFileName"
                             Foreground="#FFE0E0E0"
                             FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
                             FontSize="20"
                             HorizontalAlignment="Center"
-                            TextAlignment="Center" />
+                            TextAlignment="Center"
+                            TextTrimming="CharacterEllipsis"
+                            MaxLines="2" />
+                        <TextBlock Text="No Preview"
+                            Foreground="{StaticResource XFilesTextMutedBrush}"
+                            FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                            FontSize="12"
+                            HorizontalAlignment="Center"
+                            TextAlignment="Center"
+                            Margin="0,6,0,0" />
                         <TextBlock x:Name="PreviewUnsupportedType"
                             Foreground="{StaticResource XFilesTextMutedBrush}"
                             FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
@@ -1159,21 +1168,42 @@
                         <ListView x:Name="FsVisualizerList"
                                   Style="{StaticResource RetroListViewStyle}"
                                   ItemContainerStyle="{StaticResource RetroListViewItemStyle}"
+                                  MaxHeight="340"
                                   ScrollViewer.VerticalScrollBarVisibility="Visible"
                                   ScrollViewer.VerticalScrollMode="Auto"
                                   SelectionMode="Single">
                             <ListView.ItemTemplate>
                                 <DataTemplate>
-                                    <TextBlock Text="{Binding}"
-                                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                                               FontSize="17" Padding="16,8"
-                                               Foreground="#FFE0E0E0" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="*"
+                                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                                                   FontSize="18" Margin="12,0,4,0"
+                                                   VerticalAlignment="Center"
+                                                   Visibility="{Binding IsCurrent, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Label}"
+                                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                                   FontSize="17" Padding="4,8,16,8" />
+                                    </Grid>
                                 </DataTemplate>
                             </ListView.ItemTemplate>
                         </ListView>
                         <Border Background="#252830" Height="1" Margin="12,4,12,0" />
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
                                     Padding="0,10,0,4">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                                <Image Source="ms-appx:///Assets/GamepadButtons/abxy/a.png"
+                                       Width="18" Height="18" Margin="0,0,4,0"
+                                       VerticalAlignment="Center" />
+                                <TextBlock Text="Select"
+                                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                           FontSize="12" Margin="0,3,0,0"
+                                           Foreground="{StaticResource XFilesTextMutedBrush}"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
                             <Image Source="ms-appx:///Assets/GamepadButtons/abxy/b.png"
                                    Width="18" Height="18" Margin="0,0,4,0"
                                    VerticalAlignment="Center" />
@@ -1325,77 +1355,77 @@
             <Grid.Background>
                 <SolidColorBrush Color="#E60D1117" />
             </Grid.Background>
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
-                <!-- Full-width header image (same width as content card) -->
-                <Border Grid.Row="0" HorizontalAlignment="Center"
-                        Width="480"
-                        Background="#FF0D1117" BorderBrush="#FF93C43C" BorderThickness="2,2,2,0"
-                        CornerRadius="8,8,0,0" Padding="0">
-                    <Image Source="ms-appx:///Assets/Wide310x150Logo.scale-200.png"
-                           Stretch="Uniform"
-                           HorizontalAlignment="Center" VerticalAlignment="Center"
-                           Margin="24,16" />
-                </Border>
-                <!-- Content -->
-                <Border Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Top"
-                        MaxWidth="480" Width="480"
-                        Background="#FF0D1117" BorderBrush="#FF93C43C" BorderThickness="2,0,2,2"
-                        CornerRadius="0,0,8,8" Padding="32,0,32,28">
-                    <StackPanel Spacing="0">
-                        <!-- Version + Author -->
+            <Border HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Width="920" MaxWidth="920"
+                    Background="#FF0D1117" BorderBrush="#FF93C43C" BorderThickness="2"
+                    CornerRadius="8">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="300" />
+                        <ColumnDefinition Width="1" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Left: brand column -->
+                    <StackPanel Grid.Column="0" Grid.Row="0"
+                                VerticalAlignment="Center" Margin="28,24,28,20">
+                        <Image Source="ms-appx:///Assets/Wide310x150Logo.scale-200.png"
+                               Stretch="Uniform"
+                               HorizontalAlignment="Center"
+                               Margin="0,0,0,16" />
                         <TextBlock x:Name="AboutVersionText"
                                    FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
-                                   FontSize="15" Foreground="#FF93C43C"
+                                   FontSize="17" Foreground="#FF93C43C"
                                    HorizontalAlignment="Center" />
                         <TextBlock Text="Marcelo Frau"
                                    FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                    FontSize="12" Foreground="#888888"
                                    HorizontalAlignment="Center"
-                                   Margin="0,2,0,0" />
+                                   Margin="0,5,0,0" />
                         <TextBlock Text="GPL-3.0-only"
                                    FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                    FontSize="11" Foreground="#FFD4A017"
                                    HorizontalAlignment="Center"
-                                   Margin="0,2,0,0" />
+                                   Margin="0,3,0,0" />
+                    </StackPanel>
 
-                        <!-- Separator -->
-                        <Border Background="#252830" Height="1"
-                                HorizontalAlignment="Center" Width="160"
-                                Margin="0,14,0,12" />
+                    <Border Grid.Column="1" Grid.RowSpan="2" Background="#252830" />
 
+                    <!-- Right: links, inspirations, acknowledgements -->
+                    <StackPanel Grid.Column="2" Grid.Row="0"
+                                VerticalAlignment="Center" Margin="28,20,28,14">
                         <!-- Links -->
                         <TextBlock Text="PROJECT"
                                    FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
                                    FontSize="10" Foreground="#55FFFFFF"
-                                   HorizontalAlignment="Center"
-                                   CharacterSpacing="80" Margin="0,0,0,6" />
+                                   CharacterSpacing="80" Margin="0,0,0,5" />
 
                         <HyperlinkButton x:Name="AboutGithubLink"
                                          NavigateUri="https://github.com/marcelofrau/x-files-uwp"
-                                         HorizontalAlignment="Center"
-                                         Margin="0,0,0,4">
+                                         HorizontalAlignment="Left"
+                                         Padding="0"
+                                         Margin="0,0,0,8">
                             <TextBlock Text="github.com/marcelofrau/x-files-uwp"
                                        FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                        FontSize="12" Foreground="#FF58A6FF" />
                         </HyperlinkButton>
 
-                        <Border Background="#252830" Height="1"
-                                HorizontalAlignment="Center" Width="100"
-                                Margin="0,6,0,8" />
+                        <Border Background="#252830" Height="1" Margin="0,0,0,12" />
 
+                        <!-- Inspirations -->
                         <TextBlock Text="INSPIRED BY"
                                    FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
                                    FontSize="10" Foreground="#55FFFFFF"
-                                   HorizontalAlignment="Center"
-                                   CharacterSpacing="80" Margin="0,0,0,6" />
+                                   CharacterSpacing="80" Margin="0,0,0,5" />
 
                         <HyperlinkButton x:Name="AboutYaziLink"
                                          NavigateUri="https://github.com/sxyazi/yazi"
-                                         HorizontalAlignment="Center"
+                                         HorizontalAlignment="Left"
+                                         Padding="0"
                                          Margin="0,0,0,2">
                             <TextBlock Text="yazi — blazing fast terminal file manager"
                                        FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
@@ -1405,53 +1435,48 @@
                         <TextBlock Text="Miller column navigation, keyboard-driven UX"
                                    FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                    FontSize="10" Foreground="#55FFFFFF"
-                                   HorizontalAlignment="Center"
                                    Margin="0,0,0,0" />
 
-                        <Border Background="#252830" Height="1"
-                                HorizontalAlignment="Center" Width="100"
-                                Margin="0,12,0,8" />
+                        <Border Background="#252830" Height="1" Margin="0,12,0,12" />
 
+                        <!-- Acknowledgements -->
                         <TextBlock Text="COMMUNITY"
                                    FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
                                    FontSize="10" Foreground="#55FFFFFF"
-                                   HorizontalAlignment="Center"
-                                   CharacterSpacing="80" Margin="0,0,0,6" />
+                                   CharacterSpacing="80" Margin="0,0,0,5" />
 
                         <TextBlock Text="Thanks to the emulationrevival community"
                                    FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                    FontSize="11" Foreground="#CCFFFFFF"
-                                   HorizontalAlignment="Center"
                                    Margin="0,0,0,2" />
 
                         <TextBlock FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                    FontSize="10" Foreground="#888888"
-                                   HorizontalAlignment="Center"
-                                   TextWrapping="Wrap" Margin="0,0,0,0">
+                                   TextWrapping="Wrap">
                             <Run Text="alouisious" Foreground="#FF93C43C" FontWeight="Bold" /> — features &amp; ideas
                         </TextBlock>
 
                         <TextBlock FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                    FontSize="10" Foreground="#888888"
-                                   HorizontalAlignment="Center"
-                                   TextWrapping="Wrap" Margin="0,0,0,0">
+                                   TextWrapping="Wrap">
                             <Run Text="MewLew" Foreground="#FF93C43C" FontWeight="Bold" />, <Run Text="Caorthann" Foreground="#FF93C43C" FontWeight="Bold" />, <Run Text="DanP142" Foreground="#FF93C43C" FontWeight="Bold" /> — support &amp; homebrew community
                         </TextBlock>
-
-                        <!-- Footer -->
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
-                                    Margin="0,24,0,0" Spacing="6">
-                            <Image Source="ms-appx:///Assets/GamepadButtons/abxy/b.png"
-                                   Width="14" Height="14" Stretch="Uniform"
-                                   VerticalAlignment="Center" />
-                            <TextBlock Text="Back"
-                                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                                       FontSize="11" Foreground="#44FFFFFF"
-                                       VerticalAlignment="Center" />
-                        </StackPanel>
                     </StackPanel>
-                </Border>
-            </Grid>
+
+                    <!-- Footer -->
+                    <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3"
+                                Orientation="Horizontal" HorizontalAlignment="Center"
+                                Margin="0,2,0,14" Spacing="6">
+                        <Image Source="ms-appx:///Assets/GamepadButtons/abxy/b.png"
+                               Width="14" Height="14" Stretch="Uniform"
+                               VerticalAlignment="Center" />
+                        <TextBlock Text="Back"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                   FontSize="11" Foreground="#44FFFFFF"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                </Grid>
+            </Border>
         </Grid>
 
         <!-- Placeholder screen overlay (Settings / About) -->
@@ -1613,5 +1638,9 @@
             </Grid>
 
         </Grid>
+
+        <!-- Controls guide overlay (fullscreen) -->
+        <controls:ControlsGuideOverlay x:Name="ControlsGuideControl" />
+
     </Grid>
 </Page>
