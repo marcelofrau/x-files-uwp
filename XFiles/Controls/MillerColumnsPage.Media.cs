@@ -412,6 +412,24 @@ namespace XFiles.Controls
                 return;
             }
             Log.Info("HandleEditAsync: opening {Path} (ext={Ext})", entry.Name, System.IO.Path.GetExtension(entry.FullPath));
+
+            if (entry.IsPortal)
+            {
+                // Cache the portal file first, then edit the cached copy. Save uploads back.
+                OpProgressDialog.Show("Downloading for edit", entry.Name, "");
+                string cachePath = await PortalCache.EnsureAsync(
+                    XFiles.FileSystem.PortalBrowser.ToPortalEntry(entry), null);
+                OpProgressDialog.Close();
+                if (cachePath == null)
+                {
+                    Log.Warn("HandleEditAsync: portal download to cache failed for {Name}", entry.Name);
+                    _ = AlertDialogControl.ShowAsync($"Failed to download \"{entry.Name}\".", AlertType.Error);
+                    return;
+                }
+                TextEditorOverlayControl.Show(cachePath, XFiles.FileSystem.PortalBrowser.ToPortalEntry(entry));
+                return;
+            }
+
             TextEditorOverlayControl.Show(entry.FullPath);
             Log.Dbg("HandleEditAsync: Show() returned, overlay visible={Vis}", TextEditorOverlayControl.IsOpen);
             await System.Threading.Tasks.Task.CompletedTask;

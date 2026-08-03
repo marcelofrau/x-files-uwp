@@ -162,24 +162,81 @@ PFN from the packages endpoint → run `checknetisolation -a` → verify. See
 pwsh ./tools/liberate-loopback.ps1 -Ip <XBOX-IP> -User <portal-user>
 ```
 
-## 6. Feature unlocked once exempted (planned)
+## 6. Feature unlocked once exempted (implemented)
 
-When the exemption is active, X-Files can offer a **"Portal: LocalAppData"**
-root in the Miller columns:
+Once exempted, X-Files shows a **"User Folders"** entry at the root of the
+Miller columns. Drill in to browse, preview, edit, and manage other apps'
+`LocalAppData` / `DevelopmentFiles`:
 
-1. **List apps** — `GET /api/app/packagemanager/packages` (reuse the same
-   probe plumbing already in `DevicePortalService`).
+1. **List apps** — `GET /api/app/packagemanager/packages` → installed packages as folders.
 2. **Browse files** — `GET /api/filesystem/apps/file?knownfolderid=LocalAppData&packagefullname=<PFN>&path=<dir>`.
-3. **Preview** — feed files into the existing preview pipeline (text editor,
-   image, hex, etc.).
-4. **Gate** — the About-screen probe (`Y`) reports the portal status; the
-   feature only appears when CONNECTED.
+3. **Preview / edit / play** — small files (≤ 25 MB) auto-download into an
+   internal cache (`portal-cache`, 2 GB LRU, cleared each launch); larger files
+   download on open with a progress dialog. Text files open in the editor; save
+   writes back to the portal.
+4. **Manage** — Download (copy to disk), Upload file, New Folder, Rename, Delete.
+
+### 6.1 Credentials (persisted)
+
+- Credentials are entered once via the credentials dialog and stored in the
+  app's SQLite settings (`PortalUser` / `PortalPass`) — no build-time `.env`
+  needed on the console.
+- Wrong creds → HTTP 401 → the dialog reappears.
+- Re-probe anytime: **About + Y**.
+
+### 6.2 If the drill-in shows the setup screen
+
+The setup dialog explains the three exemption routes (XB Homebrew Vault wizard,
+the packaged scripts, or manual SSH below) and shows a **QR code** pointing to
+this page. Not connected yet? Apply the exemption, then **Re-probe**.
+
+### 6.3 curl cheat-sheet (write ops, from any device)
+
+Base URL `https://<XBOX-IP>:11443`, Basic auth `-u <portal-user>:<portal-pass>`.
+Writes need a CSRF token: first `GET /api/os/info` (any page works) → cookie
+`CSRF-Token=<token>`; then send header `-H "X-CSRF-Token: <token>"`. Omit
+`packagefullname` to list packages; use `%5C` for `\`.
+
+```bash
+# list known folders
+curl -k -u user:pass "https://<IP>:11443/api/filesystem/apps/knownfolders"
+
+# list installed packages (omit packagefullname)
+curl -k -u user:pass "https://<IP>:11443/api/app/packagemanager/packages"
+
+# list files: path is backslash-quirk — root "\" = %5C, one level "\\Settings"
+curl -k -u user:pass "https://<IP>:11443/api/filesystem/apps/files?knownfolderid=LocalAppData&packagefullname=<PFN>&path=%5C"
+
+# download a file — filename is a SEPARATE param; path = parent folder only
+curl -k -u user:pass -o settings.dat \
+  "https://<IP>:11443/api/filesystem/apps/file?filename=settings.dat&packagefullname=<PFN>&path=%5C"
+
+# create folder
+curl -k -u user:pass -X POST -H "X-CSRF-Token: <token>" \
+  "https://<IP>:11443/api/filesystem/apps/folder?newfoldername=NewDir&packagefullname=<PFN>&path=%5C"
+
+# rename (path = parent)
+curl -k -u user:pass -X POST -H "X-CSRF-Token: <token>" \
+  "https://<IP>:11443/api/filesystem/apps/rename?filename=old.txt&newfilename=new.txt&packagefullname=<PFN>&path=%5C"
+
+# delete
+curl -k -u user:pass -X DELETE -H "X-CSRF-Token: <token>" \
+  "https://<IP>:11443/api/filesystem/apps/file?filename=old.txt&packagefullname=<PFN>&path=%5C"
+```
+
+**Upload gotcha:** the portal only accepts the browser-style multipart format.
+`curl -F "file=@x.txt"` matches it. If the server replies `500 ... WdpTempWebFolder\UPDxxxx.tmp`,
+check the multipart first, then reboot dev mode / free package quota.
+
+> Implementation details, decisions, and the manual test script live in
+> [`docs/portal-appdata/PLAN.md`](portal-appdata/PLAN.md) (D4 = SQLite creds,
+> D5 = cache, D6 = 25 MB auto-download, D8 = QR → this page).
 
 Related tooling (already in the repo):
 
 - `XFiles/Services/DevicePortalService.cs` — probe (network + filesystem +
-  packages), `ProbeAsync(force)`, `ProbeStatus`, `ProbeCompleted`.
+  packages), `ProbeAsync(force)`, `ProbeStatus`, `ProbeCompleted`, plus the
+  persistent portal client (read/write APIs, CSRF, 401 handling).
 - About + **Y** re-probe on `MillerColumnsPage.Navigation.cs`.
-
-> xbHomebrewVault also plans a "Loopback Exempt" tool in its Tools view
-> (see `xb-homebrew-vault/docs/feature-loopback-exempt.md`).
+- The **XB Homebrew Vault** project (`xb-homebrew-vault`) implements the same
+  REST client and a "Loopback Exempt" wizard in its Tools view.

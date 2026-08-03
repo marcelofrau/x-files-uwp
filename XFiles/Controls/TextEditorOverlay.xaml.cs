@@ -24,6 +24,10 @@ namespace XFiles.Controls
         private bool _isReadOnly;
         private bool _highlightEnabled;
 
+        // When editing a portal file, the local path is the cache copy and this holds
+        // the portal origin so Save uploads the result back to the console.
+        private XFiles.Services.PortalFileEntry _portalEntry;
+
         // HTML template parts (loaded once)
         private static string _highlightJs;
         private static string _highlightCss;
@@ -79,10 +83,20 @@ namespace XFiles.Controls
         /// </summary>
         public async void Show(string filePath)
         {
-            Log.Info("TextEditorOverlay.Show: {Path}", filePath);
+            Show(filePath, null);
+        }
+
+        /// <summary>
+        /// Open a text file in the editor. When <paramref name="portalEntry"/> is set,
+        /// the local path is a portal cache copy and saving uploads it back to the console.
+        /// </summary>
+        public async void Show(string filePath, XFiles.Services.PortalFileEntry portalEntry)
+        {
+            Log.Info("TextEditorOverlay.Show: {Path} portal={Portal}", filePath, portalEntry != null);
 
             _filePath = filePath;
             _fileName = System.IO.Path.GetFileName(filePath);
+            _portalEntry = portalEntry;
 
             // Load file
             var result = await TextEditorService.LoadAsync(filePath);
@@ -548,6 +562,10 @@ namespace XFiles.Controls
 
             if (ok)
             {
+                if (_portalEntry != null)
+                {
+                    await UploadToPortalAsync();
+                }
                 await InvokeJs("editor.setDirty(false)");
                 _lastDirtyState = false;
                 _dirtySuppressUntil = DateTime.Now.AddSeconds(2);
@@ -563,6 +581,24 @@ namespace XFiles.Controls
             {
                 Log.Warn("TextEditorOverlay: save failed for {File}", _fileName);
                 ShowToast("Save failed");
+            }
+        }
+
+        private async Task UploadToPortalAsync()
+        {
+            try
+            {
+                var bytes = System.IO.File.ReadAllBytes(_filePath);
+                await XFiles.Services.DevicePortalService.UploadPortalFileAsync(
+                    _portalEntry.KnownFolder, _portalEntry.PackageFullName,
+                    _portalEntry.PortalPath, _portalEntry.Name, bytes, null);
+                Log.Info("TextEditorOverlay: uploaded {File} back to portal", _portalEntry.Name);
+                ShowToast("Saved to portal");
+            }
+            catch (Exception ex)
+            {
+                Log.Err("TextEditorOverlay: portal upload failed for {File}", ex, _portalEntry?.Name);
+                ShowToast("Portal upload failed");
             }
         }
 

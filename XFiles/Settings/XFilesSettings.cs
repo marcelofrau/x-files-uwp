@@ -51,5 +51,19 @@ namespace XFiles.Settings
 
         public static async Task SetLogLevelAsync(string level)
             => await SetStringAsync("LogLevel", level);
+
+        // Portal credentials (Device Portal). Stored in SQLite like every other
+        // setting — the console has no build-time .env.
+        public static async Task<string> GetPortalUserAsync()
+            => await GetStringAsync("PortalUser", "");
+
+        public static async Task<string> GetPortalPassAsync()
+            => await GetStringAsync("PortalPass", "");
+
+        public static async Task SetPortalCredentialsAsync(string user, string pass)
+        {
+            await SetStringAsync("PortalUser", user ?? "");
+            await SetStringAsync("PortalPass", pass ?? "");
+        }
     }
 }

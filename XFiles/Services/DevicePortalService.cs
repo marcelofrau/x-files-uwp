@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.WindowsRuntime;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,6 +13,7 @@ using Windows.Networking;
 using Windows.Networking.Connectivity;
 using Windows.Networking.Sockets;
 using Windows.Security.Cryptography.Certificates;
+using Windows.Storage.Streams;
 using Windows.Web.Http;
 using Windows.Web.Http.Filters;
 using Windows.Web.Http.Headers;
@@ -23,7 +26,7 @@ namespace XFiles.Services
     /// Probe phase: layered connectivity diagnostic — internet reachability, raw TCP,
     /// plain-HTTP and HTTPS paths — to determine empirically how (or whether) the app
     /// running on the console can reach its own portal.
-    /// Credentials come from DevPortalSecrets.g.cs (generated from .env at build time).
+    /// Credentials come from runtime state (SQLite settings), set via SetCredentials.
     /// </summary>
     internal static class DevicePortalService
     {
@@ -38,14 +41,60 @@ namespace XFiles.Services
         private static string _baseUrl;
         private static string _probeStatus = "not run";
 
+        private static string _runtimeUser;
+        private static string _runtimePass;
+        private static Windows.Web.Http.HttpClient _client;
+        private static HttpBaseProtocolFilter _filter;
+        private static string _csrfToken;
+        private static bool _accessDeniedRaised;
+
         public static event Action ProbeCompleted;
 
+        /// <summary>
+        /// Raised when the portal returns HTTP 401 (credentials rejected) and the app
+        /// has no usable credentials. MillerColumnsPage opens the credentials dialog.
+        /// Guarded — fires at most once until ResetAccessDenied() is called.
+        /// </summary>
+        public static event Action CredentialsRequired;
+
         public static bool HasCredentials =>
-            !string.IsNullOrEmpty(DevPortalSecrets.User) && !string.IsNullOrEmpty(DevPortalSecrets.Password);
+            !string.IsNullOrEmpty(_runtimeUser) && !string.IsNullOrEmpty(_runtimePass);
 
         public static string BaseUrl => _baseUrl;
 
         public static string ProbeStatus => _probeStatus;
+
+        public static bool IsPortalConnected => !string.IsNullOrEmpty(_baseUrl);
+
+        private static string CurrentUser => _runtimeUser;
+        private static string CurrentPassword => _runtimePass;
+
+        /// <summary>
+        /// Sets the portal credentials in memory. Takes precedence over nothing else —
+        /// credentials come exclusively from the SQLite settings (PortalUser/PortalPass),
+        /// never from a build-time .env. Rebuilds the portal client so the new
+        /// credentials apply immediately.
+        /// </summary>
+        public static void SetCredentials(string user, string pass)
+        {
+            lock (Sync)
+            {
+                _runtimeUser = user;
+                _runtimePass = pass;
+                _csrfToken = null;
+                ResetPortalClient();
+            }
+            Log.Dbg("DevicePortal.SetCredentials: runtime credentials set (user={User})", user);
+        }
+
+        /// <summary>
+        /// Re-arms the CredentialsRequired event so a new 401 after fixing credentials
+        /// can prompt again. Called on portal drill-in.
+        /// </summary>
+        public static void ResetAccessDenied()
+        {
+            _accessDeniedRaised = false;
+        }
 
         /// <summary>
         /// Fire-and-forget probe, safe to call repeatedly. Logs results to the
@@ -72,7 +121,7 @@ namespace XFiles.Services
             if (!HasCredentials)
             {
                 _probeStatus = "no credentials";
-                Log.Warn("DevicePortal.Probe: no credentials — configure .env (DEV_PORTAL_USER/DEV_PORTAL_PASS)");
+                Log.Warn("DevicePortal.Probe: no credentials — set portal user/password (About → Portal)");
                 ProbeCompleted?.Invoke();
                 return;
             }
@@ -359,7 +408,7 @@ namespace XFiles.Services
             }
 
             var auth = Convert.ToBase64String(
-                Encoding.UTF8.GetBytes($"{DevPortalSecrets.User}:{DevPortalSecrets.Password}"));
+                Encoding.UTF8.GetBytes($"{CurrentUser}:{CurrentPassword}"));
             client.DefaultRequestHeaders.Authorization = new HttpCredentialsHeaderValue("Basic", auth);
 
             var sw = Stopwatch.StartNew();
@@ -430,7 +479,7 @@ namespace XFiles.Services
             }
             var client = new HttpClient(filter);
             var auth = Convert.ToBase64String(
-                Encoding.UTF8.GetBytes($"{DevPortalSecrets.User}:{DevPortalSecrets.Password}"));
+                Encoding.UTF8.GetBytes($"{CurrentUser}:{CurrentPassword}"));
             client.DefaultRequestHeaders.Authorization = new HttpCredentialsHeaderValue("Basic", auth);
             return client;
         }
@@ -594,8 +643,412 @@ namespace XFiles.Services
             }
         }
 
-        private static string Truncate(string s, int max = 600)
+        // ---- Portal browsing / transfer API (runtime credentials + CSRF) ----
+
+        private static void ResetPortalClient()
         {
+            _client?.Dispose();
+            _filter?.Dispose();
+            _client = null;
+            _filter = null;
+        }
+
+        private static void EnsurePortalClient()
+        {
+            if (_client != null) return;
+
+            _filter = new HttpBaseProtocolFilter();
+            _filter.IgnorableServerCertificateErrors.Add(ChainValidationResult.Untrusted);
+            _filter.IgnorableServerCertificateErrors.Add(ChainValidationResult.InvalidName);
+            _filter.IgnorableServerCertificateErrors.Add(ChainValidationResult.Expired);
+            _filter.IgnorableServerCertificateErrors.Add(ChainValidationResult.RevocationFailure);
+
+            _client = new HttpClient(_filter);
+            var auth = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{CurrentUser}:{CurrentPassword}"));
+            _client.DefaultRequestHeaders.Authorization = new HttpCredentialsHeaderValue("Basic", auth);
+            Log.Dbg("DevicePortal.Client: portal client ready (base={BaseUrl})", _baseUrl);
+        }
+
+        private static async Task<Windows.Web.Http.HttpResponseMessage> GetPortalAsync(string pathAndQuery, int timeoutSeconds = 30)
+        {
+            EnsurePortalClient();
+            using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds)))
+                return await _client.GetAsync(new Uri(BaseUrl + pathAndQuery)).AsTask(cts.Token);
+        }
+
+        private static async Task<string> GetPortalStringAsync(string pathAndQuery)
+        {
+            using (var resp = await GetPortalAsync(pathAndQuery))
+            {
+                if (resp.StatusCode == HttpStatusCode.Unauthorized)
+                    HandleAccessDenied();
+                var body = await resp.Content.ReadAsStringAsync();
+                if (!resp.IsSuccessStatusCode)
+                    throw new PortalRequestException((int)resp.StatusCode,
+                        "GET " + pathAndQuery + " => HTTP " + (int)resp.StatusCode + " " + Truncate(body, 300));
+                return body;
+            }
+        }
+
+        private static void HandleAccessDenied()
+        {
+            _probeStatus = "access denied";
+            if (_accessDeniedRaised) return;
+            _accessDeniedRaised = true;
+            Log.Warn("DevicePortal: HTTP 401 — credentials rejected, prompting for new ones");
+            CredentialsRequired?.Invoke();
+        }
+
+        private static async Task EnsureCsrfAsync()
+        {
+            if (!string.IsNullOrEmpty(_csrfToken)) return;
+            await TryFetchCsrfAsync("/api/os/info");
+            if (string.IsNullOrEmpty(_csrfToken))
+                await TryFetchCsrfAsync("/");
+        }
+
+        private static async Task TryFetchCsrfAsync(string path)
+        {
+            try
+            {
+                using (var resp = await GetPortalAsync(path))
+                {
+                    if (resp.IsSuccessStatusCode)
+                    {
+                        await resp.Content.ReadAsStringAsync();
+                        ExtractCsrfToken();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("DevicePortal.Csrf: fetch from {Path} failed: {Message}", path, ex.Message);
+            }
+        }
+
+        private static void ExtractCsrfToken()
+        {
+            if (_filter == null || string.IsNullOrEmpty(_baseUrl)) return;
+            try
+            {
+                var cookies = _filter.CookieManager.GetCookies(new Uri(_baseUrl));
+                foreach (var c in cookies)
+                {
+                    if (string.Equals(c.Name, "CSRF-Token", StringComparison.OrdinalIgnoreCase) &&
+                        !string.IsNullOrEmpty(c.Value))
+                    {
+                        _csrfToken = c.Value;
+                        Log.Dbg("DevicePortal.Csrf: token extracted ({N} chars)", _csrfToken.Length);
+                        return;
+                    }
+                }
+                Log.Warn("DevicePortal.Csrf: no CSRF-Token cookie found");
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("DevicePortal.Csrf: extraction error: {Message}", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Sends a state-changing request with the CSRF token; on HTTP 403 re-fetches the
+        /// token and retries once. Throws PortalRequestException on any non-success status.
+        /// </summary>
+        private static async Task SendWriteWithCsrfAsync(HttpMethod method, string pathAndQuery,
+            Func<IHttpContent> contentFactory, int timeoutSeconds = 60)
+        {
+            EnsurePortalClient();
+            for (int attempt = 0; attempt < 2; attempt++)
+            {
+                await EnsureCsrfAsync();
+                var req = new HttpRequestMessage(method, new Uri(BaseUrl + pathAndQuery));
+                var content = contentFactory?.Invoke();
+                if (content != null) req.Content = content;
+                if (!string.IsNullOrEmpty(_csrfToken))
+                    req.Headers.Append("X-CSRF-Token", _csrfToken);
+
+                using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds)))
+                using (var resp = await _client.SendRequestAsync(req).AsTask(cts.Token))
+                {
+                    if (resp.StatusCode == HttpStatusCode.Forbidden)
+                    {
+                        Log.Warn("DevicePortal.Write: HTTP 403 — re-fetching CSRF, retrying once");
+                        _csrfToken = null;
+                        continue;
+                    }
+                    if (resp.StatusCode == HttpStatusCode.Unauthorized)
+                        HandleAccessDenied();
+                    if (!resp.IsSuccessStatusCode)
+                    {
+                        var errBody = await resp.Content.ReadAsStringAsync();
+                        throw new PortalRequestException((int)resp.StatusCode,
+                            pathAndQuery + " => HTTP " + (int)resp.StatusCode + " " + Truncate(errBody, 300));
+                    }
+                    return;
+                }
+            }
+            throw new PortalRequestException(403, pathAndQuery + " => HTTP 403 after CSRF retry");
+        }
+
+        /// <summary>
+        /// Lists the known folders the portal can browse (DevelopmentFiles, LocalAppData).
+        /// </summary>
+        public static async Task<List<string>> GetKnownFoldersAsync()
+        {
+            var body = await GetPortalStringAsync(KnownFoldersPath);
+            try
+            {
+                var val = JsonValue.Parse(body);
+                if (val.ValueType != JsonValueType.Object || !val.GetObject().ContainsKey("KnownFolders"))
+                {
+                    Log.Warn("DevicePortal.KnownFolders: unexpected shape — {Body}", Truncate(body));
+                    return new List<string> { "DevelopmentFiles", "LocalAppData" };
+                }
+                var result = new List<string>();
+                foreach (var k in val.GetObject()["KnownFolders"].GetArray())
+                    result.Add(k.GetString());
+                return result;
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("DevicePortal.KnownFolders: parse failed: {Message} — {Body}", ex.Message, Truncate(body));
+                return new List<string> { "DevelopmentFiles", "LocalAppData" };
+            }
+        }
+
+        /// <summary>
+        /// Lists installed packages (non-system, non-framework), newest-first.
+        /// </summary>
+        public static async Task<List<PortalPackage>> GetInstalledPackagesAsync()
+        {
+            var body = await GetPortalStringAsync("/api/app/packagemanager/packages");
+            var result = new List<PortalPackage>();
+            try
+            {
+                JsonArray pkgs;
+                var val = JsonValue.Parse(body);
+                if (val.ValueType == JsonValueType.Array) pkgs = val.GetArray();
+                else if (val.ValueType == JsonValueType.Object && val.GetObject().ContainsKey("Packages"))
+                    pkgs = val.GetObject()["Packages"].GetArray();
+                else
+                {
+                    Log.Warn("DevicePortal.Packages: unexpected shape — {Body}", Truncate(body));
+                    return result;
+                }
+
+                foreach (var p in pkgs)
+                {
+                    var o = p.GetObject();
+                    var full = o.ContainsKey("PackageFullName") ? o["PackageFullName"].GetString() : "";
+                    if (full.Length == 0) continue;
+                    if (full.StartsWith("Microsoft.", StringComparison.OrdinalIgnoreCase)) continue;
+                    var isFramework = o.ContainsKey("IsFramework") && o["IsFramework"].GetBoolean();
+                    if (isFramework) continue;
+                    result.Add(new PortalPackage
+                    {
+                        Name = o.ContainsKey("Name") ? o["Name"].GetString() : full,
+                        DisplayName = o.ContainsKey("PackageDisplayName") ? o["PackageDisplayName"].GetString() : full,
+                        FamilyName = o.ContainsKey("PackageFamilyName") ? o["PackageFamilyName"].GetString() : "",
+                        FullName = full,
+                        Origin = o.ContainsKey("PackageOrigin") ? (int)o["PackageOrigin"].GetNumber() : 0
+                    });
+                }
+                result.Sort((a, b) => string.Compare(a.FullName, b.FullName, StringComparison.OrdinalIgnoreCase));
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("DevicePortal.Packages: parse failed: {Message} — {Body}", ex.Message, Truncate(body));
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// Lists entries (files + subdirs) under a portal path. portalPath is the
+        /// backslash-quirk format: root = "\", one level = "\\Settings", two = "\\Settings\\Sub".
+        /// </summary>
+        public static async Task<List<PortalFileEntry>> ListPortalFilesAsync(string knownFolder, string packageFullName, string portalPath)
+        {
+            var query = "/api/filesystem/apps/files?knownfolderid=" + Uri.EscapeDataString(knownFolder) +
+                        "&packagefullname=" + Uri.EscapeDataString(packageFullName ?? "") +
+                        "&path=" + Uri.EscapeDataString(portalPath);
+            var body = await GetPortalStringAsync(query);
+            var result = new List<PortalFileEntry>();
+            try
+            {
+                JsonArray items = null;
+                var val = JsonValue.Parse(body);
+                if (val.ValueType == JsonValueType.Object && val.GetObject().ContainsKey("Items"))
+                    items = val.GetObject()["Items"].GetArray();
+                else if (val.ValueType == JsonValueType.Array)
+                    items = val.GetArray();
+
+                if (items == null)
+                {
+                    Log.Warn("DevicePortal.Files: unexpected shape for {Query} — {Body}", query, Truncate(body));
+                    return result;
+                }
+
+                foreach (var it in items)
+                {
+                    var o = it.GetObject();
+                    var name = o.ContainsKey("Name") ? o["Name"].GetString() : "";
+                    if (name.Length == 0) continue;
+                    int type = o.ContainsKey("Type") ? (int)o["Type"].GetNumber() : 0;
+                    result.Add(new PortalFileEntry
+                    {
+                        Name = name,
+                        IsDirectory = (type & 0x10) != 0,
+                        FileSize = o.ContainsKey("FileSize") ? (long)o["FileSize"].GetNumber() : 0,
+                        DateCreated = o.ContainsKey("DateCreated") ? (long)o["DateCreated"].GetNumber() : 0,
+                        KnownFolder = knownFolder,
+                        PackageFullName = packageFullName ?? "",
+                        PortalPath = portalPath
+                    });
+                }
+                result.Sort((a, b) =>
+                {
+                    if (a.IsDirectory != b.IsDirectory) return a.IsDirectory ? -1 : 1;
+                    return string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase);
+                });
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("DevicePortal.Files: parse failed: {Message} — {Body}", ex.Message, Truncate(body));
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// Streams a portal file into <paramref name="dest"/> without buffering it fully.
+        /// The filename is a separate query parameter; path is the parent folder only.
+        /// </summary>
+        public static async Task DownloadPortalFileAsync(PortalFileEntry entry, Stream dest, IProgress<double> progress)
+        {
+            var query = "/api/filesystem/apps/file?knownfolderid=" + Uri.EscapeDataString(entry.KnownFolder) +
+                        "&filename=" + Uri.EscapeDataString(entry.Name) +
+                        "&packagefullname=" + Uri.EscapeDataString(entry.PackageFullName) +
+                        "&path=" + Uri.EscapeDataString(entry.PortalPath);
+            using (var resp = await GetPortalAsync(query, 120))
+            {
+                if (resp.StatusCode == HttpStatusCode.Unauthorized)
+                {
+                    HandleAccessDenied();
+                    throw new PortalRequestException(401, "portal download: credentials rejected");
+                }
+                if (!resp.IsSuccessStatusCode)
+                {
+                    var err = await resp.Content.ReadAsStringAsync();
+                    throw new PortalRequestException((int)resp.StatusCode,
+                        "portal download failed: " + Truncate(err, 300));
+                }
+
+                ulong? total = resp.Content.Headers.ContentLength;
+                long copied = 0;
+                using (var input = await resp.Content.ReadAsInputStreamAsync())
+                using (var reader = new DataReader(input))
+                {
+                    reader.InputStreamOptions = InputStreamOptions.Partial;
+                    while (true)
+                    {
+                        uint loaded = await reader.LoadAsync(65536);
+                        if (loaded == 0) break;
+                        var bytes = new byte[reader.UnconsumedBufferLength];
+                        reader.ReadBytes(bytes);
+                        await dest.WriteAsync(bytes, 0, bytes.Length);
+                        copied += bytes.Length;
+                        if (total.HasValue && total.Value > 0)
+                            progress?.Report((double)copied / total.Value);
+                    }
+                    progress?.Report(1.0);
+                }
+                Log.Info("DevicePortal.Download: {Name} => {Bytes} bytes", entry.Name, copied);
+            }
+        }
+
+        /// <summary>
+        /// Deletes an entry (file or directory) on the portal.
+        /// </summary>
+        public static async Task DeletePortalEntryAsync(PortalFileEntry entry)
+        {
+            var query = "/api/filesystem/apps/file?knownfolderid=" + Uri.EscapeDataString(entry.KnownFolder) +
+                        "&filename=" + Uri.EscapeDataString(entry.Name) +
+                        "&packagefullname=" + Uri.EscapeDataString(entry.PackageFullName) +
+                        "&path=" + Uri.EscapeDataString(entry.PortalPath);
+            await SendWriteWithCsrfAsync(HttpMethod.Delete, query, null);
+            Log.Info("DevicePortal.Delete: deleted {Name} ({Query})", entry.Name, query);
+        }
+
+        /// <summary>
+        /// Renames an entry on the portal. path = parent folder.
+        /// </summary>
+        public static async Task RenamePortalEntryAsync(PortalFileEntry entry, string newName)
+        {
+            var query = "/api/filesystem/apps/rename?knownfolderid=" + Uri.EscapeDataString(entry.KnownFolder) +
+                        "&filename=" + Uri.EscapeDataString(entry.Name) +
+                        "&newfilename=" + Uri.EscapeDataString(newName) +
+                        "&packagefullname=" + Uri.EscapeDataString(entry.PackageFullName) +
+                        "&path=" + Uri.EscapeDataString(entry.PortalPath);
+            await SendWriteWithCsrfAsync(HttpMethod.Post, query, null);
+            Log.Info("DevicePortal.Rename: {Name} -> {NewName}", entry.Name, newName);
+        }
+
+        /// <summary>
+        /// Creates a folder named <paramref name="newFolderName"/> inside portalPath.
+        /// </summary>
+        public static async Task CreatePortalFolderAsync(string knownFolder, string packageFullName, string portalPath, string newFolderName)
+        {
+            var query = "/api/filesystem/apps/folder?knownfolderid=" + Uri.EscapeDataString(knownFolder) +
+                        "&newfoldername=" + Uri.EscapeDataString(newFolderName) +
+                        "&packagefullname=" + Uri.EscapeDataString(packageFullName ?? "") +
+                        "&path=" + Uri.EscapeDataString(portalPath);
+            await SendWriteWithCsrfAsync(HttpMethod.Post, query, null);
+            Log.Info("DevicePortal.Folder: created '{NewFolder}' in {Path}", newFolderName, portalPath);
+        }
+
+        /// <summary>
+        /// Uploads a file into the portal directory. The multipart body is hand-rolled to
+        /// match the browser format the WDP accepts (Content-Disposition first, quoted
+        /// name/filename, no filename*, octet-stream, fixed Content-Length).
+        /// </summary>
+        public static async Task UploadPortalFileAsync(string knownFolder, string packageFullName, string portalPath,
+            string fileName, byte[] fileBytes, IProgress<double> progress)
+        {
+            var query = "/api/filesystem/apps/file?knownfolderid=" + Uri.EscapeDataString(knownFolder) +
+                        "&packagefullname=" + Uri.EscapeDataString(packageFullName ?? "") +
+                        "&path=" + Uri.EscapeDataString(portalPath) + "&extract=false";
+
+            var boundary = "----XFiles" + Guid.NewGuid().ToString("N");
+            var payload = BuildMultipart(boundary, fileName, fileBytes);
+            Log.Dbg("DevicePortal.Upload: uploading '{FileName}' ({Bytes} bytes) to {Query}", fileName, fileBytes?.Length ?? 0, query);
+
+            await SendWriteWithCsrfAsync(HttpMethod.Post, query, () =>
+            {
+                var content = new HttpBufferContent(payload.AsBuffer());
+                content.Headers.ContentType = HttpMediaTypeHeaderValue.Parse("multipart/form-data; boundary=" + boundary);
+                return content;
+            }, 120);
+
+            Log.Info("DevicePortal.Upload: '{FileName}' uploaded ({Bytes} bytes)", fileName, fileBytes?.Length ?? 0);
+            progress?.Report(1.0);
+        }
+
+        private static byte[] BuildMultipart(string boundary, string fileName, byte[] fileBytes)
+        {
+            string safeName = fileName.Replace("\"", "\\\"");
+            var header = Encoding.UTF8.GetBytes(
+                "--" + boundary + "\r\n" +
+                "Content-Disposition: form-data; name=\"file\"; filename=\"" + safeName + "\"\r\n" +
+                "Content-Type: application/octet-stream\r\n\r\n");
+            var footer = Encoding.UTF8.GetBytes("\r\n--" + boundary + "--\r\n");
+            var payload = new byte[header.Length + (fileBytes?.Length ?? 0) + footer.Length];
+            System.Buffer.BlockCopy(header, 0, payload, 0, header.Length);
+            if (fileBytes != null)
+                System.Buffer.BlockCopy(fileBytes, 0, payload, header.Length, fileBytes.Length);
+            System.Buffer.BlockCopy(footer, 0, payload, header.Length + (fileBytes?.Length ?? 0), footer.Length);
+            return payload;
+        }
+
+        private static string Truncate(string s, int max = 600)        {
             if (s == null) return "<null>";
             string flat = s.Replace("\r", " ").Replace("\n", " ").Trim();
             if (flat.Length <= max) return flat;

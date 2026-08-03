@@ -104,6 +104,8 @@ namespace XFiles.Controls
             _navigator.PreviewChanged += OnPreviewChanged;
             _navigator.LoadingChanged += OnLoadingChanged;
             _navigator.Error += OnError;
+            _navigator.PortalSetupRequired += OnPortalSetupRequired;
+            DevicePortalService.CredentialsRequired += OnPortalCredentialsRequired;
 
             _fullscreenProgressTimer.Tick += OnFullscreenProgressTick;
             _fsHideTimer.Tick += OnFsHideTimerTick;
@@ -139,6 +141,8 @@ namespace XFiles.Controls
             _navigator.PreviewChanged -= OnPreviewChanged;
             _navigator.LoadingChanged -= OnLoadingChanged;
             _navigator.Error -= OnError;
+            _navigator.PortalSetupRequired -= OnPortalSetupRequired;
+            DevicePortalService.CredentialsRequired -= OnPortalCredentialsRequired;
             _fullscreenProgressTimer.Tick -= OnFullscreenProgressTick;
             _fsHideTimer.Tick -= OnFsHideTimerTick;
             _mediaLoadTimer.Tick -= OnMediaLoadTimerTick;
@@ -263,6 +267,8 @@ namespace XFiles.Controls
             }
             Action markOverlayClosed = () => _overlayClosedTick = Environment.TickCount;
             InputDialogControl.OnClosed = markOverlayClosed;
+            PortalSetupDialogControl.OnClosed = markOverlayClosed;
+            PortalCredentialsDialogControl.OnClosed = markOverlayClosed;
             AlertDialogControl.OnClosed = markOverlayClosed;
             FileActionSheetControl.OnClosed = markOverlayClosed;
             StartMenuControl.OnClosed = markOverlayClosed;
@@ -298,6 +304,45 @@ namespace XFiles.Controls
         {
             Log.Err("MillerColumnsPage error: {Message}", args: message);
             CurrentStatus.Text = $"ERROR: {message}";
+        }
+
+        private void OnPortalSetupRequired()
+        {
+            Log.Info("Portal setup required — showing setup dialog");
+            string status = DevicePortalService.ProbeStatus;
+            if (status == "not run" && DevicePortalService.HasCredentials)
+                status = "Portal not reached — check loopback exemption and re-probe.";
+            PortalSetupDialogControl.Show(status);
+        }
+
+        private void OnPortalCredentialsRequired()
+        {
+            Log.Info("Portal credentials required (401) — showing credentials dialog");
+            _ = Dispatcher.RunAsync(CoreDispatcherPriority.Normal,
+                () => ShowPortalCredentialsAsync("Portal credentials rejected (401) — enter again"));
+        }
+
+        private async Task ShowPortalCredentialsAsync(string title)
+        {
+            string prefilled = await Settings.XFilesSettings.GetPortalUserAsync();
+            var result = await PortalCredentialsDialogControl.ShowAsync(title, prefilled);
+            if (result == null)
+            {
+                Log.Info("Portal credentials dialog cancelled");
+                return;
+            }
+
+            Log.Info("Portal credentials entered — saving and re-probing");
+            DevicePortalService.SetCredentials(result.User, result.Password);
+            try
+            {
+                await Settings.XFilesSettings.SetPortalCredentialsAsync(result.User, result.Password);
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("Failed to persist portal credentials: {Error}", ex.Message);
+            }
+            DevicePortalService.ProbeAsync(force: true);
         }
 
         private async Task UpdateUIAsync()
@@ -349,6 +394,9 @@ namespace XFiles.Controls
 
                 // Current column
                 CurrentHeader.Text = _navigator.Current?.Label ?? "(Drives)";
+                PortalBanner.Visibility = (_navigator.Current != null && _navigator.Current.IsPortal)
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
                 if (_navigator.Current != null)
                 {
                     BindCurrentList(_navigator.Current);

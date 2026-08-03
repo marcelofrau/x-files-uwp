@@ -78,6 +78,14 @@ The exemption survives app relaunch but is **lost** on:
 After either, re-run the script (or press **Y** on the X-Files About screen to
 re-probe the portal). It prints `OK: exemption applied` when done.
 
+## In-app Portal browser
+
+Once exempted, X-Files itself can browse other apps' `LocalAppData` /
+`DevelopmentFiles`: the **"User Folders"** entry at the root of the file
+columns. If the portal is unreachable, that drill-in shows a setup screen with
+these instructions and a **QR code** pointing to
+[`docs/PORTAL-APPDATA.md`](../docs/PORTAL-APPDATA.md).
+
 ## Manual fallback
 
 No script? Run it by hand — full steps in

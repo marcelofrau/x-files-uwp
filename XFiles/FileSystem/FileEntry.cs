@@ -18,5 +18,18 @@ namespace XFiles.FileSystem
 
         // Virtual entry (e.g. Favorites pseudo-folder in root)
         public bool IsVirtual { get; set; }
+
+        // Visual-only divider row in a column list (not navigable/selectable)
+        public bool IsSeparator { get; set; }
+
+        // Portal entry (Device Portal AppData browser) — set for every portal node
+        public bool IsPortal { get; set; }
+        public string PortalKnownFolder { get; set; }
+        public string PortalPackageFullName { get; set; }
+
+        // Portal-relative parent directory of the entry (e.g. "\" or "\Settings").
+        // For known-folder and package entries this is null (they are addressed via
+        // knownfolderid/packagefullname query params, not a portal path).
+        public string PortalPath { get; set; }
     }
 }

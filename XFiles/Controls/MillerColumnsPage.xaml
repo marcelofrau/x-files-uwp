@@ -15,16 +15,95 @@
             FalseBrush="{StaticResource XFilesTextMutedBrush}" />
         <local:BooleanToColumnWidthConverter x:Key="BatchCheckWidthConverter" />
         <local:BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+        <local:EntrySeparatorSelector x:Key="ParentItemSelector">
+            <local:EntrySeparatorSelector.DefaultTemplate>
+                <DataTemplate>
+                    <StackPanel Orientation="Horizontal" Margin="12,3,12,3">
+                        <Image Source="{Binding Icon}"
+                               Width="18" Height="18"
+                               Margin="0,0,8,0"
+                               VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding Name}"
+                                   Foreground="{Binding IsHighlighted, Converter={StaticResource BoolToHighlightBrush}}"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                   FontSize="14"
+                                   Margin="0,3,0,0"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                </DataTemplate>
+            </local:EntrySeparatorSelector.DefaultTemplate>
+            <local:EntrySeparatorSelector.SeparatorTemplate>
+                <DataTemplate>
+                    <Border Height="1" Background="#252830" Margin="24,4" />
+                </DataTemplate>
+            </local:EntrySeparatorSelector.SeparatorTemplate>
+        </local:EntrySeparatorSelector>
+        <local:EntrySeparatorSelector x:Key="CurrentItemSelector">
+            <local:EntrySeparatorSelector.DefaultTemplate>
+                <DataTemplate>
+                    <Grid Margin="4,3,8,3">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="{Binding IsBatchMode, ElementName=PageRoot, Converter={StaticResource BatchCheckWidthConverter}}" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Border x:Name="BatchCheck"
+                                Grid.Column="0"
+                                Width="14" Height="14"
+                                CornerRadius="3"
+                                BorderBrush="#5593C43C"
+                                BorderThickness="1"
+                                Background="Transparent"
+                                VerticalAlignment="Center"
+                                Margin="0,0,8,0"
+                                Visibility="Collapsed">
+                            <Border x:Name="BatchCheckFill"
+                                    Background="#93C43C"
+                                    CornerRadius="2"
+                                    Margin="2"
+                                    Visibility="Collapsed" />
+                        </Border>
+                        <Image Grid.Column="1"
+                               Source="{Binding Icon}"
+                               Width="20" Height="20"
+                               Margin="0,0,8,0"
+                               VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="2"
+                                   x:Name="ItemNameText"
+                                   Text="{Binding Name}"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                   FontSize="15"
+                                   Margin="0,3,0,0"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Column="3"
+                                   Text="{Binding SizeDisplay}"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                   FontSize="11"
+                                   Margin="12,3,0,0"
+                                   Foreground="{StaticResource XFilesTextDimBrush}"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+                </DataTemplate>
+            </local:EntrySeparatorSelector.DefaultTemplate>
+            <local:EntrySeparatorSelector.SeparatorTemplate>
+                <DataTemplate>
+                    <Border Height="1" Background="#252830" Margin="24,4" />
+                </DataTemplate>
+            </local:EntrySeparatorSelector.SeparatorTemplate>
+        </local:EntrySeparatorSelector>
     </Page.Resources>
 
     <Grid>
         <!-- Main layout -->
         <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
 
         <!-- ═══ HEADER ═══ -->
         <Grid Grid.Row="0" Background="#284325" Padding="12,8">
@@ -99,24 +178,9 @@
                     Padding="0"
                     Style="{StaticResource RetroListViewStyle}"
                     ItemContainerStyle="{StaticResource RetroListViewItemStyle}"
+                    ItemTemplateSelector="{StaticResource ParentItemSelector}"
                     IsHitTestVisible="False"
                     Opacity="0.6">
-                    <ListView.ItemTemplate>
-                        <DataTemplate>
-                            <StackPanel Orientation="Horizontal" Margin="12,3,12,3">
-                                <Image Source="{Binding Icon}"
-                                       Width="18" Height="18"
-                                       Margin="0,0,8,0"
-                                       VerticalAlignment="Center" />
-                                <TextBlock Text="{Binding Name}"
-                                           Foreground="{Binding IsHighlighted, Converter={StaticResource BoolToHighlightBrush}}"
-                                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                                           FontSize="14"
-                                           Margin="0,3,0,0"
-                                           VerticalAlignment="Center" />
-                            </StackPanel>
-                        </DataTemplate>
-                    </ListView.ItemTemplate>
                 </ListView>
 
                 <TextBlock Grid.Row="2"
@@ -206,54 +270,9 @@
                         SelectionChanged="CurrentList_SelectionChanged"
                         KeyDown="CurrentList_KeyDown"
                         ContainerContentChanging="OnCurrentListContainerChanging">
-                    <controls:RetroListView.ItemTemplate>
-                        <DataTemplate>
-                            <Grid Margin="4,3,8,3">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="{Binding IsBatchMode, ElementName=PageRoot, Converter={StaticResource BatchCheckWidthConverter}}" />
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <Border x:Name="BatchCheck"
-                                        Grid.Column="0"
-                                        Width="14" Height="14"
-                                        CornerRadius="3"
-                                        BorderBrush="#5593C43C"
-                                        BorderThickness="1"
-                                        Background="Transparent"
-                                        VerticalAlignment="Center"
-                                        Margin="0,0,8,0"
-                                        Visibility="Collapsed">
-                                    <Border x:Name="BatchCheckFill"
-                                            Background="#93C43C"
-                                            CornerRadius="2"
-                                            Margin="2"
-                                            Visibility="Collapsed" />
-                                </Border>
-                                <Image Grid.Column="1"
-                                       Source="{Binding Icon}"
-                                       Width="20" Height="20"
-                                       Margin="0,0,8,0"
-                                       VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="2"
-                                           x:Name="ItemNameText"
-                                           Text="{Binding Name}"
-                                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                                           FontSize="15"
-                                           Margin="0,3,0,0"
-                                           VerticalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis" />
-                                <TextBlock Grid.Column="3"
-                                           Text="{Binding SizeDisplay}"
-                                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                                           FontSize="11"
-                                           Margin="12,3,0,0"
-                                           Foreground="{StaticResource XFilesTextDimBrush}"
-                                           VerticalAlignment="Center" />
-                            </Grid>
-                        </DataTemplate>
-                    </controls:RetroListView.ItemTemplate>
+                    <controls:RetroListView.ItemTemplateSelector>
+                        <StaticResource ResourceKey="CurrentItemSelector" />
+                    </controls:RetroListView.ItemTemplateSelector>
                     </controls:RetroListView>
                 </Grid>
 
@@ -273,7 +292,25 @@
                                HorizontalAlignment="Center" />
                 </StackPanel>
 
-                <TextBlock Grid.Row="2"
+                <!-- Portal banner — shown when current column is inside the web portal -->
+                <Grid Grid.Row="2" x:Name="PortalBanner"
+                      Visibility="Collapsed"
+                      Background="#2A2110">
+                    <StackPanel Orientation="Horizontal" Padding="12,6">
+                        <Image Source="ms-appx:///Assets/Views/MillerColumnsPage/millercolumnspage-portal-banner-48.png"
+                               Width="16" Height="16" Margin="0,0,8,0"
+                               VerticalAlignment="Center" />
+                        <TextBlock Text="Web portal access — files load via the Xbox Dev Portal, slower/limited vs local drives"
+                                   Foreground="#D0B060"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                   FontSize="11"
+                                   TextWrapping="Wrap"
+                                   TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                </Grid>
+
+                <TextBlock Grid.Row="3"
                     x:Name="CurrentStatus"
                     Text=""
                     Foreground="{StaticResource XFilesTextDimBrush}"
@@ -966,6 +1003,8 @@
         <controls:FileActionSheet x:Name="FileActionSheetControl" />
         <controls:AlertDialog x:Name="AlertDialogControl" />
         <controls:InputDialog x:Name="InputDialogControl" />
+        <controls:PortalSetupDialog x:Name="PortalSetupDialogControl" />
+        <controls:PortalCredentialsDialog x:Name="PortalCredentialsDialogControl" />
         <controls:OverwriteDialog x:Name="OverwriteDialogControl" />
         <controls:FileOperationConfirmDialog x:Name="FileOperationConfirmDialogControl" />
         <controls:FolderBrowserDialog x:Name="FolderBrowserDialogControl" />

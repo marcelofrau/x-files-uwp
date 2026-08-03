@@ -13,6 +13,7 @@ using Windows.Data.Json;
 using Windows.Media.Core;
 using Windows.Media.Playback;
 using Windows.Storage;
+using Windows.Storage.Pickers;
 using Windows.UI.Core;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
@@ -273,6 +274,12 @@ namespace XFiles.Controls
                     break;
                 case FileAction.Delete:
                     await HandleDeleteAsync(entry);
+                    break;
+                case FileAction.Download:
+                    await HandlePortalDownloadAsync(entry);
+                    break;
+                case FileAction.UploadFile:
+                    await HandlePortalUploadAsync(entry);
                     break;
                 case FileAction.Extract:
                     await HandleExtractAsync(entry);
@@ -817,6 +824,12 @@ namespace XFiles.Controls
                 return;
             }
 
+            if (entry.IsPortal)
+            {
+                await HandlePortalRenameAsync(entry, newName);
+                return;
+            }
+
                 var confirmed = await AlertDialogControl.ShowConfirmAsync($"Rename '{entry.Name}' to '{newName}'?");
             if (!confirmed)
             {
@@ -837,9 +850,39 @@ namespace XFiles.Controls
             }
         }
 
+        private async Task HandlePortalRenameAsync(FileEntry entry, string newName)
+        {
+            Log.Info("HandlePortalRenameAsync: {Name} → {New}", entry.Name, newName);
+            bool confirmed = await AlertDialogControl.ShowConfirmAsync($"Rename '{entry.Name}' to '{newName}'?");
+            if (!confirmed)
+            {
+                Log.Verb("HandlePortalRenameAsync: confirmation cancelled");
+                return;
+            }
+
+            try
+            {
+                await DevicePortalService.RenamePortalEntryAsync(
+                    XFiles.FileSystem.PortalBrowser.ToPortalEntry(entry), newName);
+                Log.Info("HandlePortalRenameAsync: success — refreshing");
+                await _navigator.RefreshCurrentAsync(newName);
+            }
+            catch (Exception ex)
+            {
+                Log.Err("HandlePortalRenameAsync: failed", ex);
+                _ = AlertDialogControl.ShowAsync($"Failed to rename \"{entry.Name}\".", AlertType.Error);
+            }
+        }
+
         private async Task HandleDeleteAsync(FileEntry entry)
         {
             Log.Info("HandleDeleteAsync: {File}", entry.FullPath);
+
+            if (entry.IsPortal)
+            {
+                await HandlePortalDeleteAsync(entry);
+                return;
+            }
 
             // Build file list for confirmation dialog
             var (files, folderCount) = await FileOperations.ListRecursiveAsync(entry.FullPath);
@@ -869,6 +912,31 @@ namespace XFiles.Controls
             else
             {
                 Log.Warn("HandleDeleteAsync: failed");
+                _ = AlertDialogControl.ShowAsync($"Failed to delete \"{entry.Name}\".", AlertType.Error);
+            }
+        }
+
+        private async Task HandlePortalDeleteAsync(FileEntry entry)
+        {
+            Log.Info("HandlePortalDeleteAsync: {Name}", entry.Name);
+            bool confirmed = await FileOperationConfirmDialogControl.ShowAsync(
+                entry.Name, entry.IsDirectory, null, entry.IsDirectory ? 1 : 0);
+            if (!confirmed)
+            {
+                Log.Verb("HandlePortalDeleteAsync: confirmation cancelled");
+                return;
+            }
+
+            try
+            {
+                await DevicePortalService.DeletePortalEntryAsync(
+                    XFiles.FileSystem.PortalBrowser.ToPortalEntry(entry));
+                Log.Info("HandlePortalDeleteAsync: success — refreshing");
+                await _navigator.RefreshCurrentAsync();
+            }
+            catch (Exception ex)
+            {
+                Log.Err("HandlePortalDeleteAsync: failed", ex);
                 _ = AlertDialogControl.ShowAsync($"Failed to delete \"{entry.Name}\".", AlertType.Error);
             }
         }
@@ -1058,6 +1126,12 @@ namespace XFiles.Controls
                 return;
             }
 
+            if (_navigator.Current?.IsPortal == true)
+            {
+                await HandlePortalCreateFolderAsync(entry, folderName);
+                return;
+            }
+
             var fullPath = System.IO.Path.Combine(targetDir, folderName);
             var result = await FileOperations.CreateFolderAsync(fullPath);
             if (result == FileOperations.OperationResult.Success)
@@ -1069,6 +1143,113 @@ namespace XFiles.Controls
             {
                 Log.Warn("HandleCreateFolderAsync: failed");
                 _ = AlertDialogControl.ShowAsync($"Failed to create folder \"{folderName}\".", AlertType.Error);
+            }
+        }
+
+        private async Task HandlePortalCreateFolderAsync(FileEntry entry, string folderName)
+        {
+            var current = _navigator.Current;
+            Log.Info("HandlePortalCreateFolderAsync: '{Name}' in {Known}/{Pkg}{Path}",
+                folderName, current?.PortalKnownFolder, current?.PortalPackageFullName, current?.PortalPath);
+            try
+            {
+                await DevicePortalService.CreatePortalFolderAsync(
+                    current?.PortalKnownFolder ?? "",
+                    current?.PortalPackageFullName ?? "",
+                    current?.PortalPath ?? "\\",
+                    folderName);
+                Log.Info("HandlePortalCreateFolderAsync: success — refreshing and selecting '{Name}'", folderName);
+                await _navigator.RefreshCurrentAsync(selectName: folderName);
+            }
+            catch (Exception ex)
+            {
+                Log.Err("HandlePortalCreateFolderAsync: failed", ex);
+                _ = AlertDialogControl.ShowAsync($"Failed to create folder \"{folderName}\".", AlertType.Error);
+            }
+        }
+
+        private async Task HandlePortalDownloadAsync(FileEntry entry)
+        {
+            Log.Info("HandlePortalDownloadAsync: {Name}", entry.Name);
+            string destDir = await FolderBrowserDialogControl.ShowAsync();
+            if (string.IsNullOrEmpty(destDir))
+            {
+                Log.Verb("HandlePortalDownloadAsync: destination cancelled");
+                return;
+            }
+
+            string destPath = System.IO.Path.Combine(destDir, entry.Name);
+            if (System.IO.File.Exists(destPath))
+            {
+                int overwrite = await OverwriteDialogControl.ShowAsync(entry.Name);
+                if (overwrite == 0)
+                {
+                    Log.Verb("HandlePortalDownloadAsync: overwrite skipped");
+                    return;
+                }
+            }
+
+            OpProgressDialog.Show("Downloading", entry.Name, destDir);
+            try
+            {
+                await XFiles.FileSystem.PortalBrowser.DownloadToDiskAsync(
+                    XFiles.FileSystem.PortalBrowser.ToPortalEntry(entry),
+                    destPath,
+                    new Progress<double>(p => OpProgressDialog.SetProgress(p)));
+                OpProgressDialog.Complete();
+                await Task.Delay(500);
+                OpProgressDialog.Close();
+                Log.Info("HandlePortalDownloadAsync: saved {Name} → {Dest}", entry.Name, destPath);
+                _ = AlertDialogControl.ShowAsync($"Downloaded \"{entry.Name}\" to {destDir}.", AlertType.Info);
+            }
+            catch (Exception ex)
+            {
+                Log.Err("HandlePortalDownloadAsync: failed", ex);
+                OpProgressDialog.Close();
+                _ = AlertDialogControl.ShowAsync($"Download failed: {ex.Message}", AlertType.Error);
+            }
+        }
+
+        private async Task HandlePortalUploadAsync(FileEntry entry)
+        {
+            Log.Info("HandlePortalUploadAsync: target folder {Name}", entry.Name);
+            var picker = new FileOpenPicker
+            {
+                ViewMode = PickerViewMode.List,
+                SuggestedStartLocation = PickerLocationId.Downloads
+            };
+            picker.FileTypeFilter.Add("*");
+            Windows.Storage.StorageFile source = await picker.PickSingleFileAsync();
+            if (source == null)
+            {
+                Log.Verb("HandlePortalUploadAsync: source cancelled");
+                return;
+            }
+
+            var current = _navigator.Current;
+            OpProgressDialog.Show("Uploading", source.Name, current?.PortalKnownFolder ?? "");
+            try
+            {
+                var bytes = await Windows.Storage.FileIO.ReadBufferAsync(source);
+                var data = bytes.ToArray();
+                await DevicePortalService.UploadPortalFileAsync(
+                    current?.PortalKnownFolder ?? "",
+                    current?.PortalPackageFullName ?? "",
+                    current?.PortalPath ?? "\\",
+                    source.Name,
+                    data,
+                    new Progress<double>(p => OpProgressDialog.SetProgress(p)));
+                OpProgressDialog.Complete();
+                await Task.Delay(500);
+                OpProgressDialog.Close();
+                Log.Info("HandlePortalUploadAsync: uploaded {Name}", source.Name);
+                await _navigator.RefreshCurrentAsync(selectName: source.Name);
+            }
+            catch (Exception ex)
+            {
+                Log.Err("HandlePortalUploadAsync: failed", ex);
+                OpProgressDialog.Close();
+                _ = AlertDialogControl.ShowAsync($"Upload failed: {ex.Message}", AlertType.Error);
             }
         }
 
