@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.Storage;
@@ -45,16 +43,7 @@ namespace XFiles.Services
         /// produces a different key, so the file re-downloads.
         /// </summary>
         public static string GetKey(PortalFileEntry entry)
-        {
-            var sb = new StringBuilder();
-            sb.Append(entry.KnownFolder).Append('|')
-              .Append(entry.PackageFullName).Append('|')
-              .Append(entry.PortalPath).Append('|')
-              .Append(entry.Name).Append('|')
-              .Append(entry.FileSize).Append('|')
-              .Append(entry.DateCreated);
-            return sb.ToString();
-        }
+            => PortalCore.GetCacheKey(entry);
 
         /// <summary>
         /// Returns the local cache path for a portal entry if already cached, else null.
@@ -87,8 +76,8 @@ namespace XFiles.Services
             if (cached != null) return cached;
 
             string key = GetKey(entry);
-            string hash = ComputeHash(key);
-            string ext = SanitizeExtension(entry.Name);
+            string hash = PortalCore.ComputeCacheHash(key);
+            string ext = PortalCore.SanitizeCacheExtension(entry.Name);
             string final = Path.Combine(RootPath, hash + ext);
 
             await Gate.WaitAsync();
@@ -193,26 +182,6 @@ namespace XFiles.Services
                 LruNodes.Remove(oldestKey);
                 Index.Remove(oldestKey);
             }
-        }
-
-        private static string ComputeHash(string key)
-        {
-            using (var sha = SHA1.Create())
-            {
-                byte[] hash = sha.ComputeHash(Encoding.UTF8.GetBytes(key));
-                var sb = new StringBuilder(40);
-                foreach (byte b in hash)
-                    sb.Append(b.ToString("x2"));
-                return sb.ToString();
-            }
-        }
-
-        private static string SanitizeExtension(string name)
-        {
-            if (string.IsNullOrEmpty(name)) return "";
-            string ext = Path.GetExtension(name);
-            if (string.IsNullOrEmpty(ext) || ext.Length > 16) return "";
-            return ext.ToLowerInvariant();
         }
     }
 }

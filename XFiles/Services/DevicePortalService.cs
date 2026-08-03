@@ -715,9 +715,7 @@ namespace XFiles.Services
         /// </summary>
         public static async Task<List<PortalFileEntry>> ListPortalFilesAsync(string knownFolder, string packageFullName, string portalPath)
         {
-            var query = "/api/filesystem/apps/files?knownfolderid=" + Uri.EscapeDataString(knownFolder) +
-                        "&packagefullname=" + Uri.EscapeDataString(packageFullName ?? "") +
-                        "&path=" + Uri.EscapeDataString(portalPath);
+            var query = PortalCore.BuildListFilesQuery(knownFolder, packageFullName ?? "", portalPath);
             var body = await GetPortalStringAsync(query);
             var result = new List<PortalFileEntry>();
             try
@@ -743,10 +741,11 @@ namespace XFiles.Services
                     int type = o.ContainsKey("Type") ? (int)o["Type"].GetNumber() : 0;
                     long size = o.ContainsKey("FileSize") ? (long)o["FileSize"].GetNumber() : 0;
                     long date = o.ContainsKey("DateCreated") ? (long)o["DateCreated"].GetNumber() : 0;
+                    bool isDir = PortalCore.IsDirectoryType(type);
                     result.Add(new PortalFileEntry
                     {
                         Name = name,
-                        IsDirectory = (type & 0x10) != 0,
+                        IsDirectory = isDir,
                         FileSize = size,
                         DateCreated = date,
                         KnownFolder = knownFolder,
@@ -754,13 +753,9 @@ namespace XFiles.Services
                         PortalPath = portalPath
                     });
                     Log.Dbg("DevicePortal.Files: '{Name}' Type=0x{Type:X} dir={Dir} size={Size} date={Date} => PortalPath='{Path}'",
-                        name, type, (type & 0x10) != 0, size, date, portalPath);
+                        name, type, isDir, size, date, portalPath);
                 }
-                result.Sort((a, b) =>
-                {
-                    if (a.IsDirectory != b.IsDirectory) return a.IsDirectory ? -1 : 1;
-                    return string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase);
-                });
+                result.Sort((a, b) => PortalCore.CompareDirectoryEntries(a.IsDirectory, a.Name, b.IsDirectory, b.Name));
                 Log.Info("DevicePortal.Files: {Query} => {Count} entries ({Dirs} dirs, {Files} files)",
                     query, result.Count, result.Count(x => x.IsDirectory), result.Count(x => !x.IsDirectory));
             }
@@ -777,10 +772,7 @@ namespace XFiles.Services
         /// </summary>
         public static async Task DownloadPortalFileAsync(PortalFileEntry entry, Stream dest, IProgress<double> progress)
         {
-            var query = "/api/filesystem/apps/file?knownfolderid=" + Uri.EscapeDataString(entry.KnownFolder) +
-                        "&filename=" + Uri.EscapeDataString(entry.Name) +
-                        "&packagefullname=" + Uri.EscapeDataString(entry.PackageFullName) +
-                        "&path=" + Uri.EscapeDataString(entry.PortalPath);
+            var query = PortalCore.BuildDownloadFileQuery(entry.KnownFolder, entry.PackageFullName, entry.PortalPath, entry.Name);
             using (var resp = await GetPortalAsync(query, 120))
             {
                 if (resp.StatusCode == HttpStatusCode.Unauthorized)

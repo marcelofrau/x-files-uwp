@@ -26,6 +26,8 @@
     <Compile Include="..\XFiles\FileSystem\RomHeaderParser.cs" Link="Linked\FileSystem\RomHeaderParser.cs" />
     <Compile Include="..\XFiles\Metadata\FilenameParser.cs" Link="Linked\Metadata\FilenameParser.cs" />
     <Compile Include="..\XFiles\Metadata\TrackMetadata.cs" Link="Linked\Metadata\TrackMetadata.cs" />
+    <Compile Include="..\XFiles\Services\PortalCore.cs" Link="Linked\Services\PortalCore.cs" />
+    <Compile Include="..\XFiles\Services\PortalModels.cs" Link="Linked\Services\PortalModels.cs" />
   </ItemGroup>
 
 </Project>
