@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
+using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using XFiles.FileSystem;
 using XFiles.Navigation;
@@ -30,6 +31,8 @@ namespace XFiles.Controls
 
         public bool IsDrive { get; set; }
         public bool IsVirtual { get; set; }
+        public bool IsPortal { get; set; }
+        public bool IsSeparator { get; set; }
         private bool _isFavorite;
         public bool IsFavorite
         {
@@ -225,16 +228,22 @@ namespace XFiles.Controls
 
         private static readonly string GenericIcon = "file-generic-24.png";
 
-        public string Icon => IsVirtual
-            ? "ms-appx:///Assets/FileTypes/favorites-24.png"
-            : IsDrive
-                ? "ms-appx:///Assets/FileTypes/drive-harddisk-24.png"
-                : IsFavorite
-                    ? "ms-appx:///Assets/FileTypes/favorite-24.png"
-                    : IsDirectory
-                        ? $"ms-appx:///Assets/FileTypes/folder-{_folderColor}-24.png"
-                        : (IsArchive ? "ms-appx:///Assets/FileTypes/file-archive-24.png"
-                                      : $"ms-appx:///Assets/FileTypes/{GetFileIcon(Name)}");
+        public string Icon => IsSeparator
+            ? null
+            : IsPortal
+                ? (IsDirectory
+                    ? "ms-appx:///Assets/FileTypes/filetype-folder-network-24.png"
+                    : $"ms-appx:///Assets/FileTypes/{GetFileIcon(Name)}")
+                : IsVirtual
+                    ? "ms-appx:///Assets/FileTypes/favorites-24.png"
+                    : IsDrive
+                        ? "ms-appx:///Assets/FileTypes/drive-harddisk-24.png"
+                        : IsFavorite
+                            ? "ms-appx:///Assets/FileTypes/favorite-24.png"
+                            : IsDirectory
+                                ? $"ms-appx:///Assets/FileTypes/folder-{_folderColor}-24.png"
+                                : (IsArchive ? "ms-appx:///Assets/FileTypes/file-archive-24.png"
+                                              : $"ms-appx:///Assets/FileTypes/{GetFileIcon(Name)}");
 
         public static string GetFileIcon(string fileName)
         {
@@ -277,6 +286,19 @@ namespace XFiles.Controls
             if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
             if (bytes < 1024 * 1024 * 1024) return $"{bytes / (1024.0 * 1024):F1} MB";
             return $"{bytes / (1024.0 * 1024 * 1024):F2} GB";
+        }
+    }
+
+    public class EntrySeparatorSelector : DataTemplateSelector
+    {
+        public DataTemplate DefaultTemplate { get; set; }
+        public DataTemplate SeparatorTemplate { get; set; }
+
+        protected override DataTemplate SelectTemplateCore(object item)
+        {
+            if (item is EntryViewModel vm && vm.IsSeparator)
+                return SeparatorTemplate;
+            return DefaultTemplate;
         }
     }
 

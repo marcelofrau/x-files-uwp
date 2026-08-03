@@ -115,6 +115,7 @@
     <Compile Include="FileSystem\DirectoryScanner.cs" />
     <Compile Include="FileSystem\FilePreviewService.cs" />
     <Compile Include="FileSystem\ArchiveBrowser.cs" />
+    <Compile Include="FileSystem\PortalBrowser.cs" />
     <Compile Include="FileSystem\Id3Tag.cs" />
     <Compile Include="FileSystem\SubtitleDetector.cs" />
     <Compile Include="FileSystem\Win32FileStream.cs" />
@@ -176,6 +177,12 @@
     <Compile Include="Controls\InputDialog.xaml.cs">
       <DependentUpon>InputDialog.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Controls\PortalCredentialsDialog.xaml.cs">
+      <DependentUpon>PortalCredentialsDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\PortalSetupDialog.xaml.cs">
+      <DependentUpon>PortalSetupDialog.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Controls\LetterGridOverlay.xaml.cs">
       <DependentUpon>LetterGridOverlay.xaml</DependentUpon>
     </Compile>
@@ -216,6 +223,8 @@
     <Compile Include="Services\FileShareService.cs" />
     <Compile Include="Services\ProgressStream.cs" />
     <Compile Include="Services\DevicePortalService.cs" />
+    <Compile Include="Services\PortalModels.cs" />
+    <Compile Include="Services\PortalCache.cs" />
     <Compile Include="DevPortalSecrets.g.cs" />
     <Compile Include="Audio\IMemoryBufferAccess.cs" />
     <Compile Include="Audio\AudioLevelService.cs" />
@@ -322,6 +331,14 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="Controls\PortalCredentialsDialog.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\PortalSetupDialog.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Page Include="Controls\LetterGridOverlay.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
@@ -418,6 +435,7 @@
     <Content Include="Assets\FileTypes\favorite-24.png" />
     <Content Include="Assets\FileTypes\file-archive-24.png" />
     <Content Include="Assets\FileTypes\file-generic-24.png" />
+    <Content Include="Assets\FileTypes\filetype-folder-network-24.png" />
     <Content Include="Assets\FileTypes\file-archive-128.png" />
     <Content Include="Assets\FileTypes\file-generic-128.png" />
     <Content Include="Assets\FileTypes\filetype-application-iso-128.png" />
@@ -486,6 +504,8 @@
     <Content Include="Assets\Views\FileActionSheet\fileactionsheet-share-48.png" />
     <Content Include="Assets\Views\FileActionSheet\fileactionsheet-extractfolder-100.png" />
     <Content Include="Assets\Views\FileActionSheet\fileactionsheet-favorite-48.png" />
+    <Content Include="Assets\Views\FileActionSheet\fileactionsheet-download-48.png" />
+    <Content Include="Assets\Views\FileActionSheet\fileactionsheet-upload-48.png" />
     <Content Include="Assets\Views\FileActionSheet\ctx-drive-120.png" />
     <Content Include="Assets\Views\FileActionSheet\ctx-generic-120.png" />
     <Content Include="Assets\Views\FileActionSheet\ctx-archive-120.png" />
@@ -555,6 +575,7 @@
     <Content Include="Assets\Views\StartMenu\startmenu-logs-48.png" />
     <Content Include="Assets\Views\StartMenu\startmenu-logs-48.png" />
     <Content Include="Assets\Views\MillerColumnsPage\osd\osd-play-48.png" />
+    <Content Include="Assets\Views\MillerColumnsPage\millercolumnspage-portal-banner-48.png" />
     <Content Include="Assets\Views\MillerColumnsPage\osd\osd-pause-48.png" />
     <Content Include="Assets\Views\MillerColumnsPage\osd\osd-next-48.png" />
     <Content Include="Assets\Views\MillerColumnsPage\osd\osd-prev-48.png" />

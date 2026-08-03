@@ -29,7 +29,9 @@ namespace XFiles.Controls
         Edit,
         Share,
         AddToFavorites,
-        RemoveFromFavorites
+        RemoveFromFavorites,
+        Download,
+        UploadFile
     }
 
     public class ActionItem
@@ -64,6 +66,8 @@ namespace XFiles.Controls
         private static readonly string ActionEdit = "ctx-text-120.png";
         private static readonly string ActionShare = "fileactionsheet-share-48.png";
         private static readonly string ActionFavorite = "fileactionsheet-favorite-48.png";
+        private static readonly string ActionDownload = "fileactionsheet-download-48.png";
+        private static readonly string ActionUpload = "fileactionsheet-upload-48.png";
 
         private static readonly Dictionary<string, string> ExtIconMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -176,8 +180,76 @@ namespace XFiles.Controls
             bool isInArchive = !string.IsNullOrEmpty(entry.ArchiveRootPath);
             bool isArchiveFile = entry.IsArchive && !entry.IsDirectory;
             bool isFolder = entry.IsDirectory;
+            bool isPortal = entry.IsPortal;
 
-            if (entry.IsDrive)
+            if (isPortal)
+            {
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.Refresh,
+                    Label = "Refresh",
+                    IconPath = IconBase + ActionRefresh,
+                    LabelBrush = accent
+                });
+
+                var portalExt = System.IO.Path.GetExtension(entry.Name);
+                if (!entry.IsDirectory && FileActionSheet.TextExts.Contains(portalExt))
+                {
+                    actions.Add(new ActionItem
+                    {
+                        Action = FileAction.Edit,
+                        Label = "Edit",
+                        IconPath = IconBase + ActionEdit,
+                        LabelBrush = accent
+                    });
+                }
+
+                if (!entry.IsDirectory)
+                {
+                    actions.Add(new ActionItem
+                    {
+                        Action = FileAction.Download,
+                        Label = "Download (copy to disk)",
+                        IconPath = IconBase + ActionDownload,
+                        LabelBrush = accent
+                    });
+                }
+                else
+                {
+                    actions.Add(new ActionItem
+                    {
+                        Action = FileAction.UploadFile,
+                        Label = "Upload file",
+                        IconPath = IconBase + ActionUpload,
+                        LabelBrush = accent
+                    });
+                }
+
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.CreateFolder,
+                    Label = "New Folder",
+                    IconPath = IconBase + ActionCreateFolder,
+                    LabelBrush = accent
+                });
+
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.Rename,
+                    Label = "Rename",
+                    IconPath = IconBase + ActionRename,
+                    LabelBrush = dim
+                });
+
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.Delete,
+                    Label = "Delete",
+                    IconPath = IconBase + ActionDelete,
+                    LabelBrush = red
+                });
+            }
+            else if (entry.IsDrive)
             {
                 actions.Add(new ActionItem
                 {

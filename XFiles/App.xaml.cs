@@ -91,6 +91,30 @@ namespace XFiles
                 Log.Warn("App: failed to load log level, using default Info", ex);
             }
 
+            // Portal setup: load persisted Device Portal credentials, arm the portal
+            // client, clear the session cache, and probe reachability (fire-and-forget).
+            try
+            {
+                string user = await Settings.XFilesSettings.GetPortalUserAsync();
+                string pass = await Settings.XFilesSettings.GetPortalPassAsync();
+                if (!string.IsNullOrEmpty(user) && !string.IsNullOrEmpty(pass))
+                {
+                    Services.DevicePortalService.SetCredentials(user, pass);
+                    Log.Info("App: portal credentials loaded from settings");
+                }
+                else
+                {
+                    Log.Dbg("App: no portal credentials stored");
+                }
+
+                await Services.PortalCache.ClearAsync();
+                Services.DevicePortalService.ProbeAsync();
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("App: portal startup failed: {Message}", ex.Message);
+            }
+
             Frame rootFrame = Window.Current.Content as Frame;
 
             if (rootFrame == null)

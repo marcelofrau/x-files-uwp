@@ -70,6 +70,16 @@ namespace XFiles.Controls
                 (k, r) => true,
                 (k) => { InputDialogControl.HandleButton(k); return true; }));
 
+            _router.Add(new OverlayHandler(79,
+                () => PortalCredentialsDialogControl.Visibility == Visibility.Visible,
+                (k, r) => { PortalCredentialsDialogControl.HandleDPad(k); return true; },
+                (k) => { PortalCredentialsDialogControl.HandleButton(k); return true; }));
+
+            _router.Add(new OverlayHandler(78,
+                () => PortalSetupDialogControl.IsVisible,
+                (k, r) => { PortalSetupDialogControl.HandleDPad(k); return true; },
+                (k) => { PortalSetupDialogControl.HandleButton(k); return true; }));
+
             _router.Add(new OverlayHandler(75,
                 () => AlertDialogControl.Visibility == Visibility.Visible,
                 (k, r) => true,
@@ -220,6 +230,18 @@ namespace XFiles.Controls
 
         // --- INavigable ---
 
+        private void SkipSeparatorRow(bool up, IReadOnlyList<FileEntry> entries, int count)
+        {
+            if (count < 2 || CurrentList.SelectedIndex < 0 || CurrentList.SelectedIndex >= count)
+                return;
+            while (entries != null && entries[CurrentList.SelectedIndex].IsSeparator)
+            {
+                CurrentList.SelectedIndex = up
+                    ? (CurrentList.SelectedIndex == 0 ? count - 1 : CurrentList.SelectedIndex - 1)
+                    : (CurrentList.SelectedIndex >= count - 1 ? 0 : CurrentList.SelectedIndex + 1);
+            }
+        }
+
         public void OnDPadUp(bool isRepeat = false)
         {
             if (_router.RouteDPad(VirtualKey.GamepadDPadUp, isRepeat)) return;
@@ -248,6 +270,8 @@ namespace XFiles.Controls
                 CurrentList.SelectedIndex = count - 1;
             else if (count > 0)
                 CurrentList.SelectedIndex--;
+
+            SkipSeparatorRow(true, entries, count);
 
             CurrentList.ScrollIntoView(CurrentList.SelectedItem);
             string afterName = (entries != null && CurrentList.SelectedIndex >= 0 && CurrentList.SelectedIndex < count) ? entries[CurrentList.SelectedIndex].Name : "(none)";
@@ -282,6 +306,8 @@ namespace XFiles.Controls
                 CurrentList.SelectedIndex = 0;
             else if (count > 0)
                 CurrentList.SelectedIndex++;
+
+            SkipSeparatorRow(false, entries, count);
 
             CurrentList.ScrollIntoView(CurrentList.SelectedItem);
             string afterName = (entries != null && CurrentList.SelectedIndex >= 0 && CurrentList.SelectedIndex < count) ? entries[CurrentList.SelectedIndex].Name : "(none)";
@@ -341,7 +367,7 @@ namespace XFiles.Controls
             if (_navigator.Current == null) return;
 
             var selected = CurrentList.SelectedItem as EntryViewModel;
-            if (selected == null)
+            if (selected == null || selected.IsSeparator)
             {
                 _slideFromRight = true;
                 _ = _navigator.DrillInAsync();
@@ -777,6 +803,8 @@ namespace XFiles.Controls
             PlaceholderOverlay.Visibility == Visibility.Visible
             || AboutOverlay.Visibility == Visibility.Visible
             || InputDialogControl.Visibility == Visibility.Visible
+            || PortalCredentialsDialogControl.Visibility == Visibility.Visible
+            || PortalSetupDialogControl.IsVisible
             || AlertDialogControl.Visibility == Visibility.Visible
             || OverwriteDialogControl.IsDialogVisible
             || FileOperationConfirmDialogControl.IsDialogVisible

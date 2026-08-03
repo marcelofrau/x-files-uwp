@@ -133,6 +133,21 @@ namespace XFiles.Controls
                 _completedFiles.Add(fileName);
         }
 
+        /// <summary>
+        /// Sets the progress bar from a 0..1 fraction (single-file portal transfers).
+        /// </summary>
+        public void SetProgress(double fraction)
+        {
+            if (_isIndeterminate)
+            {
+                _isIndeterminate = false;
+                ProgressBar.IsIndeterminate = false;
+            }
+            double pct = Math.Max(0, Math.Min(1, fraction)) * 100;
+            ProgressBar.Value = pct;
+            CurrentFileText.Text = $"{(int)pct}%";
+        }
+
         public void Complete()
         {
             ProgressBar.IsIndeterminate = false;
