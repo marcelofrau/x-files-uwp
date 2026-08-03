@@ -261,10 +261,27 @@ namespace XFiles.Controls
                         break;
 
                     case FilePreviewType.Error:
-                        PreviewErrorText.Text = _navigator.Preview.PreviewErrorMessage ?? "Unknown error";
-                        PreviewStatus.Text = "";
-                        PreviewErrorPanel.Visibility = Visibility.Visible;
-                        break;
+                        {
+                            string msg = _navigator.Preview.PreviewErrorMessage ?? "Unknown error";
+                            bool devOnly = msg.IndexOf("only allowed for developer packages", StringComparison.OrdinalIgnoreCase) >= 0;
+                            if (devOnly)
+                            {
+                                PreviewErrorIcon.Source = new Windows.UI.Xaml.Media.Imaging.BitmapImage(
+                                    new Uri("ms-appx:///Assets/Views/MillerColumnsPage/millercolumnspage-access-denied-100.png"));
+                                PreviewErrorTitle.Text = "Developer-only app";
+                                PreviewErrorText.Text = "X-Files can open the files of developer (homebrew) apps, but not store apps like this one. Try a different app.";
+                            }
+                            else
+                            {
+                                PreviewErrorIcon.Source = new Windows.UI.Xaml.Media.Imaging.BitmapImage(
+                                    new Uri("ms-appx:///Assets/Views/MillerColumnsPage/millercolumnspage-error-100.png"));
+                                PreviewErrorTitle.Text = "Can't access this entry";
+                                PreviewErrorText.Text = msg;
+                            }
+                            PreviewStatus.Text = "";
+                            PreviewErrorPanel.Visibility = Visibility.Visible;
+                            break;
+                        }
 
                     case FilePreviewType.Unsupported:
                         {
@@ -283,7 +300,7 @@ namespace XFiles.Controls
                                 PreviewUnsupportedIcon.Source = new Windows.UI.Xaml.Media.Imaging.BitmapImage(
                                     new Uri($"ms-appx:///Assets/FileTypes/{iconFile}"));
 
-                                string fileName = System.IO.Path.GetFileName(previewPath);
+                                string fileName = _navigator.Preview.Label ?? Path.GetFileName(previewPath);
                                 PreviewUnsupportedFileName.Text = string.IsNullOrEmpty(fileName) ? "No Preview" : fileName;
                                 PreviewUnsupportedType.Text = _navigator.Preview.PreviewFileType ?? "";
                                 PreviewUnsupportedSize.Text = Formatting.FormatSize(_navigator.Preview.PreviewFileSize);
