@@ -34,10 +34,10 @@ namespace XFiles.Controls
             string suffix = isFolder ? " (including all contents)" : "";
             SummaryText.Text = $"Delete '{itemName}'{suffix}?";
 
-            int fileCount = files.Count - folderCount;
+            int fileCount = (files?.Count ?? 0) - folderCount;
             CountText.Text = $"{fileCount} file(s), {folderCount} folder(s)";
 
-            FileListText.Text = string.Join("\n", files);
+            FileListText.Text = string.Join("\n", files ?? new List<string>());
 
             var redBg = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 0xE7, 0x4C, 0x3C));
             DeleteButton.Background = redBg;
@@ -59,10 +59,10 @@ namespace XFiles.Controls
         {
             SummaryText.Text = $"Move '{itemName}' to '{destPath}'?";
 
-            int fileCount = files.Count - folderCount;
+            int fileCount = (files?.Count ?? 0) - folderCount;
             CountText.Text = $"{fileCount} file(s), {folderCount} folder(s)";
 
-            FileListText.Text = string.Join("\n", files);
+            FileListText.Text = string.Join("\n", files ?? new List<string>());
 
             var greenBg = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x93, 0xC4, 0x3C));
             DeleteButton.Background = greenBg;

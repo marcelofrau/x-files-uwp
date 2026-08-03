@@ -1043,6 +1043,11 @@ namespace XFiles.Navigation
             }
 
             ColumnsChanged?.Invoke();
+
+            // Recompute the preview for the preserved selection. The selection-changed
+            // handler is suppressed during rebind (_updating), so without this the preview
+            // column would keep showing the pre-refresh entry (e.g. a deleted file).
+            await OnSelectionChangedAsync();
         }
 
         /// <summary>

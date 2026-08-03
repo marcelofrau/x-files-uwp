@@ -60,19 +60,7 @@ namespace XFiles.FileSystem
             foreach (var p in byFamily)
             {
                 string baseName = string.IsNullOrEmpty(p.DisplayName) ? p.FullName : p.DisplayName;
-                string name = baseName;
-                if (usedNames.TryGetValue(baseName, out int n))
-                {
-                    usedNames[baseName] = n + 1;
-                    string shortName = ShortFamilyName(p.FamilyName);
-                    name = string.IsNullOrEmpty(shortName)
-                        ? $"{baseName} ({n + 1})"
-                        : $"{baseName} ({shortName})";
-                }
-                else
-                {
-                    usedNames[baseName] = 1;
-                }
+                string name = PortalCore.BuildPackageDisplayName(baseName, usedNames, p.FamilyName);
 
                 entries.Add(new FileEntry
                 {
@@ -89,20 +77,6 @@ namespace XFiles.FileSystem
 
             Log.Info("PortalBrowser.Packages: {Count} packages (deduped from {Raw})", entries.Count, packages.Count);
             return entries;
-        }
-
-        private static string ShortFamilyName(string familyName)
-        {
-            if (string.IsNullOrEmpty(familyName)) return null;
-            // Strip the publisher suffix ("_8wekyb3d8bbwe") and take the last dot segment.
-            string core = familyName;
-            int lastUnderscore = familyName.LastIndexOf('_');
-            if (lastUnderscore > 0)
-                core = familyName.Substring(0, lastUnderscore);
-            int lastDot = core.LastIndexOf('.');
-            return lastDot >= 0 && lastDot < core.Length - 1
-                ? core.Substring(lastDot + 1)
-                : core;
         }
 
         /// <summary>
@@ -148,8 +122,8 @@ namespace XFiles.FileSystem
                 if (e.IsDirectory) dirs.Add(e);
                 else files.Add(e);
             }
-            dirs.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
-            files.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+            dirs.Sort((a, b) => PortalCore.CompareDirectoryEntries(a.IsDirectory, a.Name, b.IsDirectory, b.Name));
+            files.Sort((a, b) => PortalCore.CompareDirectoryEntries(a.IsDirectory, a.Name, b.IsDirectory, b.Name));
             var sorted = new List<FileEntry>(entries.Count);
             sorted.AddRange(dirs);
             sorted.AddRange(files);
@@ -161,29 +135,14 @@ namespace XFiles.FileSystem
         /// by cache/download/write operations.
         /// </summary>
         public static PortalFileEntry ToPortalEntry(FileEntry e)
-        {
-            return new PortalFileEntry
-            {
-                Name = e.Name,
-                IsDirectory = e.IsDirectory,
-                FileSize = e.SizeBytes,
-                DateCreated = e.LastModified.HasValue ? e.LastModified.Value.ToFileTime() : 0,
-                KnownFolder = e.PortalKnownFolder,
-                PackageFullName = e.PortalPackageFullName ?? "",
-                PortalPath = e.PortalPath
-            };
-        }
+            => PortalCore.ToPortalEntry(e);
 
         /// <summary>
         /// Builds the child portal path from a parent portal path + child name.
         /// Root ("\") + "Settings" → "\\Settings"; "\\Settings" + "Sub" → "\\Settings\\Sub".
         /// </summary>
         public static string CombinePortalPath(string parent, string childName)
-        {
-            if (string.IsNullOrEmpty(parent) || parent == "\\")
-                return "\\" + childName;
-            return parent + "\\" + childName;
-        }
+            => PortalCore.CombinePortalPath(parent, childName);
 
         /// <summary>
         /// Ensures a portal file is cached locally; returns the local path.

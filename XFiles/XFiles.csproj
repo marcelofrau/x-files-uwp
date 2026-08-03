@@ -224,6 +224,7 @@
     <Compile Include="Services\ProgressStream.cs" />
     <Compile Include="Services\DevicePortalService.cs" />
     <Compile Include="Services\PortalModels.cs" />
+    <Compile Include="Services\PortalCore.cs" />
     <Compile Include="Services\PortalCache.cs" />
     <Compile Include="DevPortalSecrets.g.cs" />
     <Compile Include="Audio\IMemoryBufferAccess.cs" />
