@@ -509,7 +509,7 @@ namespace XFiles.Controls
             if (ErrorOverlay.Visibility == Visibility.Visible) { Log.Dbg("OnContextMenu: → ErrorShare"); OnErrorShareClick(null, null); return; }
             if (_isMediaPlayerActive) return;
 
-            if (CurrentList.SelectedItem is EntryViewModel vm && vm.IsVirtual) return;
+            if (CurrentList.SelectedItem is EntryViewModel vm && vm.IsVirtual && !vm.IsPortal) return;
 
             Log.Verb("MillerColumnsPage.OnContextMenu — showing FileActionSheet");
             if (_isBatchMode)
@@ -529,7 +529,7 @@ namespace XFiles.Controls
 
             bool inFavorites = _navigator.Current?.IsFavorite == true;
             var sel = CurrentList.SelectedItem as EntryViewModel;
-            if (sel == null) return;
+            if (sel == null || sel.IsPortal) return;
 
             if (inFavorites)
             {

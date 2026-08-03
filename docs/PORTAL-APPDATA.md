@@ -9,17 +9,11 @@
 
 ## 1. Do I need this?
 
-```mermaid
-flowchart TD
-    A["Do you want to browse / edit OTHER apps' files<br/>(saves, configs, memory cards) on your Xbox?"] -->|"No"| B["Stop here. You don't need this page.<br/>X-Files works normally without it."]
-    A -->|"Yes"| C["Pick ONE of the 3 unlock ways below:"]
-    C --> D["A - XB Homebrew Vault (easiest)"]
-    C --> E["B - Script from the ZIP"]
-    C --> F["C - Manual (SSH)"]
-    D --> G["Done - 'User Folders' appears<br/>in the X-Files main list"]
-    E --> G
-    F --> G
-```
+- **Want to see / edit other apps' files** (RetroArch saves, DuckStation memory
+  cards, configs)? Go to [§2 Quick start](#2-quick-start--pick-one-way) — it
+  takes about 2 minutes and adds a **"User Folders"** entry to the X-Files file list.
+- **Only browse your own USB drives / external HDD?** You don't need this page.
+  X-Files works normally without it.
 
 - **You need it** if you want the **"User Folders"** entry to appear at the top
   of the X-Files file list. That entry lets you open other apps' `LocalAppData`
@@ -40,8 +34,10 @@ All three ways do the exact same thing: they tell the console
    free app for managing Xbox developer mode.
 2. Connect Vault to your Xbox (developer-mode IP + portal username/password —
    see [§5 credentials](#5-get-your-values-first)).
-3. Open its **Tools** view → **"Loopback Exempt"**.
-4. Pick **X-Files** from the list → it runs the unlock for you.
+3. Open its **Tools** view → **"X-Files Enablement"** (X-Files is pre-selected —
+   this button is the quickest way). The generic **"Loopback Exempt"** option
+   also works: pick **X-Files** from the list.
+4. Confirm — it runs the unlock for you.
 
 Done. No command line needed.
 
