@@ -204,26 +204,32 @@ namespace XFiles.Controls
                     });
                 }
 
-                if (!entry.IsDirectory)
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.Copy,
+                    Label = "Copy",
+                    IconPath = IconBase + ActionCopy,
+                    LabelBrush = accent
+                });
+
+                if (ClipboardState.HasItems)
                 {
                     actions.Add(new ActionItem
                     {
-                        Action = FileAction.Download,
-                        Label = "Download (copy to disk)",
-                        IconPath = IconBase + ActionDownload,
+                        Action = FileAction.Paste,
+                        Label = "Paste",
+                        IconPath = IconBase + ActionPaste,
                         LabelBrush = accent
                     });
                 }
-                else
+
+                actions.Add(new ActionItem
                 {
-                    actions.Add(new ActionItem
-                    {
-                        Action = FileAction.UploadFile,
-                        Label = "Upload file",
-                        IconPath = IconBase + ActionUpload,
-                        LabelBrush = accent
-                    });
-                }
+                    Action = FileAction.Move,
+                    Label = "Move",
+                    IconPath = IconBase + ActionMove,
+                    LabelBrush = accent
+                });
 
                 actions.Add(new ActionItem
                 {

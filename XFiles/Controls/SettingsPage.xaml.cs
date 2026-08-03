@@ -7,6 +7,7 @@ using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
 using XFiles.Metadata;
+using XFiles.Services;
 using XFiles.Settings;
 
 namespace XFiles.Controls
@@ -28,7 +29,7 @@ namespace XFiles.Controls
         private static readonly string IconBase = "ms-appx:///Assets/Views/StartMenu/";
         private static readonly string[] LogLevels = { "Verbose", "Debug", "Info", "Warning", "Error" };
 
-        private static List<SettingsMenuItem> BuildMenuItems(string cacheDesc, string logLevel)
+        private static List<SettingsMenuItem> BuildMenuItems(string cacheDesc, string logLevel, string portalDesc)
         {
             return new List<SettingsMenuItem>
             {
@@ -45,6 +46,13 @@ namespace XFiles.Controls
                     Description = $"Current: {logLevel}",
                     IconPath = IconBase + "startmenu-settings-48.png",
                     Action = "log-level"
+                },
+                new SettingsMenuItem
+                {
+                    Label = "Clear Portal Credentials",
+                    Description = portalDesc,
+                    IconPath = "ms-appx:///Assets/Views/SettingsPage/settingspage-clear-credentials-48.png",
+                    Action = "clear-portal-creds"
                 }
             };
         }
@@ -74,14 +82,32 @@ namespace XFiles.Controls
 
             string currentLevel = await XFilesSettings.GetLogLevelAsync();
 
+            string portalDesc = await GetPortalDescAsync();
+
             CacheStatsText.Text = $"{cacheCount} cached entries";
 
             SettingsList.ItemsSource = BuildMenuItems(
-                $"Remove all {cacheCount} cached metadata and cover art entries", currentLevel);
+                $"Remove all {cacheCount} cached metadata and cover art entries", currentLevel, portalDesc);
             SettingsList.SelectedIndex = 0;
             SettingsList.Focus(FocusState.Programmatic);
 
             return await _tcs.Task;
+        }
+
+        private static async Task<string> GetPortalDescAsync()
+        {
+            string portalUser = "";
+            try
+            {
+                portalUser = await XFilesSettings.GetPortalUserAsync();
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("SettingsPage: failed to read portal user", ex);
+            }
+            return string.IsNullOrEmpty(portalUser)
+                ? "No portal credentials stored"
+                : $"Portal user: {portalUser}";
         }
 
         public void HandleDPad(VirtualKey key)
@@ -137,7 +163,8 @@ namespace XFiles.Controls
                         _cacheWasCleared = true;
 
                         SettingsList.ItemsSource = BuildMenuItems(
-                            "Remove all 0 cached metadata and cover art entries", Log.GetCurrentLevel());
+                            "Remove all 0 cached metadata and cover art entries", Log.GetCurrentLevel(),
+                            await GetPortalDescAsync());
                         SettingsList.SelectedIndex = 0;
                     }
                     catch (Exception ex)
@@ -164,8 +191,41 @@ namespace XFiles.Controls
 
                 // Refresh the item description
                 SettingsList.ItemsSource = BuildMenuItems(
-                    "Remove cached metadata and cover art entries", newLevel);
+                    "Remove cached metadata and cover art entries", newLevel,
+                    await GetPortalDescAsync());
                 SettingsList.SelectedIndex = 1;
+                SettingsList.Focus(FocusState.Programmatic);
+            }
+            else if (item.Action == "clear-portal-creds")
+            {
+                Overlay.Visibility = Visibility.Collapsed;
+                bool confirmed = await AlertDialogControl.ShowConfirmAsync(
+                    "Clear stored portal credentials and reset portal connection state?");
+
+                if (confirmed)
+                {
+                    try
+                    {
+                        DevicePortalService.ClearPortalCredentials();
+                        await XFilesSettings.SetPortalCredentialsAsync("", "");
+                        Log.Info("SettingsPage: portal credentials cleared");
+
+                        SettingsList.ItemsSource = BuildMenuItems(
+                            "Remove cached metadata and cover art entries", Log.GetCurrentLevel(),
+                            "No portal credentials stored");
+                        SettingsList.SelectedIndex = 2;
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warn("SettingsPage: clear portal credentials failed", ex);
+                        SettingsList.ItemsSource = BuildMenuItems(
+                            "Remove cached metadata and cover art entries", Log.GetCurrentLevel(),
+                            await GetPortalDescAsync());
+                        SettingsList.SelectedIndex = 2;
+                    }
+                }
+
+                Overlay.Visibility = Visibility.Visible;
                 SettingsList.Focus(FocusState.Programmatic);
             }
         }

@@ -24,7 +24,11 @@
                     </Grid.ColumnDefinitions>
 
                     <Grid Grid.Column="0" VerticalAlignment="Top" Margin="0,0,22,0">
-                        <Border Background="#0F1318"
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Border Grid.Row="0" Background="#0F1318"
                                 BorderBrush="#2A2D33"
                                 BorderThickness="1"
                                 CornerRadius="6"
@@ -34,7 +38,7 @@
                                    Height="250"
                                    Stretch="Uniform" />
                         </Border>
-                        <TextBlock Text="Scan → opens the official docs on how to proceed"
+                        <TextBlock Grid.Row="1" Text="Scan → opens the official docs on how to proceed"
                                    FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                    FontSize="12"
                                    Foreground="#D0B060"
@@ -104,31 +108,56 @@
                                    TextWrapping="Wrap"
                                    Margin="0,0,0,10" />
 
+                        <ProgressBar x:Name="ReprobeProgress"
+                                     IsIndeterminate="True"
+                                     Visibility="Collapsed"
+                                     Width="280"
+                                     Height="4"
+                                     Foreground="{StaticResource XFilesAccentGlowBrush}"
+                                     Background="#1A1D23"
+                                     HorizontalAlignment="Left"
+                                     Margin="0,0,0,8" />
+
+                        <TextBlock x:Name="ReprobeResultText"
+                                   Text=""
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                   FontSize="13"
+                                   Foreground="#D0B060"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,10" />
+
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,6,0,0">
-                            <Button Style="{StaticResource ConfirmDialogButton}"
+                            <Button x:Name="CredentialsBtn"
+                                    Style="{StaticResource ConfirmDialogButton}"
                                     Click="OnCredentialsClicked"
                                     Margin="0,0,10,0">
                                 <StackPanel Orientation="Horizontal">
                                     <Image Source="ms-appx:///Assets/GamepadButtons/abxy/a.png"
                                            Width="18" Height="18" Margin="0,0,6,0"
                                            VerticalAlignment="Center" />
-                                    <TextBlock Text="Enter credentials"
+                                    <TextBlock x:Name="CredentialsBtnText"
+                                               Text="Enter credentials"
                                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
                                                Foreground="{StaticResource XFilesForegroundBrush}"
                                                VerticalAlignment="Center" />
                                 </StackPanel>
                             </Button>
-                            <Button Style="{StaticResource ConfirmDialogButton}"
+                            <Button x:Name="ReprobeBtn"
+                                    Style="{StaticResource ConfirmDialogButton}"
                                     Click="OnReprobeClicked"
                                     Margin="0,0,10,0">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="Re-probe"
+                                    <Image Source="ms-appx:///Assets/GamepadButtons/abxy/y.png"
+                                           Width="18" Height="18" Margin="0,0,6,0"
+                                           VerticalAlignment="Center" />
+                                    <TextBlock Text="Retry"
                                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
                                                Foreground="{StaticResource XFilesForegroundBrush}"
                                                VerticalAlignment="Center" />
                                 </StackPanel>
                             </Button>
-                            <Button Style="{StaticResource ConfirmDialogButton}"
+                            <Button x:Name="CloseBtn"
+                                    Style="{StaticResource ConfirmDialogButton}"
                                     Click="OnCloseClicked">
                                 <StackPanel Orientation="Horizontal">
                                     <Image Source="ms-appx:///Assets/GamepadButtons/abxy/b.png"

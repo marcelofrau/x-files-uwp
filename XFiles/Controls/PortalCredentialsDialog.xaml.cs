@@ -50,6 +50,11 @@ namespace XFiles.Controls
                     e.Handled = true;
                     PassBox.Focus(FocusState.Programmatic);
                     break;
+                case Windows.System.VirtualKey.GamepadMenu:
+                    e.Handled = true;
+                    Log.Dbg("PortalCredentialsDialog: user Start → next component");
+                    MoveFocusNext();
+                    break;
                 case Windows.System.VirtualKey.Escape:
                 case Windows.System.VirtualKey.GamepadB:
                     e.Handled = true;
@@ -63,10 +68,17 @@ namespace XFiles.Controls
             switch (e.Key)
             {
                 case Windows.System.VirtualKey.Enter:
-                case Windows.System.VirtualKey.GamepadMenu:
                     e.Handled = true;
-                    Log.Dbg("PortalCredentialsDialog: pass key {Key} → confirm", e.Key);
+                    Log.Dbg("PortalCredentialsDialog: pass Enter → confirm");
                     Close(MakeResult());
+                    break;
+                case Windows.System.VirtualKey.GamepadMenu:
+                    // Start with the virtual keyboard open must NOT confirm the dialog —
+                    // it dismisses the input focus and moves to the next component
+                    // (the first button), which also closes the on-screen keyboard.
+                    e.Handled = true;
+                    Log.Dbg("PortalCredentialsDialog: pass Start → next component");
+                    MoveFocusNext();
                     break;
                 case Windows.System.VirtualKey.Escape:
                 case Windows.System.VirtualKey.GamepadB:
@@ -74,6 +86,17 @@ namespace XFiles.Controls
                     Log.Dbg("PortalCredentialsDialog: pass key {Key} → cancel", e.Key);
                     Close(null);
                     break;
+            }
+        }
+
+        private void MoveFocusNext()
+        {
+            // User → Pass → Cancel → Save. Landing on a button (Cancel/Save) also
+            // dismisses the on-screen keyboard.
+            if (_focusIndex < 3)
+            {
+                _focusIndex++;
+                ApplyFocus();
             }
         }
 

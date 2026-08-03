@@ -250,6 +250,7 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
                 <TextBlock Grid.Row="0"
@@ -296,18 +297,24 @@
                 <Grid Grid.Row="2" x:Name="PortalBanner"
                       Visibility="Collapsed"
                       Background="#2A2110">
-                    <StackPanel Orientation="Horizontal" Padding="12,6">
-                        <Image Source="ms-appx:///Assets/Views/MillerColumnsPage/millercolumnspage-portal-banner-48.png"
-                               Width="16" Height="16" Margin="0,0,8,0"
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Image Grid.Column="0"
+                           Source="ms-appx:///Assets/Views/MillerColumnsPage/millercolumnspage-portal-banner-48.png"
+                           Width="14" Height="14" Margin="12,0,8,0"
+                           VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1"
+                               Text="Web portal access — files load via the Xbox Dev Portal, slower/limited vs local drives"
+                               Foreground="#D0B060"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="10"
+                               TextWrapping="Wrap"
+                               TextTrimming="CharacterEllipsis"
+                               MaxLines="3"
+                               Padding="0,6,12,6"
                                VerticalAlignment="Center" />
-                        <TextBlock Text="Web portal access — files load via the Xbox Dev Portal, slower/limited vs local drives"
-                                   Foreground="#D0B060"
-                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                                   FontSize="11"
-                                   TextWrapping="Wrap"
-                                   TextTrimming="CharacterEllipsis"
-                                   VerticalAlignment="Center" />
-                    </StackPanel>
                 </Grid>
 
                 <TextBlock Grid.Row="3"
@@ -619,6 +626,22 @@
                                    Margin="0,8,0,0" />
                     </Grid>
                 </Grid>
+
+                <!-- Preview loading overlay — shown while a portal preview (REST list/download) is in flight -->
+                <StackPanel Grid.Row="1"
+                    x:Name="PreviewLoading"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Center"
+                    Visibility="Collapsed">
+                    <ProgressRing IsActive="True" Width="32" Height="32"
+                                  Foreground="{StaticResource XFilesAccentBrush}" />
+                    <TextBlock Text="Loading portal preview…"
+                               Foreground="{StaticResource XFilesTextMutedBrush}"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="12"
+                               Margin="0,8,0,0"
+                               HorizontalAlignment="Center" />
+                </StackPanel>
 
                 <TextBlock Grid.Row="2"
                     x:Name="PreviewStatus"

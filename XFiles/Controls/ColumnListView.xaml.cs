@@ -32,6 +32,9 @@ namespace XFiles.Controls
         public bool IsDrive { get; set; }
         public bool IsVirtual { get; set; }
         public bool IsPortal { get; set; }
+        public string PortalKnownFolder { get; set; }
+        public string PortalPackageFullName { get; set; }
+        public string PortalPath { get; set; }
         public bool IsSeparator { get; set; }
         private bool _isFavorite;
         public bool IsFavorite
@@ -232,10 +235,10 @@ namespace XFiles.Controls
             ? null
             : IsPortal
                 ? (IsDirectory
-                    ? "ms-appx:///Assets/FileTypes/filetype-folder-network-24.png"
+                    ? $"ms-appx:///Assets/FileTypes/folder-{_folderColor}-private-24.png"
                     : $"ms-appx:///Assets/FileTypes/{GetFileIcon(Name)}")
                 : IsVirtual
-                    ? "ms-appx:///Assets/FileTypes/favorites-24.png"
+                    ? $"ms-appx:///Assets/FileTypes/folder-{_folderColor}-favorites-24.png"
                     : IsDrive
                         ? "ms-appx:///Assets/FileTypes/drive-harddisk-24.png"
                         : IsFavorite

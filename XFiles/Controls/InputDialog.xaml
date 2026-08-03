@@ -25,13 +25,9 @@
                            Text="" />
 
                 <TextBox x:Name="InputBox"
+                         Style="{StaticResource DarkTextBoxStyle}"
                          FontFamily="ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata"
                          FontSize="15"
-                         Foreground="{StaticResource XFilesForegroundBrush}"
-                         Background="#0F1318"
-                         BorderBrush="{StaticResource XFilesInputBorderBrush}"
-                         BorderThickness="1"
-                         Padding="8,6"
                          MaxWidth="850"
                          HorizontalAlignment="Stretch"
                          GotFocus="OnInputGotFocus"

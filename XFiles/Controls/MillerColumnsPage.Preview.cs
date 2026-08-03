@@ -379,6 +379,9 @@ namespace XFiles.Controls
                 IsArchive = e.IsArchive,
                 IsVirtual = e.IsVirtual,
                 IsPortal = e.IsPortal,
+                PortalKnownFolder = e.PortalKnownFolder,
+                PortalPackageFullName = e.PortalPackageFullName,
+                PortalPath = e.PortalPath,
                 IsSeparator = e.IsSeparator,
                 IsFavorite = e.FullPath != null && FileSystem.FavoritesManager.IsFavorite(e.FullPath),
                 SizeBytes = e.SizeBytes,
@@ -401,6 +404,9 @@ namespace XFiles.Controls
                 IsArchive = e.IsArchive,
                 IsVirtual = e.IsVirtual,
                 IsPortal = e.IsPortal,
+                PortalKnownFolder = e.PortalKnownFolder,
+                PortalPackageFullName = e.PortalPackageFullName,
+                PortalPath = e.PortalPath,
                 IsSeparator = e.IsSeparator,
                 IsFavorite = e.FullPath != null && FileSystem.FavoritesManager.IsFavorite(e.FullPath),
                 SizeBytes = e.SizeBytes,
@@ -424,6 +430,9 @@ namespace XFiles.Controls
                 IsArchive = e.IsArchive,
                 IsVirtual = e.IsVirtual,
                 IsPortal = e.IsPortal,
+                PortalKnownFolder = e.PortalKnownFolder,
+                PortalPackageFullName = e.PortalPackageFullName,
+                PortalPath = e.PortalPath,
                 IsSeparator = e.IsSeparator,
                 IsFavorite = e.FullPath != null && FileSystem.FavoritesManager.IsFavorite(e.FullPath),
                 SizeBytes = e.SizeBytes,
@@ -512,7 +521,11 @@ namespace XFiles.Controls
                         PreviewStatus.Text = "Loading...";
                     }
 
-                    // Debounce preview update — skip if scrolling rapidly
+                    // Debounce preview update — skip if scrolling rapidly. Portal columns
+                    // cost a REST round-trip per preview, so give them a longer window.
+                    bool isPortal = _navigator.Current.IsPortal;
+                    _previewDebounceTimer.Interval = TimeSpan.FromMilliseconds(
+                        isPortal ? PortalPreviewDebounceMs : PreviewDebounceMs);
                     _previewDebounceTimer.Stop();
                     _previewDebounceTimer.Start();
                 }

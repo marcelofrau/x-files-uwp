@@ -9,23 +9,18 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.Data.Json;
-using Windows.Networking;
-using Windows.Networking.Connectivity;
-using Windows.Networking.Sockets;
 using Windows.Security.Cryptography.Certificates;
 using Windows.Storage.Streams;
 using Windows.Web.Http;
 using Windows.Web.Http.Filters;
 using Windows.Web.Http.Headers;
-using XFiles.FileSystem;
 
 namespace XFiles.Services
 {
     /// <summary>
     /// Client for the Xbox Developer Mode Device Portal REST API.
-    /// Probe phase: layered connectivity diagnostic — internet reachability, raw TCP,
-    /// plain-HTTP and HTTPS paths — to determine empirically how (or whether) the app
-    /// running on the console can reach its own portal.
+    /// Probe phase: tries the HTTPS/HTTP portal endpoints on 127.0.0.1 to determine
+    /// whether the app running on the console can reach its own portal.
     /// Credentials come from runtime state (SQLite settings), set via SetCredentials.
     /// </summary>
     internal static class DevicePortalService
@@ -33,11 +28,11 @@ namespace XFiles.Services
         private const int HttpsPort = 11443;
         private const int HttpPort = 80;
         private const string KnownFoldersPath = "/api/filesystem/apps/knownfolders";
-        private const string InternetProbeHost = "www.msftconnecttest.com";
-        private const string InternetProbeUrl = "http://www.msftconnecttest.com/connecttest.txt";
 
         private static readonly object Sync = new object();
         private static bool _probeRan;
+        private static bool _probeRunning;
+        private static bool _probeRerun;
         private static string _baseUrl;
         private static string _probeStatus = "not run";
 
@@ -97,6 +92,26 @@ namespace XFiles.Services
         }
 
         /// <summary>
+        /// Clears stored runtime credentials and resets the probe state so a later
+        /// drill-in re-prompts for credentials and re-probes from scratch.
+        /// </summary>
+        public static void ClearPortalCredentials()
+        {
+            lock (Sync)
+            {
+                _runtimeUser = string.Empty;
+                _runtimePass = string.Empty;
+                _baseUrl = null;
+                _csrfToken = null;
+                _probeRan = false;
+                _accessDeniedRaised = false;
+                _probeStatus = null;
+                ResetPortalClient();
+            }
+            Log.Info("DevicePortal.ClearPortalCredentials: runtime credentials and probe state cleared");
+        }
+
+        /// <summary>
         /// Fire-and-forget probe, safe to call repeatedly. Logs results to the
         /// central log viewer. Runs once per process unless force is set (About + Y).
         /// </summary>
@@ -104,12 +119,21 @@ namespace XFiles.Services
         {
             lock (Sync)
             {
+                if (_probeRunning)
+                {
+                    // A probe is in flight (e.g. a previous dialog run still finishing).
+                    // Queue a rerun so the new subscriber still gets a completion event.
+                    _probeRerun = true;
+                    Log.Dbg("DevicePortal.Probe: already running, queuing rerun");
+                    return;
+                }
                 if (_probeRan && !force)
                 {
                     Log.Dbg("DevicePortal.Probe: already ran, skipping");
                     return;
                 }
                 _probeRan = true;
+                _probeRunning = true;
             }
 
             _probeStatus = "probing…";
@@ -118,264 +142,61 @@ namespace XFiles.Services
 
         private static async Task ProbeCoreAsync()
         {
-            if (!HasCredentials)
+            try
             {
-                _probeStatus = "no credentials";
-                Log.Warn("DevicePortal.Probe: no credentials — set portal user/password (About → Portal)");
-                ProbeCompleted?.Invoke();
-                return;
-            }
+                if (!HasCredentials)
+                {
+                    _probeStatus = "no credentials";
+                    Log.Warn("DevicePortal.Probe: no credentials — set portal user/password (About → Portal)");
+                    return;
+                }
 
-            var hosts = GetCandidateHosts();
-            Log.Info("DevicePortal.Probe: candidates = {Hosts}", string.Join(", ", hosts));
+                // Direct loopback target: Windows Device Portal listens on 127.0.0.1
+                // on the local console, and the dev-mode loopback exemption covers it.
+                var hosts = GetCandidateHosts();
+                Log.Info("DevicePortal.Probe: candidates = {Hosts}", string.Join(", ", hosts));
 
-            LogConnectionProfile();
-            await TestInternetAsync();
-
-            // Self-liberation test: NetworkIsolationSetAppContainerConfig (the API under
-            // checknetisolation) can be called by AppContainers with network capabilities,
-            // and dev mode bypasses the admin check. Add own SID to the loopback exemption
-            // list. If it returns 0, the portal tests below should now pass without SSH.
-            Log.Info("DevicePortal.Probe: self-exempt — NetworkIsolationSetAppContainerConfig");
-            uint exemptHr = SelfExempt();
-            Log.Info("DevicePortal.Probe: self-exempt HRESULT 0x{HR:X8} ({Label})",
-                exemptHr, exemptHr == 0 ? "OK — exemption applied" : "FAILED — need SSH one-liner");
-
-            // Decisive experiment: is the console's own SSH reachable from the app WITHOUT
-            // loopback exemption? If TCP LAN_IP:22 succeeds, an in-app SSH client could
-            // auto-apply the exemption at startup (self-liberation). If dropped, chicken-egg.
-            var lanHost = hosts.FirstOrDefault();
-            if (lanHost != null)
-            {
-                Log.Info("DevicePortal.Probe: SSH reachability test — {Host}:22", lanHost);
-                await TestTcpAsync(lanHost, 22);
-            }
-
-            foreach (var host in hosts)
-            {
-                var tcpHttps = await TestTcpAsync(host, HttpsPort);
-                var tcpHttp = await TestTcpAsync(host, HttpPort);
-
-                if (tcpHttps)
+                foreach (var host in hosts)
+                {
                     await TestHttpGetAsync(host, HttpsPort, useTls: true);
-                if (tcpHttp)
                     await TestHttpGetAsync(host, HttpPort, useTls: false);
-            }
-
-            if (_baseUrl != null)
-            {
-                _probeStatus = "OK " + _baseUrl;
-                Log.Info("DevicePortal.Probe: WORKING base URL: {BaseUrl}", _baseUrl);
-                await DeepProbeAsync(_baseUrl);
-            }
-            else
-            {
-                _probeStatus = "portal unreachable";
-                Log.Warn("DevicePortal.Probe: no path works — see per-test results above");
-                Log.Warn("DevicePortal.Probe: if on Xbox dev mode, re-apply loopback exemption via SSH: " +
-                    "checknetisolation loopbackexempt -a -n=XFiles.Xbox_jgz7qwhvc5jpc, then press Y in About");
-            }
-
-            await RunFileSystemProbeAsync();
-            ProbeCompleted?.Invoke();
-        }
-
-        /// <summary>
-        /// Filesystem diagnostic: map how far the sandbox can reach on the Xbox drives.
-        /// Mirrors the portal's known-folders layout (Q:\Users\...\AppData\Local\Packages)
-        /// using the same *FromApp P/Invoke the browser uses, logging Win32 errors per step.
-        /// </summary>
-        private static async Task RunFileSystemProbeAsync()
-        {
-            Log.Info("DevicePortal.Probe: FS probe — enumerate drives");
-
-            List<FileEntry> root;
-            try
-            {
-                root = await DirectoryScanner.ScanAsync(null);
-            }
-            catch (Exception ex)
-            {
-                Log.Warn("DevicePortal.Probe: FS root scan exception: {Message}", ex.Message);
-                return;
-            }
-
-            var drives = root.Where(e => e.IsDrive).Select(e => e.FullPath).ToList();
-            Log.Info("DevicePortal.Probe: FS drives = {Drives}", string.Join(", ", drives));
-
-            foreach (var drive in drives)
-                ProbeDir(drive, "drive");
-
-            // Portal-known locations regardless of drive enumeration.
-            ProbeDir("Q:\\Users", "portal-known");
-            ProbeDir("D:\\DevelopmentFiles", "portal-known");
-        }
-
-        private static void ProbeDir(string path, string label)
-        {
-            var names = DirectoryScanner.EnumerateDirectoryNames(path, out int err);
-            if (err != 0)
-            {
-                Log.Warn("DevicePortal.Probe: FS {Label} '{Path}' ERROR {Err}: {Desc}",
-                    label, path, err, DescribeWin32(err));
-                return;
-            }
-
-            Log.Info("DevicePortal.Probe: FS {Label} '{Path}' OK — {Count} entries: {First}",
-                label, path, names.Count, string.Join(", ", names.Take(25)));
-
-            if (label != "drive") return;
-
-            // Walk the portal's known-folders shape: X:\Users\<user>\AppData\Local\Packages
-            if (names.Any(n => n.Equals("Users", StringComparison.OrdinalIgnoreCase)))
-            {
-                var users = DirectoryScanner.EnumerateDirectoryNames(path + "\\Users", out int uerr);
-                if (uerr != 0)
-                {
-                    Log.Warn("DevicePortal.Probe: FS 'Users' ERROR {Err}: {Desc}", uerr, DescribeWin32(uerr));
-                    return;
+                    if (_baseUrl != null) break;
                 }
-                Log.Info("DevicePortal.Probe: FS 'Users' OK — {Count}: {First}",
-                    users.Count, string.Join(", ", users.Take(10)));
 
-                foreach (var user in users)
+                if (_baseUrl != null)
                 {
-                    var packages = path + "\\Users\\" + user + "\\AppData\\Local\\Packages";
-                    var pkgs = DirectoryScanner.EnumerateDirectoryNames(packages, out int perr);
-                    if (perr != 0)
-                    {
-                        Log.Warn("DevicePortal.Probe: FS Packages '{P}' ERROR {Err}: {Desc}",
-                            packages, perr, DescribeWin32(perr));
-                        continue;
-                    }
-                    Log.Info("DevicePortal.Probe: FS Packages '{P}' OK — {Count}: {First}",
-                        packages, pkgs.Count, string.Join(", ", pkgs.Take(25)));
-
-                    // Depth probe: LocalState of the first few packages + read test of one file.
-                    foreach (var pkg in pkgs.Take(3))
-                    {
-                        var localState = packages + "\\" + pkg + "\\LocalState";
-                        var lsNames = DirectoryScanner.EnumerateDirectoryNames(localState, out int lerr);
-                        if (lerr != 0)
-                        {
-                            Log.Warn("DevicePortal.Probe: FS LocalState '{LS}' ERROR {Err}: {Desc}",
-                                localState, lerr, DescribeWin32(lerr));
-                            continue;
-                        }
-                        Log.Info("DevicePortal.Probe: FS LocalState '{LS}' OK — {Count}: {First}",
-                            localState, lsNames.Count, string.Join(", ", lsNames.Take(10)));
-
-                        var firstFile = lsNames.FirstOrDefault();
-                        if (firstFile != null)
-                        {
-                            string file = localState + "\\" + firstFile;
-                            int ferr = DirectoryScanner.TestFileReadable(file);
-                            Log.Info("DevicePortal.Probe: FS read '{F}' => {Err} ({Desc})",
-                                file, ferr, DescribeWin32(ferr));
-                        }
-                    }
+                    _probeStatus = "OK " + _baseUrl;
+                    Log.Info("DevicePortal.Probe: WORKING base URL: {BaseUrl}", _baseUrl);
+                    await DeepProbeAsync(_baseUrl);
                 }
-            }
-        }
-
-        private static string DescribeWin32(int err)
-        {
-            switch (err)
-            {
-                case 0: return "OK";
-                case 2: return "ERROR_FILE_NOT_FOUND";
-                case 3: return "ERROR_PATH_NOT_FOUND";
-                case 5: return "ERROR_ACCESS_DENIED";
-                case 15: return "ERROR_DRIVE_NOT_FOUND";
-                case 21: return "ERROR_NOT_READY";
-                case 32: return "ERROR_SHARING_VIOLATION";
-                case 50: return "ERROR_NOT_SUPPORTED";
-                case 53: return "ERROR_BAD_NETPATH";
-                case 87: return "ERROR_INVALID_PARAMETER";
-                case 123: return "ERROR_INVALID_NAME";
-                case 124: return "ERROR_BAD_LENGTH";
-                case 206: return "ERROR_FILENAME_EXCED_RANGE";
-                default: return $"0x{err:X8}";
-            }
-        }
-
-        private static void LogConnectionProfile()
-        {
-            try
-            {
-                var profile = NetworkInformation.GetInternetConnectionProfile();
-                if (profile == null)
+                else
                 {
-                    Log.Warn("DevicePortal.Probe: no internet connection profile");
-                    return;
-                }
-                var level = profile.GetNetworkConnectivityLevel();
-                var adapter = profile.NetworkAdapter?.IanaInterfaceType ?? 0;
-                Log.Info("DevicePortal.Probe: profile level={Level}, adapterType={Adapter}, isWlan={Wlan}",
-                    level, adapter, profile.IsWlanConnectionProfile);
-            }
-            catch (Exception ex)
-            {
-                Log.Warn("DevicePortal.Probe: connection profile error: {Message}", ex.Message);
-            }
-        }
-
-        private static async Task TestInternetAsync()
-        {
-            var tcpOk = await TestTcpAsync(InternetProbeHost, 80);
-            if (!tcpOk)
-            {
-                Log.Warn("DevicePortal.Probe: internet TCP to {Host}:80 FAILED — app likely has no outbound network at all", InternetProbeHost);
-                return;
-            }
-
-            try
-            {
-                using (var client = new HttpClient())
-                using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5)))
-                using (var resp = await client.GetAsync(new Uri(InternetProbeUrl)).AsTask(cts.Token))
-                {
-                    var body = await resp.Content.ReadAsStringAsync();
-                    Log.Info("DevicePortal.Probe: internet HTTP {Url} => {Status} body={Body}",
-                        InternetProbeUrl, (int)resp.StatusCode, body.Trim());
+                    _probeStatus = "portal unreachable";
+                    Log.Warn("DevicePortal.Probe: no path works — see per-test results above");
+                    Log.Warn("DevicePortal.Probe: if on Xbox dev mode, re-apply loopback exemption via SSH: " +
+                        "checknetisolation loopbackexempt -a -n=XFiles.Xbox_jgz7qwhvc5jpc, then press Y in About");
                 }
             }
             catch (Exception ex)
             {
-                Log.Warn("DevicePortal.Probe: internet HTTP {Url} FAILED: {Message}", InternetProbeUrl, ex.Message);
+                _probeStatus = "probe error";
+                Log.Err("DevicePortal.Probe: exception: {Message}", ex);
             }
-        }
-
-        /// <summary>
-        /// Raw TCP connect (no HTTP, no TLS) — isolates network-layer reachability
-        /// from TLS/cert problems. Returns true if the connection completed.
-        /// </summary>
-        private static async Task<bool> TestTcpAsync(string host, int port)
-        {
-            var sw = Stopwatch.StartNew();
-            using (var socket = new StreamSocket())
-            using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(4)))
+            finally
             {
-                try
+                bool rerun;
+                lock (Sync)
                 {
-                    await socket.ConnectAsync(new HostName(host), port.ToString()).AsTask(cts.Token);
-                    sw.Stop();
-                    Log.Info("DevicePortal.Probe: TCP {Host}:{Port} OK in {Elapsed}ms", host, port, sw.ElapsedMilliseconds);
-                    return true;
+                    _probeRunning = false;
+                    rerun = _probeRerun;
+                    _probeRerun = false;
+                    if (rerun) _probeRunning = true;
                 }
-                catch (OperationCanceledException)
+                ProbeCompleted?.Invoke();
+                if (rerun)
                 {
-                    sw.Stop();
-                    Log.Warn("DevicePortal.Probe: TCP {Host}:{Port} TIMEOUT after {Elapsed}ms", host, port, sw.ElapsedMilliseconds);
-                    return false;
-                }
-                catch (Exception ex)
-                {
-                    sw.Stop();
-                    var status = SocketError.GetStatus(ex.HResult);
-                    Log.Warn("DevicePortal.Probe: TCP {Host}:{Port} FAILED in {Elapsed}ms: {Status} ({Message})",
-                        host, port, sw.ElapsedMilliseconds, status, ex.Message);
-                    return false;
+                    _probeStatus = "probing…";
+                    _ = ProbeCoreAsync();
                 }
             }
         }
@@ -513,9 +334,13 @@ namespace XFiles.Services
                     {
                         pkgs = val.GetArray();
                     }
-                    else if (val.ValueType == JsonValueType.Object && val.GetObject().ContainsKey("Packages"))
+                    else if (val.ValueType == JsonValueType.Object &&
+                        (val.GetObject().ContainsKey("Packages") || val.GetObject().ContainsKey("InstalledPackages")))
                     {
-                        pkgs = val.GetObject()["Packages"].GetArray();
+                        var obj = val.GetObject();
+                        pkgs = obj.ContainsKey("InstalledPackages")
+                            ? obj["InstalledPackages"].GetArray()
+                            : obj["Packages"].GetArray();
                     }
                     else
                     {
@@ -672,8 +497,17 @@ namespace XFiles.Services
         private static async Task<Windows.Web.Http.HttpResponseMessage> GetPortalAsync(string pathAndQuery, int timeoutSeconds = 30)
         {
             EnsurePortalClient();
+            var url = BaseUrl + pathAndQuery;
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds)))
-                return await _client.GetAsync(new Uri(BaseUrl + pathAndQuery)).AsTask(cts.Token);
+            {
+                var resp = await _client.GetAsync(new Uri(url)).AsTask(cts.Token);
+                sw.Stop();
+                ulong? len = resp.Content?.Headers?.ContentLength;
+                Log.Info("DevicePortal.Http: GET {Url} => HTTP {Status} in {Elapsed}ms ({Len} bytes)",
+                    url, (int)resp.StatusCode, sw.ElapsedMilliseconds, len ?? 0);
+                return resp;
+            }
         }
 
         private static async Task<string> GetPortalStringAsync(string pathAndQuery)
@@ -683,6 +517,8 @@ namespace XFiles.Services
                 if (resp.StatusCode == HttpStatusCode.Unauthorized)
                     HandleAccessDenied();
                 var body = await resp.Content.ReadAsStringAsync();
+                Log.Info("DevicePortal.Payload: {Query} => {Bytes} bytes body", pathAndQuery, body.Length);
+                Log.Verb("DevicePortal.Payload: {Query} => {Body}", pathAndQuery, Truncate(body, 4000));
                 if (!resp.IsSuccessStatusCode)
                     throw new PortalRequestException((int)resp.StatusCode,
                         "GET " + pathAndQuery + " => HTTP " + (int)resp.StatusCode + " " + Truncate(body, 300));
@@ -807,6 +643,7 @@ namespace XFiles.Services
                 var result = new List<string>();
                 foreach (var k in val.GetObject()["KnownFolders"].GetArray())
                     result.Add(k.GetString());
+                Log.Info("DevicePortal.KnownFolders: {Count} folders: {Names}", result.Count, string.Join(", ", result));
                 return result;
             }
             catch (Exception ex)
@@ -828,8 +665,14 @@ namespace XFiles.Services
                 JsonArray pkgs;
                 var val = JsonValue.Parse(body);
                 if (val.ValueType == JsonValueType.Array) pkgs = val.GetArray();
-                else if (val.ValueType == JsonValueType.Object && val.GetObject().ContainsKey("Packages"))
-                    pkgs = val.GetObject()["Packages"].GetArray();
+                else if (val.ValueType == JsonValueType.Object &&
+                    (val.GetObject().ContainsKey("Packages") || val.GetObject().ContainsKey("InstalledPackages")))
+                {
+                    var obj = val.GetObject();
+                    pkgs = obj.ContainsKey("InstalledPackages")
+                        ? obj["InstalledPackages"].GetArray()
+                        : obj["Packages"].GetArray();
+                }
                 else
                 {
                     Log.Warn("DevicePortal.Packages: unexpected shape — {Body}", Truncate(body));
@@ -854,6 +697,10 @@ namespace XFiles.Services
                     });
                 }
                 result.Sort((a, b) => string.Compare(a.FullName, b.FullName, StringComparison.OrdinalIgnoreCase));
+                Log.Info("DevicePortal.Packages: {Count} packages ({First} … {Last})",
+                    result.Count,
+                    result.Count > 0 ? result[0].FullName : "(none)",
+                    result.Count > 1 ? result[result.Count - 1].FullName : "");
             }
             catch (Exception ex)
             {
@@ -894,22 +741,28 @@ namespace XFiles.Services
                     var name = o.ContainsKey("Name") ? o["Name"].GetString() : "";
                     if (name.Length == 0) continue;
                     int type = o.ContainsKey("Type") ? (int)o["Type"].GetNumber() : 0;
+                    long size = o.ContainsKey("FileSize") ? (long)o["FileSize"].GetNumber() : 0;
+                    long date = o.ContainsKey("DateCreated") ? (long)o["DateCreated"].GetNumber() : 0;
                     result.Add(new PortalFileEntry
                     {
                         Name = name,
                         IsDirectory = (type & 0x10) != 0,
-                        FileSize = o.ContainsKey("FileSize") ? (long)o["FileSize"].GetNumber() : 0,
-                        DateCreated = o.ContainsKey("DateCreated") ? (long)o["DateCreated"].GetNumber() : 0,
+                        FileSize = size,
+                        DateCreated = date,
                         KnownFolder = knownFolder,
                         PackageFullName = packageFullName ?? "",
                         PortalPath = portalPath
                     });
+                    Log.Dbg("DevicePortal.Files: '{Name}' Type=0x{Type:X} dir={Dir} size={Size} date={Date} => PortalPath='{Path}'",
+                        name, type, (type & 0x10) != 0, size, date, portalPath);
                 }
                 result.Sort((a, b) =>
                 {
                     if (a.IsDirectory != b.IsDirectory) return a.IsDirectory ? -1 : 1;
                     return string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase);
                 });
+                Log.Info("DevicePortal.Files: {Query} => {Count} entries ({Dirs} dirs, {Files} files)",
+                    query, result.Count, result.Count(x => x.IsDirectory), result.Count(x => !x.IsDirectory));
             }
             catch (Exception ex)
             {
@@ -1057,113 +910,14 @@ namespace XFiles.Services
 
         private static List<string> GetCandidateHosts()
         {
-            var hosts = new List<string>();
-
-            // 1. Console's own LAN IP — normal outbound traffic, most likely to work.
-            foreach (var hostName in NetworkInformation.GetHostNames())
-            {
-                if (hostName.Type != HostNameType.Ipv4) continue;
-                var ip = hostName.DisplayName;
-                if (ip == "::1" || ip.StartsWith("127.", StringComparison.Ordinal)) continue;
-                if (!hosts.Contains(ip)) hosts.Add(ip);
-            }
-
-            // 2. Loopback aliases (may be blocked by network isolation).
-            hosts.Add("localhost");
-            hosts.Add("127.0.0.1");
-            hosts.Add("::1");
-
-            return hosts;
+            // Windows Device Portal binds to 127.0.0.1 on the local console. The
+            // dev-mode loopback exemption covers this address, and it is unambiguous
+            // (no IPv6 bracket handling needed). Removed: LAN-IP / localhost / ::1
+            // candidates, which added IPv6 URL quirks without extra coverage.
+            return new List<string> { "127.0.0.1" };
         }
 
         private const uint TokenQuery = 0x0008;
         private const int TokenAppContainerSid = 32;
-
-        [DllImport("kernel32.dll")]
-        private static extern IntPtr GetCurrentProcess();
-
-        [DllImport("advapi32.dll", SetLastError = true)]
-        private static extern bool OpenProcessToken(IntPtr processHandle, uint desiredAccess, out IntPtr tokenHandle);
-
-        [DllImport("advapi32.dll", SetLastError = true)]
-        private static extern bool GetTokenInformation(
-            IntPtr tokenHandle, int tokenInformationClass,
-            IntPtr tokenInformation, uint tokenInformationLength, out uint returnLength);
-
-        [DllImport("advapi32.dll", SetLastError = true)]
-        private static extern uint GetLengthSid(IntPtr sid);
-
-        [DllImport("kernel32.dll")]
-        private static extern bool CloseHandle(IntPtr handle);
-
-        [DllImport("firewallapi.dll", SetLastError = true)]
-        private static extern uint NetworkIsolationSetAppContainerConfig(uint dwNumPublicAppCs, IntPtr appContainerSids);
-
-        /// <summary>
-        /// Reads this process's AppContainer SID from the token (TokenAppContainerSid).
-        /// </summary>
-        private static uint GetAppContainerSid(out byte[] sidBytes)
-        {
-            sidBytes = null;
-            if (!OpenProcessToken(GetCurrentProcess(), TokenQuery, out IntPtr hToken))
-                return (uint)Marshal.GetLastWin32Error();
-            try
-            {
-                uint len = 0;
-                GetTokenInformation(hToken, TokenAppContainerSid, IntPtr.Zero, 0, out len);
-                if (len == 0) return (uint)Marshal.GetLastWin32Error();
-
-                IntPtr buf = Marshal.AllocHGlobal((int)len);
-                try
-                {
-                    if (!GetTokenInformation(hToken, TokenAppContainerSid, buf, len, out len))
-                        return (uint)Marshal.GetLastWin32Error();
-
-                    uint sidLen = GetLengthSid(buf);
-                    sidBytes = new byte[sidLen];
-                    Marshal.Copy(buf, sidBytes, 0, (int)sidLen);
-                    return 0;
-                }
-                finally
-                {
-                    Marshal.FreeHGlobal(buf);
-                }
-            }
-            finally
-            {
-                CloseHandle(hToken);
-            }
-        }
-
-        /// <summary>
-        /// Adds this app's own AppContainer SID to the loopback exemption list via
-        /// NetworkIsolationSetAppContainerConfig (the API underneath checknetisolation).
-        /// Returns the HRESULT; 0 = success.
-        /// </summary>
-        private static uint SelfExempt()
-        {
-            uint hr = GetAppContainerSid(out byte[] sidBytes);
-            if (hr != 0 || sidBytes == null)
-            {
-                Log.Warn("DevicePortal.SelfExempt: GetAppContainerSid failed 0x{HR:X8}", hr);
-                return hr;
-            }
-
-            IntPtr sidPtr = Marshal.AllocHGlobal(sidBytes.Length);
-            Marshal.Copy(sidBytes, 0, sidPtr, sidBytes.Length);
-            IntPtr saa = Marshal.AllocHGlobal(IntPtr.Size + 4);
-            Marshal.WriteIntPtr(saa, 0, sidPtr);
-            Marshal.WriteInt32(saa, IntPtr.Size, 0); // Attributes = 0
-
-            try
-            {
-                return NetworkIsolationSetAppContainerConfig(1, saa);
-            }
-            finally
-            {
-                Marshal.FreeHGlobal(sidPtr);
-                Marshal.FreeHGlobal(saa);
-            }
-        }
     }
 }

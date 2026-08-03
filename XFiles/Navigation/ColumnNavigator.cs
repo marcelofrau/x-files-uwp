@@ -36,6 +36,12 @@ namespace XFiles.Navigation
         public event Action PortalSetupRequired;
 
         /// <summary>
+        /// Raised when a portal preview (directory listing or file download via REST) is
+        /// in flight. MillerColumnsPage shows a spinner over the preview column.
+        /// </summary>
+        public event Action<bool> PreviewLoadingChanged;
+
+        /// <summary>
         /// Set by MillerColumnsPage: given a label, returns an IProgress<double> bound to
         /// the OperationProgressDialog. Used for explicit portal downloads (> 25 MB).
         /// </summary>
@@ -137,7 +143,46 @@ namespace XFiles.Navigation
             if (_current.AllEntries != null)
                 _current.AllEntries.Insert(2, separator);
 
+            // Move the AppData entry (LocalFolder) above the separator so it stays
+            // grouped with the virtual folders (Favorites, User Folders)
+            int appDataIdx = _current.Entries.FindIndex(e => e.Name == "AppData");
+            if (appDataIdx > 2)
+            {
+                var appData = _current.Entries[appDataIdx];
+                _current.Entries.RemoveAt(appDataIdx);
+                _current.Entries.Insert(2, appData);
+
+                if (_current.AllEntries != null)
+                {
+                    int allIdx = _current.AllEntries.FindIndex(e => e.Name == "AppData");
+                    if (allIdx > 2)
+                    {
+                        var allApp = _current.AllEntries[allIdx];
+                        _current.AllEntries.RemoveAt(allIdx);
+                        _current.AllEntries.Insert(2, allApp);
+                    }
+                }
+            }
+
             ColumnsChanged?.Invoke();
+        }
+
+        /// <summary>
+        /// Jump to the portal root entry ("User Folders") and drill in. Used after a
+        /// successful portal connection so the user lands directly on the portal folders.
+        /// </summary>
+        public async Task DrillIntoPortalRootAsync()
+        {
+            Log.Info("ColumnNavigator: auto drilling into portal root");
+            await LoadRootAsync();
+            int idx = _current.Entries.FindIndex(e => e.IsPortal);
+            if (idx < 0)
+            {
+                Log.Warn("ColumnNavigator: portal root entry not found — aborting auto drill-in");
+                return;
+            }
+            _current.SelectedIndex = idx;
+            await DrillInAsync();
         }
 
         /// <summary>
@@ -331,6 +376,14 @@ namespace XFiles.Navigation
             }
             DevicePortalService.ResetAccessDenied();
 
+            // ".." = drill up one level (same as B button): pop history and reload.
+            if (selected.Name == "..")
+            {
+                Log.Info("ColumnNavigator.Portal: drilling up via '..'");
+                await DrillOutAsync();
+                return;
+            }
+
             if (!selected.IsDirectory)
             {
                 if (selected.IsArchive)
@@ -341,42 +394,74 @@ namespace XFiles.Navigation
             ++_previewGeneration;
             Log.Info("ColumnNavigator.Portal: drilling into {Name}", selected.Name);
 
-            _history.Push(new ColumnState
-            {
-                Path = _current.Path,
-                Label = _current.Label,
-                SelectedIndex = _current.SelectedIndex,
-                Entries = _current.Entries
-            });
-
             // Clear any stale gamelist — portal columns never use it.
             _gamelistCache = null;
             _gamelistDirectory = null;
 
             var newColumn = new ColumnState { Path = null, Label = selected.Name, IsPortal = true };
 
-            if (selected.PortalKnownFolder == null)
+            LoadingChanged?.Invoke(true);
+            try
             {
-                await newColumn.LoadPortalKnownFoldersAsync(_portalBrowser);
+                if (selected.PortalKnownFolder == null)
+                {
+                    await newColumn.LoadPortalKnownFoldersAsync(_portalBrowser);
+                }
+                else if (selected.PortalPackageFullName == null && selected.PortalKnownFolder == "LocalAppData")
+                {
+                    newColumn.PortalKnownFolder = "LocalAppData";
+                    await newColumn.LoadPortalPackagesAsync(_portalBrowser);
+                }
+                else
+                {
+                    newColumn.PortalKnownFolder = selected.PortalKnownFolder;
+                    newColumn.PortalPackageFullName = selected.PortalPackageFullName ?? "";
+                    // Known-folder and package entries are addressed by query params (no path);
+                    // everything deeper is addressed by portal path.
+                    bool isParamRoot = selected.PortalPackageFullName == null || selected.PortalPath == null;
+                    newColumn.PortalPath = isParamRoot
+                        ? "\\"
+                        : PortalBrowser.CombinePortalPath(selected.PortalPath, selected.Name);
+                    await newColumn.LoadPortalDirectoryAsync(_portalBrowser,
+                        newColumn.PortalKnownFolder, newColumn.PortalPackageFullName, newColumn.PortalPath);
+                }
             }
-            else if (selected.PortalPackageFullName == null && selected.PortalKnownFolder == "LocalAppData")
+            catch (Exception ex)
             {
-                newColumn.PortalKnownFolder = "LocalAppData";
-                await newColumn.LoadPortalPackagesAsync(_portalBrowser);
+                // Some packages can't be browsed (no accessible LocalAppData, 404/timeout).
+                // Surface the failure in the preview instead of navigating into nothing.
+                Log.Warn("ColumnNavigator.Portal: failed to list {Name}: {Message}", selected.Name, ex.Message);
+                _preview = new ColumnState
+                {
+                    Path = null,
+                    Label = selected.Name,
+                    IsFilePreview = true,
+                    IsPortal = true,
+                    PreviewType = FilePreviewType.Error,
+                    PreviewFileType = "Portal entry",
+                    PreviewErrorMessage = "Could not list this entry — " + ex.Message
+                };
+                ColumnsChanged?.Invoke();
+                return;
             }
-            else
+            finally
             {
-                newColumn.PortalKnownFolder = selected.PortalKnownFolder;
-                newColumn.PortalPackageFullName = selected.PortalPackageFullName ?? "";
-                // Known-folder and package entries are addressed by query params (no path);
-                // everything deeper is addressed by portal path.
-                bool isParamRoot = selected.PortalPackageFullName == null || selected.PortalPath == null;
-                newColumn.PortalPath = isParamRoot
-                    ? "\\"
-                    : PortalBrowser.CombinePortalPath(selected.PortalPath, selected.Name);
-                await newColumn.LoadPortalDirectoryAsync(_portalBrowser,
-                    newColumn.PortalKnownFolder, newColumn.PortalPackageFullName, newColumn.PortalPath);
+                LoadingChanged?.Invoke(false);
             }
+
+            // Push the previous column only after the load succeeded, and preserve its
+            // portal metadata so DrillOut restores a correctly-flagged portal column.
+            _history.Push(new ColumnState
+            {
+                Path = _current.Path,
+                Label = _current.Label,
+                SelectedIndex = _current.SelectedIndex,
+                Entries = _current.Entries,
+                IsPortal = _current.IsPortal,
+                PortalKnownFolder = _current.PortalKnownFolder,
+                PortalPackageFullName = _current.PortalPackageFullName,
+                PortalPath = _current.PortalPath
+            });
 
             newColumn.ClearSearch();
             _current = newColumn;
@@ -407,7 +492,11 @@ namespace XFiles.Navigation
                 Path = _current.Path,
                 Label = _current.Label,
                 SelectedIndex = _current.SelectedIndex,
-                Entries = _current.Entries
+                Entries = _current.Entries,
+                IsPortal = _current.IsPortal,
+                PortalKnownFolder = _current.PortalKnownFolder,
+                PortalPackageFullName = _current.PortalPackageFullName,
+                PortalPath = _current.PortalPath
             });
 
             var entries = _archiveBrowser.ListEntries(cachePath, "");
@@ -486,6 +575,7 @@ namespace XFiles.Navigation
             if (selected == null)
             {
                 _preview = null;
+                PreviewLoadingChanged?.Invoke(false);
                 return;
             }
 
@@ -494,6 +584,9 @@ namespace XFiles.Navigation
                 await UpdatePortalPreviewAsync(selected, gen);
                 return;
             }
+
+            // Non-portal preview: ensure any stale portal spinner is cleared.
+            PreviewLoadingChanged?.Invoke(false);
 
             if (selected.IsDirectory)
             {
@@ -646,6 +739,22 @@ namespace XFiles.Navigation
         /// </summary>
         private async Task UpdatePortalPreviewAsync(FileEntry selected, long gen)
         {
+            PreviewLoadingChanged?.Invoke(true);
+            try
+            {
+                await UpdatePortalPreviewCoreAsync(selected, gen);
+            }
+            finally
+            {
+                // Only clear the spinner if this generation is still the active one —
+                // a newer preview may have taken over and raised its own 'true'.
+                if (_previewGeneration == gen)
+                    PreviewLoadingChanged?.Invoke(false);
+            }
+        }
+
+        private async Task UpdatePortalPreviewCoreAsync(FileEntry selected, long gen)
+        {
             if (selected.IsDirectory)
             {
                 if (selected.Name == "..")
@@ -656,25 +765,36 @@ namespace XFiles.Navigation
 
                 _preview = new ColumnState { Path = null, Label = selected.Name, IsPortal = true };
 
-                if (selected.PortalKnownFolder == null)
+                try
                 {
-                    await _preview.LoadPortalKnownFoldersAsync(_portalBrowser);
+                    if (selected.PortalKnownFolder == null)
+                    {
+                        await _preview.LoadPortalKnownFoldersAsync(_portalBrowser);
+                    }
+                    else if (selected.PortalPackageFullName == null && selected.PortalKnownFolder == "LocalAppData")
+                    {
+                        _preview.PortalKnownFolder = "LocalAppData";
+                        await _preview.LoadPortalPackagesAsync(_portalBrowser);
+                    }
+                    else
+                    {
+                        _preview.PortalKnownFolder = selected.PortalKnownFolder;
+                        _preview.PortalPackageFullName = selected.PortalPackageFullName ?? "";
+                        bool isParamRoot = selected.PortalPackageFullName == null || selected.PortalPath == null;
+                        _preview.PortalPath = isParamRoot
+                            ? "\\"
+                            : PortalBrowser.CombinePortalPath(selected.PortalPath, selected.Name);
+                        await _preview.LoadPortalDirectoryAsync(_portalBrowser,
+                            _preview.PortalKnownFolder, _preview.PortalPackageFullName, _preview.PortalPath);
+                    }
                 }
-                else if (selected.PortalPackageFullName == null && selected.PortalKnownFolder == "LocalAppData")
+                catch (Exception ex)
                 {
-                    _preview.PortalKnownFolder = "LocalAppData";
-                    await _preview.LoadPortalPackagesAsync(_portalBrowser);
-                }
-                else
-                {
-                    _preview.PortalKnownFolder = selected.PortalKnownFolder;
-                    _preview.PortalPackageFullName = selected.PortalPackageFullName ?? "";
-                    bool isParamRoot = selected.PortalPackageFullName == null || selected.PortalPath == null;
-                    _preview.PortalPath = isParamRoot
-                        ? "\\"
-                        : PortalBrowser.CombinePortalPath(selected.PortalPath, selected.Name);
-                    await _preview.LoadPortalDirectoryAsync(_portalBrowser,
-                        _preview.PortalKnownFolder, _preview.PortalPackageFullName, _preview.PortalPath);
+                    Log.Warn("ColumnNavigator.Portal: preview list failed for {Name}: {Message}", selected.Name, ex.Message);
+                    _preview.IsFilePreview = true;
+                    _preview.PreviewType = FilePreviewType.Error;
+                    _preview.PreviewFileType = "Portal entry";
+                    _preview.PreviewErrorMessage = "Could not list this entry — " + ex.Message;
                 }
 
                 if (_previewGeneration != gen) return;
@@ -702,6 +822,8 @@ namespace XFiles.Navigation
                     catch (Exception ex)
                     {
                         Log.Warn("ColumnNavigator.Portal: preview download failed for {Name}: {Message}", selected.Name, ex.Message);
+                        _preview.PreviewType = FilePreviewType.Error;
+                        _preview.PreviewFileType = "Portal entry";
                         _preview.PreviewErrorMessage = "Portal download failed: " + ex.Message;
                         return;
                     }
@@ -709,6 +831,8 @@ namespace XFiles.Navigation
                     if (_previewGeneration != gen) return;
                     if (cachePath == null)
                     {
+                        _preview.PreviewType = FilePreviewType.Error;
+                        _preview.PreviewFileType = "Portal entry";
                         _preview.PreviewErrorMessage = "Portal download failed (see log)";
                         return;
                     }
@@ -931,7 +1055,7 @@ namespace XFiles.Navigation
             {
                 await col.LoadPortalKnownFoldersAsync(_portalBrowser);
             }
-            else if (col.PortalPackageFullName == "" && col.PortalKnownFolder == "LocalAppData")
+            else if (col.PortalPackageFullName == null && col.PortalKnownFolder == "LocalAppData")
             {
                 await col.LoadPortalPackagesAsync(_portalBrowser);
             }
@@ -1083,7 +1207,18 @@ namespace XFiles.Navigation
 
         private void SetPortalEntries(List<FileEntry> entries)
         {
-            _allEntries = entries;
+            var list = new List<FileEntry>(entries.Count + 1);
+            list.Add(new FileEntry
+            {
+                Name = "..",
+                FullPath = null,
+                IsDirectory = true,
+                IsVirtual = true,
+                IsPortal = true
+            });
+            list.AddRange(entries);
+
+            _allEntries = list;
             AllEntries = _allEntries;
             Entries = new List<FileEntry>(_allEntries);
             if (SelectedIndex == 0 && Entries.Count > 0)
