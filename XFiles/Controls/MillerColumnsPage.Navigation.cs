@@ -401,67 +401,16 @@ namespace XFiles.Controls
                     var preview = _navigator.Preview;
                     if (preview != null)
                     {
-                        _ = PdfFullScreen.ShowAsync(
-                            selected.FullPath, preview.PreviewPdfPageCount, 0);
+                        _ = OpenPdfFullscreenAsync(selected, preview.PreviewPdfPageCount);
                     }
                 }
                 else if (FilePreviewService.IsAudioFile(ext))
                 {
-                    if (selected.SizeBytes == 0)
-                    {
-                        Log.Warn("OnConfirm: empty audio file, blocking play");
-                        _ = AlertDialogControl.ShowAsync($"\"{selected.Name}\" is empty (0 bytes).", AlertType.Error);
-                        return;
-                    }
-                    Log.Verb("OnConfirm: audio file — toggling play/pause");
-                    _mediaLoadTimer.Stop();
-                    _pendingMediaPath = null;
-                    if (_isMediaPlayerActive)
-                    {
-                        MediaPreview.TogglePlayPause();
-                    }
-                    else if (MediaPreview.IsFileLoaded(selected.FullPath))
-                    {
-                        MediaPreview.TogglePlayPause();
-                        UpdateMediaPlayerFocusUI();
-                    }
-                    else
-                    {
-                        Log.Info("OnConfirm: loading+playing audio {Path}", selected.FullPath);
-                        MediaPreview.Stop();
-                        MediaPreview.LoadFile(selected.FullPath);
-                        MediaPreview.TogglePlayPause();
-                        UpdateMediaPlayerFocusUI();
-                    }
+                    _ = PlayAudioAsync(selected);
                 }
                 else if (FilePreviewService.IsVideoFile(ext))
                 {
-                    if (selected.SizeBytes == 0)
-                    {
-                        Log.Warn("OnConfirm: empty video file, blocking play");
-                        _ = AlertDialogControl.ShowAsync($"\"{selected.Name}\" is empty (0 bytes).", AlertType.Error);
-                        return;
-                    }
-                    Log.Verb("OnConfirm: video file — toggling play/pause");
-                    _mediaLoadTimer.Stop();
-                    _pendingMediaPath = null;
-                    if (_isMediaPlayerActive)
-                    {
-                        MediaPreview.TogglePlayPause();
-                    }
-                    else if (MediaPreview.IsFileLoaded(selected.FullPath))
-                    {
-                        MediaPreview.TogglePlayPause();
-                        UpdateMediaPlayerFocusUI();
-                    }
-                    else
-                    {
-                        Log.Info("OnConfirm: loading+playing video {Path}", selected.FullPath);
-                        MediaPreview.Stop();
-                        MediaPreview.LoadFile(selected.FullPath);
-                        MediaPreview.TogglePlayPause();
-                        UpdateMediaPlayerFocusUI();
-                    }
+                    _ = PlayVideoAsync(selected);
                 }
                 else
                 {
@@ -469,6 +418,145 @@ namespace XFiles.Controls
                     _ = ShowFileActionSheetAsync();
                 }
             }
+        }
+
+        /// <summary>
+        /// Resolves the local path to open for a selected entry. Portal entries have
+        /// no local FullPath — use the already-cached preview copy, or cache on demand.
+        /// </summary>
+        private async Task<string> ResolveOpenPathAsync(EntryViewModel selected)
+        {
+            if (!selected.IsPortal)
+                return selected.FullPath;
+
+            var preview = _navigator.Preview;
+            if (preview != null && !string.IsNullOrEmpty(preview.PreviewFilePath))
+                return preview.PreviewFilePath;
+
+            var entry = new FileEntry
+            {
+                Name = selected.Name,
+                IsDirectory = selected.IsDirectory,
+                SizeBytes = selected.SizeBytes,
+                IsPortal = true,
+                PortalKnownFolder = selected.PortalKnownFolder,
+                PortalPackageFullName = selected.PortalPackageFullName,
+                PortalPath = selected.PortalPath
+            };
+            return await PortalCache.EnsureAsync(PortalBrowser.ToPortalEntry(entry), null);
+        }
+
+        private async Task OpenPdfFullscreenAsync(EntryViewModel selected, int pageCount)
+        {
+            string path = await ResolveOpenPathAsync(selected);
+            if (path == null)
+            {
+                Log.Warn("OnConfirm: no local path for PDF {Name}", selected.Name);
+                return;
+            }
+            await PdfFullScreen.ShowAsync(path, pageCount, 0);
+        }
+
+        private async Task PlayAudioAsync(EntryViewModel selected)
+        {
+            if (selected.SizeBytes == 0)
+            {
+                Log.Warn("OnConfirm: empty audio file, blocking play");
+                _ = AlertDialogControl.ShowAsync($"\"{selected.Name}\" is empty (0 bytes).", AlertType.Error);
+                return;
+            }
+            string path = await ResolveOpenPathAsync(selected);
+            if (path == null)
+            {
+                Log.Warn("OnConfirm: no local path for audio {Name}", selected.Name);
+                return;
+            }
+            Log.Verb("OnConfirm: audio file — toggling play/pause");
+            _mediaLoadTimer.Stop();
+            _pendingMediaPath = null;
+            if (_isMediaPlayerActive)
+            {
+                MediaPreview.TogglePlayPause();
+            }
+            else if (MediaPreview.IsFileLoaded(path))
+            {
+                MediaPreview.TogglePlayPause();
+                UpdateMediaPlayerFocusUI();
+            }
+            else
+            {
+                Log.Info("OnConfirm: loading+playing audio {Path}", path);
+                MediaPreview.Stop();
+                MediaPreview.LoadFile(path);
+                MediaPreview.TogglePlayPause();
+                UpdateMediaPlayerFocusUI();
+            }
+        }
+
+        private async Task PlayVideoAsync(EntryViewModel selected)
+        {
+            if (selected.SizeBytes == 0)
+            {
+                Log.Warn("OnConfirm: empty video file, blocking play");
+                _ = AlertDialogControl.ShowAsync($"\"{selected.Name}\" is empty (0 bytes).", AlertType.Error);
+                return;
+            }
+            string path = await ResolveOpenPathAsync(selected);
+            if (path == null)
+            {
+                Log.Warn("OnConfirm: no local path for video {Name}", selected.Name);
+                return;
+            }
+            Log.Verb("OnConfirm: video file — toggling play/pause");
+            _mediaLoadTimer.Stop();
+            _pendingMediaPath = null;
+            if (_isMediaPlayerActive)
+            {
+                MediaPreview.TogglePlayPause();
+            }
+            else if (MediaPreview.IsFileLoaded(path))
+            {
+                MediaPreview.TogglePlayPause();
+                UpdateMediaPlayerFocusUI();
+            }
+            else
+            {
+                Log.Info("OnConfirm: loading+playing video {Path}", path);
+                MediaPreview.Stop();
+                MediaPreview.LoadFile(path);
+                MediaPreview.TogglePlayPause();
+                UpdateMediaPlayerFocusUI();
+            }
+        }
+
+        private async Task OpenVideoFullscreenAsync(EntryViewModel selected)
+        {
+            string path = await ResolveOpenPathAsync(selected);
+            if (path == null)
+            {
+                Log.Warn("OnRefresh: no local path for video {Name}", selected.Name);
+                return;
+            }
+            var pos = (_isMediaPlayerActive && !MediaPreview.IsAudioMode)
+                ? MediaPreview.CurrentPosition
+                : TimeSpan.Zero;
+            if (_isMediaPlayerActive) { MediaPreview.StopPlayer(); UpdateMediaPlayerFocusUI(); }
+            await ShowMediaFullscreenAsync(new Uri(path), true, pos);
+        }
+
+        private async Task OpenAudioFullscreenAsync(EntryViewModel selected)
+        {
+            string path = await ResolveOpenPathAsync(selected);
+            if (path == null)
+            {
+                Log.Warn("OnRefresh: no local path for audio {Name}", selected.Name);
+                return;
+            }
+            var pos = (_isMediaPlayerActive && MediaPreview.IsAudioMode)
+                ? MediaPreview.CurrentPosition
+                : TimeSpan.Zero;
+            if (_isMediaPlayerActive) { MediaPreview.StopPlayer(); UpdateMediaPlayerFocusUI(); }
+            OpenAudioFullscreen(path, pos);
         }
 
         public void OnBack()
@@ -625,22 +713,14 @@ namespace XFiles.Controls
                 if (FilePreviewService.IsVideoFile(ext))
                 {
                     Log.Info("OnRefresh: video file → fullscreen");
-                    var pos = (_isMediaPlayerActive && !MediaPreview.IsAudioMode)
-                        ? MediaPreview.CurrentPosition
-                        : TimeSpan.Zero;
-                    if (_isMediaPlayerActive) { MediaPreview.StopPlayer(); UpdateMediaPlayerFocusUI(); }
-                    _ = ShowMediaFullscreenAsync(new Uri(selected.FullPath), true, pos);
+                    _ = OpenVideoFullscreenAsync(selected);
                     return;
                 }
 
                 if (FilePreviewService.IsAudioFile(ext))
                 {
                     Log.Info("OnRefresh: audio file → fullscreen");
-                    var pos = (_isMediaPlayerActive && MediaPreview.IsAudioMode)
-                        ? MediaPreview.CurrentPosition
-                        : TimeSpan.Zero;
-                    if (_isMediaPlayerActive) { MediaPreview.StopPlayer(); UpdateMediaPlayerFocusUI(); }
-                    OpenAudioFullscreen(selected.FullPath, pos);
+                    _ = OpenAudioFullscreenAsync(selected);
                     return;
                 }
             }
