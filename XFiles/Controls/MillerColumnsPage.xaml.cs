@@ -103,6 +103,7 @@ namespace XFiles.Controls
             _navigator.ColumnsChanged += OnColumnsChanged;
             _navigator.PreviewChanged += OnPreviewChanged;
             _navigator.LoadingChanged += OnLoadingChanged;
+            _navigator.PreviewLoadingChanged += OnPreviewLoadingChanged;
             _navigator.Error += OnError;
             _navigator.PortalSetupRequired += OnPortalSetupRequired;
             DevicePortalService.CredentialsRequired += OnPortalCredentialsRequired;
@@ -140,6 +141,7 @@ namespace XFiles.Controls
             _navigator.ColumnsChanged -= OnColumnsChanged;
             _navigator.PreviewChanged -= OnPreviewChanged;
             _navigator.LoadingChanged -= OnLoadingChanged;
+            _navigator.PreviewLoadingChanged -= OnPreviewLoadingChanged;
             _navigator.Error -= OnError;
             _navigator.PortalSetupRequired -= OnPortalSetupRequired;
             DevicePortalService.CredentialsRequired -= OnPortalCredentialsRequired;
@@ -164,9 +166,12 @@ namespace XFiles.Controls
 
         private bool _isMediaPlayerActive;
 
-        // Preview debounce — delays preview update during rapid scrolling
+        // Preview debounce — delays preview update during rapid scrolling.
+        // Portal columns use a longer window: every preview fires a REST call against
+        // the Dev Portal, so skip navigation spikes instead of paying for them.
         private DispatcherTimer _previewDebounceTimer;
         private const int PreviewDebounceMs = 90;
+        private const int PortalPreviewDebounceMs = 500;
 
         private long _overlayClosedTick;
         private readonly DisplayRequest _displayRequest = new DisplayRequest();
@@ -268,6 +273,21 @@ namespace XFiles.Controls
             Action markOverlayClosed = () => _overlayClosedTick = Environment.TickCount;
             InputDialogControl.OnClosed = markOverlayClosed;
             PortalSetupDialogControl.OnClosed = markOverlayClosed;
+            PortalSetupDialogControl.CredentialsRequested = () =>
+            {
+                Log.Dbg("PortalSetupDialog: credentials requested → opening credentials dialog");
+                _ = ShowPortalCredentialsAsync("Enter portal credentials");
+            };
+            PortalSetupDialogControl.ResetCredentialsRequested = () =>
+            {
+                Log.Dbg("PortalSetupDialog: reset credentials requested");
+                _ = ResetPortalCredentialsAsync();
+            };
+            PortalSetupDialogControl.Connected += () =>
+            {
+                Log.Info("PortalSetupDialog: connected → auto drill-in to portal");
+                _ = DrillIntoPortalAfterConnectAsync();
+            };
             PortalCredentialsDialogControl.OnClosed = markOverlayClosed;
             AlertDialogControl.OnClosed = markOverlayClosed;
             FileActionSheetControl.OnClosed = markOverlayClosed;
@@ -298,6 +318,13 @@ namespace XFiles.Controls
             Log.Verb("Loading state: {IsLoading}", isLoading);
             CurrentLoading.Visibility = isLoading ? Visibility.Visible : Visibility.Collapsed;
             CurrentList.Opacity = isLoading ? 0.4 : 1.0;
+        }
+
+        private void OnPreviewLoadingChanged(bool isLoading)
+        {
+            Log.Verb("Preview loading state: {IsLoading}", isLoading);
+            PreviewLoading.Visibility = isLoading ? Visibility.Visible : Visibility.Collapsed;
+            PreviewList.Opacity = isLoading ? 0.4 : 1.0;
         }
 
         private void OnError(string message)
@@ -342,7 +369,47 @@ namespace XFiles.Controls
             {
                 Log.Warn("Failed to persist portal credentials: {Error}", ex.Message);
             }
-            DevicePortalService.ProbeAsync(force: true);
+
+            // Bridge to the reprobe modal: it shows the connecting state with live
+            // feedback and auto-starts the probe. On success it auto-closes and fires
+            // Connected (auto drill-in); on failure it stays open for retry.
+            PortalSetupDialogControl.Show("Credentials saved — verifying portal connection…",
+                autoProbeMessage: "Connecting to portal…");
+        }
+
+        private async Task ResetPortalCredentialsAsync()
+        {
+            bool confirmed = await AlertDialogControl.ShowConfirmAsync(
+                "Reset portal credentials? The stored user/password will be cleared, and you can enter new ones.");
+            if (!confirmed)
+            {
+                Log.Info("Portal reset credentials cancelled");
+                return;
+            }
+
+            Log.Info("Portal reset credentials confirmed — clearing stored credentials");
+            DevicePortalService.ClearPortalCredentials();
+            try
+            {
+                await Settings.XFilesSettings.SetPortalCredentialsAsync("", "");
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("Reset portal credentials: failed to clear persisted credentials: {Error}", ex.Message);
+            }
+            PortalSetupDialogControl.Show("Portal credentials cleared — enter new ones");
+        }
+
+        private async Task DrillIntoPortalAfterConnectAsync()
+        {
+            try
+            {
+                await _navigator.DrillIntoPortalRootAsync();
+            }
+            catch (Exception ex)
+            {
+                Log.Err("DrillIntoPortalAfterConnect: {Ex}", ex);
+            }
         }
 
         private async Task UpdateUIAsync()

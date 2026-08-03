@@ -13,7 +13,6 @@ using Windows.Data.Json;
 using Windows.Media.Core;
 using Windows.Media.Playback;
 using Windows.Storage;
-using Windows.Storage.Pickers;
 using Windows.UI.Core;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
@@ -81,14 +80,17 @@ namespace XFiles.Controls
             var selected = CurrentList.SelectedItem as EntryViewModel;
             if (selected == null || selected.IsDotDot || selected.IsDrive) return;
 
-            if (_batchSelectedPaths.Contains(selected.FullPath))
+            string key = selected.FullPath ?? ("P|" + selected.PortalKnownFolder + "|" +
+                selected.PortalPackageFullName + "|" + selected.PortalPath + "|" + selected.Name);
+
+            if (_batchSelectedPaths.Contains(key))
             {
-                _batchSelectedPaths.Remove(selected.FullPath);
+                _batchSelectedPaths.Remove(key);
                 selected.IsSelected = false;
             }
             else
             {
-                _batchSelectedPaths.Add(selected.FullPath);
+                _batchSelectedPaths.Add(key);
                 selected.IsSelected = true;
             }
             Log.Verb("BatchMode: toggled {Name} (selected={Sel}, total={Total})",
@@ -189,6 +191,12 @@ namespace XFiles.Controls
             }
         }
 
+        private static string BatchKey(FileEntry e)
+        {
+            return e.FullPath ?? ("P|" + e.PortalKnownFolder + "|" +
+                e.PortalPackageFullName + "|" + e.PortalPath + "|" + e.Name);
+        }
+
         /// <summary>
         /// Get selected FileEntry objects from batch selection.
         /// </summary>
@@ -199,7 +207,7 @@ namespace XFiles.Controls
             foreach (var fe in _navigator.Current.Entries)
             {
                 if (fe.Name == "..") continue;
-                if (_batchSelectedPaths.Contains(fe.FullPath))
+                if (_batchSelectedPaths.Contains(BatchKey(fe)))
                     entries.Add(fe);
             }
             return entries;
@@ -223,7 +231,11 @@ namespace XFiles.Controls
                     IsArchive = selected.IsArchive,
                     SizeBytes = selected.SizeBytes,
                     ArchiveRootPath = selected.ArchiveRootPath,
-                    ArchiveInternalPath = selected.ArchiveInternalPath
+                    ArchiveInternalPath = selected.ArchiveInternalPath,
+                    IsPortal = selected.IsPortal,
+                    PortalKnownFolder = selected.PortalKnownFolder,
+                    PortalPackageFullName = selected.PortalPackageFullName,
+                    PortalPath = selected.PortalPath
                 };
             }
             else
@@ -274,12 +286,6 @@ namespace XFiles.Controls
                     break;
                 case FileAction.Delete:
                     await HandleDeleteAsync(entry);
-                    break;
-                case FileAction.Download:
-                    await HandlePortalDownloadAsync(entry);
-                    break;
-                case FileAction.UploadFile:
-                    await HandlePortalUploadAsync(entry);
                     break;
                 case FileAction.Extract:
                     await HandleExtractAsync(entry);
@@ -334,6 +340,14 @@ namespace XFiles.Controls
 
             var entries = GetBatchEntries();
 
+            if ((action == FileAction.CreateZip || action == FileAction.Share) &&
+                entries.Any(e => e.IsPortal))
+            {
+                Log.Warn("ShowFileActionSheetBatchAsync: ZIP/Share unsupported for portal items");
+                _ = AlertDialogControl.ShowAsync("ZIP/Share are not supported for portal items yet.", AlertType.Info);
+                return;
+            }
+
             switch (action)
             {
                 case FileAction.Copy:
@@ -371,11 +385,16 @@ namespace XFiles.Controls
                 return;
             }
 
-            // Build combined file list for confirmation
+            // Build combined file list for confirmation (portal entries have no local paths)
             var allFiles = new List<string>();
             int folderCount = 0;
             foreach (var entry in entries)
             {
+                if (entry.IsPortal)
+                {
+                    if (entry.IsDirectory) folderCount++;
+                    continue;
+                }
                 var (files, folders) = await FileOperations.ListRecursiveAsync(entry.FullPath);
                 allFiles.AddRange(files);
                 folderCount += folders;
@@ -389,6 +408,15 @@ namespace XFiles.Controls
             if (!confirmed)
             {
                 Log.Verb("HandleBatchMoveAsync: confirmation cancelled");
+                return;
+            }
+
+            // Cross-source batch move: portal → local (download, then delete on portal).
+            if (entries.Any(e => e.IsPortal))
+            {
+                await ExecuteBatchMovePortalAsync(entries, destDir);
+                ExitBatchMode();
+                await _navigator.RefreshCurrentAsync();
                 return;
             }
 
@@ -460,15 +488,84 @@ namespace XFiles.Controls
             await _navigator.RefreshCurrentAsync();
         }
 
+        private async Task ExecuteBatchMovePortalAsync(List<FileEntry> entries, string destDir)
+        {
+            Log.Info("ExecuteBatchMovePortalAsync: {Count} items → {Dest}", entries.Count, destDir);
+
+            OpProgressDialog.Show("Moving", $"{entries.Count} items", destDir, 0, entries.Count);
+
+            int failed = 0;
+            foreach (var entry in entries)
+            {
+                if (OpProgressDialog.CancelToken.IsCancellationRequested)
+                {
+                    Log.Dbg("ExecuteBatchMovePortalAsync: cancelled");
+                    OpProgressDialog.Cancel();
+                    await Task.Delay(1500);
+                    OpProgressDialog.Close();
+                    return;
+                }
+
+                try
+                {
+                    var progress = new Progress<FileOperations.OperationProgress>(p =>
+                    {
+                        Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                            OpProgressDialog.UpdateProgress(p));
+                    });
+
+                    if (entry.IsPortal)
+                    {
+                        var portalEntry = XFiles.FileSystem.PortalBrowser.ToPortalEntry(entry);
+                        await XFiles.FileSystem.PortalBrowser.CopyPortalToLocalAsync(
+                            portalEntry, destDir, progress, OpProgressDialog.CancelToken);
+                        await DevicePortalService.DeletePortalEntryAsync(portalEntry);
+                    }
+                    else
+                    {
+                        var result = await FileOperations.MoveAsync(
+                            entry.FullPath, destDir, progress, OpProgressDialog.CancelToken);
+                        if (result != FileOperations.OperationResult.Success)
+                        {
+                            failed++;
+                            continue;
+                        }
+                    }
+
+                    OpProgressDialog.TrackCompleted(entry.Name);
+                    Log.Info("ExecuteBatchMovePortalAsync: moved {Name}", entry.Name);
+                }
+                catch (Exception ex)
+                {
+                    Log.Warn("ExecuteBatchMovePortalAsync: {Name} failed: {Message}", entry.Name, ex.Message);
+                    failed++;
+                }
+            }
+
+            OpProgressDialog.Complete();
+            await Task.Delay(400);
+            OpProgressDialog.Close();
+
+            if (failed > 0)
+                _ = AlertDialogControl.ShowAsync($"Moved {entries.Count - failed} items, failed to move {failed}.", AlertType.Error);
+            else
+                Log.Info("ExecuteBatchMovePortalAsync: {Count} items moved", entries.Count);
+        }
+
         private async Task HandleBatchDeleteAsync(List<FileEntry> entries)
         {
             Log.Info("HandleBatchDeleteAsync: {Count} items", entries.Count);
 
-            // Build combined file list
+            // Build combined file list (portal entries have no local paths to enumerate)
             var allFiles = new List<string>();
             int folderCount = 0;
             foreach (var entry in entries)
             {
+                if (entry.IsPortal)
+                {
+                    if (entry.IsDirectory) folderCount++;
+                    continue;
+                }
                 var (files, folders) = await FileOperations.ListRecursiveAsync(entry.FullPath);
                 allFiles.AddRange(files);
                 folderCount += folders;
@@ -485,6 +582,22 @@ namespace XFiles.Controls
             int success = 0, failed = 0;
             foreach (var entry in entries)
             {
+                if (entry.IsPortal)
+                {
+                    try
+                    {
+                        await DevicePortalService.DeletePortalEntryAsync(PortalBrowser.ToPortalEntry(entry));
+                        Log.Info("HandleBatchDeleteAsync: portal item {Name} deleted", entry.Name);
+                        success++;
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warn("HandleBatchDeleteAsync: portal item {Name} delete failed: {Message}", entry.Name, ex.Message);
+                        failed++;
+                    }
+                    continue;
+                }
+
                 FileOperations.OperationResult result;
                 if (entry.IsDirectory)
                     result = await FileOperations.DeleteDirectoryAsync(entry.FullPath);
@@ -621,7 +734,16 @@ namespace XFiles.Controls
             {
             if (!ClipboardState.HasItems) return;
 
-            var destDir = _navigator.Current?.Path;
+            var current = _navigator.Current;
+
+            // Paste into a portal column → upload local clipboard entries to the portal.
+            if (current != null && current.IsPortal)
+            {
+                await HandlePasteToPortalAsync();
+                return;
+            }
+
+            var destDir = current?.Path;
             if (string.IsNullOrEmpty(destDir))
             {
                 Log.Warn("HandlePasteAsync: no current directory");
@@ -630,6 +752,14 @@ namespace XFiles.Controls
             }
 
             var entries = ClipboardState.Entries;
+
+            // Paste portal clipboard entries into a local directory → download to disk.
+            if (entries.Any(e => e.IsPortal))
+            {
+                await HandlePastePortalToLocalAsync(destDir);
+                return;
+            }
+
             Log.Info("HandlePasteAsync: {Count} items → {Dest}",
                 entries.Count, destDir);
 
@@ -715,9 +845,156 @@ namespace XFiles.Controls
         catch (Exception ex) { Log.Err("HandlePasteAsync: {Ex}", ex); _ = AlertDialogControl.ShowAsync("Paste failed.", AlertType.Error); }
         }
 
+        /// <summary>
+        /// Pastes local clipboard entries into the current portal directory via REST upload.
+        /// </summary>
+        private async Task HandlePasteToPortalAsync()
+        {
+            var current = _navigator.Current;
+            if (current == null || !current.IsPortal)
+            {
+                Log.Warn("HandlePasteToPortalAsync: not in a portal column");
+                return;
+            }
+            if (string.IsNullOrEmpty(current.PortalKnownFolder))
+            {
+                Log.Warn("HandlePasteToPortalAsync: portal column has no target folder");
+                _ = AlertDialogControl.ShowAsync("Choose a folder inside the portal to paste into.", AlertType.Info);
+                return;
+            }
+
+            var knownFolder = current.PortalKnownFolder;
+            var packageFullName = current.PortalPackageFullName ?? "";
+            var portalPath = current.PortalPath ?? "\\";
+
+            var entries = ClipboardState.Entries;
+            if (entries.Any(e => e.IsPortal))
+            {
+                Log.Warn("HandlePasteToPortalAsync: portal-to-portal paste unsupported");
+                _ = AlertDialogControl.ShowAsync("Portal-to-portal paste is not supported yet.", AlertType.Info);
+                return;
+            }
+
+            Log.Info("HandlePasteToPortalAsync: {Count} local items → portal {Known}/{Pkg}{Path}",
+                entries.Count, knownFolder, packageFullName, portalPath);
+
+            OpProgressDialog.Show("Copying", $"{entries.Count} items", knownFolder + portalPath, 0, entries.Count);
+
+            int failed = 0;
+            foreach (var entry in entries)
+            {
+                if (string.IsNullOrEmpty(entry.FullPath)) continue;
+
+                if (OpProgressDialog.CancelToken.IsCancellationRequested)
+                {
+                    Log.Dbg("HandlePasteToPortalAsync: cancelled");
+                    OpProgressDialog.Cancel();
+                    await Task.Delay(1500);
+                    OpProgressDialog.Close();
+                    UpdateClipboardIndicator();
+                    return;
+                }
+
+                var progress = new Progress<FileOperations.OperationProgress>(p =>
+                {
+                    Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                        OpProgressDialog.UpdateProgress(p));
+                });
+
+                try
+                {
+                    await XFiles.FileSystem.PortalBrowser.UploadLocalToPortalAsync(
+                        entry.FullPath, knownFolder, packageFullName, portalPath,
+                        progress, OpProgressDialog.CancelToken);
+                    OpProgressDialog.TrackCompleted(entry.Name);
+                    Log.Info("HandlePasteToPortalAsync: uploaded {Name}", entry.Name);
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    Log.Warn("HandlePasteToPortalAsync: {File} failed: {Message}", entry.Name, ex.Message);
+                }
+            }
+
+            OpProgressDialog.Complete();
+            await Task.Delay(400);
+            OpProgressDialog.Close();
+
+            if (failed > 0)
+                _ = AlertDialogControl.ShowAsync($"Upload failed for {failed} item(s).", AlertType.Error);
+
+            UpdateClipboardIndicator();
+            await _navigator.RefreshCurrentAsync();
+        }
+
+        /// <summary>
+        /// Pastes portal clipboard entries into a local directory via REST download.
+        /// </summary>
+        private async Task HandlePastePortalToLocalAsync(string destDir)
+        {
+            var entries = ClipboardState.Entries;
+            Log.Info("HandlePastePortalToLocalAsync: {Count} portal items → {Dest}", entries.Count, destDir);
+
+            OpProgressDialog.Show("Copying", $"{entries.Count} items", destDir, 0, entries.Count);
+
+            int failed = 0;
+            foreach (var entry in entries)
+            {
+                if (!entry.IsPortal) continue;
+
+                if (OpProgressDialog.CancelToken.IsCancellationRequested)
+                {
+                    Log.Dbg("HandlePastePortalToLocalAsync: cancelled");
+                    OpProgressDialog.Cancel();
+                    await Task.Delay(1500);
+                    OpProgressDialog.Close();
+                    UpdateClipboardIndicator();
+                    await _navigator.RefreshCurrentAsync();
+                    return;
+                }
+
+                var progress = new Progress<FileOperations.OperationProgress>(p =>
+                {
+                    Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                        OpProgressDialog.UpdateProgress(p));
+                });
+
+                try
+                {
+                    await XFiles.FileSystem.PortalBrowser.CopyPortalToLocalAsync(
+                        XFiles.FileSystem.PortalBrowser.ToPortalEntry(entry),
+                        destDir, progress, OpProgressDialog.CancelToken);
+                    OpProgressDialog.TrackCompleted(entry.Name);
+                    Log.Info("HandlePastePortalToLocalAsync: copied {Name}", entry.Name);
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    Log.Warn("HandlePastePortalToLocalAsync: {File} failed: {Message}", entry.Name, ex.Message);
+                }
+            }
+
+            OpProgressDialog.Complete();
+            await Task.Delay(400);
+            OpProgressDialog.Close();
+
+            if (failed > 0)
+                _ = AlertDialogControl.ShowAsync($"Copy failed for {failed} item(s).", AlertType.Error);
+
+            UpdateClipboardIndicator();
+            await _navigator.RefreshCurrentAsync();
+        }
+
         private async Task HandleMoveAsync(FileEntry entry)
         {
             Log.Info("HandleMoveAsync: {File}", entry.FullPath);
+
+            // Portal → local move: copy to chosen folder, then delete on the portal.
+            if (entry.IsPortal)
+            {
+                await HandlePortalMoveAsync(entry);
+                return;
+            }
 
             // 1. Choose destination folder
             UpdateFooterALabel("Select");
@@ -789,6 +1066,62 @@ namespace XFiles.Controls
             {
                 Log.Warn("HandleMoveAsync: failed");
                 _ = AlertDialogControl.ShowAsync($"Failed to move \"{entry.Name}\".", AlertType.Error);
+            }
+        }
+
+        private async Task HandlePortalMoveAsync(FileEntry entry)
+        {
+            Log.Info("HandlePortalMoveAsync: {Name}", entry.Name);
+
+            // 1. Choose local destination folder
+            UpdateFooterALabel("Select");
+            var destDir = await FolderBrowserDialogControl.ShowAsync(_navigator.Current?.Path ?? null);
+            UpdateFooterALabelFromSelection();
+
+            if (string.IsNullOrEmpty(destDir))
+            {
+                Log.Verb("HandlePortalMoveAsync: cancelled at folder browser");
+                return;
+            }
+
+            // 2. Confirm
+            UpdateFooterALabel("Confirm");
+            bool confirmed = await FileOperationConfirmDialogControl.ShowMoveAsync(
+                entry.Name, destDir, null, entry.IsDirectory ? 1 : 0);
+            UpdateFooterALabelFromSelection();
+
+            if (!confirmed)
+            {
+                Log.Verb("HandlePortalMoveAsync: confirmation cancelled");
+                return;
+            }
+
+            // 3. Copy to local, then delete on the portal
+            var portalEntry = XFiles.FileSystem.PortalBrowser.ToPortalEntry(entry);
+            var progress = new Progress<FileOperations.OperationProgress>(p =>
+            {
+                Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                    OpProgressDialog.UpdateProgress(p));
+            });
+
+            OpProgressDialog.Show("Moving", entry.Name, destDir);
+            try
+            {
+                await XFiles.FileSystem.PortalBrowser.CopyPortalToLocalAsync(
+                    portalEntry, destDir, progress, OpProgressDialog.CancelToken);
+                await DevicePortalService.DeletePortalEntryAsync(portalEntry);
+
+                OpProgressDialog.Complete();
+                await Task.Delay(400);
+                OpProgressDialog.Close();
+                Log.Info("HandlePortalMoveAsync: success");
+                await _navigator.RefreshCurrentAsync();
+            }
+            catch (Exception ex)
+            {
+                Log.Err("HandlePortalMoveAsync: failed", ex);
+                OpProgressDialog.Close();
+                _ = AlertDialogControl.ShowAsync($"Failed to move \"{entry.Name}\": {ex.Message}", AlertType.Error);
             }
         }
 
@@ -1165,91 +1498,6 @@ namespace XFiles.Controls
             {
                 Log.Err("HandlePortalCreateFolderAsync: failed", ex);
                 _ = AlertDialogControl.ShowAsync($"Failed to create folder \"{folderName}\".", AlertType.Error);
-            }
-        }
-
-        private async Task HandlePortalDownloadAsync(FileEntry entry)
-        {
-            Log.Info("HandlePortalDownloadAsync: {Name}", entry.Name);
-            string destDir = await FolderBrowserDialogControl.ShowAsync();
-            if (string.IsNullOrEmpty(destDir))
-            {
-                Log.Verb("HandlePortalDownloadAsync: destination cancelled");
-                return;
-            }
-
-            string destPath = System.IO.Path.Combine(destDir, entry.Name);
-            if (System.IO.File.Exists(destPath))
-            {
-                int overwrite = await OverwriteDialogControl.ShowAsync(entry.Name);
-                if (overwrite == 0)
-                {
-                    Log.Verb("HandlePortalDownloadAsync: overwrite skipped");
-                    return;
-                }
-            }
-
-            OpProgressDialog.Show("Downloading", entry.Name, destDir);
-            try
-            {
-                await XFiles.FileSystem.PortalBrowser.DownloadToDiskAsync(
-                    XFiles.FileSystem.PortalBrowser.ToPortalEntry(entry),
-                    destPath,
-                    new Progress<double>(p => OpProgressDialog.SetProgress(p)));
-                OpProgressDialog.Complete();
-                await Task.Delay(500);
-                OpProgressDialog.Close();
-                Log.Info("HandlePortalDownloadAsync: saved {Name} → {Dest}", entry.Name, destPath);
-                _ = AlertDialogControl.ShowAsync($"Downloaded \"{entry.Name}\" to {destDir}.", AlertType.Info);
-            }
-            catch (Exception ex)
-            {
-                Log.Err("HandlePortalDownloadAsync: failed", ex);
-                OpProgressDialog.Close();
-                _ = AlertDialogControl.ShowAsync($"Download failed: {ex.Message}", AlertType.Error);
-            }
-        }
-
-        private async Task HandlePortalUploadAsync(FileEntry entry)
-        {
-            Log.Info("HandlePortalUploadAsync: target folder {Name}", entry.Name);
-            var picker = new FileOpenPicker
-            {
-                ViewMode = PickerViewMode.List,
-                SuggestedStartLocation = PickerLocationId.Downloads
-            };
-            picker.FileTypeFilter.Add("*");
-            Windows.Storage.StorageFile source = await picker.PickSingleFileAsync();
-            if (source == null)
-            {
-                Log.Verb("HandlePortalUploadAsync: source cancelled");
-                return;
-            }
-
-            var current = _navigator.Current;
-            OpProgressDialog.Show("Uploading", source.Name, current?.PortalKnownFolder ?? "");
-            try
-            {
-                var bytes = await Windows.Storage.FileIO.ReadBufferAsync(source);
-                var data = bytes.ToArray();
-                await DevicePortalService.UploadPortalFileAsync(
-                    current?.PortalKnownFolder ?? "",
-                    current?.PortalPackageFullName ?? "",
-                    current?.PortalPath ?? "\\",
-                    source.Name,
-                    data,
-                    new Progress<double>(p => OpProgressDialog.SetProgress(p)));
-                OpProgressDialog.Complete();
-                await Task.Delay(500);
-                OpProgressDialog.Close();
-                Log.Info("HandlePortalUploadAsync: uploaded {Name}", source.Name);
-                await _navigator.RefreshCurrentAsync(selectName: source.Name);
-            }
-            catch (Exception ex)
-            {
-                Log.Err("HandlePortalUploadAsync: failed", ex);
-                OpProgressDialog.Close();
-                _ = AlertDialogControl.ShowAsync($"Upload failed: {ex.Message}", AlertType.Error);
             }
         }
 

@@ -40,6 +40,31 @@
     <SolidColorBrush x:Key="XFilesInputBorderBrush" Color="#4A6220" />
     <SolidColorBrush x:Key="XFilesInputBorderHoverBrush" Color="#7AA832" />
 
+    <!--
+        Default TextBox/PasswordBox template resolves TextControl* theme brushes from
+        the control's resource scope. Overriding them here (app-wide) keeps input
+        backgrounds dark when focused instead of snapping to the light system brushes.
+    -->
+    <SolidColorBrush x:Key="TextControlBackground" Color="#0F1A0F" />
+    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#101B10" />
+    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#0F1A0F" />
+    <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="#0F1A0F" />
+    <SolidColorBrush x:Key="TextControlBorderBrush" Color="#4A6220" />
+    <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="#7AA832" />
+    <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="#7AA832" />
+    <SolidColorBrush x:Key="TextControlBorderBrushDisabled" Color="#2A2D33" />
+    <SolidColorBrush x:Key="TextControlForeground" Color="#F0F0F0" />
+    <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#F0F0F0" />
+    <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#F0F0F0" />
+    <SolidColorBrush x:Key="TextControlForegroundDisabled" Color="#8B8D91" />
+    <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#8B8D91" />
+    <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#8B8D91" />
+    <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#8B8D91" />
+    <SolidColorBrush x:Key="TextControlPlaceholderForegroundDisabled" Color="#5A5C60" />
+    <SolidColorBrush x:Key="TextControlHeaderForeground" Color="#B0D8A0" />
+    <SolidColorBrush x:Key="TextControlHeaderForegroundPointerOver" Color="#B0D8A0" />
+    <SolidColorBrush x:Key="TextControlHeaderForegroundFocused" Color="#B0D8A0" />
+
     <!-- Header/footer green -->
     <SolidColorBrush x:Key="XFilesHeaderBgBrush" Color="#284325" />
     <SolidColorBrush x:Key="XFilesFooterBgBrush" Color="#284325" />
@@ -163,5 +188,36 @@
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+    </Style>
+
+    <!-- ═══ Text input (dark theme fix) ═══ -->
+    <!--
+        Focused/pointer-over backgrounds are fixed app-wide by the TextControl*
+        brush overrides above (they live in the control's resource scope, so the
+        default template picks them up). These styles add the shared look: font,
+        padding, selection/caret accents.
+    -->
+    <Style x:Key="DarkTextBoxStyle" TargetType="TextBox">
+        <Setter Property="Background" Value="{StaticResource XFilesInputBgBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource XFilesForegroundBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource XFilesInputBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="FontFamily" Value="{StaticResource XFilesBodyFont}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Padding" Value="8,6" />
+        <Setter Property="SelectionHighlightColor" Value="{StaticResource XFilesAccentBrush}" />
+        <Setter Property="MinHeight" Value="32" />
+    </Style>
+
+    <Style x:Key="DarkPasswordBoxStyle" TargetType="PasswordBox">
+        <Setter Property="Background" Value="{StaticResource XFilesInputBgBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource XFilesForegroundBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource XFilesInputBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="FontFamily" Value="{StaticResource XFilesBodyFont}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Padding" Value="8,6" />
+        <Setter Property="SelectionHighlightColor" Value="{StaticResource XFilesAccentBrush}" />
+        <Setter Property="MinHeight" Value="32" />
     </Style>
 </ResourceDictionary>

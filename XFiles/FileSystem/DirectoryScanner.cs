@@ -194,11 +194,11 @@ namespace XFiles.FileSystem
                 string localPath = ApplicationData.Current.LocalFolder.Path;
                 entries.Insert(0, new FileEntry
                 {
-                    Name = "[App Data]",
+                    Name = "AppData",
                     FullPath = localPath,
                     IsDirectory = true
                 });
-                Log.Verb("  [App Data] entry added: {Path}", localPath);
+                Log.Verb("  AppData entry added: {Path}", localPath);
             }
             catch (Exception ex)
             {
@@ -270,6 +270,13 @@ namespace XFiles.FileSystem
                     FindClose(hFind);
                 }
 
+                entries.AddRange(dirs);
+                entries.AddRange(files);
+
+                // Deterministic order: folders first, then files, each alphabetical.
+                dirs.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+                files.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+                entries.Clear();
                 entries.AddRange(dirs);
                 entries.AddRange(files);
             });
