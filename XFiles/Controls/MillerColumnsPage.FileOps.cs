@@ -1432,8 +1432,9 @@ namespace XFiles.Controls
         {
             Log.Info("HandleCreateFolderAsync: {File}", entry?.Name ?? "(none)");
 
-            var targetDir = _navigator.Current?.Path;
-            if (string.IsNullOrEmpty(targetDir))
+            var current = _navigator.Current;
+            var targetDir = current?.Path;
+            if (string.IsNullOrEmpty(targetDir) && current?.IsPortal != true)
             {
                 Log.Warn("HandleCreateFolderAsync: no target directory");
                 return;
