@@ -164,7 +164,7 @@ Share any file or folder as a **QR code** in seconds:
 </p>
 
 <details>
-<summary>📸 All screenshots (48)</summary>
+<summary>📸 All screenshots (54)</summary>
 
 <p align="center">
   <img src="docs/screenshots/xfiles-01-splash.jpg" alt="Splash Screen" width="600" /><br/>
@@ -213,7 +213,13 @@ Share any file or folder as a **QR code** in seconds:
   <img src="docs/screenshots/xfiles-43-move-here.jpg" alt="Move Here 2" width="600" /><br/>
   <img src="docs/screenshots/xfiles-44-settings.jpg" alt="Settings" width="600" /><br/>
   <img src="docs/screenshots/xfiles-45-video-player.jpg" alt="Video Player" width="600" /><br/>
-  <img src="docs/screenshots/xfiles-46-video-player-full.jpg" alt="Video Player Fullscreen" width="600" />
+  <img src="docs/screenshots/xfiles-46-video-player-full.jpg" alt="Video Player Fullscreen" width="600" /><br/>
+  <img src="docs/screenshots/1.3.0/2026-08-07_14-21.png" alt="Screenshot" width="600" /><br/>
+  <img src="docs/screenshots/1.3.0/2026-08-07_14-21_1.png" alt="Screenshot" width="600" /><br/>
+  <img src="docs/screenshots/1.3.0/2026-08-07_14-22.png" alt="Screenshot" width="600" /><br/>
+  <img src="docs/screenshots/1.3.0/2026-08-07_14-22_1.png" alt="Screenshot" width="600" /><br/>
+  <img src="docs/screenshots/1.3.0/2026-08-07_14-22_2.png" alt="Screenshot" width="600" /><br/>
+  <img src="docs/screenshots/1.3.0/2026-08-07_14-23.png" alt="Screenshot" width="600" />
 </p>
 
 </details>
