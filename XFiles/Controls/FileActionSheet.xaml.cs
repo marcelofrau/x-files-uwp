@@ -183,8 +183,48 @@ namespace XFiles.Controls
             bool isArchiveFile = entry.IsArchive && !entry.IsDirectory;
             bool isFolder = entry.IsDirectory;
             bool isPortal = entry.IsPortal;
+            bool isDotDot = entry.Name == "..";
 
-            if (entry.IsRootContainer)
+            if (isDotDot)
+            {
+                // ".." represents the current folder: refresh, new folder and paste
+                // (folder is empty, that's why the user opened the menu on it).
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.Refresh,
+                    Label = "Refresh",
+                    IconPath = IconBase + ActionRefresh,
+                    LabelBrush = accent
+                });
+
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.CreateFolder,
+                    Label = "New Folder",
+                    IconPath = IconBase + ActionCreateFolder,
+                    LabelBrush = accent
+                });
+
+                if (ClipboardState.HasItems)
+                {
+                    actions.Add(new ActionItem
+                    {
+                        Action = FileAction.Paste,
+                        Label = "Paste",
+                        IconPath = IconBase + ActionPaste,
+                        LabelBrush = accent
+                    });
+                }
+
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.DiskSpace,
+                    Label = "Disk Space",
+                    IconPath = IconBase + ActionDiskSpace,
+                    LabelBrush = accent
+                });
+            }
+            else if (entry.IsRootContainer)
             {
                 actions.Add(new ActionItem
                 {

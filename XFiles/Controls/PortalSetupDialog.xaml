@@ -100,14 +100,6 @@
                                    TextWrapping="Wrap"
                                    Margin="12,0,0,10" />
 
-                        <TextBlock x:Name="StatusText"
-                                   Text=""
-                                   FontFamily="ms-appx:///Assets/Fonts/Inconsolata-Regular.ttf#Inconsolata"
-                                   FontSize="12"
-                                   Foreground="#D0B060"
-                                   TextWrapping="Wrap"
-                                   Margin="0,0,0,10" />
-
                         <ProgressBar x:Name="ReprobeProgress"
                                      IsIndeterminate="True"
                                      Visibility="Collapsed"

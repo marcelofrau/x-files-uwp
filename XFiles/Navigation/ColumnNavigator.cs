@@ -29,6 +29,11 @@ namespace XFiles.Navigation
         private Dictionary<string, GamelistEntry> _gamelistCache;
         private string _gamelistDirectory;
 
+        // True while a portal load (REST listing or archive download) is in flight.
+        // Consecutive drill-in/drill-out presses during a slow portal navigation are
+        // ignored so they can't queue up and interleave loads.
+        private bool _portalBusy;
+
         /// <summary>
         /// Raised when a portal drill-in is attempted while the portal is not connected.
         /// MillerColumnsPage shows the setup dialog (exemption instructions + QR).
@@ -193,6 +198,12 @@ namespace XFiles.Navigation
         /// </summary>
         public async Task DrillInAsync()
         {
+            if (_portalBusy)
+            {
+                Log.Verb("ColumnNavigator: drill-in ignored — portal navigation in progress");
+                return;
+            }
+
             ++_previewGeneration;
             var selected = _current.GetSelectedEntry();
             if (selected == null) return;
@@ -407,6 +418,7 @@ namespace XFiles.Navigation
             var newColumn = new ColumnState { Path = null, Label = selected.Name, IsPortal = true };
 
             LoadingChanged?.Invoke(true);
+            _portalBusy = true;
             try
             {
                 if (selected.PortalKnownFolder == null)
@@ -452,6 +464,7 @@ namespace XFiles.Navigation
             }
             finally
             {
+                _portalBusy = false;
                 LoadingChanged?.Invoke(false);
             }
 
@@ -486,7 +499,16 @@ namespace XFiles.Navigation
             Log.Info("ColumnNavigator.Portal: drilling into portal archive {Name}", archiveEntry.Name);
 
             IProgress<double> progress = DownloadProgressFactory?.Invoke(archiveEntry.Name);
-            string cachePath = await PortalCache.EnsureAsync(PortalBrowser.ToPortalEntry(archiveEntry), progress);
+            _portalBusy = true;
+            string cachePath;
+            try
+            {
+                cachePath = await PortalCache.EnsureAsync(PortalBrowser.ToPortalEntry(archiveEntry), progress);
+            }
+            finally
+            {
+                _portalBusy = false;
+            }
             if (cachePath == null)
             {
                 Log.Warn("ColumnNavigator.Portal: archive download to cache failed for {Name}", archiveEntry.Name);
@@ -530,6 +552,12 @@ namespace XFiles.Navigation
         /// </summary>
         public async Task DrillOutAsync()
         {
+            if (_portalBusy)
+            {
+                Log.Verb("ColumnNavigator: drill-out ignored — portal navigation in progress");
+                return;
+            }
+
             if (_history.Count == 0)
                 return;
 
@@ -554,7 +582,15 @@ namespace XFiles.Navigation
             // If returning to a portal column, reload from the API
             if (_current.IsPortal)
             {
-                await ReloadPortalColumnAsync(_current);
+                _portalBusy = true;
+                try
+                {
+                    await ReloadPortalColumnAsync(_current);
+                }
+                finally
+                {
+                    _portalBusy = false;
+                }
             }
 
             // Reload gamelist for the parent directory
@@ -1027,7 +1063,15 @@ namespace XFiles.Navigation
                 }
                 else if (_current.IsPortal)
                 {
-                    await ReloadPortalColumnAsync(_current);
+                    _portalBusy = true;
+                    try
+                    {
+                        await ReloadPortalColumnAsync(_current);
+                    }
+                    finally
+                    {
+                        _portalBusy = false;
+                    }
                 }
                 else
                 {
@@ -1206,20 +1250,21 @@ namespace XFiles.Navigation
 
         public async Task LoadPortalKnownFoldersAsync(PortalBrowser portalBrowser)
         {
-            SetPortalEntries(await portalBrowser.ListKnownFoldersAsync());
+            SetPortalEntries(await portalBrowser.ListKnownFoldersAsync(), null, null, null);
         }
 
         public async Task LoadPortalPackagesAsync(PortalBrowser portalBrowser)
         {
-            SetPortalEntries(await portalBrowser.ListPackagesAsync());
+            SetPortalEntries(await portalBrowser.ListPackagesAsync(), null, null, null);
         }
 
         public async Task LoadPortalDirectoryAsync(PortalBrowser portalBrowser, string knownFolder, string packageFullName, string portalPath)
         {
-            SetPortalEntries(await portalBrowser.ListDirectoryAsync(knownFolder, packageFullName, portalPath));
+            SetPortalEntries(await portalBrowser.ListDirectoryAsync(knownFolder, packageFullName, portalPath),
+                knownFolder, packageFullName ?? "", portalPath ?? "\\");
         }
 
-        private void SetPortalEntries(List<FileEntry> entries)
+        private void SetPortalEntries(List<FileEntry> entries, string knownFolder, string packageFullName, string portalPath)
         {
             var list = new List<FileEntry>(entries.Count + 1);
             list.Add(new FileEntry
@@ -1228,7 +1273,12 @@ namespace XFiles.Navigation
                 FullPath = null,
                 IsDirectory = true,
                 IsVirtual = true,
-                IsPortal = true
+                IsPortal = true,
+                // Carry the folder's portal context so ".." is treated as the current
+                // folder (not a root container) for file operations (paste/new-folder).
+                PortalKnownFolder = knownFolder,
+                PortalPackageFullName = packageFullName ?? "",
+                PortalPath = portalPath
             });
             list.AddRange(entries);
 

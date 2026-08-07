@@ -264,6 +264,34 @@ namespace XFiles.FileSystem
         }
 
         /// <summary>
+        /// Copies a portal entry (file or directory tree) into another portal location
+        /// by round-tripping through a local staging directory: download, then upload.
+        /// Progress covers both phases.
+        /// </summary>
+        public static async Task CopyPortalToPortalAsync(PortalFileEntry source,
+            string destKnownFolder, string destPackageFullName, string destPortalPath,
+            string stagingDir,
+            IProgress<FileOperations.OperationProgress> progress, CancellationToken ct)
+        {
+            string uploadPath;
+            if (source.IsDirectory)
+            {
+                // Staging wrapper folder preserves the root name for the upload.
+                string wrapper = Path.Combine(stagingDir, source.Name);
+                Directory.CreateDirectory(wrapper);
+                await CopyPortalToLocalAsync(source, wrapper, progress, ct);
+                uploadPath = wrapper;
+            }
+            else
+            {
+                await CopyPortalToLocalAsync(source, stagingDir, progress, ct);
+                uploadPath = Path.Combine(stagingDir, source.Name);
+            }
+
+            await UploadLocalToPortalAsync(uploadPath, destKnownFolder, destPackageFullName, destPortalPath, progress, ct);
+        }
+
+        /// <summary>
         /// Uploads a local file or directory tree into a portal directory. Recursively
         /// creates portal folders to mirror the local layout. Progress mirrors the local
         /// copy dialog.

@@ -420,6 +420,8 @@ namespace XFiles.FileSystem
             {
                 if (string.IsNullOrEmpty(path)) return null;
                 string root = Path.GetPathRoot(path) ?? path;
+                Log.Verb("FileOperations.GetDriveFreeSpace: path={Path} root={Root} (thread {Thread})",
+                    path, root, Environment.CurrentManagedThreadId);
 
                 var candidates = new List<string> { path };
                 if (!string.Equals(root, path, StringComparison.OrdinalIgnoreCase))
