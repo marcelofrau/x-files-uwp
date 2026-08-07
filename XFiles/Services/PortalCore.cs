@@ -28,6 +28,23 @@ namespace XFiles.Services
         }
 
         /// <summary>
+        /// Physical drive root hosting a WDP known folder, used for free-space checks
+        /// (the portal REST API does not expose free space; the app queries the console's
+        /// own volume via P/Invoke). LocalAppData lives on the Q: volume; DevelopmentFiles
+        /// on the dev-scratch D: volume. Unknown folders return null — the caller skips
+        /// the check.
+        /// </summary>
+        public static string DestinationDriveRoot(string knownFolder)
+        {
+            if (string.IsNullOrEmpty(knownFolder)) return null;
+            if (string.Equals(knownFolder, "LocalAppData", StringComparison.OrdinalIgnoreCase))
+                return "Q:\\";
+            if (string.Equals(knownFolder, "DevelopmentFiles", StringComparison.OrdinalIgnoreCase))
+                return "D:\\";
+            return null;
+        }
+
+        /// <summary>
         /// WDP entry Type is a bitmask; bit 0x10 marks directories.
         /// </summary>
         public static bool IsDirectoryType(int type) => (type & 0x10) != 0;

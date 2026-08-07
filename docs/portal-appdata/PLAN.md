@@ -71,8 +71,10 @@ X-Files probe already validated the exact endpoints used here
   plain (no `filename*`), part `Content-Type: application/octet-stream`,
   Content-Length set (never chunked). Hand-roll with `StreamContent` +
   `ContentDispositionHeaderValue.Parse(...)` (no `name` overload).
-- **`extract=true` ZIP upload is broken on Xbox** (500 `UPDxxxx.tmp`). Out of
-  scope (we don't upload archives via portal).
+- **`extract=true` ZIP upload is broken on Xbox** (500 `UPDxxxx.tmp`) — server-side
+  unzip/archive upload is out of scope. Portal ZIP operations instead download to a
+  temp staging dir, run zip/unzip locally (SharpCompress), then upload the result
+  file-by-file via `extract=false` multipart (`UploadLocalToPortalAsync`).
 - **500 `{"Reason":"...WdpTempWebFolder\\UPDxxxx.tmp"}` diagnosis**: wrong
   multipart (every upload fails) → console state (reboot dev mode, package
   quota full, stale `UPD*.tmp`) → not CSRF (successful CreateFolder proves token).

@@ -100,6 +100,19 @@ namespace XFiles.Controls
                 (k, r) => true,
                 (k) => { if (k == VirtualKey.GamepadB) OpProgressDialog.Cancel(); return true; }));
 
+            _router.Add(new OverlayHandler(67,
+                () => DiskUsageDialogControl.IsOpen,
+                (k, r) => true,
+                (k) =>
+                {
+                    if (k == VirtualKey.GamepadB)
+                    {
+                        DiskUsageDialogControl.Close();
+                        UpdateFooterALabelFromSelection();
+                    }
+                    return true;
+                }));
+
             _router.Add(new OverlayHandler(65,
                 () => SettingsPageControl.IsVisible,
                 (k, r) =>

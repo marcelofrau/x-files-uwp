@@ -53,6 +53,22 @@ namespace XFiles.Controls
         public string ArchiveRootPath { get; set; }
         public string ArchiveInternalPath { get; set; }
 
+        /// <summary>
+        /// Root-level container entries (drives, portal browser roots, the AppData
+        /// shortcut) — only offer Refresh / Disk Space and are excluded from batch.
+        /// Mirrors FileEntry.IsRootContainer.
+        /// </summary>
+        public bool IsRootContainer
+        {
+            get
+            {
+                if (IsDrive) return true;
+                if (IsPortal && string.IsNullOrEmpty(PortalPath)) return true;
+                return Name != null && Name.Equals("AppData", StringComparison.OrdinalIgnoreCase)
+                    && IsDirectory && !IsPortal;
+            }
+        }
+
         public bool IsHighlighted
         {
             get => _isHighlighted;

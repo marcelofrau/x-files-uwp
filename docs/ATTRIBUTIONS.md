@@ -20,6 +20,7 @@ Full license text: https://creativecommons.org/licenses/by-sa/4.0/legalcode
 - **Source:** `F:\workspace\icons8-personal-set\`
 - **License:** See original Icons8 license terms
 - **Used for:** UI controls, toolbar buttons, view-specific icons
+- **Disk Space dialog + drive menu:** `icons8-hdd-48.png` → `Assets/Views/FileActionSheet/fileactionsheet-hdd-48.png`, `icons8-hdd-100.png` → `Assets/Views/DiskUsageDialog/diskusagedialog-hdd-100.png`
 
 ## Gamepad Button Icons
 

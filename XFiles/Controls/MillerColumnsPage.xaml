@@ -1047,6 +1047,7 @@
         <controls:FileOperationConfirmDialog x:Name="FileOperationConfirmDialogControl" />
         <controls:FolderBrowserDialog x:Name="FolderBrowserDialogControl" />
         <controls:OperationProgressDialog x:Name="OpProgressDialog" />
+        <controls:DiskUsageDialog x:Name="DiskUsageDialogControl" />
         <controls:PdfFullScreenOverlay x:Name="PdfFullScreen" />
         <controls:ImageFullScreenOverlay x:Name="ImageFullScreen" />
         <controls:TextEditorOverlay x:Name="TextEditorOverlayControl" />

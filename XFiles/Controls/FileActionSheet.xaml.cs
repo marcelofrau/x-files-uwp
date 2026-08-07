@@ -31,7 +31,8 @@ namespace XFiles.Controls
         AddToFavorites,
         RemoveFromFavorites,
         Download,
-        UploadFile
+        UploadFile,
+        DiskSpace
     }
 
     public class ActionItem
@@ -68,6 +69,7 @@ namespace XFiles.Controls
         private static readonly string ActionFavorite = "fileactionsheet-favorite-48.png";
         private static readonly string ActionDownload = "fileactionsheet-download-48.png";
         private static readonly string ActionUpload = "fileactionsheet-upload-48.png";
+        private static readonly string ActionDiskSpace = "fileactionsheet-hdd-48.png";
 
         private static readonly Dictionary<string, string> ExtIconMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -182,7 +184,25 @@ namespace XFiles.Controls
             bool isFolder = entry.IsDirectory;
             bool isPortal = entry.IsPortal;
 
-            if (isPortal)
+            if (entry.IsRootContainer)
+            {
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.Refresh,
+                    Label = "Refresh",
+                    IconPath = IconBase + ActionRefresh,
+                    LabelBrush = accent
+                });
+
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.DiskSpace,
+                    Label = "Disk Space",
+                    IconPath = IconBase + ActionDiskSpace,
+                    LabelBrush = accent
+                });
+            }
+            else if (isPortal)
             {
                 actions.Add(new ActionItem
                 {
@@ -239,6 +259,28 @@ namespace XFiles.Controls
                     LabelBrush = accent
                 });
 
+                if (!entry.IsArchive)
+                {
+                    actions.Add(new ActionItem
+                    {
+                        Action = FileAction.CreateZip,
+                        Label = "Create ZIP",
+                        IconPath = IconBase + ActionCreateZip,
+                        LabelBrush = accent
+                    });
+                }
+
+                if (entry.IsArchive && !entry.IsDirectory)
+                {
+                    actions.Add(new ActionItem
+                    {
+                        Action = FileAction.Extract,
+                        Label = "Extract",
+                        IconPath = IconBase + ActionExtract,
+                        LabelBrush = accent
+                    });
+                }
+
                 actions.Add(new ActionItem
                 {
                     Action = FileAction.Rename,
@@ -253,16 +295,6 @@ namespace XFiles.Controls
                     Label = "Delete",
                     IconPath = IconBase + ActionDelete,
                     LabelBrush = red
-                });
-            }
-            else if (entry.IsDrive)
-            {
-                actions.Add(new ActionItem
-                {
-                    Action = FileAction.Refresh,
-                    Label = "Refresh",
-                    IconPath = IconBase + ActionRefresh,
-                    LabelBrush = accent
                 });
             }
             else if (isInArchive)

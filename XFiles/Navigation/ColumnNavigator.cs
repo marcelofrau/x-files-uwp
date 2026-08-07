@@ -312,7 +312,10 @@ namespace XFiles.Navigation
                 Entries = entries.ToList(),
                 IsArchive = true,
                 ArchiveRootPath = archiveEntry.FullPath,
-                ArchiveInternalPath = ""
+                ArchiveInternalPath = "",
+                PortalKnownFolder = _current.PortalKnownFolder,
+                PortalPackageFullName = _current.PortalPackageFullName,
+                PortalPath = _current.PortalPath
             };
             _current.ClearSearch();
 
@@ -350,7 +353,10 @@ namespace XFiles.Navigation
                 Entries = entries.ToList(),
                 IsArchive = true,
                 ArchiveRootPath = dirEntry.ArchiveRootPath,
-                ArchiveInternalPath = dirEntry.ArchiveInternalPath
+                ArchiveInternalPath = dirEntry.ArchiveInternalPath,
+                PortalKnownFolder = _current.PortalKnownFolder,
+                PortalPackageFullName = _current.PortalPackageFullName,
+                PortalPath = _current.PortalPath
             };
             _current.ClearSearch();
 
@@ -507,7 +513,10 @@ namespace XFiles.Navigation
                 Entries = entries.ToList(),
                 IsArchive = true,
                 ArchiveRootPath = cachePath,
-                ArchiveInternalPath = ""
+                ArchiveInternalPath = "",
+                PortalKnownFolder = archiveEntry.PortalKnownFolder,
+                PortalPackageFullName = archiveEntry.PortalPackageFullName,
+                PortalPath = archiveEntry.PortalPath
             };
             _current.ClearSearch();
 

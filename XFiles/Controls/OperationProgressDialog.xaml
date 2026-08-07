@@ -107,6 +107,30 @@
                            Margin="0,4,0,0"
                            Text="" />
 
+                <!-- Live stats: percent / speed / ETA -->
+                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                    <TextBlock x:Name="PercentText"
+                               Foreground="{StaticResource XFilesAccentBrush}"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                               FontSize="16"
+                               Margin="0,0,20,0"
+                               VerticalAlignment="Center"
+                               Text="" />
+                    <TextBlock x:Name="SpeedText"
+                               Foreground="{StaticResource XFilesForegroundBrush}"
+                               FontFamily="ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata"
+                               FontSize="13"
+                               Margin="0,0,20,0"
+                               VerticalAlignment="Center"
+                               Text="" />
+                    <TextBlock x:Name="EtaText"
+                               Foreground="{StaticResource XFilesTextMutedBrush}"
+                               FontFamily="ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata"
+                               FontSize="13"
+                               VerticalAlignment="Center"
+                               Text="" />
+                </StackPanel>
+
                 <!-- Cancel hint -->
                 <StackPanel x:Name="CancelHint"
                             Orientation="Horizontal"

@@ -21,6 +21,10 @@ namespace XFiles.Controls
         public Action OnClosed;
         public Action OnCancelled;
 
+        // Speed / ETA estimation
+        private readonly System.Diagnostics.Stopwatch _sw = new System.Diagnostics.Stopwatch();
+        private readonly TransferStats _stats = new TransferStats();
+
         public bool IsOpen => Visibility == Visibility.Visible;
         public CancellationToken CancelToken => _cts?.Token ?? CancellationToken.None;
 
@@ -38,12 +42,17 @@ namespace XFiles.Controls
             DestText.Text = destination;
             CurrentFileText.Text = "";
             BytesText.Text = "";
+            PercentText.Text = "";
+            SpeedText.Text = "";
+            EtaText.Text = "";
             ProgressBar.Value = 0;
             _isIndeterminate = false;
             ProgressBar.IsIndeterminate = false;
             _completedFileCount = 0;
             _completedBytes = 0;
             _completedFiles.Clear();
+            _sw.Restart();
+            _stats.Reset();
 
             // Show/hide overall progress bar for multi-file operations
             if (fileTotal > 1)
@@ -67,6 +76,18 @@ namespace XFiles.Controls
             Overlay.Visibility = Visibility.Visible;
         }
 
+        /// <summary>
+        /// Updates the operation title / source / destination labels between phases
+        /// (e.g. portal zip: download → compress → upload) without resetting progress.
+        /// </summary>
+        public void SetPhase(string title, string source, string destination)
+        {
+            _currentOperationTitle = title;
+            TitleText.Text = title;
+            SourceText.Text = source;
+            DestText.Text = destination;
+        }
+
         public void UpdateProgress(OperationProgress progress)
         {
             if (progress == null) return;
@@ -79,47 +100,53 @@ namespace XFiles.Controls
                     CurrentFileText.Text = progress.FileName;
             }
 
-            if (progress.FileTotal > 0)
-            {
-                // Multi-file mode: overall progress tracks file count
-                if (_isIndeterminate)
-                {
-                    _isIndeterminate = false;
-                    ProgressBar.IsIndeterminate = false;
-                }
-                OverallProgressBar.Value = progress.FileIndex;
-                ProgressBar.Value = progress.PercentComplete >= 0 ? progress.PercentComplete : 0;
-                if (progress.PercentComplete < 0)
-                    ProgressBar.IsIndeterminate = true;
-            }
-            else if (progress.PercentComplete < 0)
-            {
-                if (!_isIndeterminate)
-                {
-                    _isIndeterminate = true;
-                    ProgressBar.IsIndeterminate = true;
-                }
-            }
-            else
-            {
-                if (_isIndeterminate)
-                {
-                    _isIndeterminate = false;
-                    ProgressBar.IsIndeterminate = false;
-                }
-                ProgressBar.Value = progress.PercentComplete;
-            }
-
             if (progress.TotalBytes > 0)
             {
+                // Byte-accurate progress dominates: percent, speed, ETA from real bytes.
+                double pct = Math.Max(0, Math.Min(100,
+                    (double)progress.BytesCopied / progress.TotalBytes * 100.0));
+
+                if (_isIndeterminate)
+                {
+                    _isIndeterminate = false;
+                    ProgressBar.IsIndeterminate = false;
+                }
+                ProgressBar.Value = pct;
+                PercentText.Text = $"{(int)Math.Round(pct)}%";
+
                 string copied = FormatBytes(progress.BytesCopied);
                 string total = FormatBytes(progress.TotalBytes);
                 BytesText.Text = $"{copied} / {total}";
+
+                UpdateSpeedEta(progress.BytesCopied, progress.TotalBytes);
             }
             else
             {
                 BytesText.Text = "";
+
+                if (progress.PercentComplete >= 0)
+                {
+                    if (_isIndeterminate)
+                    {
+                        _isIndeterminate = false;
+                        ProgressBar.IsIndeterminate = false;
+                    }
+                    ProgressBar.Value = progress.PercentComplete;
+                    PercentText.Text = $"{(int)Math.Round(progress.PercentComplete)}%";
+                }
+                else
+                {
+                    if (!_isIndeterminate)
+                    {
+                        _isIndeterminate = true;
+                        ProgressBar.IsIndeterminate = true;
+                    }
+                    PercentText.Text = "";
+                }
             }
+
+            if (progress.FileTotal > 0)
+                OverallProgressBar.Value = progress.FileIndex;
         }
 
         /// <summary>
@@ -145,6 +172,7 @@ namespace XFiles.Controls
             }
             double pct = Math.Max(0, Math.Min(1, fraction)) * 100;
             ProgressBar.Value = pct;
+            PercentText.Text = $"{(int)Math.Round(pct)}%";
             CurrentFileText.Text = $"{(int)pct}%";
         }
 
@@ -156,6 +184,11 @@ namespace XFiles.Controls
                 OverallProgressBar.Value = OverallProgressBar.Maximum;
             CurrentFileText.Text = "Done";
             BytesText.Text = "";
+            PercentText.Text = "100%";
+            SpeedText.Text = "";
+            EtaText.Text = "";
+            _sw.Stop();
+            _stats.Reset();
         }
 
         /// <summary>
@@ -203,6 +236,37 @@ namespace XFiles.Controls
             _cts?.Cancel();
             _cts = null;
             OnClosed?.Invoke();
+        }
+
+        /// <summary>
+        /// Windowed speed (last ~4s of samples) + ETA from remaining bytes.
+        /// </summary>
+        private void UpdateSpeedEta(long bytesCopied, long totalBytes)
+        {
+            double now = _sw.Elapsed.TotalSeconds;
+            _stats.Sample(now, bytesCopied);
+
+            double speedBps = _stats.SpeedBytesPerSecond();
+            if (speedBps <= 0)
+            {
+                SpeedText.Text = "—";
+                EtaText.Text = "";
+                return;
+            }
+
+            SpeedText.Text = FormatBytes((long)speedBps) + "/s";
+
+            double etaSec = _stats.EtaSeconds(totalBytes, bytesCopied);
+            if (etaSec < 0)
+            {
+                EtaText.Text = "";
+            }
+            else if (etaSec >= 3600)
+                EtaText.Text = $"ETA {(int)(etaSec / 3600)}:{(int)(etaSec % 3600 / 60):00}:{(int)(etaSec % 60):00}";
+            else if (etaSec > 0)
+                EtaText.Text = $"ETA {(int)(etaSec / 60)}:{(int)(etaSec % 60):00}";
+            else
+                EtaText.Text = "";
         }
 
         private void OnOverlayTapped(object sender, TappedRoutedEventArgs e)

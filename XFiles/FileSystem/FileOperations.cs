@@ -35,6 +35,13 @@ namespace XFiles.FileSystem
         [DllImport("api-ms-win-core-file-fromapp-l1-1-0.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern bool CreateDirectoryFromAppW(string lpPathName, IntPtr lpSecurityAttributes);
 
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool GetDiskFreeSpaceExW(
+            string lpDirectoryName,
+            out ulong lpFreeBytesAvailableToCaller,
+            out ulong lpTotalNumberOfBytes,
+            out ulong lpTotalNumberOfFreeBytes);
+
         [DllImport("api-ms-win-core-file-l1-1-0.dll", CharSet = CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
         private static extern bool GetFileAttributesExFromAppW(string lpFileName, int fInfoLevelId, out WIN32_FILE_ATTRIBUTE_DATA lpFileInformation);
 
@@ -160,6 +167,94 @@ namespace XFiles.FileSystem
         }
 
         private const int CopyChunkSize = 65536; // 64KB
+
+        /// <summary>
+        /// Stream wrapper that counts bytes written and invokes a throttled callback.
+        /// Used to report real bytes-written progress while a zip archive is saved.
+        /// </summary>
+        private sealed class CountingWriteStream : System.IO.Stream
+        {
+            private const long ReportThrottle = 256 * 1024; // report every 256KB
+            private readonly System.IO.Stream _inner;
+            private readonly Action<long> _onWrite;
+            private long _lastReport;
+
+            public long BytesWritten { get; private set; }
+
+            public CountingWriteStream(System.IO.Stream inner, Action<long> onWrite)
+            {
+                _inner = inner;
+                _onWrite = onWrite;
+                _lastReport = long.MinValue;
+            }
+
+            public override void Write(byte[] buffer, int offset, int count)
+            {
+                _inner.Write(buffer, offset, count);
+                BytesWritten += count;
+                if (_onWrite != null && BytesWritten - _lastReport >= ReportThrottle)
+                {
+                    _lastReport = BytesWritten;
+                    _onWrite(BytesWritten);
+                }
+            }
+
+            public override void Flush() => _inner.Flush();
+            public override bool CanRead => false;
+            public override bool CanSeek => false;
+            public override bool CanWrite => true;
+            public override long Length => _inner.Length;
+            public override long Position { get => _inner.Position; set => throw new NotSupportedException(); }
+            public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+            public override long Seek(long offset, System.IO.SeekOrigin origin) => throw new NotSupportedException();
+            public override void SetLength(long value) => throw new NotSupportedException();
+        }
+
+        /// <summary>
+        /// Saves a zip archive while reporting bytes written as progress. Returns false
+        /// when the destination file cannot be created.
+        /// </summary>
+        private static bool SaveZipWithProgress(
+            SharpCompress.Archives.Zip.ZipArchive archive, string zipPath,
+            long totalBytes, IProgress<OperationProgress> progress)
+        {
+            using (var writeStream = Win32FileWriteStream.Create(zipPath))
+            {
+                if (writeStream == null)
+                {
+                    Log.Warn("FileOperations.SaveZipWithProgress: cannot create zip file {Path}", zipPath);
+                    return false;
+                }
+
+                var counting = new CountingWriteStream(writeStream, written =>
+                {
+                    progress?.Report(new OperationProgress
+                    {
+                        FileName = "Writing ZIP...",
+                        BytesCopied = written,
+                        TotalBytes = totalBytes,
+                        PercentComplete = totalBytes > 0
+                            ? Math.Min(100.0, (double)written / totalBytes * 100.0)
+                            : -1
+                    });
+                });
+
+                archive.SaveTo(counting,
+                    new SharpCompress.Writers.WriterOptions(SharpCompress.Common.CompressionType.Deflate));
+                counting.Flush();
+
+                progress?.Report(new OperationProgress
+                {
+                    FileName = "Finalizing...",
+                    BytesCopied = counting.BytesWritten,
+                    TotalBytes = totalBytes,
+                    PercentComplete = totalBytes > 0
+                        ? Math.Min(100.0, (double)counting.BytesWritten / totalBytes * 100.0)
+                        : -1
+                });
+                return true;
+            }
+        }
 
         /// <summary>
         /// Streaming file copy using Win32 P/Invoke streams.
@@ -304,6 +399,98 @@ namespace XFiles.FileSystem
                 return ((long)attr.nFileSizeHigh << 32) | attr.nFileSizeLow;
             }
             return 0;
+        }
+
+        /// <summary>
+        /// Queries free + total bytes for the volume containing path (e.g. "E:\").
+        /// Returns null when the query fails. Uses the plain kernel32 export — the
+        /// file API-set DLL has no *FromApp variant for this function, and volume
+        /// queries are not restricted in app containers.
+        ///
+        /// In the app container, volume ROOTS the app has no ACL over (e.g. "Q:\",
+        /// "C:\" on Xbox) return ERROR_ACCESS_DENIED even though GetDiskFreeSpaceExW
+        /// is permitted. Accessible SUB-paths still resolve to their volume, so this
+        /// tries the given path first, then the path root, then — for the Q:\ portal
+        /// volume — the app's own LocalFolder as an anchor (the app always has access
+        /// to its own sandbox under Q:\).
+        /// </summary>
+        public static (ulong FreeBytes, ulong TotalBytes)? GetDriveFreeSpace(string path)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(path)) return null;
+                string root = Path.GetPathRoot(path) ?? path;
+
+                var candidates = new List<string> { path };
+                if (!string.Equals(root, path, StringComparison.OrdinalIgnoreCase))
+                    candidates.Add(root);
+                if (string.Equals(root, "Q:\\", StringComparison.OrdinalIgnoreCase))
+                {
+                    string anchor = Windows.Storage.ApplicationData.Current?.LocalFolder?.Path;
+                    if (!string.IsNullOrEmpty(anchor))
+                        candidates.Add(anchor);
+                }
+
+                foreach (var c in candidates)
+                {
+                    if (QueryDriveFreeSpace(c, out ulong free, out ulong total))
+                    {
+                        Log.Dbg("FileOperations.GetDriveFreeSpace: {Path} (via {Anchor}) free={Free} total={Total}",
+                            path, c, free, total);
+                        return (free, total);
+                    }
+                }
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("FileOperations.GetDriveFreeSpace exception", ex);
+                return null;
+            }
+        }
+
+        private static bool QueryDriveFreeSpace(string path, out ulong free, out ulong total)
+        {
+            if (GetDiskFreeSpaceExW(path, out free, out total, out ulong totalFree))
+                return true;
+            Log.Warn("FileOperations.GetDriveFreeSpace: failed for {Path} (err {Err})",
+                path, Marshal.GetLastWin32Error());
+            free = 0;
+            total = 0;
+            return false;
+        }
+
+        /// <summary>
+        /// First-pass sum of the uncompressed sizes of all non-directory entries in an
+        /// archive. Used to pre-check free space before extraction.
+        /// </summary>
+        public static async Task<long> GetArchiveUncompressedSizeAsync(string archivePath)
+        {
+            return await Task.Run(() =>
+            {
+                try
+                {
+                    using (var stream = Win32FileStream.OpenRead(archivePath))
+                    {
+                        if (stream == null) return 0L;
+                        using (var archive = SharpCompress.Archives.ArchiveFactory.Open(stream))
+                        {
+                            long total = 0;
+                            foreach (var entry in archive.Entries)
+                            {
+                                if (!entry.IsDirectory)
+                                    total += (long)entry.Size;
+                            }
+                            return total;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Warn("FileOperations.GetArchiveUncompressedSize exception", ex);
+                    return 0;
+                }
+            });
         }
 
         /// <summary>
@@ -1042,6 +1229,38 @@ namespace XFiles.FileSystem
             });
         }
 
+        /// <summary>
+        /// Uncompressed size of a single non-directory entry inside an archive.
+        /// </summary>
+        public static async Task<long> GetArchiveEntryUncompressedSizeAsync(string archivePath, string internalPath)
+        {
+            return await Task.Run(() =>
+            {
+                try
+                {
+                    using (var stream = Win32FileStream.OpenRead(archivePath))
+                    {
+                        if (stream == null) return 0L;
+                        using (var archive = SharpCompress.Archives.ArchiveFactory.Open(stream))
+                        {
+                            foreach (var entry in archive.Entries)
+                            {
+                                if (entry.IsDirectory) continue;
+                                if (string.Equals(entry.Key, internalPath, StringComparison.OrdinalIgnoreCase))
+                                    return (long)entry.Size;
+                            }
+                            return 0L;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Warn("FileOperations.GetArchiveEntryUncompressedSize exception", ex);
+                    return 0;
+                }
+            });
+        }
+
         public static async Task<OperationResult> ExtractFileAsync(
             string archivePath, string internalPath, string destDir,
             Func<string, Task<int>> conflictCallback = null,
@@ -1338,14 +1557,21 @@ namespace XFiles.FileSystem
                             return OperationResult.Failed;
                         }
 
-                        using (var writeStream = Win32FileWriteStream.Create(zipPath))
+                        long zipTotal = 0;
+                        if (pathType == "file")
                         {
-                            if (writeStream == null)
-                            {
-                                Log.Warn("FileOperations.CreateZip: cannot create zip file {Path}", zipPath);
-                                return OperationResult.Failed;
-                            }
-                            archive.SaveTo(writeStream, new SharpCompress.Writers.WriterOptions(SharpCompress.Common.CompressionType.Deflate));
+                            zipTotal = GetFileSizePInvoke(sourcePath);
+                        }
+                        else if (pathType == "directory")
+                        {
+                            var filesForTotal = EnumerateFilesRecursive(sourcePath);
+                            foreach (var f in filesForTotal) zipTotal += GetFileSizePInvoke(f);
+                        }
+
+                        if (!SaveZipWithProgress(archive, zipPath, zipTotal, progress))
+                        {
+                            Log.Warn("FileOperations.CreateZip: cannot create zip file {Path}", zipPath);
+                            return OperationResult.Failed;
                         }
                     }
 
@@ -1427,14 +1653,13 @@ namespace XFiles.FileSystem
                         }
                         Log.Info("FileOperations.CreateZip(multi): added {Count} entries total", fileIndex);
 
-                        using (var writeStream = Win32FileWriteStream.Create(zipPath))
+                        long zipTotal = 0;
+                        foreach (var f in allFiles) zipTotal += GetFileSizePInvoke(f);
+
+                        if (!SaveZipWithProgress(archive, zipPath, zipTotal, progress))
                         {
-                            if (writeStream == null)
-                            {
-                                Log.Warn("FileOperations.CreateZip(multi): cannot create zip file {Path}", zipPath);
-                                return OperationResult.Failed;
-                            }
-                            archive.SaveTo(writeStream, new SharpCompress.Writers.WriterOptions(SharpCompress.Common.CompressionType.Deflate));
+                            Log.Warn("FileOperations.CreateZip(multi): cannot create zip file {Path}", zipPath);
+                            return OperationResult.Failed;
                         }
                     }
 
