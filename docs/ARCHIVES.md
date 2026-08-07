@@ -54,6 +54,34 @@ Same preview logic as a normal file (`ARCHITECTURE.md` → "Live Preview"), but 
 the content goes through `IArchiveBrowser.OpenEntryStream` instead of `File.OpenRead`.
 Text/images inside zip/7z/rar should work without extracting to disk first.
 
+## Portal Archives (ZIP/UNZIP via Device Portal)
+
+ZIP operations on items stored in the console's AppData (Device Portal) stage through
+a local temp folder — the portal REST API has no server-side archive support
+(`extract=true` upload is broken on Xbox, see `portal-appdata/PLAN.md`).
+
+- **Create ZIP from portal items**: download each item to `TemporaryFolder/portal-op-{guid}`
+  (`PortalBrowser.CopyPortalToLocalAsync`), compress with `CreateZipAsync`, then upload the
+  ZIP to the current portal folder (`UploadLocalToPortalAsync`). Offered on portal files and
+  folders and in batch mode (portal-only selection).
+- **Extract a portal ZIP**: download the ZIP to the portal cache (`PortalCache.EnsureAsync`),
+  extract locally, then upload the result back to the current portal folder. Single-root
+  ZIPs upload their contents directly (mirrors the local "extract here" behaviour);
+  multi-root ZIPs upload each top-level item.
+- **Extract a file from inside a portal ZIP**: archive columns keep the originating portal
+  context (`PortalKnownFolder`/`PackageFullName`/`PortalPath`, threaded through nested
+  archive drill-ins in `ColumnNavigator`), so the extracted file uploads to the ZIP's
+  parent portal folder instead of the local cache.
+- **Overwrite policy**: before upload the target portal folder is listed and, if any item
+  name collides, `OverwriteDialog` asks once (Overwrite / Skip). Uploads never silently
+  clobber without confirmation.
+- **Free-space gates**: download-to-temp is checked against the known source file bytes;
+  the upload phase is checked against the portal volume via
+  `PortalCore.DestinationDriveRoot` (`LocalAppData` → `Q:\`, `DevelopmentFiles` → `D:\`).
+  Unknown sizes (un-crawled directories) skip the gate, matching the no-crawl policy of
+  the paste flow.
+- **Staging cleanup**: the temp folder is always deleted in `finally`.
+
 ## Known Limitations (documented, not bugs)
 
 - `.rar`: read-only (SharpCompress doesn't write rar) — extraction works, creation is not

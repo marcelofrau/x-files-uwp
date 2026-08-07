@@ -41,6 +41,44 @@ namespace XFiles.Tests
             Assert.AreEqual("\\Settings\\A\\B\\C", PortalCore.CombinePortalPath("\\Settings\\A\\B", "C"));
         }
 
+        // --- DestinationDriveRoot ---
+
+        [TestMethod]
+        public void DestinationDriveRoot_LocalAppData_Q()
+        {
+            Assert.AreEqual("Q:\\", PortalCore.DestinationDriveRoot("LocalAppData"));
+        }
+
+        [TestMethod]
+        public void DestinationDriveRoot_DevelopmentFiles_D()
+        {
+            Assert.AreEqual("D:\\", PortalCore.DestinationDriveRoot("DevelopmentFiles"));
+        }
+
+        [TestMethod]
+        public void DestinationDriveRoot_CaseInsensitive()
+        {
+            Assert.AreEqual("Q:\\", PortalCore.DestinationDriveRoot("localappdata"));
+        }
+
+        [TestMethod]
+        public void DestinationDriveRoot_UnknownFolder_Null()
+        {
+            Assert.IsNull(PortalCore.DestinationDriveRoot("PicturesLibrary"));
+        }
+
+        [TestMethod]
+        public void DestinationDriveRoot_Null_Null()
+        {
+            Assert.IsNull(PortalCore.DestinationDriveRoot(null));
+        }
+
+        [TestMethod]
+        public void DestinationDriveRoot_Empty_Null()
+        {
+            Assert.IsNull(PortalCore.DestinationDriveRoot(""));
+        }
+
         // --- IsDirectoryType ---
 
         [TestMethod]

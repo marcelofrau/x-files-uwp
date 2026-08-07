@@ -78,7 +78,7 @@ namespace XFiles.Controls
         {
             if (!_isBatchMode) return;
             var selected = CurrentList.SelectedItem as EntryViewModel;
-            if (selected == null || selected.IsDotDot || selected.IsDrive) return;
+            if (selected == null || selected.IsDotDot || selected.IsRootContainer) return;
 
             string key = selected.FullPath ?? ("P|" + selected.PortalKnownFolder + "|" +
                 selected.PortalPackageFullName + "|" + selected.PortalPath + "|" + selected.Name);
@@ -213,6 +213,54 @@ namespace XFiles.Controls
             return entries;
         }
 
+        /// <summary>
+        /// True when source and destination live on the same volume (drive letter).
+        /// Same-volume moves are renames — they consume no free space.
+        /// </summary>
+        private static bool IsSameVolume(string path, string destDir)
+        {
+            try
+            {
+                return string.Equals(
+                    Path.GetPathRoot(path),
+                    Path.GetPathRoot(destDir),
+                    StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Warns (and asks to continue) when the destination volume lacks free space
+        /// for an operation. Returns true when the operation may proceed. Skips the
+        /// check when requiredBytes is unknown (<= 0) or the query fails.
+        /// </summary>
+        private async Task<bool> EnsureDiskSpaceAsync(string destDir, long requiredBytes)
+        {
+            if (requiredBytes <= 0) return true;
+
+            var space = FileOperations.GetDriveFreeSpace(destDir);
+            if (space == null)
+            {
+                Log.Warn("EnsureDiskSpaceAsync: cannot query free space for {Dir}", destDir);
+                return true;
+            }
+
+            long free = (long)space.Value.FreeBytes;
+            if (!DiskSpaceGuard.IsInsufficient(free, requiredBytes)) return true;
+
+            UpdateFooterALabel("Confirm");
+            bool ok = await AlertDialogControl.ShowConfirmAsync(
+                DiskSpaceGuard.BuildWarning(free, requiredBytes) + " Continue anyway?");
+            UpdateFooterALabelFromSelection();
+
+            Log.Info("EnsureDiskSpaceAsync: insufficient space (need {Req}, free {Free}) — continue={Ok}",
+                requiredBytes, free, ok);
+            return ok;
+        }
+
         // --- File Action Sheet ---
 
         private async Task ShowFileActionSheetAsync()
@@ -288,7 +336,10 @@ namespace XFiles.Controls
                     await HandleDeleteAsync(entry);
                     break;
                 case FileAction.Extract:
-                    await HandleExtractAsync(entry);
+                    if (entry.IsPortal)
+                        await HandleExtractPortalZipAsync(entry);
+                    else
+                        await HandleExtractAsync(entry);
                     break;
                 case FileAction.ExtractFile:
                     await HandleExtractFileAsync(entry);
@@ -297,7 +348,10 @@ namespace XFiles.Controls
                     await HandleCreateFolderAsync(entry);
                     break;
                 case FileAction.CreateZip:
-                    await HandleCreateZipAsync(entry);
+                    if (entry.IsPortal)
+                        await HandleCreatePortalZipAsync(new List<FileEntry> { entry });
+                    else
+                        await HandleCreateZipAsync(entry);
                     break;
                 case FileAction.Refresh:
                     OnRefresh();
@@ -313,6 +367,9 @@ namespace XFiles.Controls
                     break;
                 case FileAction.RemoveFromFavorites:
                     await RemoveFavoriteAsync(entry.FullPath);
+                    break;
+                case FileAction.DiskSpace:
+                    await HandleDiskSpaceAsync(entry);
                     break;
             }
         }
@@ -340,11 +397,11 @@ namespace XFiles.Controls
 
             var entries = GetBatchEntries();
 
-            if ((action == FileAction.CreateZip || action == FileAction.Share) &&
+            if (action == FileAction.Share &&
                 entries.Any(e => e.IsPortal))
             {
-                Log.Warn("ShowFileActionSheetBatchAsync: ZIP/Share unsupported for portal items");
-                _ = AlertDialogControl.ShowAsync("ZIP/Share are not supported for portal items yet.", AlertType.Info);
+                Log.Warn("ShowFileActionSheetBatchAsync: Share unsupported for portal items");
+                _ = AlertDialogControl.ShowAsync("Sharing portal items is not supported yet.", AlertType.Info);
                 return;
             }
 
@@ -363,7 +420,10 @@ namespace XFiles.Controls
                     await HandleBatchDeleteAsync(entries);
                     break;
                 case FileAction.CreateZip:
-                    await HandleBatchCreateZipAsync(entries);
+                    if (entries.Any(e => e.IsPortal))
+                        await HandleCreatePortalZipAsync(entries);
+                    else
+                        await HandleBatchCreateZipAsync(entries);
                     break;
                 case FileAction.Share:
                     await HandleBatchShareAsync(entries);
@@ -424,6 +484,14 @@ namespace XFiles.Controls
             var sourcePaths = entries.Select(e => e.FullPath).ToList();
             var scan = await FileOperations.ScanPathsAsync(sourcePaths);
 
+            // Same-volume moves are renames — no free space consumed.
+            bool sameVolume = sourcePaths.All(p => IsSameVolume(p, destDir));
+            if (!sameVolume && !await EnsureDiskSpaceAsync(destDir, scan.TotalBytes))
+            {
+                Log.Verb("HandleBatchMoveAsync: cancelled — insufficient free space");
+                return;
+            }
+
             OpProgressDialog.Show("Moving", $"{entries.Count} items", destDir,
                 0, scan.FileCount);
 
@@ -433,16 +501,15 @@ namespace XFiles.Controls
 
             foreach (var entry in entries)
             {
+                long lastEntryTotal = 0;
                 var progress = new Progress<FileOperations.OperationProgress>(p =>
                 {
                     Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
                     {
+                        if (p.TotalBytes > 0) lastEntryTotal = p.TotalBytes;
                         OpProgressDialog.UpdateProgress(new FileOperations.OperationProgress
                         {
                             FileName = p.FileName,
-                            PercentComplete = scan.FileCount > 0
-                                ? (double)completedFiles / scan.FileCount * 100.0
-                                : -1,
                             FileIndex = completedFiles,
                             FileTotal = scan.FileCount,
                             BytesCopied = completedBytes + p.BytesCopied,
@@ -464,10 +531,10 @@ namespace XFiles.Controls
                     return;
                 }
 
-                var entryScan = await FileOperations.ScanPathsAsync(
-                    new List<string> { entry.FullPath });
-                completedFiles += entryScan.FileCount;
-                completedBytes += entryScan.TotalBytes;
+                completedFiles++;
+                completedBytes += entry.IsDirectory
+                    ? lastEntryTotal
+                    : Math.Max(0, entry.SizeBytes);
 
                 if (result == FileOperations.OperationResult.Success)
                     success++;
@@ -491,6 +558,24 @@ namespace XFiles.Controls
         private async Task ExecuteBatchMovePortalAsync(List<FileEntry> entries, string destDir)
         {
             Log.Info("ExecuteBatchMovePortalAsync: {Count} items → {Dest}", entries.Count, destDir);
+
+            long portalFileBytes = entries
+                .Where(e => e.IsPortal && !e.IsDirectory)
+                .Sum(e => Math.Max(0, e.SizeBytes));
+            var localPaths = entries
+                .Where(e => !e.IsPortal && !string.IsNullOrEmpty(e.FullPath))
+                .Select(e => e.FullPath).ToList();
+            long required = portalFileBytes;
+            if (localPaths.Count > 0 && !localPaths.All(p => IsSameVolume(p, destDir)))
+            {
+                var ls = await FileOperations.ScanPathsAsync(localPaths);
+                required += ls.TotalBytes;
+            }
+            if (required > 0 && !await EnsureDiskSpaceAsync(destDir, required))
+            {
+                Log.Verb("ExecuteBatchMovePortalAsync: cancelled — insufficient free space");
+                return;
+            }
 
             OpProgressDialog.Show("Moving", $"{entries.Count} items", destDir, 0, entries.Count);
 
@@ -638,8 +723,21 @@ namespace XFiles.Controls
             var zipPath = System.IO.Path.Combine(currentPath, zipName);
             Log.Info("HandleBatchCreateZipAsync: zipPath={Zip}", zipPath);
 
+            var scanZip = await FileOperations.ScanPathsAsync(
+                entries.Select(e => e.FullPath).ToList());
+            if (!await EnsureDiskSpaceAsync(currentPath, scanZip.TotalBytes))
+            {
+                Log.Verb("HandleBatchCreateZipAsync: cancelled — insufficient free space");
+                return;
+            }
+
             OpProgressDialog.Show("Creating ZIP", $"{entries.Count} items", zipPath);
-            var result = await FileOperations.CreateZipAsync(entries.Select(e => e.FullPath).ToList(), zipPath, null, OpProgressDialog.CancelToken);
+            var progress = new Progress<FileOperations.OperationProgress>(p =>
+            {
+                Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                    OpProgressDialog.UpdateProgress(p));
+            });
+            var result = await FileOperations.CreateZipAsync(entries.Select(e => e.FullPath).ToList(), zipPath, progress, OpProgressDialog.CancelToken);
 
             if (result == FileOperations.OperationResult.Cancelled)
             {
@@ -767,6 +865,12 @@ namespace XFiles.Controls
             var sourcePaths = entries.Select(e => e.FullPath).ToList();
             var scan = await FileOperations.ScanPathsAsync(sourcePaths);
 
+            if (!await EnsureDiskSpaceAsync(destDir, scan.TotalBytes))
+            {
+                Log.Verb("HandlePasteAsync: cancelled — insufficient free space");
+                return;
+            }
+
             OpProgressDialog.Show("Copying", $"{entries.Count} items", destDir,
                 0, scan.FileCount);
             if (scan.TotalBytes > 0)
@@ -786,18 +890,17 @@ namespace XFiles.Controls
                     destDir.TrimEnd('\\'),
                     StringComparison.OrdinalIgnoreCase);
 
+                long lastEntryTotal = 0;
                 // Progress updates overall completed bytes across all entries
                 var progress = new Progress<FileOperations.OperationProgress>(p =>
                 {
                     Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
                     {
+                        if (p.TotalBytes > 0) lastEntryTotal = p.TotalBytes;
                         // Overlay this entry's progress onto overall tracking
                         var overall = new FileOperations.OperationProgress
                         {
                             FileName = p.FileName,
-                            PercentComplete = scan.FileCount > 0
-                                ? (double)completedFiles / scan.FileCount * 100.0
-                                : -1,
                             FileIndex = completedFiles,
                             FileTotal = scan.FileCount,
                             BytesCopied = completedBytes + p.BytesCopied,
@@ -821,12 +924,13 @@ namespace XFiles.Controls
                 }
 
                 // After this entry completes, advance completedFiles by entry's file count
-                var entryScan = await FileOperations.ScanPathsAsync(
-                    new List<string> { entry.FullPath });
-                completedFiles += entryScan.FileCount;
-                completedBytes += entryScan.TotalBytes;
+                completedFiles++;
+                long entryBytes = entry.IsDirectory
+                    ? lastEntryTotal
+                    : Math.Max(0, entry.SizeBytes);
+                completedBytes += entryBytes;
 
-                OpProgressDialog.TrackCompleted(entry.Name, entryScan.TotalBytes);
+                OpProgressDialog.TrackCompleted(entry.Name, entryBytes);
 
                 if (result != FileOperations.OperationResult.Success)
                 {
@@ -873,6 +977,15 @@ namespace XFiles.Controls
                 Log.Warn("HandlePasteToPortalAsync: portal-to-portal paste unsupported");
                 _ = AlertDialogControl.ShowAsync("Portal-to-portal paste is not supported yet.", AlertType.Info);
                 return;
+            }
+
+            var driveRoot = PortalCore.DestinationDriveRoot(knownFolder);
+            if (driveRoot != null)
+            {
+                long knownBytes = entries
+                    .Where(e => !e.IsDirectory && e.SizeBytes > 0)
+                    .Sum(e => e.SizeBytes);
+                if (!await EnsureDiskSpaceAsync(driveRoot, knownBytes)) return;
             }
 
             Log.Info("HandlePasteToPortalAsync: {Count} local items → portal {Known}/{Pkg}{Path}",
@@ -928,12 +1041,360 @@ namespace XFiles.Controls
         }
 
         /// <summary>
+        /// Creates a ZIP from portal items: downloads each item to a temp staging dir,
+        /// compresses locally, then uploads the resulting ZIP to the current portal folder.
+        /// </summary>
+        private async Task HandleCreatePortalZipAsync(List<FileEntry> entries)
+        {
+            var current = _navigator.Current;
+            if (current == null || !current.IsPortal || string.IsNullOrEmpty(current.PortalKnownFolder))
+            {
+                Log.Warn("HandleCreatePortalZipAsync: not in a portal column");
+                return;
+            }
+
+            string defaultName = entries.Count == 1 ? entries[0].Name + ".zip" : "archive.zip";
+            var zipName = await InputDialogControl.ShowAsync("Create ZIP", defaultName);
+            if (string.IsNullOrEmpty(zipName))
+            {
+                Log.Verb("HandleCreatePortalZipAsync: cancelled");
+                return;
+            }
+
+            var knownFolder = current.PortalKnownFolder;
+            var packageFullName = current.PortalPackageFullName ?? "";
+            var portalPath = current.PortalPath ?? "\\";
+
+            // Local temp gate: known file bytes only (directories are not crawled).
+            long knownBytes = entries
+                .Where(e => !e.IsDirectory && e.SizeBytes > 0)
+                .Sum(e => e.SizeBytes);
+            if (!await EnsureDiskSpaceAsync(Windows.Storage.ApplicationData.Current.TemporaryFolder.Path, knownBytes))
+            {
+                Log.Verb("HandleCreatePortalZipAsync: cancelled — insufficient temp space");
+                return;
+            }
+
+            string staging = CreatePortalOpStagingDir();
+            try
+            {
+                var progress = new Progress<FileOperations.OperationProgress>(p =>
+                {
+                    Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                        OpProgressDialog.UpdateProgress(p));
+                });
+
+                OpProgressDialog.Show("Downloading from portal", $"{entries.Count} items", staging, 0, entries.Count);
+                foreach (var entry in entries)
+                {
+                    if (OpProgressDialog.CancelToken.IsCancellationRequested)
+                    {
+                        OpProgressDialog.Cancel();
+                        await Task.Delay(1500);
+                        OpProgressDialog.Close();
+                        return;
+                    }
+                    try
+                    {
+                        await XFiles.FileSystem.PortalBrowser.CopyPortalToLocalAsync(
+                            XFiles.FileSystem.PortalBrowser.ToPortalEntry(entry), staging, progress, OpProgressDialog.CancelToken);
+                        OpProgressDialog.TrackCompleted(entry.Name);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warn("HandleCreatePortalZipAsync: download {Name} failed: {Message}", entry.Name, ex.Message);
+                        OpProgressDialog.Complete();
+                        await Task.Delay(400);
+                        OpProgressDialog.Close();
+                        _ = AlertDialogControl.ShowAsync($"Failed to download \"{entry.Name}\" from the portal.", AlertType.Error);
+                        return;
+                    }
+                }
+
+                var sources = entries.Select(e => System.IO.Path.Combine(staging, e.Name)).ToList();
+                string zipPath = System.IO.Path.Combine(staging, zipName);
+
+                OpProgressDialog.SetPhase("Creating ZIP", entries.Count == 1 ? entries[0].Name : $"{entries.Count} items", zipName);
+                var result = await FileOperations.CreateZipAsync(sources, zipPath, progress, OpProgressDialog.CancelToken);
+                if (result == FileOperations.OperationResult.Cancelled)
+                {
+                    OpProgressDialog.Cancel();
+                    await Task.Delay(1500);
+                    OpProgressDialog.Close();
+                    return;
+                }
+                if (result != FileOperations.OperationResult.Success)
+                {
+                    OpProgressDialog.Complete();
+                    await Task.Delay(400);
+                    OpProgressDialog.Close();
+                    _ = AlertDialogControl.ShowAsync($"Failed to create ZIP \"{zipName}\".", AlertType.Error);
+                    return;
+                }
+
+                long zipSize = new System.IO.FileInfo(zipPath).Length;
+                var driveRoot = PortalCore.DestinationDriveRoot(knownFolder);
+                if (driveRoot != null && !await EnsureDiskSpaceAsync(driveRoot, zipSize))
+                {
+                    OpProgressDialog.Complete();
+                    await Task.Delay(400);
+                    OpProgressDialog.Close();
+                    return;
+                }
+
+                if (!await ConfirmPortalOverwriteOnceAsync(knownFolder, packageFullName, portalPath, new List<string> { zipName }))
+                {
+                    OpProgressDialog.Complete();
+                    await Task.Delay(400);
+                    OpProgressDialog.Close();
+                    Log.Info("HandleCreatePortalZipAsync: skipped — overwrite declined");
+                    return;
+                }
+
+                OpProgressDialog.SetPhase("Uploading to portal", zipName, knownFolder + portalPath);
+                await XFiles.FileSystem.PortalBrowser.UploadLocalToPortalAsync(
+                    zipPath, knownFolder, packageFullName, portalPath, progress, OpProgressDialog.CancelToken);
+
+                OpProgressDialog.Complete();
+                await Task.Delay(400);
+                OpProgressDialog.Close();
+
+                Log.Info("HandleCreatePortalZipAsync: success — '{Zip}' uploaded to portal {Known}/{Pkg}{Path}", zipName, knownFolder, packageFullName, portalPath);
+                await _navigator.RefreshCurrentAsync(zipName);
+            }
+            catch (Exception ex)
+            {
+                Log.Err("HandleCreatePortalZipAsync: {Ex}", ex);
+                OpProgressDialog.Close();
+                _ = AlertDialogControl.ShowAsync("Failed to create ZIP on the portal.", AlertType.Error);
+            }
+            finally
+            {
+                try { System.IO.Directory.Delete(staging, true); }
+                catch (Exception ex) { Log.Warn("HandleCreatePortalZipAsync: cleanup failed: {Message}", ex.Message); }
+            }
+        }
+
+        /// <summary>
+        /// Extracts a ZIP that lives in the portal: downloads it to the portal cache,
+        /// extracts into a temp staging dir, then uploads the extracted items to the
+        /// current portal folder. Single-root ZIPs upload their contents directly
+        /// (mirroring the local "extract here" behaviour).
+        /// </summary>
+        private async Task HandleExtractPortalZipAsync(FileEntry entry)
+        {
+            var current = _navigator.Current;
+            if (current == null || !current.IsPortal || string.IsNullOrEmpty(current.PortalKnownFolder))
+            {
+                Log.Warn("HandleExtractPortalZipAsync: not in a portal column");
+                return;
+            }
+
+            var knownFolder = current.PortalKnownFolder;
+            var packageFullName = current.PortalPackageFullName ?? "";
+            var portalPath = current.PortalPath ?? "\\";
+
+            string staging = CreatePortalOpStagingDir();
+            try
+            {
+                var progress = new Progress<FileOperations.OperationProgress>(p =>
+                {
+                    Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                        OpProgressDialog.UpdateProgress(p));
+                });
+
+                OpProgressDialog.Show("Downloading", entry.Name, "portal");
+                var portalEntry = XFiles.FileSystem.PortalBrowser.ToPortalEntry(entry);
+                string cacheZip = await PortalCache.EnsureAsync(portalEntry, new Progress<double>(p =>
+                {
+                    ((System.IProgress<FileOperations.OperationProgress>)progress).Report(new FileOperations.OperationProgress
+                    {
+                        FileName = entry.Name,
+                        PercentComplete = (int)(p * 100),
+                        BytesCopied = (long)(p * entry.SizeBytes),
+                        TotalBytes = entry.SizeBytes
+                    });
+                }));
+                if (cacheZip == null)
+                {
+                    OpProgressDialog.Close();
+                    _ = AlertDialogControl.ShowAsync($"Failed to download \"{entry.Name}\" from the portal.", AlertType.Error);
+                    return;
+                }
+
+                string extractDir = System.IO.Path.Combine(staging, "extracted");
+                System.IO.Directory.CreateDirectory(extractDir);
+
+                OpProgressDialog.SetPhase("Extracting", entry.Name, extractDir);
+                string rootFolder = await Task.Run(() => FileOperations.GetSingleRootFolder(cacheZip));
+                var result = await FileOperations.ExtractAsync(cacheZip, extractDir, progress, null, OpProgressDialog.CancelToken);
+                if (result == FileOperations.OperationResult.Cancelled)
+                {
+                    OpProgressDialog.Cancel();
+                    await Task.Delay(1500);
+                    OpProgressDialog.Close();
+                    return;
+                }
+                if (result != FileOperations.OperationResult.Success)
+                {
+                    OpProgressDialog.Complete();
+                    await Task.Delay(400);
+                    OpProgressDialog.Close();
+                    _ = AlertDialogControl.ShowAsync($"Failed to extract \"{entry.Name}\".", AlertType.Error);
+                    return;
+                }
+
+                // Single-root ZIP uploads its contents directly; multi-root uploads the top-level items.
+                List<string> uploadItems;
+                if (rootFolder != null)
+                {
+                    string rootPath = System.IO.Path.Combine(extractDir, rootFolder);
+                    uploadItems = System.IO.Directory.EnumerateFileSystemEntries(rootPath).ToList();
+                }
+                else
+                {
+                    uploadItems = System.IO.Directory.EnumerateFileSystemEntries(extractDir).ToList();
+                }
+
+                if (uploadItems.Count == 0)
+                {
+                    OpProgressDialog.Complete();
+                    await Task.Delay(400);
+                    OpProgressDialog.Close();
+                    _ = AlertDialogControl.ShowAsync("Nothing to extract.", AlertType.Info);
+                    return;
+                }
+
+                // Upload gate: total extracted bytes (files already on disk — cheap local scan).
+                long uploadBytes = uploadItems.Sum(item =>
+                    System.IO.Directory.Exists(item)
+                        ? System.IO.Directory.EnumerateFiles(item, "*", System.IO.SearchOption.AllDirectories).Sum(f => new System.IO.FileInfo(f).Length)
+                        : new System.IO.FileInfo(item).Length);
+                var driveRoot = PortalCore.DestinationDriveRoot(knownFolder);
+                if (driveRoot != null && !await EnsureDiskSpaceAsync(driveRoot, uploadBytes))
+                {
+                    OpProgressDialog.Complete();
+                    await Task.Delay(400);
+                    OpProgressDialog.Close();
+                    return;
+                }
+
+                var names = uploadItems
+                    .Select(i => System.IO.Path.GetFileName(i.TrimEnd('\\', '/')))
+                    .ToList();
+                if (!await ConfirmPortalOverwriteOnceAsync(knownFolder, packageFullName, portalPath, names))
+                {
+                    OpProgressDialog.Complete();
+                    await Task.Delay(400);
+                    OpProgressDialog.Close();
+                    Log.Info("HandleExtractPortalZipAsync: skipped — overwrite declined");
+                    return;
+                }
+
+                OpProgressDialog.SetPhase("Uploading to portal", entry.Name, knownFolder + portalPath);
+                foreach (var item in uploadItems)
+                {
+                    if (OpProgressDialog.CancelToken.IsCancellationRequested)
+                    {
+                        OpProgressDialog.Cancel();
+                        await Task.Delay(1500);
+                        OpProgressDialog.Close();
+                        return;
+                    }
+                    try
+                    {
+                        await XFiles.FileSystem.PortalBrowser.UploadLocalToPortalAsync(
+                            item, knownFolder, packageFullName, portalPath, progress, OpProgressDialog.CancelToken);
+                        OpProgressDialog.TrackCompleted(System.IO.Path.GetFileName(item));
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warn("HandleExtractPortalZipAsync: upload {Item} failed: {Message}", item, ex.Message);
+                        OpProgressDialog.Complete();
+                        await Task.Delay(400);
+                        OpProgressDialog.Close();
+                        _ = AlertDialogControl.ShowAsync($"Failed to upload \"{System.IO.Path.GetFileName(item)}\".", AlertType.Error);
+                        return;
+                    }
+                }
+
+                OpProgressDialog.Complete();
+                await Task.Delay(400);
+                OpProgressDialog.Close();
+
+                Log.Info("HandleExtractPortalZipAsync: success — '{Name}' extracted to portal {Known}/{Pkg}{Path}", entry.Name, knownFolder, packageFullName, portalPath);
+                await _navigator.RefreshCurrentAsync();
+            }
+            catch (Exception ex)
+            {
+                Log.Err("HandleExtractPortalZipAsync: {Ex}", ex);
+                OpProgressDialog.Close();
+                _ = AlertDialogControl.ShowAsync($"Failed to extract \"{entry.Name}\".", AlertType.Error);
+            }
+            finally
+            {
+                try { System.IO.Directory.Delete(staging, true); }
+                catch (Exception ex) { Log.Warn("HandleExtractPortalZipAsync: cleanup failed: {Message}", ex.Message); }
+            }
+        }
+
+        /// <summary>
+        /// Creates a unique temp staging folder for portal zip operations.
+        /// </summary>
+        private static string CreatePortalOpStagingDir()
+        {
+            string dir = System.IO.Path.Combine(
+                Windows.Storage.ApplicationData.Current.TemporaryFolder.Path,
+                "portal-op-" + Guid.NewGuid().ToString("N"));
+            System.IO.Directory.CreateDirectory(dir);
+            return dir;
+        }
+
+        /// <summary>
+        /// Lists the portal directory and, if any of the given names already exist,
+        /// asks once (Overwrite / Skip) before the upload proceeds. Returns true when
+        /// the upload may continue. Listing failures proceed (no false blocking).
+        /// </summary>
+        private async Task<bool> ConfirmPortalOverwriteOnceAsync(
+            string knownFolder, string packageFullName, string portalPath, List<string> names)
+        {
+            try
+            {
+                var existing = await DevicePortalService.ListPortalFilesAsync(knownFolder, packageFullName ?? "", portalPath ?? "\\");
+                string first = names.FirstOrDefault(n =>
+                    existing.Any(e => string.Equals(e.Name, n, StringComparison.OrdinalIgnoreCase)));
+                if (first == null) return true;
+
+                UpdateFooterALabel("Select");
+                int decision = await OverwriteDialogControl.ShowAsync(first);
+                UpdateFooterALabelFromSelection();
+
+                Log.Info("ConfirmPortalOverwriteOnceAsync: '{First}' exists on portal — decision={Decision}", first, decision);
+                return decision != 0;
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("ConfirmPortalOverwriteOnceAsync: listing failed — proceeding: {Message}", ex.Message);
+                return true;
+            }
+        }
+
+        /// <summary>
         /// Pastes portal clipboard entries into a local directory via REST download.
         /// </summary>
         private async Task HandlePastePortalToLocalAsync(string destDir)
         {
             var entries = ClipboardState.Entries;
             Log.Info("HandlePastePortalToLocalAsync: {Count} portal items → {Dest}", entries.Count, destDir);
+
+            long required = entries
+                .Where(e => e.IsPortal && !e.IsDirectory)
+                .Sum(e => Math.Max(0, e.SizeBytes));
+            if (required > 0 && !await EnsureDiskSpaceAsync(destDir, required))
+            {
+                Log.Verb("HandlePastePortalToLocalAsync: cancelled — insufficient free space");
+                return;
+            }
 
             OpProgressDialog.Show("Copying", $"{entries.Count} items", destDir, 0, entries.Count);
 
@@ -1034,6 +1495,14 @@ namespace XFiles.Controls
             var scan = await FileOperations.ScanPathsAsync(
                 new List<string> { entry.FullPath });
 
+            // Same-volume moves are renames — no free space consumed.
+            if (!IsSameVolume(entry.FullPath, destDir) &&
+                !await EnsureDiskSpaceAsync(destDir, scan.TotalBytes))
+            {
+                Log.Verb("HandleMoveAsync: cancelled — insufficient free space");
+                return;
+            }
+
             var progress = new Progress<FileOperations.OperationProgress>(p =>
             {
                 Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
@@ -1094,6 +1563,17 @@ namespace XFiles.Controls
             {
                 Log.Verb("HandlePortalMoveAsync: confirmation cancelled");
                 return;
+            }
+
+            // 2.5 Check free space for single portal files
+            if (!entry.IsDirectory)
+            {
+                long required = Math.Max(0, entry.SizeBytes);
+                if (required > 0 && !await EnsureDiskSpaceAsync(destDir, required))
+                {
+                    Log.Verb("HandlePortalMoveAsync: cancelled — insufficient free space");
+                    return;
+                }
             }
 
             // 3. Copy to local, then delete on the portal
@@ -1335,6 +1815,13 @@ namespace XFiles.Controls
                 return tcs.Task;
             });
 
+            long required = await FileOperations.GetArchiveUncompressedSizeAsync(entry.FullPath);
+            if (!await EnsureDiskSpaceAsync(destDir, required))
+            {
+                Log.Verb("HandleExtractAsync: cancelled — insufficient free space");
+                return;
+            }
+
             OpProgressDialog.Show("Extracting", entry.Name, destDir);
             var result = await FileOperations.ExtractAsync(entry.FullPath, destDir, progress, conflictCallback, OpProgressDialog.CancelToken);
 
@@ -1374,6 +1861,15 @@ namespace XFiles.Controls
                 return;
             }
 
+            // Extracting a file from inside a portal ZIP: write to temp, then upload
+            // to the ZIP's parent portal folder (the cached copy is not a real target).
+            var current = _navigator.Current;
+            if (current != null && current.IsArchive && !string.IsNullOrEmpty(current.PortalKnownFolder))
+            {
+                await HandleExtractFileFromPortalZipAsync(entry);
+                return;
+            }
+
             var destDir = System.IO.Path.GetDirectoryName(entry.ArchiveRootPath);
             if (string.IsNullOrEmpty(destDir)) return;
 
@@ -1398,6 +1894,14 @@ namespace XFiles.Controls
                 });
                 return tcs.Task;
             });
+
+            long required = await FileOperations.GetArchiveEntryUncompressedSizeAsync(
+                entry.ArchiveRootPath, entry.ArchiveInternalPath);
+            if (!await EnsureDiskSpaceAsync(destDir, required))
+            {
+                Log.Verb("HandleExtractFileAsync: cancelled — insufficient free space");
+                return;
+            }
 
             OpProgressDialog.Show("Extracting", fileName, destDir);
             var result = await FileOperations.ExtractFileAsync(
@@ -1425,6 +1929,102 @@ namespace XFiles.Controls
             {
                 Log.Warn("HandleExtractFileAsync: failed");
                 _ = AlertDialogControl.ShowAsync($"Failed to extract \"{fileName}\".", AlertType.Error);
+            }
+        }
+
+        /// <summary>
+        /// Extracts a single file from inside a portal ZIP and uploads it to the ZIP's
+        /// parent portal folder. The archive column's cached copy is never the target —
+        /// the file goes back to the console.
+        /// </summary>
+        private async Task HandleExtractFileFromPortalZipAsync(FileEntry entry)
+        {
+            var current = _navigator.Current;
+            string knownFolder = current.PortalKnownFolder;
+            string packageFullName = current.PortalPackageFullName ?? "";
+            string portalPath = current.PortalPath ?? "\\";
+            string fileName = System.IO.Path.GetFileName(entry.ArchiveInternalPath);
+
+            Log.Info("HandleExtractFileFromPortalZipAsync: {Archive}|{Internal} → portal {Known}/{Pkg}{Path}",
+                entry.ArchiveRootPath, entry.ArchiveInternalPath, knownFolder, packageFullName, portalPath);
+
+            string staging = CreatePortalOpStagingDir();
+            try
+            {
+                var progress = new Progress<FileOperations.OperationProgress>(p =>
+                {
+                    Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                        OpProgressDialog.UpdateProgress(p));
+                });
+
+                OpProgressDialog.Show("Extracting", fileName, staging);
+                var result = await FileOperations.ExtractFileAsync(
+                    entry.ArchiveRootPath, entry.ArchiveInternalPath, staging, null, OpProgressDialog.CancelToken);
+                if (result == FileOperations.OperationResult.Cancelled)
+                {
+                    OpProgressDialog.Cancel();
+                    await Task.Delay(1500);
+                    OpProgressDialog.Close();
+                    return;
+                }
+                if (result != FileOperations.OperationResult.Success)
+                {
+                    OpProgressDialog.Complete();
+                    await Task.Delay(400);
+                    OpProgressDialog.Close();
+                    _ = AlertDialogControl.ShowAsync($"Failed to extract \"{fileName}\".", AlertType.Error);
+                    return;
+                }
+
+                string extractedPath = System.IO.Path.Combine(staging, fileName);
+                if (!System.IO.File.Exists(extractedPath))
+                {
+                    OpProgressDialog.Complete();
+                    await Task.Delay(400);
+                    OpProgressDialog.Close();
+                    _ = AlertDialogControl.ShowAsync($"Extracted file not found: \"{fileName}\".", AlertType.Error);
+                    return;
+                }
+
+                long fileSize = new System.IO.FileInfo(extractedPath).Length;
+                var driveRoot = PortalCore.DestinationDriveRoot(knownFolder);
+                if (driveRoot != null && !await EnsureDiskSpaceAsync(driveRoot, fileSize))
+                {
+                    OpProgressDialog.Complete();
+                    await Task.Delay(400);
+                    OpProgressDialog.Close();
+                    return;
+                }
+
+                if (!await ConfirmPortalOverwriteOnceAsync(knownFolder, packageFullName, portalPath, new List<string> { fileName }))
+                {
+                    OpProgressDialog.Complete();
+                    await Task.Delay(400);
+                    OpProgressDialog.Close();
+                    Log.Info("HandleExtractFileFromPortalZipAsync: skipped — overwrite declined");
+                    return;
+                }
+
+                OpProgressDialog.SetPhase("Uploading to portal", fileName, knownFolder + portalPath);
+                await XFiles.FileSystem.PortalBrowser.UploadLocalToPortalAsync(
+                    extractedPath, knownFolder, packageFullName, portalPath, progress, OpProgressDialog.CancelToken);
+
+                OpProgressDialog.Complete();
+                await Task.Delay(400);
+                OpProgressDialog.Close();
+
+                Log.Info("HandleExtractFileFromPortalZipAsync: uploaded {File} to portal {Known}/{Pkg}{Path}", fileName, knownFolder, packageFullName, portalPath);
+            }
+            catch (Exception ex)
+            {
+                Log.Err("HandleExtractFileFromPortalZipAsync: {Ex}", ex);
+                OpProgressDialog.Close();
+                _ = AlertDialogControl.ShowAsync($"Failed to extract \"{fileName}\" to the portal.", AlertType.Error);
+            }
+            finally
+            {
+                try { System.IO.Directory.Delete(staging, true); }
+                catch (Exception ex) { Log.Warn("HandleExtractFileFromPortalZipAsync: cleanup failed: {Message}", ex.Message); }
             }
         }
 
@@ -1517,8 +2117,21 @@ namespace XFiles.Controls
             var zipPath = System.IO.Path.Combine(currentPath, zipName);
             Log.Info("HandleCreateZipAsync: zipPath={Zip}", zipPath);
 
+            var scanZip = await FileOperations.ScanPathsAsync(
+                new List<string> { entry.FullPath });
+            if (!await EnsureDiskSpaceAsync(currentPath, scanZip.TotalBytes))
+            {
+                Log.Verb("HandleCreateZipAsync: cancelled — insufficient free space");
+                return;
+            }
+
             OpProgressDialog.Show("Creating ZIP", entry.Name, zipPath);
-            var result = await FileOperations.CreateZipAsync(entry.FullPath, zipPath, null, OpProgressDialog.CancelToken);
+            var progress = new Progress<FileOperations.OperationProgress>(p =>
+            {
+                Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                    OpProgressDialog.UpdateProgress(p));
+            });
+            var result = await FileOperations.CreateZipAsync(entry.FullPath, zipPath, progress, OpProgressDialog.CancelToken);
 
             if (result == FileOperations.OperationResult.Cancelled)
             {
@@ -1543,6 +2156,53 @@ namespace XFiles.Controls
                 Log.Warn("HandleCreateZipAsync: failed");
                 _ = AlertDialogControl.ShowAsync($"Failed to create ZIP \"{zipName}\".", AlertType.Error);
             }
+        }
+        private async Task HandleDiskSpaceAsync(FileEntry entry)
+        {
+            var volumes = ResolveDiskSpaceVolumes(entry);
+            Log.Info("HandleDiskSpaceAsync: {Volumes}",
+                volumes.Count == 0 ? "<none>" : string.Join(", ", volumes.Select(v => v.Label == null ? v.Root : $"{v.Root} ({v.Label})")));
+            UpdateFooterALabel("Close");
+            DiskUsageDialogControl.Show(volumes.ToArray());
+            await Task.Delay(1);
+        }
+
+        private static List<DiskVolumeInfo> ResolveDiskSpaceVolumes(FileEntry entry)
+        {
+            var volumes = new List<DiskVolumeInfo>();
+            if (entry == null) return volumes;
+
+            if (entry.IsRootContainer)
+            {
+                if (entry.IsPortal)
+                {
+                    if (string.IsNullOrEmpty(entry.PortalKnownFolder))
+                    {
+                        // User Folders root — spans both portal volumes.
+                        volumes.Add(new DiskVolumeInfo(PortalCore.DestinationDriveRoot("LocalAppData"), "LocalAppData"));
+                        volumes.Add(new DiskVolumeInfo(PortalCore.DestinationDriveRoot("DevelopmentFiles"), "DevelopmentFiles"));
+                    }
+                    else
+                    {
+                        volumes.Add(new DiskVolumeInfo(PortalCore.DestinationDriveRoot(entry.PortalKnownFolder), entry.PortalKnownFolder));
+                    }
+                }
+                else if (entry.IsDrive)
+                {
+                    volumes.Add(new DiskVolumeInfo(entry.FullPath, null));
+                }
+                else if (!string.IsNullOrEmpty(entry.FullPath))
+                {
+                    // AppData shortcut.
+                    volumes.Add(new DiskVolumeInfo(entry.FullPath, null));
+                }
+            }
+            else if (!string.IsNullOrEmpty(entry.FullPath))
+            {
+                volumes.Add(new DiskVolumeInfo(entry.FullPath, null));
+            }
+
+            return volumes.Where(v => !string.IsNullOrEmpty(v.Root)).ToList();
         }
     }
 }
