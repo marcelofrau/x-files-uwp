@@ -1,6 +1,7 @@
 using System;
 using System.Buffers;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -166,7 +167,7 @@ namespace XFiles.FileSystem
             public long TotalBytes;
         }
 
-        private const int CopyChunkSize = 65536; // 64KB
+        private const int CopyChunkSize = 1024 * 1024; // 1MB
 
         /// <summary>
         /// Stream wrapper that counts bytes written and invokes a throttled callback.
@@ -177,19 +178,23 @@ namespace XFiles.FileSystem
             private const long ReportThrottle = 256 * 1024; // report every 256KB
             private readonly System.IO.Stream _inner;
             private readonly Action<long> _onWrite;
+            private readonly CancellationToken _token;
             private long _lastReport;
 
             public long BytesWritten { get; private set; }
 
-            public CountingWriteStream(System.IO.Stream inner, Action<long> onWrite)
+            public CountingWriteStream(System.IO.Stream inner, Action<long> onWrite, CancellationToken token)
             {
                 _inner = inner;
                 _onWrite = onWrite;
-                _lastReport = long.MinValue;
+                _token = token;
+                _lastReport = -ReportThrottle;
             }
 
             public override void Write(byte[] buffer, int offset, int count)
             {
+                if (_token.IsCancellationRequested)
+                    throw new OperationCanceledException(_token);
                 _inner.Write(buffer, offset, count);
                 BytesWritten += count;
                 if (_onWrite != null && BytesWritten - _lastReport >= ReportThrottle)
@@ -216,7 +221,8 @@ namespace XFiles.FileSystem
         /// </summary>
         private static bool SaveZipWithProgress(
             SharpCompress.Archives.Zip.ZipArchive archive, string zipPath,
-            long totalBytes, IProgress<OperationProgress> progress)
+            long totalBytes, IProgress<OperationProgress> progress,
+            CancellationToken token = default)
         {
             using (var writeStream = Win32FileWriteStream.Create(zipPath))
             {
@@ -226,33 +232,52 @@ namespace XFiles.FileSystem
                     return false;
                 }
 
-                var counting = new CountingWriteStream(writeStream, written =>
+                // SharpCompress's ZipWriter emits Deflate output in ~8KB chunks; buffer
+                // them so Win32 WriteFile calls are 1MB instead of thousands of small ones.
+                using (var buffered = new BufferedStream(writeStream, 1024 * 1024))
                 {
+                    var counting = new CountingWriteStream(buffered, written =>
+                    {
+                        progress?.Report(new OperationProgress
+                        {
+                            FileName = "Writing ZIP...",
+                            BytesCopied = written,
+                            TotalBytes = totalBytes,
+                            PercentComplete = totalBytes > 0
+                                ? Math.Min(100.0, (double)written / totalBytes * 100.0)
+                                : -1
+                        });
+                    }, token);
+
+                    archive.SaveTo(counting,
+                        new SharpCompress.Writers.WriterOptions(SharpCompress.Common.CompressionType.Deflate));
+                    counting.Flush();
+                    buffered.Flush();
+
                     progress?.Report(new OperationProgress
                     {
-                        FileName = "Writing ZIP...",
-                        BytesCopied = written,
+                        FileName = "Finalizing...",
+                        BytesCopied = counting.BytesWritten,
                         TotalBytes = totalBytes,
                         PercentComplete = totalBytes > 0
-                            ? Math.Min(100.0, (double)written / totalBytes * 100.0)
+                            ? Math.Min(100.0, (double)counting.BytesWritten / totalBytes * 100.0)
                             : -1
                     });
-                });
+                    return true;
+                }
+            }
+        }
 
-                archive.SaveTo(counting,
-                    new SharpCompress.Writers.WriterOptions(SharpCompress.Common.CompressionType.Deflate));
-                counting.Flush();
-
-                progress?.Report(new OperationProgress
-                {
-                    FileName = "Finalizing...",
-                    BytesCopied = counting.BytesWritten,
-                    TotalBytes = totalBytes,
-                    PercentComplete = totalBytes > 0
-                        ? Math.Min(100.0, (double)counting.BytesWritten / totalBytes * 100.0)
-                        : -1
-                });
-                return true;
+        private static void CleanupFailedZip(string zipPath)
+        {
+            try
+            {
+                if (DeleteFileFromAppW(zipPath))
+                    Log.Dbg("FileOperations.CleanupFailedZip: removed partial zip {Path}", zipPath);
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("FileOperations.CleanupFailedZip: could not remove partial zip {Path}", ex, zipPath);
             }
         }
 
@@ -287,8 +312,7 @@ namespace XFiles.FileSystem
                         var buffer = ArrayPool<byte>.Shared.Rent(CopyChunkSize);
                         long totalCopied = 0;
                         int bytesRead;
-                        int chunkCount = 0;
-                        const int progressInterval = 32;
+                        var lastReport = Stopwatch.GetTimestamp();
 
                         try
                         {
@@ -301,10 +325,12 @@ namespace XFiles.FileSystem
                                 {
                                     writeStream.Write(buffer, 0, bytesRead);
                                     totalCopied += bytesRead;
-                                    chunkCount++;
 
-                                    if (fileTotalBytes > 0 && (chunkCount % progressInterval == 0 || totalCopied >= fileTotalBytes))
+                                    long now = Stopwatch.GetTimestamp();
+                                    double elapsedMs = (now - lastReport) * 1000.0 / Stopwatch.Frequency;
+                                    if (fileTotalBytes > 0 && (elapsedMs >= 100 || totalCopied >= fileTotalBytes))
                                     {
+                                        lastReport = now;
                                         progress?.Report(new OperationProgress
                                         {
                                             FileName = fileName,
@@ -1182,6 +1208,7 @@ namespace XFiles.FileSystem
                                             long entryCopied = 0;
                                             long entrySize = (long)entry.Size;
                                             int bytesRead;
+                                            var lastReport = Stopwatch.GetTimestamp();
 
                                             do
                                             {
@@ -1193,15 +1220,21 @@ namespace XFiles.FileSystem
                                                     writeStream.Write(buffer, 0, bytesRead);
                                                     entryCopied += bytesRead;
 
-                                                    progress?.Report(new OperationProgress
+                                                    long now = Stopwatch.GetTimestamp();
+                                                    double elapsedMs = (now - lastReport) * 1000.0 / Stopwatch.Frequency;
+                                                    if (elapsedMs >= 100 || entryCopied >= entrySize)
                                                     {
-                                                        FileName = entry.Key,
-                                                        PercentComplete = totalFiles > 0 ? (double)(completedFiles) / totalFiles * 100.0 : -1,
-                                                        FileIndex = completedFiles,
-                                                        FileTotal = totalFiles,
-                                                        BytesCopied = completedBytes + entryCopied,
-                                                        TotalBytes = totalBytes
-                                                    });
+                                                        lastReport = now;
+                                                        progress?.Report(new OperationProgress
+                                                        {
+                                                            FileName = entry.Key,
+                                                            PercentComplete = totalFiles > 0 ? (double)(completedFiles) / totalFiles * 100.0 : -1,
+                                                            FileIndex = completedFiles,
+                                                            FileTotal = totalFiles,
+                                                            BytesCopied = completedBytes + entryCopied,
+                                                            TotalBytes = totalBytes
+                                                        });
+                                                    }
                                                 }
                                             }
                                             while (bytesRead > 0);
@@ -1266,7 +1299,8 @@ namespace XFiles.FileSystem
         public static async Task<OperationResult> ExtractFileAsync(
             string archivePath, string internalPath, string destDir,
             Func<string, Task<int>> conflictCallback = null,
-            CancellationToken token = default)
+            CancellationToken token = default,
+            IProgress<OperationProgress> progress = null)
         {
             return await Task.Run(async () =>
             {
@@ -1330,7 +1364,38 @@ namespace XFiles.FileSystem
                                         return OperationResult.Failed;
                                     }
 
-                                    entryStream.CopyTo(writeStream);
+                                    var buffer = new byte[CopyChunkSize];
+                                    long entryCopied = 0;
+                                    long entrySize = (long)entry.Size;
+                                    int bytesRead;
+                                    var lastReport = Stopwatch.GetTimestamp();
+
+                                    do
+                                    {
+                                        if (token.IsCancellationRequested) return OperationResult.Cancelled;
+
+                                        bytesRead = entryStream.Read(buffer, 0, CopyChunkSize);
+                                        if (bytesRead > 0)
+                                        {
+                                            writeStream.Write(buffer, 0, bytesRead);
+                                            entryCopied += bytesRead;
+
+                                            long now = Stopwatch.GetTimestamp();
+                                            double elapsedMs = (now - lastReport) * 1000.0 / Stopwatch.Frequency;
+                                            if (elapsedMs >= 100 || entryCopied >= entrySize)
+                                            {
+                                                lastReport = now;
+                                                progress?.Report(new OperationProgress
+                                                {
+                                                    FileName = fileName,
+                                                    PercentComplete = entrySize > 0 ? (double)entryCopied / entrySize * 100.0 : -1,
+                                                    BytesCopied = entryCopied,
+                                                    TotalBytes = entrySize
+                                                });
+                                            }
+                                        }
+                                    }
+                                    while (bytesRead > 0);
                                 }
                             }
 
@@ -1501,88 +1566,104 @@ namespace XFiles.FileSystem
                     {
                         var pathType = CheckPathType(sourcePath);
                         Log.Info("FileOperations.CreateZip: pathType={Type}", pathType ?? "null");
-                        if (pathType == "file")
+
+                        // SharpCompress reads entry streams lazily during SaveTo, so the
+                        // streams must stay open until after SaveZipWithProgress completes.
+                        var openStreams = new List<Stream>();
+                        try
                         {
-                            var fileName = System.IO.Path.GetFileName(sourcePath);
-                            using (var stream = Win32FileStream.OpenRead(sourcePath))
+                            if (pathType == "file")
                             {
+                                var fileName = System.IO.Path.GetFileName(sourcePath);
+                                var stream = Win32FileStream.OpenRead(sourcePath);
                                 if (stream == null)
                                 {
                                     Log.Warn("FileOperations.CreateZip: cannot read {Path}", sourcePath);
                                     return OperationResult.Failed;
                                 }
+                                openStreams.Add(stream);
                                 archive.AddEntry(fileName, stream);
                                 Log.Verb("FileOperations.CreateZip: added {Entry} ({Size} bytes)", fileName, stream.Length);
-                            }
 
-                            progress?.Report(new OperationProgress
-                            {
-                                FileName = fileName,
-                                PercentComplete = -1
-                            });
-                        }
-                        else if (pathType == "directory")
-                        {
-                            var files = EnumerateFilesRecursive(sourcePath);
-                            Log.Info("FileOperations.CreateZip: enumerated {Count} files from {Source}", files.Count, sourcePath);
-                            int fileIndex = 0;
-                            foreach (var file in files)
-                            {
-                                if (token.IsCancellationRequested) return OperationResult.Cancelled;
-
-                                var entryName = file.Substring(sourcePath.Length + 1);
-                                using (var stream = Win32FileStream.OpenRead(file))
+                                progress?.Report(new OperationProgress
                                 {
+                                    FileName = fileName,
+                                    PercentComplete = -1
+                                });
+                            }
+                            else if (pathType == "directory")
+                            {
+                                var files = EnumerateFilesRecursive(sourcePath);
+                                Log.Info("FileOperations.CreateZip: enumerated {Count} files from {Source}", files.Count, sourcePath);
+                                int fileIndex = 0;
+                                foreach (var file in files)
+                                {
+                                    if (token.IsCancellationRequested) return OperationResult.Cancelled;
+
+                                    var entryName = file.Substring(sourcePath.Length + 1);
+                                    var stream = Win32FileStream.OpenRead(file);
                                     if (stream == null)
                                     {
                                         Log.Warn("FileOperations.CreateZip: cannot read {Path}", file);
                                         continue;
                                     }
+                                    openStreams.Add(stream);
                                     archive.AddEntry(entryName, stream);
                                     Log.Verb("FileOperations.CreateZip: added {Entry} ({Size} bytes)", entryName, stream.Length);
+
+                                    fileIndex++;
+                                    progress?.Report(new OperationProgress
+                                    {
+                                        FileName = entryName,
+                                        PercentComplete = -1,
+                                        FileIndex = fileIndex,
+                                        FileTotal = files.Count
+                                    });
                                 }
-
-                                fileIndex++;
-                                progress?.Report(new OperationProgress
-                                {
-                                    FileName = entryName,
-                                    PercentComplete = -1,
-                                    FileIndex = fileIndex,
-                                    FileTotal = files.Count
-                                });
+                                Log.Info("FileOperations.CreateZip: added {Count} entries total", fileIndex);
                             }
-                            Log.Info("FileOperations.CreateZip: added {Count} entries total", fileIndex);
-                        }
-                        else
-                        {
-                            Log.Warn("FileOperations.CreateZip: source not found {Source}", sourcePath);
-                            return OperationResult.Failed;
-                        }
+                            else
+                            {
+                                Log.Warn("FileOperations.CreateZip: source not found {Source}", sourcePath);
+                                return OperationResult.Failed;
+                            }
 
-                        long zipTotal = 0;
-                        if (pathType == "file")
-                        {
-                            zipTotal = GetFileSizePInvoke(sourcePath);
-                        }
-                        else if (pathType == "directory")
-                        {
-                            var filesForTotal = EnumerateFilesRecursive(sourcePath);
-                            foreach (var f in filesForTotal) zipTotal += GetFileSizePInvoke(f);
-                        }
+                            long zipTotal = 0;
+                            if (pathType == "file")
+                            {
+                                zipTotal = GetFileSizePInvoke(sourcePath);
+                            }
+                            else if (pathType == "directory")
+                            {
+                                var filesForTotal = EnumerateFilesRecursive(sourcePath);
+                                foreach (var f in filesForTotal) zipTotal += GetFileSizePInvoke(f);
+                            }
 
-                        if (!SaveZipWithProgress(archive, zipPath, zipTotal, progress))
+                            if (!SaveZipWithProgress(archive, zipPath, zipTotal, progress, token))
+                            {
+                                Log.Warn("FileOperations.CreateZip: cannot create zip file {Path}", zipPath);
+                                return OperationResult.Failed;
+                            }
+                        }
+                        finally
                         {
-                            Log.Warn("FileOperations.CreateZip: cannot create zip file {Path}", zipPath);
-                            return OperationResult.Failed;
+                            foreach (var s in openStreams) s.Dispose();
                         }
                     }
 
                     Log.Info("FileOperations.CreateZip: done — {Zip} ({Size} bytes) in {Ms}ms", zipPath, GetFileSizePInvoke(zipPath), (DateTime.UtcNow - started).TotalMilliseconds);
                     return OperationResult.Success;
                 }
+                catch (OperationCanceledException)
+                {
+                    Log.Info("FileOperations.CreateZip: cancelled");
+                    CleanupFailedZip(zipPath);
+                    return OperationResult.Cancelled;
+                }
                 catch (Exception ex)
                 {
                     Log.Warn("FileOperations.CreateZip exception", ex);
+                    CleanupFailedZip(zipPath);
                     return OperationResult.Failed;
                 }
             });
@@ -1627,50 +1708,66 @@ namespace XFiles.FileSystem
                         }
                         Log.Info("FileOperations.CreateZip(multi): {Count} files to compress", allFiles.Count);
 
-                        foreach (var file in allFiles)
+                        // SharpCompress reads entry streams lazily during SaveTo, so the
+                        // streams must stay open until after SaveZipWithProgress completes.
+                        var openStreams = new List<Stream>();
+                        try
                         {
-                            if (token.IsCancellationRequested) return OperationResult.Cancelled;
-
-                            string entryName = System.IO.Path.GetFileName(file);
-
-                            using (var stream = Win32FileStream.OpenRead(file))
+                            foreach (var file in allFiles)
                             {
+                                if (token.IsCancellationRequested) return OperationResult.Cancelled;
+
+                                string entryName = System.IO.Path.GetFileName(file);
+
+                                var stream = Win32FileStream.OpenRead(file);
                                 if (stream == null)
                                 {
                                     Log.Warn("FileOperations.CreateZip(multi): cannot read {Path}", file);
                                     continue;
                                 }
+                                openStreams.Add(stream);
                                 archive.AddEntry(entryName, stream);
                                 Log.Verb("FileOperations.CreateZip(multi): added {Entry} ({Size} bytes)", entryName, stream.Length);
+
+                                fileIndex++;
+                                progress?.Report(new OperationProgress
+                                {
+                                    FileName = entryName,
+                                    PercentComplete = -1,
+                                    FileIndex = fileIndex,
+                                    FileTotal = allFiles.Count
+                                });
                             }
+                            Log.Info("FileOperations.CreateZip(multi): added {Count} entries total", fileIndex);
 
-                            fileIndex++;
-                            progress?.Report(new OperationProgress
+                            long zipTotal = 0;
+                            foreach (var f in allFiles) zipTotal += GetFileSizePInvoke(f);
+
+                            if (!SaveZipWithProgress(archive, zipPath, zipTotal, progress, token))
                             {
-                                FileName = entryName,
-                                PercentComplete = -1,
-                                FileIndex = fileIndex,
-                                FileTotal = allFiles.Count
-                            });
+                                Log.Warn("FileOperations.CreateZip(multi): cannot create zip file {Path}", zipPath);
+                                return OperationResult.Failed;
+                            }
                         }
-                        Log.Info("FileOperations.CreateZip(multi): added {Count} entries total", fileIndex);
-
-                        long zipTotal = 0;
-                        foreach (var f in allFiles) zipTotal += GetFileSizePInvoke(f);
-
-                        if (!SaveZipWithProgress(archive, zipPath, zipTotal, progress))
+                        finally
                         {
-                            Log.Warn("FileOperations.CreateZip(multi): cannot create zip file {Path}", zipPath);
-                            return OperationResult.Failed;
+                            foreach (var s in openStreams) s.Dispose();
                         }
                     }
 
                     Log.Info("FileOperations.CreateZip(multi): done — {Zip} ({Size} bytes) in {Ms}ms", zipPath, GetFileSizePInvoke(zipPath), (DateTime.UtcNow - started).TotalMilliseconds);
                     return OperationResult.Success;
                 }
+                catch (OperationCanceledException)
+                {
+                    Log.Info("FileOperations.CreateZip(multi): cancelled");
+                    CleanupFailedZip(zipPath);
+                    return OperationResult.Cancelled;
+                }
                 catch (Exception ex)
                 {
                     Log.Warn("FileOperations.CreateZip(multi) exception", ex);
+                    CleanupFailedZip(zipPath);
                     return OperationResult.Failed;
                 }
             });

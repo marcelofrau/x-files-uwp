@@ -504,17 +504,14 @@ namespace XFiles.Controls
                 long lastEntryTotal = 0;
                 var progress = new Progress<FileOperations.OperationProgress>(p =>
                 {
-                    Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                    if (p.TotalBytes > 0) lastEntryTotal = p.TotalBytes;
+                    OpProgressDialog.UpdateProgress(new FileOperations.OperationProgress
                     {
-                        if (p.TotalBytes > 0) lastEntryTotal = p.TotalBytes;
-                        OpProgressDialog.UpdateProgress(new FileOperations.OperationProgress
-                        {
-                            FileName = p.FileName,
-                            FileIndex = completedFiles,
-                            FileTotal = scan.FileCount,
-                            BytesCopied = completedBytes + p.BytesCopied,
-                            TotalBytes = scan.TotalBytes
-                        });
+                        FileName = p.FileName,
+                        FileIndex = completedFiles,
+                        FileTotal = scan.FileCount,
+                        BytesCopied = completedBytes + p.BytesCopied,
+                        TotalBytes = scan.TotalBytes
                     });
                 });
 
@@ -595,8 +592,7 @@ namespace XFiles.Controls
                 {
                     var progress = new Progress<FileOperations.OperationProgress>(p =>
                     {
-                        Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
-                            OpProgressDialog.UpdateProgress(p));
+                        OpProgressDialog.UpdateProgress(p);
                     });
 
                     if (entry.IsPortal)
@@ -734,8 +730,7 @@ namespace XFiles.Controls
             OpProgressDialog.Show("Creating ZIP", $"{entries.Count} items", zipPath);
             var progress = new Progress<FileOperations.OperationProgress>(p =>
             {
-                Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
-                    OpProgressDialog.UpdateProgress(p));
+                OpProgressDialog.UpdateProgress(p);
             });
             var result = await FileOperations.CreateZipAsync(entries.Select(e => e.FullPath).ToList(), zipPath, progress, OpProgressDialog.CancelToken);
 
@@ -892,22 +887,21 @@ namespace XFiles.Controls
 
                 long lastEntryTotal = 0;
                 // Progress updates overall completed bytes across all entries
+                // Progress<T> already marshals to the UI thread via its captured
+                // SynchronizationContext — no extra Dispatcher.RunAsync needed.
                 var progress = new Progress<FileOperations.OperationProgress>(p =>
                 {
-                    Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                    if (p.TotalBytes > 0) lastEntryTotal = p.TotalBytes;
+                    // Overlay this entry's progress onto overall tracking
+                    var overall = new FileOperations.OperationProgress
                     {
-                        if (p.TotalBytes > 0) lastEntryTotal = p.TotalBytes;
-                        // Overlay this entry's progress onto overall tracking
-                        var overall = new FileOperations.OperationProgress
-                        {
-                            FileName = p.FileName,
-                            FileIndex = completedFiles,
-                            FileTotal = scan.FileCount,
-                            BytesCopied = completedBytes + p.BytesCopied,
-                            TotalBytes = scan.TotalBytes
-                        };
-                        OpProgressDialog.UpdateProgress(overall);
-                    });
+                        FileName = p.FileName,
+                        FileIndex = completedFiles,
+                        FileTotal = scan.FileCount,
+                        BytesCopied = completedBytes + p.BytesCopied,
+                        TotalBytes = scan.TotalBytes
+                    };
+                    OpProgressDialog.UpdateProgress(overall);
                 });
 
                 var result = await FileOperations.CopyAsync(
@@ -1009,8 +1003,7 @@ namespace XFiles.Controls
 
                     var progress = new Progress<FileOperations.OperationProgress>(p =>
                     {
-                        Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
-                            OpProgressDialog.UpdateProgress(p));
+                        OpProgressDialog.UpdateProgress(p);
                     });
 
                     try
@@ -1104,8 +1097,7 @@ namespace XFiles.Controls
             {
                 var progress = new Progress<FileOperations.OperationProgress>(p =>
                 {
-                    Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
-                        OpProgressDialog.UpdateProgress(p));
+                    OpProgressDialog.UpdateProgress(p);
                 });
 
                 OpProgressDialog.Show("Downloading from portal", $"{entries.Count} items", staging, 0, entries.Count);
@@ -1224,8 +1216,7 @@ namespace XFiles.Controls
             {
                 var progress = new Progress<FileOperations.OperationProgress>(p =>
                 {
-                    Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
-                        OpProgressDialog.UpdateProgress(p));
+                    OpProgressDialog.UpdateProgress(p);
                 });
 
                 OpProgressDialog.Show("Downloading", entry.Name, "portal");
@@ -1478,8 +1469,7 @@ namespace XFiles.Controls
 
                 var progress = new Progress<FileOperations.OperationProgress>(p =>
                 {
-                    Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
-                        OpProgressDialog.UpdateProgress(p));
+                    OpProgressDialog.UpdateProgress(p);
                 });
 
                 try
@@ -1567,8 +1557,7 @@ namespace XFiles.Controls
 
             var progress = new Progress<FileOperations.OperationProgress>(p =>
             {
-                Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
-                    OpProgressDialog.UpdateProgress(p));
+                OpProgressDialog.UpdateProgress(p);
             });
 
             OpProgressDialog.Show("Moving", entry.Name, destDir,
@@ -1642,8 +1631,7 @@ namespace XFiles.Controls
             var portalEntry = XFiles.FileSystem.PortalBrowser.ToPortalEntry(entry);
             var progress = new Progress<FileOperations.OperationProgress>(p =>
             {
-                Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
-                    OpProgressDialog.UpdateProgress(p));
+                OpProgressDialog.UpdateProgress(p);
             });
 
             OpProgressDialog.Show("Moving", entry.Name, destDir);
@@ -1853,8 +1841,7 @@ namespace XFiles.Controls
 
             var progress = new Progress<FileOperations.OperationProgress>(p =>
             {
-                Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
-                    OpProgressDialog.UpdateProgress(p));
+                OpProgressDialog.UpdateProgress(p);
             });
 
             // Conflict callback: shows OverwriteDialog on UI thread, returns 0=skip/1=overwrite/2=all
@@ -1966,8 +1953,13 @@ namespace XFiles.Controls
             }
 
             OpProgressDialog.Show("Extracting", fileName, destDir);
+            // Progress<T> marshals to the UI thread via its captured SynchronizationContext.
+            var progress = new Progress<FileOperations.OperationProgress>(p =>
+            {
+                OpProgressDialog.UpdateProgress(p);
+            });
             var result = await FileOperations.ExtractFileAsync(
-                entry.ArchiveRootPath, entry.ArchiveInternalPath, destDir, conflictCallback, OpProgressDialog.CancelToken);
+                entry.ArchiveRootPath, entry.ArchiveInternalPath, destDir, conflictCallback, OpProgressDialog.CancelToken, progress);
 
             if (result == FileOperations.OperationResult.Cancelled)
             {
@@ -2015,13 +2007,12 @@ namespace XFiles.Controls
             {
                 var progress = new Progress<FileOperations.OperationProgress>(p =>
                 {
-                    Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
-                        OpProgressDialog.UpdateProgress(p));
+                    OpProgressDialog.UpdateProgress(p);
                 });
 
                 OpProgressDialog.Show("Extracting", fileName, staging);
                 var result = await FileOperations.ExtractFileAsync(
-                    entry.ArchiveRootPath, entry.ArchiveInternalPath, staging, null, OpProgressDialog.CancelToken);
+                    entry.ArchiveRootPath, entry.ArchiveInternalPath, staging, null, OpProgressDialog.CancelToken, progress);
                 if (result == FileOperations.OperationResult.Cancelled)
                 {
                     OpProgressDialog.Cancel();
@@ -2190,8 +2181,7 @@ namespace XFiles.Controls
             OpProgressDialog.Show("Creating ZIP", entry.Name, zipPath);
             var progress = new Progress<FileOperations.OperationProgress>(p =>
             {
-                Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
-                    OpProgressDialog.UpdateProgress(p));
+                OpProgressDialog.UpdateProgress(p);
             });
             var result = await FileOperations.CreateZipAsync(entry.FullPath, zipPath, progress, OpProgressDialog.CancelToken);
 

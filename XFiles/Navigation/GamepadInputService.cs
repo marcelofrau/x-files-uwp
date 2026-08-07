@@ -120,7 +120,7 @@ namespace XFiles.Navigation
             var justPressed = (pressed ^ _prevButtons) & pressed;
             var justReleased = (pressed ^ _prevButtons) & _prevButtons;
 
-#if DEBUG_EDITOR_INPUT
+#if GAMEPAD_INPUT_DEBUG
             if (justPressed != 0) Log.Info("INPUT-DBG: justPressed={Buttons}", justPressed);
             if (justReleased != 0) Log.Info("INPUT-DBG: justReleased={Buttons}", justReleased);
             double dbgLx = reading.LeftThumbstickX, dbgLy = reading.LeftThumbstickY;
@@ -156,14 +156,18 @@ namespace XFiles.Navigation
 
             if ((dpadJustPressed & GamepadButtons.DPadUp) != 0)
             {
+#if GAMEPAD_INPUT_DEBUG
                 Log.Info("INPUT: DPad Up initial press");
+#endif
                 nav.OnDPadUp(isRepeat: false);
                 _dpadRepeatCooldown = DpadInitialDelay;
                 _dpadNavigatedThisTick = true;
             }
             if ((dpadJustPressed & GamepadButtons.DPadDown) != 0)
             {
+#if GAMEPAD_INPUT_DEBUG
                 Log.Info("INPUT: DPad Down initial press");
+#endif
                 nav.OnDPadDown(isRepeat: false);
                 _dpadRepeatCooldown = DpadInitialDelay;
                 _dpadNavigatedThisTick = true;
@@ -224,12 +228,16 @@ namespace XFiles.Navigation
             // A, B — just pressed only
             if ((justPressed & GamepadButtons.A) != 0)
             {
+#if GAMEPAD_INPUT_DEBUG
                 Log.Info("INPUT: A (Confirm)");
+#endif
                 nav.OnConfirm();
             }
             if ((justPressed & GamepadButtons.B) != 0)
             {
+#if GAMEPAD_INPUT_DEBUG
                 Log.Info("INPUT: B (Back)");
+#endif
                 nav.OnBack();
             }
 
@@ -237,7 +245,9 @@ namespace XFiles.Navigation
             const int YLongPressTicks = 15;
             if ((justPressed & GamepadButtons.Y) != 0)
             {
+#if GAMEPAD_INPUT_DEBUG
                 Log.Info("INPUT: Y pressed — starting hold timer");
+#endif
                 _yHeld = true;
                 _yHeldTicks = 0;
                 _yLongPressHandled = false;
@@ -267,7 +277,7 @@ namespace XFiles.Navigation
             // X — refresh current directory
             if ((justPressed & GamepadButtons.X) != 0)
             {
-#if DEBUG_EDITOR_INPUT
+#if GAMEPAD_INPUT_DEBUG
                 Log.Info("INPUT-DBG: X pressed (Refresh dispatch)");
 #endif
                 nav.OnRefresh();
@@ -283,7 +293,9 @@ namespace XFiles.Navigation
             const int ViewLongPressTicks = 15;
             if ((justPressed & GamepadButtons.View) != 0)
             {
+#if GAMEPAD_INPUT_DEBUG
                 Log.Info("INPUT: View pressed — starting hold timer");
+#endif
                 _viewHeld = true;
                 _viewHeldTicks = 0;
                 _viewLongPressHandled = false;
@@ -294,7 +306,9 @@ namespace XFiles.Navigation
                 _viewHeldTicks++;
                 if (_viewHeldTicks >= ViewLongPressTicks && !_viewLongPressHandled)
                 {
+#if GAMEPAD_INPUT_DEBUG
                     Log.Info("Button: View long-press triggered");
+#endif
                     if (_viewCtxFullscreen)
                         nav.OnSelectVisualizerMenu();
                     _viewLongPressHandled = true;
@@ -304,7 +318,9 @@ namespace XFiles.Navigation
             {
                 if (_viewHeld && !_viewLongPressHandled)
                 {
+#if GAMEPAD_INPUT_DEBUG
                     Log.Info("Button: View short press");
+#endif
                     if (_viewCtxFullscreen)
                         nav.OnSelectVisualizer();
                     else

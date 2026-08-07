@@ -859,6 +859,81 @@
                         </StackPanel>
                     </ScrollViewer>
                 </Grid>
+
+                <!-- Favorites how-to guide — shown at the Favorites column root (no folder preview) -->
+                <Grid x:Name="FavoritesGuidePanel" Grid.Row="0" Grid.RowSpan="3"
+                      Visibility="Collapsed" Background="#0F1318">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="20,24,20,24">
+                            <TextBlock Text="FAVORITES"
+                                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                                       FontSize="13" Foreground="{StaticResource XFilesAccentBrush}"
+                                       Margin="0,0,0,16" />
+
+                            <Image Source="ms-appx:///Assets/Views/StartMenu/startmenu-favorites-128.png"
+                                   Width="80" Height="80"
+                                   HorizontalAlignment="Center"
+                                   Margin="0,4,0,16" />
+
+                            <TextBlock Text="Pin your folders and files for quick access."
+                                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                       FontSize="12" Foreground="#AAFFFFFF"
+                                       TextWrapping="Wrap"
+                                       TextAlignment="Center"
+                                       Margin="0,0,0,20" />
+
+                            <Border Height="1" Background="{StaticResource XFilesBorderBrush}" Margin="0,0,0,14" />
+
+                            <!-- Add -->
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                <Image Source="ms-appx:///Assets/GamepadButtons/abxy/y.png"
+                                       Width="26" Height="26" Margin="0,0,10,0"
+                                       VerticalAlignment="Center" />
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="Add to Favorites"
+                                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                               FontSize="13" Foreground="#CCFFFFFF" />
+                                    <TextBlock Text="Hold Y on any folder or file anywhere"
+                                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                               FontSize="10" Foreground="{StaticResource XFilesTextDimBrush}"
+                                               Margin="0,1,0,0" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- Remove -->
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                <Image Source="ms-appx:///Assets/GamepadButtons/abxy/y.png"
+                                       Width="26" Height="26" Margin="0,0,10,0"
+                                       VerticalAlignment="Center" />
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="Remove"
+                                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                               FontSize="13" Foreground="#CCFFFFFF" />
+                                    <TextBlock Text="Hold Y again on the favorite entry here"
+                                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                               FontSize="10" Foreground="{StaticResource XFilesTextDimBrush}"
+                                               Margin="0,1,0,0" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- Open -->
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,0">
+                                <Image Source="ms-appx:///Assets/GamepadButtons/abxy/a.png"
+                                       Width="26" Height="26" Margin="0,0,10,0"
+                                       VerticalAlignment="Center" />
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="Open favorite"
+                                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                               FontSize="13" Foreground="#CCFFFFFF" />
+                                    <TextBlock Text="Press A — the preview works as usual inside"
+                                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                               FontSize="10" Foreground="{StaticResource XFilesTextDimBrush}"
+                                               Margin="0,1,0,0" />
+                                </StackPanel>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
             </Grid>
         </Grid>
 

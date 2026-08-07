@@ -406,12 +406,22 @@ namespace XFiles.Controls
 
         private async System.Threading.Tasks.Task HandleEditAsync(FileEntry entry)
         {
-            if (entry == null || string.IsNullOrEmpty(entry.FullPath))
+            if (entry == null)
+            {
+                Log.Warn("HandleEditAsync: null entry");
+                return;
+            }
+            if (!entry.IsPortal && string.IsNullOrEmpty(entry.FullPath))
             {
                 Log.Warn("HandleEditAsync: null/empty entry");
                 return;
             }
-            Log.Info("HandleEditAsync: opening {Path} (ext={Ext})", entry.Name, System.IO.Path.GetExtension(entry.FullPath));
+            if (entry.IsPortal && string.IsNullOrEmpty(entry.PortalPackageFullName))
+            {
+                Log.Warn("HandleEditAsync: portal entry missing package full name");
+                return;
+            }
+            Log.Info("HandleEditAsync: opening {Path} (ext={Ext})", entry.Name, System.IO.Path.GetExtension(entry.FullPath ?? entry.Name));
 
             if (entry.IsPortal)
             {

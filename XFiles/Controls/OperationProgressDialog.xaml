@@ -94,7 +94,7 @@
                 <!-- Current file -->
                 <TextBlock x:Name="CurrentFileText"
                            Foreground="#99FFFFFF"
-                           FontFamily="ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata"
+                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                            FontSize="12"
                            TextTrimming="CharacterEllipsis"
                            Text="" />
@@ -118,14 +118,14 @@
                                Text="" />
                     <TextBlock x:Name="SpeedText"
                                Foreground="{StaticResource XFilesForegroundBrush}"
-                               FontFamily="ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                FontSize="13"
                                Margin="0,0,20,0"
                                VerticalAlignment="Center"
                                Text="" />
                     <TextBlock x:Name="EtaText"
                                Foreground="{StaticResource XFilesTextMutedBrush}"
-                               FontFamily="ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                FontSize="13"
                                VerticalAlignment="Center"
                                Text="" />

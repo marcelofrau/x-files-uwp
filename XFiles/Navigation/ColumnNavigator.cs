@@ -109,7 +109,19 @@ namespace XFiles.Navigation
             _preview = null;
 
             await _current.LoadAsync(null);
+            InjectRootVirtualEntries(_current);
 
+            ColumnsChanged?.Invoke();
+        }
+
+        /// <summary>
+        /// Adds the virtual root entries (Favorites, User Folders portal root, separator)
+        /// and moves the AppData entry above the separator. Must run after ANY root
+        /// (path == null) scan — both the initial load and refreshes — otherwise those
+        /// entries disappear from the drives listing.
+        /// </summary>
+        private static void InjectRootVirtualEntries(ColumnState col)
+        {
             // Inject Favorites virtual entry at top (also into AllEntries for ClearSearch)
             var favEntry = new FileEntry
             {
@@ -119,9 +131,8 @@ namespace XFiles.Navigation
                 IsDrive = false,
                 IsVirtual = true
             };
-            _current.Entries.Insert(0, favEntry);
-            if (_current.AllEntries != null)
-                _current.AllEntries.Insert(0, favEntry);
+            col.Entries.Insert(0, favEntry);
+            col.AllEntries?.Insert(0, favEntry);
 
             // Inject User Folders virtual entry (always visible at root)
             var portalEntry = new FileEntry
@@ -133,9 +144,8 @@ namespace XFiles.Navigation
                 IsVirtual = true,
                 IsPortal = true
             };
-            _current.Entries.Insert(1, portalEntry);
-            if (_current.AllEntries != null)
-                _current.AllEntries.Insert(1, portalEntry);
+            col.Entries.Insert(1, portalEntry);
+            col.AllEntries?.Insert(1, portalEntry);
 
             // Separator between the virtual group (Favorites, User Folders) and drives
             var separator = new FileEntry
@@ -144,32 +154,29 @@ namespace XFiles.Navigation
                 FullPath = null,
                 IsSeparator = true
             };
-            _current.Entries.Insert(2, separator);
-            if (_current.AllEntries != null)
-                _current.AllEntries.Insert(2, separator);
+            col.Entries.Insert(2, separator);
+            col.AllEntries?.Insert(2, separator);
 
             // Move the AppData entry (LocalFolder) above the separator so it stays
             // grouped with the virtual folders (Favorites, User Folders)
-            int appDataIdx = _current.Entries.FindIndex(e => e.Name == "AppData");
+            int appDataIdx = col.Entries.FindIndex(e => e.Name == "AppData");
             if (appDataIdx > 2)
             {
-                var appData = _current.Entries[appDataIdx];
-                _current.Entries.RemoveAt(appDataIdx);
-                _current.Entries.Insert(2, appData);
+                var appData = col.Entries[appDataIdx];
+                col.Entries.RemoveAt(appDataIdx);
+                col.Entries.Insert(2, appData);
 
-                if (_current.AllEntries != null)
+                if (col.AllEntries != null)
                 {
-                    int allIdx = _current.AllEntries.FindIndex(e => e.Name == "AppData");
+                    int allIdx = col.AllEntries.FindIndex(e => e.Name == "AppData");
                     if (allIdx > 2)
                     {
-                        var allApp = _current.AllEntries[allIdx];
-                        _current.AllEntries.RemoveAt(allIdx);
-                        _current.AllEntries.Insert(2, allApp);
+                        var allApp = col.AllEntries[allIdx];
+                        col.AllEntries.RemoveAt(allIdx);
+                        col.AllEntries.Insert(2, allApp);
                     }
                 }
             }
-
-            ColumnsChanged?.Invoke();
         }
 
         /// <summary>
@@ -618,6 +625,16 @@ namespace XFiles.Navigation
             long gen = ++_previewGeneration;
             var selected = _current.GetSelectedEntry();
             if (selected == null)
+            {
+                _preview = null;
+                PreviewLoadingChanged?.Invoke(false);
+                return;
+            }
+
+            // Favorites column (root level): no folder preview — the UI shows the
+            // how-to guide instead. After drilling into an actual favorite, IsFavorite
+            // is false and the normal preview path takes over.
+            if (_current.IsFavorite)
             {
                 _preview = null;
                 PreviewLoadingChanged?.Invoke(false);
@@ -1087,6 +1104,11 @@ namespace XFiles.Navigation
             {
                 LoadingChanged?.Invoke(false);
             }
+
+            // Root column: re-inject virtual entries (Favorites, User Folders) that a
+            // plain drive scan does not include.
+            if (_current.Path == null && !_current.IsArchive && !_current.IsPortal)
+                InjectRootVirtualEntries(_current);
 
             // Try to preserve selection
             if (prevName != null)
