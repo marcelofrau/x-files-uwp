@@ -5,8 +5,8 @@
 ## 🆕 What's new since v1.2.0
 
 ### 🛰️ Device Portal — Xbox file system access *(NEW)*
-- **Probe & connect** — one-shot connection check from About, with saved credentials and re-probe support
-- **User folders browser** — drill into known folders, app data, and root containers right from the columns
+- **User Folders at the root** — a new virtual entry in the root drive listing; press **A** on it and X-Files runs the one-shot portal probe/connect (using your saved credentials), then drops you straight into the Xbox file system
+- **Known folders & app data** — drill into known folders, packages (LocalAppData), and root containers right from the columns
 - **Bidirectional clipboard** — copy/paste between your Xbox file system and local folders
 - **Download & upload** — transfer files to and from the console with live progress in the gamepad UI
 - **Full entry support** — Y context menu, media/PDF playback, create folder, and file diagnostics on portal entries
