@@ -456,6 +456,11 @@ namespace XFiles.Controls
             bool shown = false;
             try
             {
+                // Focus the bridge BEFORE TryShow: the Xbox OSK slides in and closes
+                // immediately if the focused control is not an editable field at that
+                // moment. Focusing afterwards (as a fallback) leaves the previous
+                // focus (WebView) active long enough for the OSK to hide itself.
+                KeyboardBridge.Focus(FocusState.Programmatic);
                 shown = InputPane.GetForCurrentView().TryShow();
                 Log.Dbg("TextEditorOverlay: InputPane.TryShow result={Result}", shown);
             }
@@ -499,9 +504,29 @@ namespace XFiles.Controls
             if (!_isKeyboardVisible || _isReadOnly) return;
 
             string currentText = KeyboardBridge.Text ?? "";
+
             if (currentText.Length > _lastKeyboardText.Length)
             {
-                string newChars = currentText.Substring(_lastKeyboardText.Length);
+                // The OSK inserts at the bridge caret, which can drift away from the
+                // end (e.g. page navigation on the Xbox keyboard). Never assume a pure
+                // append — locate the actual insertion point. Naively slicing from
+                // _lastKeyboardText.Length forwards the stale last char forever.
+                string newChars;
+                if (currentText.StartsWith(_lastKeyboardText, StringComparison.Ordinal))
+                {
+                    newChars = currentText.Substring(_lastKeyboardText.Length);
+                }
+                else
+                {
+                    int firstDiff = 0;
+                    while (firstDiff < _lastKeyboardText.Length &&
+                           firstDiff < currentText.Length &&
+                           _lastKeyboardText[firstDiff] == currentText[firstDiff])
+                        firstDiff++;
+                    int added = currentText.Length - _lastKeyboardText.Length;
+                    newChars = currentText.Substring(firstDiff, Math.Min(added, currentText.Length - firstDiff));
+                }
+
                 string escaped = newChars.Replace("\\", "\\\\").Replace("'", "\\'").Replace("\n", "\\n").Replace("\r", "\\r");
 #if DEBUG_EDITOR_INPUT
                 Log.Info("EDITOR-DBG: Bridge INSERT {N} chars [{Chars}] (prev={Prev} now={Now})",
@@ -522,6 +547,11 @@ namespace XFiles.Controls
             }
 
             _lastKeyboardText = currentText;
+
+            // Pin the bridge caret to the end so subsequent OSK keystrokes append
+            // instead of inserting mid-text (prevents the stale-char bug recurring).
+            KeyboardBridge.SelectionStart = currentText.Length;
+            KeyboardBridge.SelectionLength = 0;
         }
 
         private void OnKeyboardBridgeKeyDown(object sender, KeyRoutedEventArgs e)
@@ -588,10 +618,9 @@ namespace XFiles.Controls
         {
             try
             {
-                var bytes = System.IO.File.ReadAllBytes(_filePath);
                 await XFiles.Services.DevicePortalService.UploadPortalFileAsync(
                     _portalEntry.KnownFolder, _portalEntry.PackageFullName,
-                    _portalEntry.PortalPath, _portalEntry.Name, bytes, null);
+                    _portalEntry.PortalPath, _portalEntry.Name, _filePath, null);
                 Log.Info("TextEditorOverlay: uploaded {File} back to portal", _portalEntry.Name);
                 ShowToast("Saved to portal");
             }

@@ -795,7 +795,7 @@ namespace XFiles.Services
                     reader.InputStreamOptions = InputStreamOptions.Partial;
                     while (true)
                     {
-                        uint loaded = await reader.LoadAsync(65536);
+                        uint loaded = await reader.LoadAsync(1024 * 1024);
                         if (loaded == 0) break;
                         var bytes = new byte[reader.UnconsumedBufferLength];
                         reader.ReadBytes(bytes);
@@ -851,46 +851,129 @@ namespace XFiles.Services
         }
 
         /// <summary>
-        /// Uploads a file into the portal directory. The multipart body is hand-rolled to
-        /// match the browser format the WDP accepts (Content-Disposition first, quoted
-        /// name/filename, no filename*, octet-stream, fixed Content-Length).
+        /// Uploads a file into the portal directory by streaming it from disk. The
+        /// multipart body is streamed as a composite (header + file + footer) so the
+        /// whole file is never materialized in memory; Content-Length is set explicitly
+        /// to match the format the WDP accepts (Content-Disposition first, quoted
+        /// name/filename, no filename*, octet-stream). A fresh file stream is opened per
+        /// CSRF-retry attempt so a retried request reads the file from the start again.
         /// </summary>
         public static async Task UploadPortalFileAsync(string knownFolder, string packageFullName, string portalPath,
-            string fileName, byte[] fileBytes, IProgress<double> progress)
+            string fileName, string filePath, IProgress<double> progress)
         {
             var query = "/api/filesystem/apps/file?knownfolderid=" + Uri.EscapeDataString(knownFolder) +
                         "&packagefullname=" + Uri.EscapeDataString(packageFullName ?? "") +
                         "&path=" + Uri.EscapeDataString(portalPath) + "&extract=false";
 
             var boundary = "----XFiles" + Guid.NewGuid().ToString("N");
-            var payload = BuildMultipart(boundary, fileName, fileBytes);
-            Log.Dbg("DevicePortal.Upload: uploading '{FileName}' ({Bytes} bytes) to {Query}", fileName, fileBytes?.Length ?? 0, query);
-
-            await SendWriteWithCsrfAsync(HttpMethod.Post, query, () =>
-            {
-                var content = new HttpBufferContent(payload.AsBuffer());
-                content.Headers.ContentType = HttpMediaTypeHeaderValue.Parse("multipart/form-data; boundary=" + boundary);
-                return content;
-            }, 120);
-
-            Log.Info("DevicePortal.Upload: '{FileName}' uploaded ({Bytes} bytes)", fileName, fileBytes?.Length ?? 0);
-            progress?.Report(1.0);
-        }
-
-        private static byte[] BuildMultipart(string boundary, string fileName, byte[] fileBytes)
-        {
             string safeName = fileName.Replace("\"", "\\\"");
             var header = Encoding.UTF8.GetBytes(
                 "--" + boundary + "\r\n" +
                 "Content-Disposition: form-data; name=\"file\"; filename=\"" + safeName + "\"\r\n" +
                 "Content-Type: application/octet-stream\r\n\r\n");
             var footer = Encoding.UTF8.GetBytes("\r\n--" + boundary + "--\r\n");
-            var payload = new byte[header.Length + (fileBytes?.Length ?? 0) + footer.Length];
-            System.Buffer.BlockCopy(header, 0, payload, 0, header.Length);
-            if (fileBytes != null)
-                System.Buffer.BlockCopy(fileBytes, 0, payload, header.Length, fileBytes.Length);
-            System.Buffer.BlockCopy(footer, 0, payload, header.Length + (fileBytes?.Length ?? 0), footer.Length);
-            return payload;
+
+            long fileSize = new FileInfo(filePath).Length;
+            long bodyLength = header.Length + fileSize + footer.Length;
+
+            Log.Dbg("DevicePortal.Upload: uploading '{FileName}' ({Bytes} bytes) to {Query}", fileName, fileSize, query);
+
+            await SendWriteWithCsrfAsync(HttpMethod.Post, query, () =>
+            {
+                long totalRead = 0;
+                var fileStream = System.IO.File.OpenRead(filePath);
+                var progressStream = new ProgressStream(fileStream, bytesRead =>
+                {
+                    totalRead += bytesRead;
+                    if (progress != null && fileSize > 0)
+                        progress.Report(Math.Min(1.0, (double)totalRead / fileSize));
+                });
+                var composite = new MultipartUploadStream(header, progressStream, fileSize, footer);
+                var content = new HttpStreamContent(composite.AsInputStream());
+                content.Headers.ContentType = HttpMediaTypeHeaderValue.Parse("multipart/form-data; boundary=" + boundary);
+                content.Headers.ContentLength = (ulong)bodyLength;
+                return content;
+            }, 120);
+
+            Log.Info("DevicePortal.Upload: '{FileName}' uploaded ({Bytes} bytes)", fileName, fileSize);
+            progress?.Report(1.0);
+        }
+
+        /// <summary>
+        /// Read-only stream that serves header bytes, then the file stream, then footer
+        /// bytes as one contiguous body — used to stream a multipart upload from disk.
+        /// </summary>
+        private sealed class MultipartUploadStream : Stream
+        {
+            private readonly byte[] _header;
+            private readonly byte[] _footer;
+            private readonly Stream _file;
+            private readonly long _length;
+            private int _headerPos;
+            private int _footerPos;
+            private int _phase; // 0=header, 1=file, 2=footer, 3=done
+            private long _position;
+
+            public MultipartUploadStream(byte[] header, Stream file, long fileSize, byte[] footer)
+            {
+                _header = header;
+                _file = file;
+                _footer = footer;
+                _length = header.Length + fileSize + footer.Length;
+            }
+
+            public override int Read(byte[] buffer, int offset, int count)
+            {
+                if (count <= 0) return 0;
+
+                while (true)
+                {
+                    if (_phase == 0)
+                    {
+                        int n = Math.Min(count, _header.Length - _headerPos);
+                        if (n <= 0) { _phase = 1; continue; }
+                        System.Buffer.BlockCopy(_header, _headerPos, buffer, offset, n);
+                        _headerPos += n;
+                        _position += n;
+                        if (_headerPos == _header.Length) _phase = 1;
+                        return n;
+                    }
+                    if (_phase == 1)
+                    {
+                        int n = _file.Read(buffer, offset, count);
+                        if (n > 0) { _position += n; return n; }
+                        _phase = 2;
+                        continue;
+                    }
+                    if (_phase == 2)
+                    {
+                        int n = Math.Min(count, _footer.Length - _footerPos);
+                        if (n <= 0) { _phase = 3; return 0; }
+                        System.Buffer.BlockCopy(_footer, _footerPos, buffer, offset, n);
+                        _footerPos += n;
+                        _position += n;
+                        return n;
+                    }
+                    return 0;
+                }
+            }
+
+            public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+            {
+                if (cancellationToken.IsCancellationRequested)
+                    return Task.FromCanceled<int>(cancellationToken);
+                return Task.Run(() => Read(buffer, offset, count), cancellationToken);
+            }
+
+            public override bool CanRead => true;
+            public override bool CanSeek => false;
+            public override bool CanWrite => false;
+            public override long Length => _length;
+            public override long Position { get => _position; set => throw new NotSupportedException(); }
+            public override void Flush() { }
+            public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+            public override void SetLength(long value) => throw new NotSupportedException();
+            public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
         }
 
         private static string Truncate(string s, int max = 600)        {

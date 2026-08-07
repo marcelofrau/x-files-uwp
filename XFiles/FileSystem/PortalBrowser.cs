@@ -304,9 +304,8 @@ namespace XFiles.FileSystem
             {
                 string name = Path.GetFileName(localPath);
                 long size = new FileInfo(localPath).Length;
-                byte[] bytes = await Task.Run(() => File.ReadAllBytes(localPath), ct);
                 await DevicePortalService.UploadPortalFileAsync(knownFolder, packageFullName, portalPath,
-                    name, bytes, new Progress<double>(p =>
+                    name, localPath, new Progress<double>(p =>
                         progress?.Report(new FileOperations.OperationProgress
                         {
                             FileName = name,
@@ -356,8 +355,7 @@ namespace XFiles.FileSystem
                 }
 
                 long size = new FileInfo(f).Length;
-                byte[] bytes = await Task.Run(() => File.ReadAllBytes(f), ct);
-                await DevicePortalService.UploadPortalFileAsync(knownFolder, packageFullName, cur, name, bytes, null);
+                await DevicePortalService.UploadPortalFileAsync(knownFolder, packageFullName, cur, name, f, null);
                 done += size;
                 idx++;
                 progress?.Report(new FileOperations.OperationProgress

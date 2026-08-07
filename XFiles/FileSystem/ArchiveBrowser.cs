@@ -352,13 +352,23 @@ namespace XFiles.FileSystem
                     return cached;
                 }
 
+                Stream stream = null;
                 try
                 {
                     // Open via Win32 P/Invoke — System.IO.FileStream doesn't work in UWP sandbox
-                    var stream = Win32FileStream.OpenRead(archivePath);
+                    stream = Win32FileStream.OpenRead(archivePath);
                     if (stream == null)
                     {
                         Log.Warn("ArchiveBrowser: file not found or unreadable: {Path}", archivePath);
+                        return null;
+                    }
+
+                    // Empty/corrupt files make SharpCompress throw (NRE inside TarArchive.IsTarFile).
+                    // Guard the size up-front so an invalid zip degrades to an empty listing.
+                    if (stream.Length == 0)
+                    {
+                        stream.Dispose();
+                        Log.Warn("ArchiveBrowser: archive is empty, treating as no entries: {Path}", archivePath);
                         return null;
                     }
 
@@ -371,6 +381,7 @@ namespace XFiles.FileSystem
                 catch (Exception ex)
                 {
                     Log.Warn("ArchiveBrowser: failed to open {Path}", archivePath, ex);
+                    stream?.Dispose();
                     return null;
                 }
             }

@@ -288,7 +288,9 @@ namespace XFiles.Controls
 
             CurrentList.ScrollIntoView(CurrentList.SelectedItem);
             string afterName = (entries != null && CurrentList.SelectedIndex >= 0 && CurrentList.SelectedIndex < count) ? entries[CurrentList.SelectedIndex].Name : "(none)";
+#if GAMEPAD_INPUT_DEBUG
             Log.Verb("OnDPadUp: {Before}→{After} \"{BeforeName}\"→\"{AfterName}\" repeat={R}", before, CurrentList.SelectedIndex, beforeName, afterName, isRepeat);
+#endif
         }
 
         public void OnDPadDown(bool isRepeat = false)
@@ -324,7 +326,9 @@ namespace XFiles.Controls
 
             CurrentList.ScrollIntoView(CurrentList.SelectedItem);
             string afterName = (entries != null && CurrentList.SelectedIndex >= 0 && CurrentList.SelectedIndex < count) ? entries[CurrentList.SelectedIndex].Name : "(none)";
+#if GAMEPAD_INPUT_DEBUG
             Log.Verb("OnDPadDown: {Before}→{After} \"{BeforeName}\"→\"{AfterName}\" repeat={R}", before, CurrentList.SelectedIndex, beforeName, afterName, isRepeat);
+#endif
         }
 
         public void OnDPadLeft()

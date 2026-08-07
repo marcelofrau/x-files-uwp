@@ -34,10 +34,11 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
     <DebugSymbols>true</DebugSymbols>
     <OutputPath>bin\x64\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_UWP;AUDIO_ANALYSIS;DEBUG_EDITOR_INPUT</DefineConstants>
+    <DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_UWP;AUDIO_ANALYSIS</DefineConstants>
     <!-- Debug flags: uncomment in DefineConstants above to enable
          AUDIO_ANALYSIS    — FFT processing + VU meter (comment out to test stutter without analysis overhead)
          GAMEPAD_POLL_DEBUG  — GamepadInputService polling (sticks, dpad state, button repeats)
+         GAMEPAD_INPUT_DEBUG — GamepadInputService button dispatch (INPUT:/INPUT-DBG:/Button: traces)
          VUMETER_DEBUG      — VuMeterBar per-tick audio sample levels
          AUDIO_LEVEL_DEBUG  — AudioLevelService per-quantum processing data
          POINTER_DEBUG      — TextEditorOverlay pointer/mouse coordinates
@@ -600,7 +601,7 @@
     <Content Include="Assets\Views\StartMenu\startmenu-startup-48.png" />
     <Content Include="Assets\Views\StartMenu\startmenu-about-48.png" />
     <Content Include="Assets\Views\StartMenu\startmenu-close-48.png" />
-    <Content Include="Assets\Views\StartMenu\startmenu-favorites-48.png" />
+    <Content Include="Assets\Views\StartMenu\startmenu-favorites-128.png" />
     <Content Include="Assets\Views\SettingsPage\settingspage-clear-credentials-48.png" />
     <Content Include="Assets\Views\StartMenu\startmenu-guide-48.png" />
     <Content Include="Assets\Views\StartMenu\startmenu-logs-48.png" />

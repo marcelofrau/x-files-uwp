@@ -64,7 +64,7 @@
                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                FontSize="12"
                                LineHeight="16"
-                               Margin="0,0,0,0"
+                               Margin="0,2,0,-2"
                                Foreground="#000000"
                                TextAlignment="Center"
                                VerticalAlignment="Center"

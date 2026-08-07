@@ -46,6 +46,15 @@ namespace XFiles.Controls
                 return;
             }
 
+            // Favorites column (root level): show the how-to guide instead of a
+            // folder preview. After drilling into an actual favorite, IsFavorite is
+            // false and the normal preview takes over.
+            if (_navigator.Current?.IsFavorite == true)
+            {
+                ShowFavoritesGuide();
+                return;
+            }
+
             if (_navigator.Preview == null)
             {
                 PreviewHeader.Text = "";
@@ -331,6 +340,15 @@ namespace XFiles.Controls
             PreviewErrorPanel.Visibility = Visibility.Collapsed;
             PreviewUnsupportedPanel.Visibility = Visibility.Collapsed;
             PreviewArchiveMediaPanel.Visibility = Visibility.Collapsed;
+            FavoritesGuidePanel.Visibility = Visibility.Collapsed;
+        }
+
+        private void ShowFavoritesGuide()
+        {
+            HideAllPreviewPanels();
+            PreviewHeader.Text = "";
+            PreviewStatus.Text = "";
+            FavoritesGuidePanel.Visibility = Visibility.Visible;
         }
 
         private async Task<string> BuildHighlightHtmlAsync(string code, string extension)
@@ -466,6 +484,18 @@ namespace XFiles.Controls
             if (state.SelectedIndex >= 0 && state.SelectedIndex < CurrentList.Items.Count)
                 CurrentList.SelectedIndex = state.SelectedIndex;
 
+            // ItemsSource was just set — containers aren't realized yet, so an immediate
+            // ScrollIntoView is a no-op. Defer to low priority so the restored selection
+            // becomes visible after layout (drill out / search / refresh).
+            if (CurrentList.SelectedIndex >= 0)
+            {
+                _ = Dispatcher.RunAsync(CoreDispatcherPriority.Low, () =>
+                {
+                    if (CurrentList.SelectedIndex >= 0)
+                        CurrentList.ScrollIntoView(CurrentList.Items[CurrentList.SelectedIndex]);
+                });
+            }
+
             CurrentList.Focus(FocusState.Programmatic);
         }
 
@@ -529,13 +559,21 @@ namespace XFiles.Controls
                     var selected = CurrentList.SelectedItem as EntryViewModel;
 
                     // At root: keep debounce for HDD spin-up, but don't update visual elements
-                    // (PreviewHeader/PreviewStatus would bleed through the semi-transparent QuickRefPanel)
+                    // (PreviewHeader/PreviewStatus would bleed through the semi-transparent QuickRefPanel).
+                    // Favorites column root: show the how-to guide instead of stale "Loading..." text.
                     if (_navigator.Parent != null)
                     {
-                        // Instant loading feedback — clear stale preview immediately
-                        HideAllPreviewPanels();
-                        PreviewHeader.Text = selected?.Name ?? "";
-                        PreviewStatus.Text = "Loading...";
+                        if (_navigator.Current.IsFavorite)
+                        {
+                            ShowFavoritesGuide();
+                        }
+                        else
+                        {
+                            // Instant loading feedback — clear stale preview immediately
+                            HideAllPreviewPanels();
+                            PreviewHeader.Text = selected?.Name ?? "";
+                            PreviewStatus.Text = "Loading...";
+                        }
                     }
 
                     // Debounce preview update — skip if scrolling rapidly. Portal columns
