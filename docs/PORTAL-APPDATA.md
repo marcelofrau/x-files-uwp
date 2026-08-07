@@ -41,6 +41,9 @@ All three ways do the exact same thing: they tell the console
 
 Done. No command line needed.
 
+   > 📺 **Video walkthrough:** see the whole XB Homebrew Vault unlock in action —
+   > [How to unlock X-Files portal access with xb-homebrew-vault](https://youtu.be/s_B38Hoiwbw)
+
 ### Option B — script from the ZIP (Windows / Linux / Mac)
 
 The release ZIP ships two scripts in the `tools/` folder. They automate
