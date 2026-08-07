@@ -38,7 +38,6 @@ namespace XFiles.Controls
             _successTimer.Stop();
             Visibility = Visibility.Visible;
             Overlay.Visibility = Visibility.Visible;
-            StatusText.Text = statusLine ?? "";
             ReprobeResultText.Text = "";
             ReprobeProgress.Visibility = Visibility.Collapsed;
             SetButtonsEnabled(true);

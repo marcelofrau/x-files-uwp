@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Windows.Foundation;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
@@ -23,9 +26,10 @@ namespace XFiles.Controls
 
     public sealed partial class DiskUsageDialog : UserControl
     {
-        private static readonly SolidColorBrush UsedBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x3A, 0x7B, 0xD5));
-        private static readonly SolidColorBrush FreeBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x6A, 0xC2, 0x5A));
-        private static readonly SolidColorBrush BodyBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x1F, 0x3A, 0x5F));
+        private static readonly SolidColorBrush UsedBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x6A, 0xC2, 0x5A));
+        private static readonly SolidColorBrush FreeBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x3A, 0x7B, 0xD5));
+        private static readonly SolidColorBrush DarkUsedBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x22, 0x3E, 0x1D));
+        private static readonly SolidColorBrush DarkFreeBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x1F, 0x3A, 0x5F));
         private static readonly SolidColorBrush MutedBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF));
         private static readonly SolidColorBrush TextBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF));
         private static readonly SolidColorBrush BarBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x2A, 0x2D, 0x33));
@@ -39,8 +43,11 @@ namespace XFiles.Controls
             this.InitializeComponent();
         }
 
+        private CancellationTokenSource _populateCts;
+
         public void Show(params DiskVolumeInfo[] volumes)
         {
+            Log.Verb("DiskUsageDialog.Show: entered (thread {Thread})", Environment.CurrentManagedThreadId);
             var roots = (volumes ?? Array.Empty<DiskVolumeInfo>())
                 .Where(v => !string.IsNullOrEmpty(v.Root))
                 .GroupBy(v => System.IO.Path.GetPathRoot(v.Root) ?? v.Root, StringComparer.OrdinalIgnoreCase)
@@ -53,40 +60,112 @@ namespace XFiles.Controls
                 return;
             }
 
+            _populateCts?.Cancel();
+            _populateCts = new CancellationTokenSource();
+            var ct = _populateCts.Token;
+
             bool compact = roots.Count > 1;
             DriveText.Text = "Storage usage";
 
+            // Open the modal immediately with a spinner; free-space queries are
+            // blocking P/Invokes (slow on spun-down drives) and must not freeze the UI.
             VolumesPanel.Children.Clear();
-            foreach (var vol in roots)
-            {
-                VolumesPanel.Children.Add(BuildVolumeRow(vol, compact));
-            }
+            VolumesPanel.Children.Add(BuildSpinnerRow());
 
             Overlay.Visibility = Visibility.Visible;
             Visibility = Visibility.Visible;
             Log.Info("DiskUsageDialog.Show: {Roots}", string.Join(", ", roots.Select(DisplayName)));
+
+            _ = PopulateAsync(roots, compact, ct);
+            Log.Verb("DiskUsageDialog.Show: PopulateAsync kicked off (thread {Thread})", Environment.CurrentManagedThreadId);
+        }
+
+        private static FrameworkElement BuildSpinnerRow()
+        {
+            var row = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 16, 0, 16)
+            };
+            row.Children.Add(new ProgressRing
+            {
+                IsActive = true,
+                Width = 28,
+                Height = 28,
+                Margin = new Thickness(0, 0, 12, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = UsedBrush
+            });
+            row.Children.Add(new TextBlock
+            {
+                Text = "Reading disk...",
+                Foreground = MutedBrush,
+                FontFamily = TitleFont,
+                FontSize = 14,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            return row;
+        }
+
+        private async Task PopulateAsync(List<DiskVolumeInfo> roots, bool compact, CancellationToken ct)
+        {
+            Log.Verb("DiskUsageDialog.PopulateAsync: started with {Count} root(s) (thread {Thread})",
+                roots.Count, Environment.CurrentManagedThreadId);
+
+            var spaceByRoot = new Dictionary<string, (ulong FreeBytes, ulong TotalBytes)?>(StringComparer.OrdinalIgnoreCase);
+            foreach (var vol in roots)
+            {
+                if (ct.IsCancellationRequested)
+                {
+                    Log.Info("DiskUsageDialog.PopulateAsync: cancelled before querying {Root}", vol.Root);
+                    return;
+                }
+                Log.Info("DiskUsageDialog.PopulateAsync: querying {Root} (thread {Thread})", vol.Root, Environment.CurrentManagedThreadId);
+                var space = await Task.Run(() => FileOperations.GetDriveFreeSpace(vol.Root));
+                Log.Info("DiskUsageDialog.PopulateAsync: {Root} -> {Space}", vol.Root,
+                    space == null ? "null" : $"free={space.Value.FreeBytes} total={space.Value.TotalBytes}");
+                spaceByRoot[vol.Root] = space;
+            }
+
+            if (ct.IsCancellationRequested)
+            {
+                Log.Info("DiskUsageDialog.PopulateAsync: cancelled before rendering rows");
+                return;
+            }
+
+            Log.Verb("DiskUsageDialog.PopulateAsync: rendering {Count} row(s) (thread {Thread})",
+                roots.Count, Environment.CurrentManagedThreadId);
+            VolumesPanel.Children.Clear();
+            foreach (var vol in roots)
+            {
+                var space = spaceByRoot[vol.Root];
+                Log.Verb("DiskUsageDialog.PopulateAsync: building row for {Root} (space {Space})", vol.Root,
+                    space == null ? "null" : $"free={space.Value.FreeBytes} total={space.Value.TotalBytes}");
+                VolumesPanel.Children.Add(BuildVolumeRow(vol, compact, space));
+            }
+            Log.Info("DiskUsageDialog.PopulateAsync: rows rendered");
         }
 
         public void Close()
         {
+            _populateCts?.Cancel();
             Overlay.Visibility = Visibility.Collapsed;
             Visibility = Visibility.Collapsed;
             Log.Info("DiskUsageDialog.Close");
         }
-
         private static string DisplayName(DiskVolumeInfo vol) =>
             vol.Label == null ? vol.Root : $"{vol.Root} ({vol.Label})";
 
-        private FrameworkElement BuildVolumeRow(DiskVolumeInfo vol, bool compact)
+        private FrameworkElement BuildVolumeRow(DiskVolumeInfo vol, bool compact, (ulong FreeBytes, ulong TotalBytes)? space)
         {
             string root = vol.Root;
-            var space = FileOperations.GetDriveFreeSpace(root);
             ulong total = 0, free = 0, used = 0;
             double fraction = 0.0;
             int pct = 0;
             if (space == null)
             {
-                Log.Warn("DiskUsageDialog.BuildVolumeRow: cannot query free space for {Root}", root);
+                Log.Warn("DiskUsageDialog.BuildVolumeRow: cannot query free space for {Root} — showing placeholder", root);
             }
             else
             {
@@ -95,6 +174,8 @@ namespace XFiles.Controls
                 used = total > free ? total - free : 0;
                 fraction = total > 0 ? (double)used / total : 0.0;
                 pct = (int)Math.Round(fraction * 100.0);
+                Log.Verb("DiskUsageDialog.BuildVolumeRow: {Root} total={Total} free={Free} used={Used} pct={Pct}",
+                    root, total, free, used, pct);
             }
 
             double pieSize = compact ? 160 : 240;
@@ -195,20 +276,30 @@ namespace XFiles.Controls
             double r = 92.0 * s;
             double extrude = 14.0 * s;
 
-            // Body: full dark disc at the extruded offset (isometric "pizza" depth).
-            canvas.Children.Add(new Path
-            {
-                Data = BuildFullCircle(cx, cy + extrude, r),
-                Fill = BodyBrush
-            });
-
             var slices = PieGeometry.Slices(usedFraction);
-            foreach (var slice in slices)
+            bool empty = usedFraction <= 0;
+            for (int i = 0; i < slices.Length; i++)
             {
-                var brush = slice.Fraction > 0.5 ? UsedBrush : FreeBrush;
+                var slice = slices[i];
                 if (slice.Fraction <= 0) continue;
+
+                // Color by semantics, not magnitude: first slice = used (green),
+                // second = free (blue). Single full-circle slice follows the flag.
+                var brush = slices.Length == 1
+                    ? (empty ? FreeBrush : UsedBrush)
+                    : (i == 0 ? UsedBrush : FreeBrush);
+                var darkBrush = slices.Length == 1
+                    ? (empty ? DarkFreeBrush : DarkUsedBrush)
+                    : (i == 0 ? DarkUsedBrush : DarkFreeBrush);
+
+                // Depth body (extruded slice) below, then the top face.
                 if (slice.Fraction >= 0.999)
                 {
+                    canvas.Children.Add(new Path
+                    {
+                        Data = BuildFullCircle(cx, cy + extrude, r),
+                        Fill = darkBrush
+                    });
                     canvas.Children.Add(new Path
                     {
                         Data = BuildFullCircle(cx, cy, r),
@@ -216,6 +307,11 @@ namespace XFiles.Controls
                     });
                     continue;
                 }
+                canvas.Children.Add(new Path
+                {
+                    Data = BuildWedge(cx, cy + extrude, r, slice.StartDeg, slice.EndDeg),
+                    Fill = darkBrush
+                });
                 canvas.Children.Add(new Path
                 {
                     Data = BuildWedge(cx, cy, r, slice.StartDeg, slice.EndDeg),
