@@ -140,7 +140,7 @@ TextEditorOverlay.HandleSave()
   <meta charset="utf-8">
   <style>
     /* Editor layout: line numbers + code area */
-    /* Monospace font (Inconsolata, embedded as base64) */
+    /* Monospace font (system Consolas) */
     /* Cursor styling (blinking caret) */
     /* Selection highlighting */
     /* Theme matching BladeTheme.xaml colors */

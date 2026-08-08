@@ -2,6 +2,9 @@
 
 ## LOW: Highlight.js Font Loading
 
+**Status: obsolete** — the Inconsolata asset was removed; highlight rendering now uses
+the system Consolas font and no base64 font embedding remains. Kept for history.
+
 Duplicated in two files with identical logic:
 
 ### MillerColumnsPage.xaml.cs (lines 540-546)

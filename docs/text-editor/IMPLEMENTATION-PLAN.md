@@ -16,7 +16,7 @@ Step 2 (HTML/JS) ──┘
 
 - All new C# files go in existing folders: `Controls/`, `FileSystem/`
 - WebView assets go in `Assets/`: `editor.html`, `editor.js`
-- Reuse existing: `highlight.min.js`, `highlight-aco.css`, `Inconsolata-Regular.ttf`
+- Reuse existing: `highlight.min.js`, `highlight-aco.css` (monospace = system Consolas)
 - Follow existing code style: no MVVM, all code-behind, `Log.Information/Warning` everywhere
 - System keyboard API: `CoreInputView.TryShow(CoreInputViewKind.Gamepad)` with
   `InputPane.TryShow()` fallback (compile-time check via `ApiInformation`)
@@ -71,7 +71,7 @@ Step 2 (HTML/JS) ──┘
 ## Step 2 — editor.html + editor.js
 
 **Files**: `Assets/editor.html`, `Assets/editor.js`
-**Depends on**: nothing (uses existing `highlight.min.js` + `Inconsolata-Regular.ttf`)
+**Depends on**: nothing (uses existing `highlight.min.js` + system Consolas font)
 **Estimated scope**: editor.html ~100 lines, editor.js ~600 lines
 
 ### editor.html structure
@@ -85,7 +85,7 @@ Step 2 (HTML/JS) ──┘
     /* Reset + body: full viewport, dark background #0F1318 */
     /* Editor container: flex row (line-numbers | code area) */
     /* Line numbers gutter: fixed width, #5A5C60 color, right-aligned */
-    /* Code area: contentEditable, Inconsolata 13px, #D4D4D4, line-height 1.5 */
+    /* Code area: contentEditable, Consolas 13px, #D4D4D4, line-height 1.5 */
     /* Cursor: CSS caret-color or custom blinking div */
     /* Selection: background #264F78 */
     /* Word wrap: white-space: pre-wrap vs pre */
@@ -229,7 +229,7 @@ public sealed partial class TextEditorOverlay : UserControl
 
 In `Show(filePath)`:
 1. Call `TextEditorService.LoadAsync(filePath)` → get text, encoding, size, tier
-2. Build HTML string: inline highlight.min.js + editor.js + highlight-aco.css + Inconsolata
+2. Build HTML string: inline highlight.min.js + editor.js + highlight-aco.css (Consolas mono)
 3. Set language via `GetHighlightLang(extension)`
 4. Call `EditorWebView.NavigateToString(html)`
 5. After navigation completes, invoke `editor.setText(text, 0)` to load content
