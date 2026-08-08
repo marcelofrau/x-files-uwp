@@ -270,15 +270,10 @@ namespace XFiles.FileSystem
                     FindClose(hFind);
                 }
 
-                entries.AddRange(dirs);
-                entries.AddRange(files);
-
                 // Deterministic order: folders first, then files, each alphabetical.
-                dirs.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
-                files.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
-                entries.Clear();
-                entries.AddRange(dirs);
-                entries.AddRange(files);
+                // Never clear "entries" here — it already carries the ".." parent entry
+                // at index 0 that callers (FolderBrowserDialog, ColumnNavigator) rely on.
+                DirectoryEntryOrder.AppendSorted(entries, dirs, files);
             });
 
             Log.Verb("Scan '{Path}' complete — {Total} entries", path, entries.Count);

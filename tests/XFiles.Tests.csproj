@@ -19,6 +19,7 @@
     <Compile Include="..\XFiles\Audio\FftHelper.cs" Link="Linked\Audio\FftHelper.cs" />
     <Compile Include="..\XFiles\FileSystem\EncodingDetector.cs" Link="Linked\FileSystem\EncodingDetector.cs" />
     <Compile Include="..\XFiles\FileSystem\FileEntry.cs" Link="Linked\FileSystem\FileEntry.cs" />
+    <Compile Include="..\XFiles\FileSystem\DirectoryEntryOrder.cs" Link="Linked\FileSystem\DirectoryEntryOrder.cs" />
     <Compile Include="..\XFiles\FileSystem\Formatting.cs" Link="Linked\FileSystem\Formatting.cs" />
     <Compile Include="..\XFiles\FileSystem\DiskSpaceGuard.cs" Link="Linked\FileSystem\DiskSpaceGuard.cs" />
     <Compile Include="..\XFiles\Controls\PieGeometry.cs" Link="Linked\Controls\PieGeometry.cs" />

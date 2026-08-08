@@ -114,6 +114,7 @@
     <Compile Include="FileSystem\HighlightRenderer.cs" />
     <Compile Include="FileSystem\RomCoverProvider.cs" />
     <Compile Include="FileSystem\DirectoryScanner.cs" />
+    <Compile Include="FileSystem\DirectoryEntryOrder.cs" />
     <Compile Include="FileSystem\FilePreviewService.cs" />
     <Compile Include="FileSystem\ArchiveBrowser.cs" />
     <Compile Include="FileSystem\PortalBrowser.cs" />
