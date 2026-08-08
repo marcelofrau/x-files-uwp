@@ -78,7 +78,7 @@ var editor = (function () {
 
         // Measure actual char width for block cursor
         var measure = document.createElement('span');
-        measure.style.cssText = 'font:13px Inconsolata,Consolas,Courier New,monospace;position:absolute;visibility:hidden;white-space:pre;';
+        measure.style.cssText = 'font:13px Consolas,Courier New,monospace;position:absolute;visibility:hidden;white-space:pre;';
         measure.textContent = 'M';
         document.body.appendChild(measure);
         _charWidth = measure.getBoundingClientRect().width || 8.5;

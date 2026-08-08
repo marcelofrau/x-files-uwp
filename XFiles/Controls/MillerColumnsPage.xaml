@@ -381,7 +381,7 @@
                     HorizontalScrollBarVisibility="Auto"
                     Padding="12,8">
                     <TextBlock x:Name="PreviewTextBlock"
-                        FontFamily="ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata"
+                        FontFamily="Consolas"
                         FontSize="12"
                         Foreground="#CCCCCC"
                         TextWrapping="Wrap"
@@ -1723,7 +1723,7 @@
                     <Border Grid.Row="2" Background="#FF0D1117" CornerRadius="4" Padding="2">
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
                             <TextBlock x:Name="ErrorDetailsText"
-                                       FontFamily="ms-appx:///Assets/Fonts/Inconsolata-Regular.ttf#Inconsolata"
+                                       FontFamily="Consolas"
                                        FontSize="11" Foreground="#FF2ECC71"
                                        TextWrapping="Wrap" Padding="8,6"
                                        Text="" />
