@@ -23,8 +23,12 @@ Unit tests live in `tests/` (xUnit, linked-source, net8.0 — run on desktop, no
 ## Critical Rules
 - **NEVER commit or push** without explicit user request. Stage changes only. Wait for
   "commit", "push", "faz o commit", etc.
-- **This project builds on Windows with VS2022 (MSBuild found).** Always run build
-  verification after structural changes: `& "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe" "XFiles.sln" /p:Configuration=Debug /p:Platform=x64 /t:Build /v:minimal`.
+- **This project builds on Windows with VS2026 (MSBuild found at
+  `C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe`).**
+  VS2022 run/debug broke and was replaced. Always run build verification after
+  structural changes: `& "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe" "XFiles.sln" /p:Configuration=Debug /p:Platform=x64 /t:Build /v:minimal`.
+  Do NOT use the VS2022 MSBuild — a machine-level `VisualStudioVersion=18.0` env var
+  makes it look for the v18.0 WindowsXaml targets that only exist under VS2026 (MSB4226).
 - **x64 target primarily** (Xbox Series). Confirm ARM64 needs before adding that platform.
 - **`broadFileSystemAccess` + `runFullTrust`** capabilities are required in the manifest
   for any filesystem code outside the app's sandboxed folders (see `docs/FILEBROWSER.md`
@@ -117,7 +121,7 @@ PDF, QR share). Cross-cutting: `Metadata/*` (MusicBrainz/Deezer + SQLite cache),
 
 ## Build (once on Windows)
 ```powershell
-MSBuild.exe "XFiles.sln" /p:Configuration=Debug /p:Platform=x64
+& "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe" "XFiles.sln" /p:Configuration=Debug /p:Platform=x64
 ```
 Unit tests (desktop, xUnit):
 ```powershell
