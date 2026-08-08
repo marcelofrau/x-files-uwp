@@ -151,6 +151,55 @@ namespace XFiles.FileSystem
             Cancelled
         }
 
+        /// <summary>
+        /// Result of an archive extraction: outcome plus a human-readable failure
+        /// reason so the UI can tell the user exactly why the extraction failed.
+        /// </summary>
+        public class ExtractResult
+        {
+            public OperationResult Result { get; set; }
+            public string ErrorMessage { get; set; }
+        }
+
+        /// <summary>
+        /// Human-readable reason for the most recent failed operation. Set by Fail()
+        /// at every failure site and consumed by UI handlers so they can explain WHY an
+        /// operation failed. Only one file operation runs at a time (single progress
+        /// dialog), so a single slot is sufficient; it is always set by the failing
+        /// operation itself and never cleared by successful ones.
+        /// </summary>
+        private static string _lastFailure;
+        public static string LastFailure => _lastFailure;
+
+        private static OperationResult Fail(string reason)
+        {
+            _lastFailure = reason;
+            Log.Warn("FileOperations: {Reason}", reason);
+            return OperationResult.Failed;
+        }
+
+        /// <summary>
+        /// Friendly text for a common Win32 error code so failure messages read like
+        /// "access is denied (read-only or insufficient permissions)" instead of an
+        /// opaque number.
+        /// </summary>
+        private static string Win32ErrorHint(int err)
+        {
+            switch (err)
+            {
+                case 2: return "the specified file was not found";
+                case 3: return "the path was not found (a parent folder may be missing)";
+                case 5: return "access is denied (read-only or insufficient permissions)";
+                case 13:
+                case 32: return "the file is in use by another program";
+                case 145: return "the folder is not empty";
+                case 183: return "an item with that name already exists";
+                case 206: return "the file name or path is too long";
+                case 2063: return "the path is too deep";
+                default: return "Win32 error " + err;
+            }
+        }
+
         public class OperationProgress
         {
             public string FileName { get; set; }
@@ -168,6 +217,11 @@ namespace XFiles.FileSystem
         }
 
         private const int CopyChunkSize = 1024 * 1024; // 1MB
+
+        // Per-file summary goes to Info level when the file is large or the copy is
+        // slow enough to be interesting; small/fast files log the same line at Debug.
+        private const long NotableSummaryBytes = 50L * 1024 * 1024;
+        private const double NotableSummaryMs = 2000;
 
         /// <summary>
         /// Stream wrapper that counts bytes written and invokes a throttled callback.
@@ -297,22 +351,31 @@ namespace XFiles.FileSystem
                 {
                     if (readStream == null)
                     {
+                        int err = Marshal.GetLastWin32Error();
                         Log.Warn("FileOperations.CopyFileStreaming: cannot open source {Path}", sourcePath);
-                        return OperationResult.Failed;
+                        return Fail($"Cannot open source \"{sourcePath}\" for reading ({Win32ErrorHint(err)}).");
                     }
 
                     using (var writeStream = Win32FileWriteStream.Create(destPath))
                     {
                         if (writeStream == null)
                         {
+                            int err = Marshal.GetLastWin32Error();
                             Log.Warn("FileOperations.CopyFileStreaming: cannot create dest {Path}", destPath);
-                            return OperationResult.Failed;
+                            return Fail($"Cannot create \"{destPath}\" ({Win32ErrorHint(err)}). The destination folder may not exist or may be read-only.");
                         }
 
                         var buffer = ArrayPool<byte>.Shared.Rent(CopyChunkSize);
                         long totalCopied = 0;
                         int bytesRead;
                         var lastReport = Stopwatch.GetTimestamp();
+                        var stats = new TransferMeter
+                        {
+                            BufferSize = CopyChunkSize,
+                            Source = sourcePath,
+                            Dest = destPath
+                        };
+                        stats.Start();
 
                         try
                         {
@@ -320,17 +383,29 @@ namespace XFiles.FileSystem
                             {
                                 if (token.IsCancellationRequested) return OperationResult.Cancelled;
 
+                                long readStart = Stopwatch.GetTimestamp();
                                 bytesRead = readStream.Read(buffer, 0, CopyChunkSize);
+                                long readTicks = Stopwatch.GetTimestamp() - readStart;
+
                                 if (bytesRead > 0)
                                 {
+                                    long writeStart = Stopwatch.GetTimestamp();
                                     writeStream.Write(buffer, 0, bytesRead);
+                                    long writeTicks = Stopwatch.GetTimestamp() - writeStart;
                                     totalCopied += bytesRead;
+                                    stats.TrackChunk(bytesRead, readTicks, writeTicks);
+
+                                    Log.Verb("Transfer.Copy: {File} chunk #{Chunks} {Bytes}B read {ReadMs:0.00}ms write {WriteMs:0.00}ms",
+                                        fileName, stats.ChunkCount, bytesRead,
+                                        readTicks * 1000.0 / Stopwatch.Frequency, writeTicks * 1000.0 / Stopwatch.Frequency);
 
                                     long now = Stopwatch.GetTimestamp();
                                     double elapsedMs = (now - lastReport) * 1000.0 / Stopwatch.Frequency;
                                     if (fileTotalBytes > 0 && (elapsedMs >= 100 || totalCopied >= fileTotalBytes))
                                     {
                                         lastReport = now;
+                                        if (elapsedMs >= 1000 || totalCopied >= fileTotalBytes)
+                                            stats.LogProgress("Copy", fileName);
                                         progress?.Report(new OperationProgress
                                         {
                                             FileName = fileName,
@@ -342,6 +417,14 @@ namespace XFiles.FileSystem
                                 }
                             }
                             while (bytesRead > 0);
+
+                            if (totalCopied > 0)
+                            {
+                                if (stats.TotalBytes >= NotableSummaryBytes || stats.ElapsedMs >= NotableSummaryMs)
+                                    stats.LogSummary("Copy", fileName);
+                                else
+                                    stats.LogSummaryDbg("Copy", fileName);
+                            }
                         }
                         finally
                         {
@@ -355,7 +438,7 @@ namespace XFiles.FileSystem
             {
                 Log.Warn("FileOperations.CopyFileStreaming exception: {File}", ex, sourcePath);
                 try { DeleteFileFromAppW(destPath); } catch { }
-                return OperationResult.Failed;
+                return Fail($"Error while copying \"{sourcePath}\": {ex.Message}");
             }
         }
 
@@ -383,6 +466,26 @@ namespace XFiles.FileSystem
                 }
                 return result;
             });
+        }
+
+        /// <summary>
+        /// Scans a set of already-listed entries to compute file count and total bytes.
+        /// Fast path: when every entry is a single file, sizes are already known from the
+        /// directory listing — no disk I/O, no thread hop. Directories fall back to a
+        /// recursive pre-scan (needed because listing sizes don't include subtree contents).
+        /// </summary>
+        public static async Task<ScanResult> ScanEntriesAsync(IReadOnlyList<FileEntry> entries)
+        {
+            if (entries.All(e => !e.IsDirectory))
+            {
+                return new ScanResult
+                {
+                    FileCount = entries.Count,
+                    TotalBytes = entries.Sum(e => Math.Max(0, e.SizeBytes))
+                };
+            }
+
+            return await ScanPathsAsync(entries.Select(e => e.FullPath).ToList());
         }
 
         private static void ScanDirectoryRecursive(string dir, ScanResult result)
@@ -571,7 +674,7 @@ namespace XFiles.FileSystem
                 catch (Exception ex)
                 {
                     Log.Warn("FileOperations.Copy exception", ex);
-                    return OperationResult.Failed;
+                    return Fail($"Failed to copy \"{sourcePath}\": {ex.Message}");
                 }
             });
         }
@@ -596,6 +699,7 @@ namespace XFiles.FileSystem
 
                     // Pre-scan for accurate progress
                     var scan = new ScanResult();
+                    var dirSw = Stopwatch.StartNew();
                     ScanDirectoryRecursive(sourceDir, scan);
 
                     int completedFiles = 0;
@@ -611,13 +715,23 @@ namespace XFiles.FileSystem
                         TotalBytes = scan.TotalBytes
                     });
 
-                    return CopyDirectoryRecursive(sourceDir, destPath, progress, token,
+                    var result = CopyDirectoryRecursive(sourceDir, destPath, progress, token,
                         ref completedFiles, scan.FileCount, ref completedBytes, scan.TotalBytes);
+
+                    dirSw.Stop();
+                    double mbps = dirSw.Elapsed.TotalSeconds > 0
+                        ? completedBytes / (1024.0 * 1024.0) / dirSw.Elapsed.TotalSeconds
+                        : 0;
+                    Log.Info("FileOperations.CopyDirectory: {Source} -> {Dest} COMPLETE — {Files}/{Total} files, {Bytes} bytes in {Elapsed:0.0}s ({Mbps:0.00} MB/s avg)",
+                        sourceDir, destPath, completedFiles, scan.FileCount, completedBytes,
+                        dirSw.Elapsed.TotalSeconds, mbps);
+
+                    return result;
                 }
                 catch (Exception ex)
                 {
                     Log.Warn("FileOperations.CopyDirectory exception", ex);
-                    return OperationResult.Failed;
+                    return Fail($"Failed to copy folder \"{sourceDir}\": {ex.Message}");
                 }
             });
         }
@@ -684,7 +798,7 @@ namespace XFiles.FileSystem
             catch (Exception ex)
             {
                 Log.Warn("FileOperations.CopyDirectoryRecursive: {Dir} error", ex, sourceDir);
-                return OperationResult.Failed;
+                return Fail($"Error while copying folder \"{sourceDir}\": {ex.Message}");
             }
 
             return OperationResult.Success;
@@ -719,8 +833,15 @@ namespace XFiles.FileSystem
                         PercentComplete = 0
                     });
 
+                    var moveSw = Stopwatch.StartNew();
                     bool ok = MoveFileFromAppW(sourcePath, destPath);
-                    if (!ok)
+                    if (ok)
+                    {
+                        moveSw.Stop();
+                        Log.Info("FileOperations.Move: {File} => {Dest} native rename in {Elapsed:0.0}ms",
+                            fileName, destPath, moveSw.Elapsed.TotalMilliseconds);
+                    }
+                    else
                     {
                         int err = Marshal.GetLastWin32Error();
                         Log.Warn("FileOperations.Move failed: error {Error}", err);
@@ -738,8 +859,11 @@ namespace XFiles.FileSystem
                         {
                             int delErr = Marshal.GetLastWin32Error();
                             Log.Warn("FileOperations.Move: copy succeeded but delete failed (source still exists): error {Error}", delErr);
-                            return OperationResult.Failed;
+                            return Fail($"Copied \"{sourcePath}\" to the destination but could not remove the original ({Win32ErrorHint(delErr)}).");
                         }
+                        moveSw.Stop();
+                        Log.Info("FileOperations.Move: {File} => {Dest} copy+delete fallback in {Elapsed:0.0}s ({Size} bytes)",
+                            fileName, destPath, moveSw.Elapsed.TotalSeconds, fileSize);
                     }
 
                     progress?.Report(new OperationProgress
@@ -753,7 +877,7 @@ namespace XFiles.FileSystem
                 catch (Exception ex)
                 {
                     Log.Warn("FileOperations.Move exception", ex);
-                    return OperationResult.Failed;
+                    return Fail($"Failed to move \"{sourcePath}\": {ex.Message}");
                 }
             });
         }
@@ -779,10 +903,15 @@ namespace XFiles.FileSystem
                         PercentComplete = 0
                     });
 
+                    var moveSw = Stopwatch.StartNew();
+
                     // Try native move first (same volume)
                     bool ok = MoveFileFromAppW(sourceDir, destPath);
                     if (ok)
                     {
+                        moveSw.Stop();
+                        Log.Info("FileOperations.MoveDirectory: {Source} -> {Dest} native rename in {Elapsed:0.0}ms",
+                            sourceDir, destPath, moveSw.Elapsed.TotalMilliseconds);
                         progress?.Report(new OperationProgress
                         {
                             FileName = dirName,
@@ -796,6 +925,10 @@ namespace XFiles.FileSystem
                     CreateDirectoryFromAppW(destPath, IntPtr.Zero);
 
                     var result = MoveDirectoryRecursive(sourceDir, destPath, progress, token);
+                    moveSw.Stop();
+                    Log.Info("FileOperations.MoveDirectory: {Source} -> {Dest} per-file fallback COMPLETE in {Elapsed:0.0}s (result={Result})",
+                        sourceDir, destPath, moveSw.Elapsed.TotalSeconds, result);
+
                     if (result == OperationResult.Success)
                     {
                         // Source should be empty after moving all files — remove it
@@ -812,7 +945,7 @@ namespace XFiles.FileSystem
                 catch (Exception ex)
                 {
                     Log.Warn("FileOperations.MoveDirectory exception", ex);
-                    return OperationResult.Failed;
+                    return Fail($"Failed to move folder \"{sourceDir}\": {ex.Message}");
                 }
             });
         }
@@ -861,7 +994,7 @@ namespace XFiles.FileSystem
                                 int delErr = Marshal.GetLastWin32Error();
                                 Log.Warn("FileOperations.MoveDirectoryRecursive: copy succeeded but delete failed for {File}: error {Error}", fullPath, delErr);
                                 FindClose(hFind);
-                                return OperationResult.Failed;
+                                return Fail($"Copied \"{fullPath}\" but could not remove the original ({Win32ErrorHint(delErr)}).");
                             }
                         }
 
@@ -879,7 +1012,7 @@ namespace XFiles.FileSystem
             catch (Exception ex)
             {
                 Log.Warn("FileOperations.MoveDirectoryRecursive: {Dir} error", ex, sourceDir);
-                return OperationResult.Failed;
+                return Fail($"Error while moving folder \"{sourceDir}\": {ex.Message}");
             }
 
             return OperationResult.Success;
@@ -904,7 +1037,7 @@ namespace XFiles.FileSystem
                     {
                         int err = Marshal.GetLastWin32Error();
                         Log.Warn("FileOperations.Rename failed: error {Error}", err);
-                        return OperationResult.Failed;
+                        return Fail($"Cannot rename \"{path}\" to \"{newName}\" ({Win32ErrorHint(err)}).");
                     }
 
                     return OperationResult.Success;
@@ -912,7 +1045,7 @@ namespace XFiles.FileSystem
                 catch (Exception ex)
                 {
                     Log.Warn("FileOperations.Rename exception", ex);
-                    return OperationResult.Failed;
+                    return Fail($"Failed to rename \"{path}\": {ex.Message}");
                 }
             });
         }
@@ -936,7 +1069,7 @@ namespace XFiles.FileSystem
                         {
                             int err = Marshal.GetLastWin32Error();
                             Log.Warn("FileOperations.Delete failed: error {Error}", err);
-                            return OperationResult.Failed;
+                            return Fail($"Cannot delete \"{path}\" ({Win32ErrorHint(err)}).");
                         }
                     }
                     else if (pathType == "directory")
@@ -946,7 +1079,7 @@ namespace XFiles.FileSystem
                         {
                             int err = Marshal.GetLastWin32Error();
                             Log.Warn("FileOperations.DeleteDirectory failed: error {Error}", err);
-                            return OperationResult.Failed;
+                            return Fail($"Cannot delete folder \"{path}\" ({Win32ErrorHint(err)}).");
                         }
                     }
 
@@ -955,7 +1088,7 @@ namespace XFiles.FileSystem
                 catch (Exception ex)
                 {
                     Log.Warn("FileOperations.Delete exception", ex);
-                    return OperationResult.Failed;
+                    return Fail($"Failed to delete \"{path}\": {ex.Message}");
                 }
             });
         }
@@ -980,7 +1113,7 @@ namespace XFiles.FileSystem
                         {
                             int err = Marshal.GetLastWin32Error();
                             Log.Warn("FileOperations.DeleteDirectory: failed to delete file {File}, error {Error}", file, err);
-                            return OperationResult.Failed;
+                            return Fail($"Cannot delete \"{file}\" ({Win32ErrorHint(err)}).");
                         }
                     }
 
@@ -995,7 +1128,7 @@ namespace XFiles.FileSystem
                         {
                             int err = Marshal.GetLastWin32Error();
                             Log.Warn("FileOperations.DeleteDirectory: failed to remove root {Path}, error {Error}", path, err);
-                            return OperationResult.Failed;
+                            return Fail($"Cannot remove the folder \"{path}\" itself ({Win32ErrorHint(err)}).");
                         }
                     }
 
@@ -1004,7 +1137,7 @@ namespace XFiles.FileSystem
                 catch (Exception ex)
                 {
                     Log.Warn("FileOperations.DeleteDirectory exception", ex);
-                    return OperationResult.Failed;
+                    return Fail($"Failed to delete the folder \"{path}\": {ex.Message}");
                 }
             });
         }
@@ -1087,7 +1220,7 @@ namespace XFiles.FileSystem
         /// If null, files are overwritten silently (existing behavior).
         /// Pre-scans archive entries for accurate progress.
         /// </summary>
-        public static async Task<OperationResult> ExtractAsync(
+        public static async Task<ExtractResult> ExtractAsync(
             string archivePath, string destDir,
             IProgress<OperationProgress> progress = null,
             Func<string, Task<int>> conflictCallback = null,
@@ -1095,22 +1228,40 @@ namespace XFiles.FileSystem
         {
             return await Task.Run(async () =>
             {
+                int failedEntries = 0;
+                string firstError = null;
+
                 try
                 {
                     Log.Info("FileOperations.Extract: {Archive} -> {Dest}", archivePath, destDir);
 
-                    if (CheckPathType(destDir) == null)
+                    string destType = CheckPathType(destDir);
+                    if (destType == "file")
+                    {
+                        string err = "Destination \"" + destDir + "\" is occupied by a file, not a folder.";
+                        Log.Warn("FileOperations.Extract: {Reason}", err);
+                        return new ExtractResult { Result = OperationResult.Failed, ErrorMessage = err };
+                    }
+                    if (destType == null)
                     {
                         Log.Info("FileOperations.Extract: creating dest dir {Dir}", destDir);
-                        CreateDirectoryFromAppW(destDir, IntPtr.Zero);
+                        bool ok = CreateDirectoryFromAppW(destDir, IntPtr.Zero);
+                        if (!ok)
+                        {
+                            int errCode = Marshal.GetLastWin32Error();
+                            string err = "Could not create destination folder \"" + destDir + "\" (Win32 error " + errCode + ").";
+                            Log.Warn("FileOperations.Extract: {Reason}", err);
+                            return new ExtractResult { Result = OperationResult.Failed, ErrorMessage = err };
+                        }
                     }
 
                     using (var stream = Win32FileStream.OpenRead(archivePath))
                     {
                         if (stream == null)
                         {
-                            Log.Warn("FileOperations.Extract: cannot open archive {Path}", archivePath);
-                            return OperationResult.Failed;
+                            string err = "Cannot open archive \"" + archivePath + "\" for reading.";
+                            Log.Warn("FileOperations.Extract: {Reason}", err);
+                            return new ExtractResult { Result = OperationResult.Failed, ErrorMessage = err };
                         }
 
                         using (var archive = SharpCompress.Archives.ArchiveFactory.Open(stream))
@@ -1137,7 +1288,8 @@ namespace XFiles.FileSystem
                             {
                                 foreach (var entry in archive2.Entries)
                                 {
-                                    if (token.IsCancellationRequested) return OperationResult.Cancelled;
+                                    if (token.IsCancellationRequested)
+                                        return new ExtractResult { Result = OperationResult.Cancelled };
 
                                     if (entry.IsDirectory) continue;
 
@@ -1188,9 +1340,10 @@ namespace XFiles.FileSystem
                                     {
                                         if (entryStream == null)
                                         {
+                                            failedEntries++;
+                                            if (firstError == null)
+                                                firstError = "Cannot open archive entry \"" + entry.Key + "\" for reading.";
                                             Log.Warn("Extract: cannot open entry stream {File}", entry.Key);
-                                            completedFiles++;
-                                            completedBytes += (long)entry.Size;
                                             continue;
                                         }
 
@@ -1198,9 +1351,11 @@ namespace XFiles.FileSystem
                                         {
                                             if (writeStream == null)
                                             {
-                                                Log.Warn("Extract: cannot create dest file {Path}", entryDestPath);
-                                                completedFiles++;
-                                                completedBytes += (long)entry.Size;
+                                                int errCode = Marshal.GetLastWin32Error();
+                                                failedEntries++;
+                                                if (firstError == null)
+                                                    firstError = "Could not create \"" + entryDestPath + "\" (Win32 error " + errCode + "). Check that the destination folder exists and is writable.";
+                                                Log.Warn("Extract: cannot create dest file {Path} (Win32 error {Error})", entryDestPath, errCode);
                                                 continue;
                                             }
 
@@ -1212,7 +1367,8 @@ namespace XFiles.FileSystem
 
                                             do
                                             {
-                                                if (token.IsCancellationRequested) return OperationResult.Cancelled;
+                                                if (token.IsCancellationRequested)
+                                                    return new ExtractResult { Result = OperationResult.Cancelled };
 
                                                 bytesRead = entryStream.Read(buffer, 0, CopyChunkSize);
                                                 if (bytesRead > 0)
@@ -1254,12 +1410,23 @@ namespace XFiles.FileSystem
                         PercentComplete = 100
                     });
 
-                    return OperationResult.Success;
+                    if (failedEntries > 0)
+                    {
+                        string err = $"Extraction finished with {failedEntries} failed entr{(failedEntries == 1 ? "y" : "ies")}. " + (firstError ?? "");
+                        Log.Warn("FileOperations.Extract: {Reason}", err);
+                        return new ExtractResult { Result = OperationResult.Failed, ErrorMessage = err };
+                    }
+
+                    return new ExtractResult { Result = OperationResult.Success };
                 }
                 catch (Exception ex)
                 {
                     Log.Warn("FileOperations.Extract exception", ex);
-                    return OperationResult.Failed;
+                    return new ExtractResult
+                    {
+                        Result = OperationResult.Failed,
+                        ErrorMessage = "Archive could not be read: " + ex.Message
+                    };
                 }
             });
         }
@@ -1319,7 +1486,7 @@ namespace XFiles.FileSystem
                         if (stream == null)
                         {
                             Log.Warn("ExtractFile: cannot open archive {Path}", archivePath);
-                            return OperationResult.Failed;
+                            return Fail($"Cannot open the archive \"{archivePath}\" for reading.");
                         }
 
                         using (var archive = SharpCompress.Archives.ArchiveFactory.Open(stream))
@@ -1331,7 +1498,7 @@ namespace XFiles.FileSystem
                             if (entry == null || entry.IsDirectory)
                             {
                                 Log.Warn("ExtractFile: entry not found or is directory: {Internal}", internalPath);
-                                return OperationResult.Failed;
+                                return Fail($"The item \"{internalPath}\" was not found inside \"{Path.GetFileName(archivePath)}\".");
                             }
 
                             string fileName = Path.GetFileName(entry.Key);
@@ -1353,15 +1520,16 @@ namespace XFiles.FileSystem
                                 if (entryStream == null)
                                 {
                                     Log.Warn("ExtractFile: cannot open entry stream {File}", internalPath);
-                                    return OperationResult.Failed;
+                                    return Fail($"Cannot read the entry \"{internalPath}\" inside the archive.");
                                 }
 
                                 using (var writeStream = Win32FileWriteStream.Create(destPath))
                                 {
                                     if (writeStream == null)
                                     {
+                                        int err = Marshal.GetLastWin32Error();
                                         Log.Warn("ExtractFile: cannot create dest file {Path}", destPath);
-                                        return OperationResult.Failed;
+                                        return Fail($"Cannot create \"{destPath}\" ({Win32ErrorHint(err)}). The destination folder may not exist or may be read-only.");
                                     }
 
                                     var buffer = new byte[CopyChunkSize];
@@ -1408,7 +1576,7 @@ namespace XFiles.FileSystem
                 catch (Exception ex)
                 {
                     Log.Warn("FileOperations.ExtractFile exception", ex);
-                    return OperationResult.Failed;
+                    return Fail($"Failed to extract \"{internalPath}\": {ex.Message}");
                 }
             });
         }
@@ -1469,6 +1637,42 @@ namespace XFiles.FileSystem
 
             int maxAttempts = 10000;
             for (int i = startIdx; i < startIdx + maxAttempts; i++)
+            {
+                string candidate = Path.Combine(parent, $"{baseName} ({i})");
+                if (CheckPathType(candidate) == null) return candidate;
+            }
+            return path;
+        }
+
+        /// <summary>
+        /// Returns <paramref name="path"/> when it is free or already a directory, or a
+        /// "path (N)" variant when a FILE currently occupies that name. Used by the
+        /// extract-to-folder flow so the destination folder never collides with an
+        /// existing file (which would otherwise make extraction fail silently).
+        /// </summary>
+        public static string GetAvailableFolderPath(string path)
+        {
+            string type = CheckPathType(path);
+            if (type != "file") return path;
+
+            string parent = Path.GetDirectoryName(path);
+            string name = Path.GetFileName(path);
+
+            var match = System.Text.RegularExpressions.Regex.Match(name, @"^(.+?)\s*\((\d+)\)$");
+            string baseName;
+            int startIdx;
+            if (match.Success)
+            {
+                baseName = match.Groups[1].Value;
+                startIdx = int.Parse(match.Groups[2].Value) + 1;
+            }
+            else
+            {
+                baseName = name;
+                startIdx = 1;
+            }
+
+            for (int i = startIdx; i < startIdx + 10000; i++)
             {
                 string candidate = Path.Combine(parent, $"{baseName} ({i})");
                 if (CheckPathType(candidate) == null) return candidate;
@@ -1538,14 +1742,14 @@ namespace XFiles.FileSystem
                     {
                         int err = Marshal.GetLastWin32Error();
                         Log.Warn("FileOperations.CreateFolder: CreateDirectoryFromAppW failed, Win32 error={Error}", err);
-                        return OperationResult.Failed;
+                        return Fail($"Cannot create the folder \"{folderPath}\" ({Win32ErrorHint(err)}).");
                     }
                     return OperationResult.Success;
                 }
                 catch (Exception ex)
                 {
                     Log.Warn("FileOperations.CreateFolder exception", ex);
-                    return OperationResult.Failed;
+                    return Fail($"Failed to create the folder \"{folderPath}\": {ex.Message}");
                 }
             });
         }
@@ -1579,7 +1783,7 @@ namespace XFiles.FileSystem
                                 if (stream == null)
                                 {
                                     Log.Warn("FileOperations.CreateZip: cannot read {Path}", sourcePath);
-                                    return OperationResult.Failed;
+                                    return Fail($"Cannot read \"{sourcePath}\" to add it to the ZIP.");
                                 }
                                 openStreams.Add(stream);
                                 archive.AddEntry(fileName, stream);
@@ -1625,7 +1829,7 @@ namespace XFiles.FileSystem
                             else
                             {
                                 Log.Warn("FileOperations.CreateZip: source not found {Source}", sourcePath);
-                                return OperationResult.Failed;
+                                return Fail($"Source \"{sourcePath}\" was not found, so nothing was zipped.");
                             }
 
                             long zipTotal = 0;
@@ -1642,7 +1846,7 @@ namespace XFiles.FileSystem
                             if (!SaveZipWithProgress(archive, zipPath, zipTotal, progress, token))
                             {
                                 Log.Warn("FileOperations.CreateZip: cannot create zip file {Path}", zipPath);
-                                return OperationResult.Failed;
+                                return Fail($"Cannot write the ZIP file \"{zipPath}\". Check that the destination is writable and has enough free space.");
                             }
                         }
                         finally
@@ -1664,7 +1868,7 @@ namespace XFiles.FileSystem
                 {
                     Log.Warn("FileOperations.CreateZip exception", ex);
                     CleanupFailedZip(zipPath);
-                    return OperationResult.Failed;
+                    return Fail($"Failed to create the ZIP \"{zipPath}\": {ex.Message}");
                 }
             });
         }
@@ -1746,7 +1950,7 @@ namespace XFiles.FileSystem
                             if (!SaveZipWithProgress(archive, zipPath, zipTotal, progress, token))
                             {
                                 Log.Warn("FileOperations.CreateZip(multi): cannot create zip file {Path}", zipPath);
-                                return OperationResult.Failed;
+                                return Fail($"Cannot write the ZIP file \"{zipPath}\". Check that the destination is writable and has enough free space.");
                             }
                         }
                         finally
@@ -1768,7 +1972,7 @@ namespace XFiles.FileSystem
                 {
                     Log.Warn("FileOperations.CreateZip(multi) exception", ex);
                     CleanupFailedZip(zipPath);
-                    return OperationResult.Failed;
+                    return Fail($"Failed to create the ZIP \"{zipPath}\": {ex.Message}");
                 }
             });
         }

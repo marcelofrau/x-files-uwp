@@ -433,7 +433,7 @@ namespace XFiles.Controls
                 if (cachePath == null)
                 {
                     Log.Warn("HandleEditAsync: portal download to cache failed for {Name}", entry.Name);
-                    _ = AlertDialogControl.ShowAsync($"Failed to download \"{entry.Name}\".", AlertType.Error);
+                    _ = AlertDialogControl.ShowAsync($"Failed to download \"{entry.Name}\".\n\nSee Log for details.", AlertType.Error);
                     return;
                 }
                 TextEditorOverlayControl.Show(cachePath, XFiles.FileSystem.PortalBrowser.ToPortalEntry(entry));

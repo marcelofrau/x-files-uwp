@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -34,6 +35,18 @@ namespace XFiles.Controls
 {
     public sealed partial class MillerColumnsPage
     {
+        /// <summary>
+        /// Appends the underlying failure reason captured by FileOperations to an
+        /// alert message so the user always understands WHY an operation failed.
+        /// Returns an empty string when there is no reason (should not happen when an
+        /// operation actually returned Failed).
+        /// </summary>
+        private static string FailureSuffix()
+        {
+            string reason = FileOperations.LastFailure;
+            return string.IsNullOrEmpty(reason) ? "" : "\n\n" + reason;
+        }
+
         // --- Batch Selection ---
 
         public void OnToggleBatch()
@@ -482,7 +495,7 @@ namespace XFiles.Controls
 
             // Pre-scan for accurate progress
             var sourcePaths = entries.Select(e => e.FullPath).ToList();
-            var scan = await FileOperations.ScanPathsAsync(sourcePaths);
+            var scan = await FileOperations.ScanEntriesAsync(entries);
 
             // Same-volume moves are renames — no free space consumed.
             bool sameVolume = sourcePaths.All(p => IsSameVolume(p, destDir));
@@ -544,7 +557,7 @@ namespace XFiles.Controls
             OpProgressDialog.Close();
 
             if (failed > 0)
-                _ = AlertDialogControl.ShowAsync($"Moved {success} items, failed to move {failed}.", AlertType.Error);
+                _ = AlertDialogControl.ShowAsync($"Moved {success} items, failed to move {failed}.{FailureSuffix()}", AlertType.Error);
             else
                 Log.Info("HandleBatchMoveAsync: {Count} items moved", success);
 
@@ -559,13 +572,14 @@ namespace XFiles.Controls
             long portalFileBytes = entries
                 .Where(e => e.IsPortal && !e.IsDirectory)
                 .Sum(e => Math.Max(0, e.SizeBytes));
-            var localPaths = entries
+            var localEntries = entries
                 .Where(e => !e.IsPortal && !string.IsNullOrEmpty(e.FullPath))
-                .Select(e => e.FullPath).ToList();
+                .ToList();
+            var localPaths = localEntries.Select(e => e.FullPath).ToList();
             long required = portalFileBytes;
             if (localPaths.Count > 0 && !localPaths.All(p => IsSameVolume(p, destDir)))
             {
-                var ls = await FileOperations.ScanPathsAsync(localPaths);
+                var ls = await FileOperations.ScanEntriesAsync(localEntries);
                 required += ls.TotalBytes;
             }
             if (required > 0 && !await EnsureDiskSpaceAsync(destDir, required))
@@ -628,7 +642,7 @@ namespace XFiles.Controls
             OpProgressDialog.Close();
 
             if (failed > 0)
-                _ = AlertDialogControl.ShowAsync($"Moved {entries.Count - failed} items, failed to move {failed}.", AlertType.Error);
+                _ = AlertDialogControl.ShowAsync($"Moved {entries.Count - failed} items, failed to move {failed}.{FailureSuffix()}", AlertType.Error);
             else
                 Log.Info("ExecuteBatchMovePortalAsync: {Count} items moved", entries.Count);
         }
@@ -692,7 +706,7 @@ namespace XFiles.Controls
             }
 
             if (failed > 0)
-                _ = AlertDialogControl.ShowAsync($"Deleted {success} items, failed to delete {failed}.", AlertType.Error);
+                _ = AlertDialogControl.ShowAsync($"Deleted {success} items, failed to delete {failed}.{FailureSuffix()}", AlertType.Error);
             else
                 Log.Info("HandleBatchDeleteAsync: {Count} items deleted", success);
 
@@ -719,8 +733,7 @@ namespace XFiles.Controls
             var zipPath = System.IO.Path.Combine(currentPath, zipName);
             Log.Info("HandleBatchCreateZipAsync: zipPath={Zip}", zipPath);
 
-            var scanZip = await FileOperations.ScanPathsAsync(
-                entries.Select(e => e.FullPath).ToList());
+            var scanZip = await FileOperations.ScanEntriesAsync(entries);
             if (!await EnsureDiskSpaceAsync(currentPath, scanZip.TotalBytes))
             {
                 Log.Verb("HandleBatchCreateZipAsync: cancelled — insufficient free space");
@@ -756,7 +769,7 @@ namespace XFiles.Controls
             else
             {
                 Log.Warn("HandleBatchCreateZipAsync: failed");
-                _ = AlertDialogControl.ShowAsync($"Failed to create ZIP \"{zipName}\".", AlertType.Error);
+                _ = AlertDialogControl.ShowAsync($"Failed to create ZIP \"{zipName}\".{FailureSuffix()}", AlertType.Error);
             }
         }
 
@@ -787,7 +800,7 @@ namespace XFiles.Controls
                 OpProgressDialog.Cancel();
                 await Task.Delay(1500);
                 OpProgressDialog.Close();
-                _ = AlertDialogControl.ShowAsync("Failed to create ZIP for sharing.", AlertType.Error);
+                _ = AlertDialogControl.ShowAsync("Failed to create ZIP for sharing." + FailureSuffix(), AlertType.Error);
                 return;
             }
 
@@ -858,7 +871,7 @@ namespace XFiles.Controls
 
             // Pre-scan all source paths for accurate total
             var sourcePaths = entries.Select(e => e.FullPath).ToList();
-            var scan = await FileOperations.ScanPathsAsync(sourcePaths);
+            var scan = await FileOperations.ScanEntriesAsync(entries);
 
             if (!await EnsureDiskSpaceAsync(destDir, scan.TotalBytes))
             {
@@ -877,6 +890,8 @@ namespace XFiles.Controls
 
             int completedFiles = 0;
             long completedBytes = 0;
+            int success = 0, failed = 0;
+            var pasteSw = Stopwatch.StartNew();
 
             foreach (var entry in entries)
             {
@@ -928,10 +943,20 @@ namespace XFiles.Controls
 
                 if (result != FileOperations.OperationResult.Success)
                 {
+                    failed++;
                     Log.Warn("HandlePasteAsync: {File} failed", entry.Name);
-                    _ = AlertDialogControl.ShowAsync($"Copy failed: \"{entry.Name}\".", AlertType.Error);
+                    _ = AlertDialogControl.ShowAsync($"Copy failed: \"{entry.Name}\".{FailureSuffix()}", AlertType.Error);
+                }
+                else
+                {
+                    success++;
                 }
             }
+
+            pasteSw.Stop();
+            Log.Info("HandlePasteAsync: COMPLETE — {Success}/{Total} items, {Bytes} bytes in {Elapsed:0.0}s ({Mbps:0.00} MB/s avg)",
+                success, entries.Count, completedBytes, pasteSw.Elapsed.TotalSeconds,
+                pasteSw.Elapsed.TotalSeconds > 0 ? completedBytes / (1024.0 * 1024.0) / pasteSw.Elapsed.TotalSeconds : 0);
 
             OpProgressDialog.Complete();
             await Task.Delay(400);
@@ -940,7 +965,7 @@ namespace XFiles.Controls
             UpdateClipboardIndicator();
             await _navigator.RefreshCurrentAsync();
         }
-        catch (Exception ex) { Log.Err("HandlePasteAsync: {Ex}", ex); _ = AlertDialogControl.ShowAsync("Paste failed.", AlertType.Error); }
+        catch (Exception ex) { Log.Err("HandlePasteAsync: {Ex}", ex); _ = AlertDialogControl.ShowAsync($"Paste failed.\n\n{ex.Message}", AlertType.Error); }
         }
 
         /// <summary>
@@ -1036,7 +1061,7 @@ namespace XFiles.Controls
                 OpProgressDialog.Close();
 
                 if (failed > 0)
-                    _ = AlertDialogControl.ShowAsync($"Upload failed for {failed} item(s).", AlertType.Error);
+                    _ = AlertDialogControl.ShowAsync($"Upload failed for {failed} item(s).{FailureSuffix()}", AlertType.Error);
 
                 UpdateClipboardIndicator();
                 await _navigator.RefreshCurrentAsync();
@@ -1045,7 +1070,7 @@ namespace XFiles.Controls
             {
                 Log.Err("HandlePasteToPortalAsync: {Ex}", ex);
                 OpProgressDialog.Close();
-                _ = AlertDialogControl.ShowAsync("Paste failed.", AlertType.Error);
+                _ = AlertDialogControl.ShowAsync($"Paste failed.\n\n{ex.Message}", AlertType.Error);
             }
             finally
             {
@@ -1122,7 +1147,7 @@ namespace XFiles.Controls
                         OpProgressDialog.Complete();
                         await Task.Delay(400);
                         OpProgressDialog.Close();
-                        _ = AlertDialogControl.ShowAsync($"Failed to download \"{entry.Name}\" from the portal.", AlertType.Error);
+                        _ = AlertDialogControl.ShowAsync($"Failed to download \"{entry.Name}\" from the portal.\n\n{ex.Message}", AlertType.Error);
                         return;
                     }
                 }
@@ -1144,7 +1169,7 @@ namespace XFiles.Controls
                     OpProgressDialog.Complete();
                     await Task.Delay(400);
                     OpProgressDialog.Close();
-                    _ = AlertDialogControl.ShowAsync($"Failed to create ZIP \"{zipName}\".", AlertType.Error);
+                    _ = AlertDialogControl.ShowAsync($"Failed to create ZIP \"{zipName}\".{FailureSuffix()}", AlertType.Error);
                     return;
                 }
 
@@ -1182,7 +1207,7 @@ namespace XFiles.Controls
             {
                 Log.Err("HandleCreatePortalZipAsync: {Ex}", ex);
                 OpProgressDialog.Close();
-                _ = AlertDialogControl.ShowAsync("Failed to create ZIP on the portal.", AlertType.Error);
+                _ = AlertDialogControl.ShowAsync($"Failed to create ZIP on the portal.\n\n{ex.Message}", AlertType.Error);
             }
             finally
             {
@@ -1234,7 +1259,7 @@ namespace XFiles.Controls
                 if (cacheZip == null)
                 {
                     OpProgressDialog.Close();
-                    _ = AlertDialogControl.ShowAsync($"Failed to download \"{entry.Name}\" from the portal.", AlertType.Error);
+                    _ = AlertDialogControl.ShowAsync($"Failed to download \"{entry.Name}\" from the portal.{FailureSuffix()}", AlertType.Error);
                     return;
                 }
 
@@ -1243,20 +1268,23 @@ namespace XFiles.Controls
 
                 OpProgressDialog.SetPhase("Extracting", entry.Name, extractDir);
                 string rootFolder = await Task.Run(() => FileOperations.GetSingleRootFolder(cacheZip));
-                var result = await FileOperations.ExtractAsync(cacheZip, extractDir, progress, null, OpProgressDialog.CancelToken);
-                if (result == FileOperations.OperationResult.Cancelled)
+                var extract = await FileOperations.ExtractAsync(cacheZip, extractDir, progress, null, OpProgressDialog.CancelToken);
+                if (extract.Result == FileOperations.OperationResult.Cancelled)
                 {
                     OpProgressDialog.Cancel();
                     await Task.Delay(1500);
                     OpProgressDialog.Close();
                     return;
                 }
-                if (result != FileOperations.OperationResult.Success)
+                if (extract.Result != FileOperations.OperationResult.Success)
                 {
                     OpProgressDialog.Complete();
                     await Task.Delay(400);
                     OpProgressDialog.Close();
-                    _ = AlertDialogControl.ShowAsync($"Failed to extract \"{entry.Name}\".", AlertType.Error);
+                    string msg = string.IsNullOrEmpty(extract.ErrorMessage)
+                        ? $"Failed to extract \"{entry.Name}\".{FailureSuffix()}"
+                        : $"Failed to extract \"{entry.Name}\".\n\n{extract.ErrorMessage}";
+                    _ = AlertDialogControl.ShowAsync(msg, AlertType.Error);
                     return;
                 }
 
@@ -1365,7 +1393,7 @@ namespace XFiles.Controls
                             OpProgressDialog.Complete();
                             await Task.Delay(400);
                             OpProgressDialog.Close();
-                            _ = AlertDialogControl.ShowAsync($"Failed to upload \"{System.IO.Path.GetFileName(item)}\".", AlertType.Error);
+                            _ = AlertDialogControl.ShowAsync($"Failed to upload \"{System.IO.Path.GetFileName(item)}\".\n\n{ex.Message}", AlertType.Error);
                             return;
                         }
                     }
@@ -1382,7 +1410,7 @@ namespace XFiles.Controls
             {
                 Log.Err("HandleExtractPortalZipAsync: {Ex}", ex);
                 OpProgressDialog.Close();
-                _ = AlertDialogControl.ShowAsync($"Failed to extract \"{entry.Name}\".", AlertType.Error);
+                _ = AlertDialogControl.ShowAsync($"Failed to extract \"{entry.Name}\".\n\n{ex.Message}", AlertType.Error);
             }
             finally
             {
@@ -1492,7 +1520,7 @@ namespace XFiles.Controls
             OpProgressDialog.Close();
 
             if (failed > 0)
-                _ = AlertDialogControl.ShowAsync($"Copy failed for {failed} item(s).", AlertType.Error);
+                _ = AlertDialogControl.ShowAsync($"Copy failed for {failed} item(s).{FailureSuffix()}", AlertType.Error);
 
             UpdateClipboardIndicator();
             await _navigator.RefreshCurrentAsync();
@@ -1544,8 +1572,7 @@ namespace XFiles.Controls
             }
 
             // 3. Execute move with progress
-            var scan = await FileOperations.ScanPathsAsync(
-                new List<string> { entry.FullPath });
+            var scan = await FileOperations.ScanEntriesAsync(new List<FileEntry> { entry });
 
             // Same-volume moves are renames — no free space consumed.
             if (!IsSameVolume(entry.FullPath, destDir) &&
@@ -1562,7 +1589,9 @@ namespace XFiles.Controls
 
             OpProgressDialog.Show("Moving", entry.Name, destDir,
                 0, scan.FileCount);
+            var moveSw = Stopwatch.StartNew();
             var result = await FileOperations.MoveAsync(entry.FullPath, destDir, progress, OpProgressDialog.CancelToken);
+            moveSw.Stop();
 
             if (result == FileOperations.OperationResult.Cancelled)
             {
@@ -1577,6 +1606,9 @@ namespace XFiles.Controls
             await Task.Delay(400);
             OpProgressDialog.Close();
 
+            Log.Info("HandleMoveAsync: {File} -> {Dest} COMPLETE — {Bytes} bytes in {Elapsed:0.0}s (result={Result})",
+                entry.Name, destDir, scan.TotalBytes, moveSw.Elapsed.TotalSeconds, result);
+
             if (result == FileOperations.OperationResult.Success)
             {
                 Log.Info("HandleMoveAsync: success");
@@ -1585,7 +1617,7 @@ namespace XFiles.Controls
             else
             {
                 Log.Warn("HandleMoveAsync: failed");
-                _ = AlertDialogControl.ShowAsync($"Failed to move \"{entry.Name}\".", AlertType.Error);
+                _ = AlertDialogControl.ShowAsync($"Failed to move \"{entry.Name}\".{FailureSuffix()}", AlertType.Error);
             }
         }
 
@@ -1709,7 +1741,7 @@ namespace XFiles.Controls
             else
             {
                 Log.Warn("HandleRenameAsync: failed");
-                _ = AlertDialogControl.ShowAsync($"Failed to rename \"{entry.Name}\".", AlertType.Error);
+                _ = AlertDialogControl.ShowAsync($"Failed to rename \"{entry.Name}\".{FailureSuffix()}", AlertType.Error);
             }
         }
 
@@ -1733,7 +1765,7 @@ namespace XFiles.Controls
             catch (Exception ex)
             {
                 Log.Err("HandlePortalRenameAsync: failed", ex);
-                _ = AlertDialogControl.ShowAsync($"Failed to rename \"{entry.Name}\".", AlertType.Error);
+                _ = AlertDialogControl.ShowAsync($"Failed to rename \"{entry.Name}\".\n\n{ex.Message}", AlertType.Error);
             }
         }
 
@@ -1775,7 +1807,7 @@ namespace XFiles.Controls
             else
             {
                 Log.Warn("HandleDeleteAsync: failed");
-                _ = AlertDialogControl.ShowAsync($"Failed to delete \"{entry.Name}\".", AlertType.Error);
+                _ = AlertDialogControl.ShowAsync($"Failed to delete \"{entry.Name}\".{FailureSuffix()}", AlertType.Error);
             }
         }
 
@@ -1800,7 +1832,7 @@ namespace XFiles.Controls
             catch (Exception ex)
             {
                 Log.Err("HandlePortalDeleteAsync: failed", ex);
-                _ = AlertDialogControl.ShowAsync($"Failed to delete \"{entry.Name}\".", AlertType.Error);
+                _ = AlertDialogControl.ShowAsync($"Failed to delete \"{entry.Name}\".\n\n{ex.Message}", AlertType.Error);
             }
         }
 
@@ -1839,6 +1871,21 @@ namespace XFiles.Controls
                 ? currentPath
                 : System.IO.Path.Combine(currentPath, archiveName);
 
+            // If a FILE already occupies the destination folder name (common when a ROM
+            // zip sits next to its loose file, e.g. extracting "X.iso.zip" next to an
+            // existing "X.iso"), divert to "name (1)" instead of silently failing to
+            // create the folder.
+            if (!singleRoot && destDir != currentPath)
+            {
+                string adjusted = FileOperations.GetAvailableFolderPath(destDir);
+                if (!string.Equals(adjusted, destDir, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    Log.Warn("HandleExtractAsync: destination '{Dest}' is occupied by a file — using '{Adjusted}'", destDir, adjusted);
+                    destDir = adjusted;
+                    selectAfter = System.IO.Path.GetFileName(adjusted);
+                }
+            }
+
             var progress = new Progress<FileOperations.OperationProgress>(p =>
             {
                 OpProgressDialog.UpdateProgress(p);
@@ -1872,7 +1919,8 @@ namespace XFiles.Controls
             }
 
             OpProgressDialog.Show("Extracting", entry.Name, destDir);
-            var result = await FileOperations.ExtractAsync(entry.FullPath, destDir, progress, conflictCallback, OpProgressDialog.CancelToken);
+            var extract = await FileOperations.ExtractAsync(entry.FullPath, destDir, progress, conflictCallback, OpProgressDialog.CancelToken);
+            var result = extract.Result;
 
             if (result == FileOperations.OperationResult.Cancelled)
             {
@@ -1894,8 +1942,11 @@ namespace XFiles.Controls
             }
             else
             {
-                Log.Warn("HandleExtractAsync: failed");
-                _ = AlertDialogControl.ShowAsync($"Failed to extract \"{entry.Name}\".", AlertType.Error);
+                string msg = string.IsNullOrEmpty(extract.ErrorMessage)
+                    ? $"Failed to extract \"{entry.Name}\".{FailureSuffix()}"
+                    : $"Failed to extract \"{entry.Name}\".\n\n{extract.ErrorMessage}";
+                Log.Warn("HandleExtractAsync: failed — {Reason}", extract.ErrorMessage ?? "(no detail)");
+                _ = AlertDialogControl.ShowAsync(msg, AlertType.Error);
             }
         }
 
@@ -1982,7 +2033,7 @@ namespace XFiles.Controls
             else
             {
                 Log.Warn("HandleExtractFileAsync: failed");
-                _ = AlertDialogControl.ShowAsync($"Failed to extract \"{fileName}\".", AlertType.Error);
+                _ = AlertDialogControl.ShowAsync($"Failed to extract \"{fileName}\".{FailureSuffix()}", AlertType.Error);
             }
         }
 
@@ -2025,7 +2076,7 @@ namespace XFiles.Controls
                     OpProgressDialog.Complete();
                     await Task.Delay(400);
                     OpProgressDialog.Close();
-                    _ = AlertDialogControl.ShowAsync($"Failed to extract \"{fileName}\".", AlertType.Error);
+                    _ = AlertDialogControl.ShowAsync($"Failed to extract \"{fileName}\".{FailureSuffix()}", AlertType.Error);
                     return;
                 }
 
@@ -2035,7 +2086,7 @@ namespace XFiles.Controls
                     OpProgressDialog.Complete();
                     await Task.Delay(400);
                     OpProgressDialog.Close();
-                    _ = AlertDialogControl.ShowAsync($"Extracted file not found: \"{fileName}\".", AlertType.Error);
+                    _ = AlertDialogControl.ShowAsync($"Extracted file not found: \"{fileName}\".{FailureSuffix()}", AlertType.Error);
                     return;
                 }
 
@@ -2072,7 +2123,7 @@ namespace XFiles.Controls
             {
                 Log.Err("HandleExtractFileFromPortalZipAsync: {Ex}", ex);
                 OpProgressDialog.Close();
-                _ = AlertDialogControl.ShowAsync($"Failed to extract \"{fileName}\" to the portal.", AlertType.Error);
+                _ = AlertDialogControl.ShowAsync($"Failed to extract \"{fileName}\" to the portal.\n\n{ex.Message}", AlertType.Error);
             }
             finally
             {
@@ -2129,7 +2180,7 @@ namespace XFiles.Controls
             else
             {
                 Log.Warn("HandleCreateFolderAsync: failed");
-                _ = AlertDialogControl.ShowAsync($"Failed to create folder \"{folderName}\".", AlertType.Error);
+                _ = AlertDialogControl.ShowAsync($"Failed to create folder \"{folderName}\".{FailureSuffix()}", AlertType.Error);
             }
         }
 
@@ -2151,7 +2202,7 @@ namespace XFiles.Controls
             catch (Exception ex)
             {
                 Log.Err("HandlePortalCreateFolderAsync: failed", ex);
-                _ = AlertDialogControl.ShowAsync($"Failed to create folder \"{folderName}\".", AlertType.Error);
+                _ = AlertDialogControl.ShowAsync($"Failed to create folder \"{folderName}\".\n\n{ex.Message}", AlertType.Error);
             }
         }
 
@@ -2170,8 +2221,7 @@ namespace XFiles.Controls
             var zipPath = System.IO.Path.Combine(currentPath, zipName);
             Log.Info("HandleCreateZipAsync: zipPath={Zip}", zipPath);
 
-            var scanZip = await FileOperations.ScanPathsAsync(
-                new List<string> { entry.FullPath });
+            var scanZip = await FileOperations.ScanEntriesAsync(new List<FileEntry> { entry });
             if (!await EnsureDiskSpaceAsync(currentPath, scanZip.TotalBytes))
             {
                 Log.Verb("HandleCreateZipAsync: cancelled — insufficient free space");
@@ -2206,7 +2256,7 @@ namespace XFiles.Controls
             else
             {
                 Log.Warn("HandleCreateZipAsync: failed");
-                _ = AlertDialogControl.ShowAsync($"Failed to create ZIP \"{zipName}\".", AlertType.Error);
+                _ = AlertDialogControl.ShowAsync($"Failed to create ZIP \"{zipName}\".{FailureSuffix()}", AlertType.Error);
             }
         }
         private async Task HandleDiskSpaceAsync(FileEntry entry)
