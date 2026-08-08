@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -147,17 +148,17 @@ namespace XFiles.FileSystem
         /// <summary>
         /// Ensures a portal file is cached locally; returns the local path.
         /// </summary>
-        public static Task<string> DownloadToCacheAsync(PortalFileEntry entry, IProgress<double> progress)
-            => PortalCache.EnsureAsync(entry, progress);
+        public static Task<string> DownloadToCacheAsync(PortalFileEntry entry, IProgress<double> progress, CancellationToken ct = default)
+            => PortalCache.EnsureAsync(entry, progress, ct);
 
         /// <summary>
         /// Downloads a portal file to an explicit local destination (copy-to-disk).
         /// </summary>
-        public static async Task DownloadToDiskAsync(PortalFileEntry entry, string destinationPath, IProgress<double> progress)
+        public static async Task DownloadToDiskAsync(PortalFileEntry entry, string destinationPath, IProgress<double> progress, CancellationToken ct = default)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(destinationPath));
             using (var fs = File.Create(destinationPath))
-                await DevicePortalService.DownloadPortalFileAsync(entry, fs, progress);
+                await DevicePortalService.DownloadPortalFileAsync(entry, fs, progress, ct);
         }
 
         /// <summary>
@@ -207,11 +208,17 @@ namespace XFiles.FileSystem
         public static async Task CopyPortalToLocalAsync(PortalFileEntry root, string destDir,
             IProgress<FileOperations.OperationProgress> progress, CancellationToken ct)
         {
+            var sw = Stopwatch.StartNew();
+
             if (!root.IsDirectory)
             {
                 string dest = Path.Combine(destDir, root.Name);
                 Directory.CreateDirectory(Path.GetDirectoryName(dest));
                 await DownloadPortalFileWithProgressAsync(root, dest, root.FileSize, 0, 1, 0, root.FileSize, progress, ct);
+                sw.Stop();
+                Log.Info("PortalBrowser.CopyPortal: {Name} -> {Dest} COMPLETE — {Bytes} bytes in {Elapsed:0.0}s ({Mbps:0.00} MB/s avg)",
+                    root.Name, destDir, root.FileSize, sw.Elapsed.TotalSeconds,
+                    sw.Elapsed.TotalSeconds > 0 ? root.FileSize / (1024.0 * 1024.0) / sw.Elapsed.TotalSeconds : 0);
                 return;
             }
 
@@ -240,6 +247,11 @@ namespace XFiles.FileSystem
                 done += entry.FileSize;
                 idx++;
             }
+
+            sw.Stop();
+            Log.Info("PortalBrowser.CopyPortal: {Name} -> {Dest} COMPLETE — {Files} files, {Bytes} bytes in {Elapsed:0.0}s ({Mbps:0.00} MB/s avg)",
+                root.Name, destDir, fileCount, totalBytes, sw.Elapsed.TotalSeconds,
+                sw.Elapsed.TotalSeconds > 0 ? totalBytes / (1024.0 * 1024.0) / sw.Elapsed.TotalSeconds : 0);
         }
 
         private static async Task DownloadPortalFileWithProgressAsync(PortalFileEntry entry, string destPath,
@@ -259,7 +271,7 @@ namespace XFiles.FileSystem
                         BytesCopied = bytesDone + (long)(p * fileSize),
                         TotalBytes = totalBytes
                     });
-                }));
+                }), ct);
             }
         }
 
@@ -300,6 +312,8 @@ namespace XFiles.FileSystem
             string packageFullName, string portalPath,
             IProgress<FileOperations.OperationProgress> progress, CancellationToken ct)
         {
+            var sw = Stopwatch.StartNew();
+
             if (File.Exists(localPath))
             {
                 string name = Path.GetFileName(localPath);
@@ -312,7 +326,11 @@ namespace XFiles.FileSystem
                             PercentComplete = (int)(p * 100),
                             BytesCopied = (long)(p * size),
                             TotalBytes = size
-                        })));
+                        })), ct);
+                sw.Stop();
+                Log.Info("PortalBrowser.UploadPortal: {Name} -> {Portal} COMPLETE — {Bytes} bytes in {Elapsed:0.0}s ({Mbps:0.00} MB/s avg)",
+                    name, knownFolder + portalPath, size, sw.Elapsed.TotalSeconds,
+                    sw.Elapsed.TotalSeconds > 0 ? size / (1024.0 * 1024.0) / sw.Elapsed.TotalSeconds : 0);
                 return;
             }
 
@@ -355,7 +373,7 @@ namespace XFiles.FileSystem
                 }
 
                 long size = new FileInfo(f).Length;
-                await DevicePortalService.UploadPortalFileAsync(knownFolder, packageFullName, cur, name, f, null);
+                await DevicePortalService.UploadPortalFileAsync(knownFolder, packageFullName, cur, name, f, null, ct);
                 done += size;
                 idx++;
                 progress?.Report(new FileOperations.OperationProgress
@@ -368,6 +386,11 @@ namespace XFiles.FileSystem
                     TotalBytes = totalBytes
                 });
             }
+
+            sw.Stop();
+            Log.Info("PortalBrowser.UploadPortal: {Root} -> {Portal} COMPLETE — {Files} files, {Bytes} bytes in {Elapsed:0.0}s ({Mbps:0.00} MB/s avg)",
+                rootName, knownFolder + portalPath, fileCount, totalBytes, sw.Elapsed.TotalSeconds,
+                sw.Elapsed.TotalSeconds > 0 ? totalBytes / (1024.0 * 1024.0) / sw.Elapsed.TotalSeconds : 0);
         }
     }
 }

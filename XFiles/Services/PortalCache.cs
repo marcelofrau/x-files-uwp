@@ -70,7 +70,7 @@ namespace XFiles.Services
         /// Ensures the portal entry is present in the cache, downloading it if needed.
         /// Returns the local path. Reuses an existing download across preview/playback/zip.
         /// </summary>
-        public static async Task<string> EnsureAsync(PortalFileEntry entry, IProgress<double> progress)
+        public static async Task<string> EnsureAsync(PortalFileEntry entry, IProgress<double> progress, CancellationToken ct = default)
         {
             string cached = await GetCachedPathAsync(entry);
             if (cached != null) return cached;
@@ -80,7 +80,7 @@ namespace XFiles.Services
             string ext = PortalCore.SanitizeCacheExtension(entry.Name);
             string final = Path.Combine(RootPath, hash + ext);
 
-            await Gate.WaitAsync();
+            await Gate.WaitAsync(ct);
             try
             {
                 // Double-check under the gate (concurrent Ensure for the same entry).
@@ -96,7 +96,7 @@ namespace XFiles.Services
                 {
                     Log.Info("PortalCache.Ensure: downloading {Name} ({Bytes} bytes)", entry.Name, entry.FileSize);
                     using (var fs = File.Create(tmp))
-                        await DevicePortalService.DownloadPortalFileAsync(entry, fs, progress);
+                        await DevicePortalService.DownloadPortalFileAsync(entry, fs, progress, ct);
 
                     if (File.Exists(final))
                         File.Delete(final);

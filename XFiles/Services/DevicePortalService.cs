@@ -14,6 +14,7 @@ using Windows.Storage.Streams;
 using Windows.Web.Http;
 using Windows.Web.Http.Filters;
 using Windows.Web.Http.Headers;
+using XFiles.FileSystem;
 
 namespace XFiles.Services
 {
@@ -494,14 +495,15 @@ namespace XFiles.Services
             Log.Dbg("DevicePortal.Client: portal client ready (base={BaseUrl})", _baseUrl);
         }
 
-        private static async Task<Windows.Web.Http.HttpResponseMessage> GetPortalAsync(string pathAndQuery, int timeoutSeconds = 30)
+        private static async Task<Windows.Web.Http.HttpResponseMessage> GetPortalAsync(string pathAndQuery, int timeoutSeconds = 30, CancellationToken ct = default)
         {
             EnsurePortalClient();
             var url = BaseUrl + pathAndQuery;
             var sw = System.Diagnostics.Stopwatch.StartNew();
-            using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds)))
+            using (var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds)))
+            using (var linked = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token, ct))
             {
-                var resp = await _client.GetAsync(new Uri(url)).AsTask(cts.Token);
+                var resp = await _client.GetAsync(new Uri(url)).AsTask(linked.Token);
                 sw.Stop();
                 ulong? len = resp.Content?.Headers?.ContentLength;
                 Log.Info("DevicePortal.Http: GET {Url} => HTTP {Status} in {Elapsed}ms ({Len} bytes)",
@@ -591,11 +593,12 @@ namespace XFiles.Services
         /// token and retries once. Throws PortalRequestException on any non-success status.
         /// </summary>
         private static async Task SendWriteWithCsrfAsync(HttpMethod method, string pathAndQuery,
-            Func<IHttpContent> contentFactory, int timeoutSeconds = 60)
+            Func<IHttpContent> contentFactory, int timeoutSeconds = 60, CancellationToken ct = default)
         {
             EnsurePortalClient();
             for (int attempt = 0; attempt < 2; attempt++)
             {
+                ct.ThrowIfCancellationRequested();
                 await EnsureCsrfAsync();
                 var req = new HttpRequestMessage(method, new Uri(BaseUrl + pathAndQuery));
                 var content = contentFactory?.Invoke();
@@ -603,8 +606,9 @@ namespace XFiles.Services
                 if (!string.IsNullOrEmpty(_csrfToken))
                     req.Headers.Append("X-CSRF-Token", _csrfToken);
 
-                using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds)))
-                using (var resp = await _client.SendRequestAsync(req).AsTask(cts.Token))
+                using (var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds)))
+                using (var linked = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token, ct))
+                using (var resp = await _client.SendRequestAsync(req).AsTask(linked.Token))
                 {
                     if (resp.StatusCode == HttpStatusCode.Forbidden)
                     {
@@ -770,10 +774,10 @@ namespace XFiles.Services
         /// Streams a portal file into <paramref name="dest"/> without buffering it fully.
         /// The filename is a separate query parameter; path is the parent folder only.
         /// </summary>
-        public static async Task DownloadPortalFileAsync(PortalFileEntry entry, Stream dest, IProgress<double> progress)
+        public static async Task DownloadPortalFileAsync(PortalFileEntry entry, Stream dest, IProgress<double> progress, CancellationToken ct = default)
         {
             var query = PortalCore.BuildDownloadFileQuery(entry.KnownFolder, entry.PackageFullName, entry.PortalPath, entry.Name);
-            using (var resp = await GetPortalAsync(query, 120))
+            using (var resp = await GetPortalAsync(query, 120, ct))
             {
                 if (resp.StatusCode == HttpStatusCode.Unauthorized)
                 {
@@ -789,24 +793,57 @@ namespace XFiles.Services
 
                 ulong? total = resp.Content.Headers.ContentLength;
                 long copied = 0;
+                int gc0 = GC.CollectionCount(0), gc1 = GC.CollectionCount(1), gc2 = GC.CollectionCount(2);
+                var stats = new TransferMeter
+                {
+                    BufferSize = 1024 * 1024,
+                    Source = entry.Name,
+                    Dest = "local disk"
+                };
+                stats.Start();
+
                 using (var input = await resp.Content.ReadAsInputStreamAsync())
                 using (var reader = new DataReader(input))
                 {
                     reader.InputStreamOptions = InputStreamOptions.Partial;
                     while (true)
                     {
+                        ct.ThrowIfCancellationRequested();
+                        long readStart = Stopwatch.GetTimestamp();
                         uint loaded = await reader.LoadAsync(1024 * 1024);
+                        long readTicks = Stopwatch.GetTimestamp() - readStart;
                         if (loaded == 0) break;
-                        var bytes = new byte[reader.UnconsumedBufferLength];
+
+                        ct.ThrowIfCancellationRequested();
+                        int chunkBytes = (int)reader.UnconsumedBufferLength;
+                        var bytes = new byte[chunkBytes];
                         reader.ReadBytes(bytes);
+                        long writeStart = Stopwatch.GetTimestamp();
                         await dest.WriteAsync(bytes, 0, bytes.Length);
-                        copied += bytes.Length;
+                        long writeTicks = Stopwatch.GetTimestamp() - writeStart;
+                        copied += chunkBytes;
+                        stats.TrackChunk(chunkBytes, readTicks, writeTicks);
+
+                        if (stats.ChunkCount == 1)
+                            Log.Info("DevicePortal.Download: {Name} first body chunk after {Ms:0.0}ms (headers -> first byte, {Expected} bytes expected)",
+                                entry.Name, stats.ElapsedMs, total ?? 0);
+
+                        Log.Verb("Transfer.Download: {Name} chunk #{Chunks} {Bytes}B read {ReadMs:0.00}ms write {WriteMs:0.00}ms",
+                            entry.Name, stats.ChunkCount, chunkBytes,
+                            readTicks * 1000.0 / Stopwatch.Frequency, writeTicks * 1000.0 / Stopwatch.Frequency);
+
+                        if (stats.ChunkCount % 8 == 0)
+                            stats.LogProgress("Download", entry.Name);
+
                         if (total.HasValue && total.Value > 0)
                             progress?.Report((double)copied / total.Value);
                     }
                     progress?.Report(1.0);
                 }
-                Log.Info("DevicePortal.Download: {Name} => {Bytes} bytes", entry.Name, copied);
+                Log.Info("DevicePortal.Download: {Name} GC delta gen0={G0} gen1={G1} gen2={G2}",
+                    entry.Name,
+                    GC.CollectionCount(0) - gc0, GC.CollectionCount(1) - gc1, GC.CollectionCount(2) - gc2);
+                stats.LogSummary("Download", entry.Name);
             }
         }
 
@@ -859,7 +896,7 @@ namespace XFiles.Services
         /// CSRF-retry attempt so a retried request reads the file from the start again.
         /// </summary>
         public static async Task UploadPortalFileAsync(string knownFolder, string packageFullName, string portalPath,
-            string fileName, string filePath, IProgress<double> progress)
+            string fileName, string filePath, IProgress<double> progress, CancellationToken ct = default)
         {
             var query = "/api/filesystem/apps/file?knownfolderid=" + Uri.EscapeDataString(knownFolder) +
                         "&packagefullname=" + Uri.EscapeDataString(packageFullName ?? "") +
@@ -878,6 +915,14 @@ namespace XFiles.Services
 
             Log.Dbg("DevicePortal.Upload: uploading '{FileName}' ({Bytes} bytes) to {Query}", fileName, fileSize, query);
 
+            var stats = new TransferMeter
+            {
+                BufferSize = 0, // HTTP transport decides the read request size (see req histogram)
+                Source = filePath,
+                Dest = knownFolder + portalPath
+            };
+            stats.Start();
+
             await SendWriteWithCsrfAsync(HttpMethod.Post, query, () =>
             {
                 long totalRead = 0;
@@ -887,14 +932,15 @@ namespace XFiles.Services
                     totalRead += bytesRead;
                     if (progress != null && fileSize > 0)
                         progress.Report(Math.Min(1.0, (double)totalRead / fileSize));
-                });
-                var composite = new MultipartUploadStream(header, progressStream, fileSize, footer);
+                }, stats);
+                var composite = new MultipartUploadStream(header, progressStream, fileSize, footer, ct);
                 var content = new HttpStreamContent(composite.AsInputStream());
                 content.Headers.ContentType = HttpMediaTypeHeaderValue.Parse("multipart/form-data; boundary=" + boundary);
                 content.Headers.ContentLength = (ulong)bodyLength;
                 return content;
-            }, 120);
+            }, 120, ct);
 
+            stats.LogSummary("Upload", fileName);
             Log.Info("DevicePortal.Upload: '{FileName}' uploaded ({Bytes} bytes)", fileName, fileSize);
             progress?.Report(1.0);
         }
@@ -909,16 +955,18 @@ namespace XFiles.Services
             private readonly byte[] _footer;
             private readonly Stream _file;
             private readonly long _length;
+            private readonly CancellationToken _ct;
             private int _headerPos;
             private int _footerPos;
             private int _phase; // 0=header, 1=file, 2=footer, 3=done
             private long _position;
 
-            public MultipartUploadStream(byte[] header, Stream file, long fileSize, byte[] footer)
+            public MultipartUploadStream(byte[] header, Stream file, long fileSize, byte[] footer, CancellationToken ct = default)
             {
                 _header = header;
                 _file = file;
                 _footer = footer;
+                _ct = ct;
                 _length = header.Length + fileSize + footer.Length;
             }
 
@@ -928,6 +976,7 @@ namespace XFiles.Services
 
                 while (true)
                 {
+                    _ct.ThrowIfCancellationRequested();
                     if (_phase == 0)
                     {
                         int n = Math.Min(count, _header.Length - _headerPos);
@@ -958,11 +1007,39 @@ namespace XFiles.Services
                 }
             }
 
-            public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+            public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
             {
-                if (cancellationToken.IsCancellationRequested)
-                    return Task.FromCanceled<int>(cancellationToken);
-                return Task.Run(() => Read(buffer, offset, count), cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                while (true)
+                {
+                    if (_phase == 0)
+                    {
+                        int n = Math.Min(count, _header.Length - _headerPos);
+                        if (n <= 0) { _phase = 1; continue; }
+                        System.Buffer.BlockCopy(_header, _headerPos, buffer, offset, n);
+                        _headerPos += n;
+                        _position += n;
+                        if (_headerPos == _header.Length) _phase = 1;
+                        return n;
+                    }
+                    if (_phase == 1)
+                    {
+                        int n = await _file.ReadAsync(buffer, offset, count, cancellationToken).ConfigureAwait(false);
+                        if (n > 0) { _position += n; return n; }
+                        _phase = 2;
+                        continue;
+                    }
+                    if (_phase == 2)
+                    {
+                        int n = Math.Min(count, _footer.Length - _footerPos);
+                        if (n <= 0) { _phase = 3; return 0; }
+                        System.Buffer.BlockCopy(_footer, _footerPos, buffer, offset, n);
+                        _footerPos += n;
+                        _position += n;
+                        return n;
+                    }
+                    return 0;
+                }
             }
 
             public override bool CanRead => true;
