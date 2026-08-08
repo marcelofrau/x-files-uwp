@@ -94,13 +94,29 @@ namespace XFiles.FileSystem
 
             try
             {
-                uint bytesWritten;
-                bool ok = WriteFile(_handle, writeBuf, (uint)count, out bytesWritten, IntPtr.Zero);
+                int remaining = count;
+                while (remaining > 0)
+                {
+                    uint bytesWritten;
+                    bool ok = WriteFile(_handle, writeBuf, (uint)remaining, out bytesWritten, IntPtr.Zero);
 
-                if (!ok)
-                    throw new IOException($"WriteFile failed, Win32 error={Marshal.GetLastWin32Error()}");
+                    if (!ok)
+                    {
+                        int err = Marshal.GetLastWin32Error();
+                        Log.Err("Win32FileWriteStream.Write: WriteFile failed, {Count} bytes pending, Win32 error={Error}", null, remaining, err);
+                        throw new IOException($"WriteFile failed, Win32 error={err}");
+                    }
 
-                _position += bytesWritten;
+                    if (bytesWritten == 0)
+                        throw new IOException("WriteFile wrote 0 bytes");
+
+                    remaining -= (int)bytesWritten;
+
+                    if (remaining > 0)
+                        Array.Copy(writeBuf, (int)bytesWritten, writeBuf, 0, remaining);
+                }
+
+                _position += count;
             }
             finally
             {

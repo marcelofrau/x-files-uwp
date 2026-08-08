@@ -113,7 +113,14 @@ namespace XFiles.FileSystem
                 uint bytesRead;
                 bool ok = ReadFile(_handle, readBuf, (uint)count, out bytesRead, IntPtr.Zero);
 
-                if (!ok || bytesRead == 0)
+                if (!ok)
+                {
+                    int err = Marshal.GetLastWin32Error();
+                    Log.Err("Win32FileStream.Read: ReadFile failed, Win32 error={Error}", null, err);
+                    throw new IOException($"ReadFile failed, Win32 error={err}");
+                }
+
+                if (bytesRead == 0)
                     return 0;
 
                 if (offset != 0)

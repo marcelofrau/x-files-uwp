@@ -1,47 +1,60 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using XFiles.FileSystem;
 
 namespace XFiles.Services
 {
     /// <summary>
     /// Stream wrapper that reports bytes read via a callback.
     /// Used to track upload progress when streaming from disk to HttpClient.
+    /// Optionally times each read and records the HTTP request sizes for diagnostics.
     /// </summary>
     internal class ProgressStream : Stream
     {
         private readonly Stream _inner;
         private readonly Action<long> _onBytesRead;
+        private readonly TransferMeter _stats;
         private long _totalBytesRead;
 
         public long TotalBytesRead => Interlocked.Read(ref _totalBytesRead);
 
-        public ProgressStream(Stream inner, Action<long> onBytesRead)
+        public ProgressStream(Stream inner, Action<long> onBytesRead, TransferMeter stats = null)
         {
             _inner = inner ?? throw new ArgumentNullException(nameof(inner));
             _onBytesRead = onBytesRead;
+            _stats = stats;
         }
 
         public override int Read(byte[] buffer, int offset, int count)
         {
+            _stats?.TrackRequest(count);
+            long start = Stopwatch.GetTimestamp();
             int read = _inner.Read(buffer, offset, count);
+            long readTicks = Stopwatch.GetTimestamp() - start;
             if (read > 0)
             {
                 Interlocked.Add(ref _totalBytesRead, read);
                 _onBytesRead?.Invoke(read);
             }
+            _stats?.TrackChunk(read, readTicks, 0);
             return read;
         }
 
         public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
+            _stats?.TrackRequest(count);
+            long start = Stopwatch.GetTimestamp();
             int read = await _inner.ReadAsync(buffer, offset, count, cancellationToken);
+            long readTicks = Stopwatch.GetTimestamp() - start;
             if (read > 0)
             {
                 Interlocked.Add(ref _totalBytesRead, read);
                 _onBytesRead?.Invoke(read);
             }
+            _stats?.TrackChunk(read, readTicks, 0);
             return read;
         }
 
