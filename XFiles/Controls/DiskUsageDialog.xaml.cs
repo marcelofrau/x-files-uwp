@@ -34,7 +34,7 @@ namespace XFiles.Controls
         private static readonly SolidColorBrush TextBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF));
         private static readonly SolidColorBrush BarBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x2A, 0x2D, 0x33));
         private static readonly FontFamily TitleFont = new FontFamily("ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium");
-        private static readonly FontFamily MonoFont = new FontFamily("ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata");
+        private static readonly FontFamily MonoFont = new FontFamily("Consolas");
 
         public bool IsOpen => Visibility == Visibility.Visible;
 

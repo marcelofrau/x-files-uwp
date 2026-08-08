@@ -30,7 +30,7 @@
                                    Text="Disk Space" />
                         <TextBlock x:Name="DriveText"
                                    Foreground="{StaticResource XFilesForegroundBrush}"
-                                   FontFamily="ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata"
+                                   FontFamily="Consolas"
                                    FontSize="13"
                                    Margin="0,4,0,0"
                                    Text="" />

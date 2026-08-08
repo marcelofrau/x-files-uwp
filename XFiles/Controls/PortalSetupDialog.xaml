@@ -58,7 +58,7 @@
                                    Margin="0,0,0,8" />
 
                         <TextBlock Text="X-Files cannot reach the Xbox Developer Portal. Two things are required:"
-                                   FontFamily="ms-appx:///Assets/Fonts/Inconsolata-Regular.ttf#Inconsolata"
+                                   FontFamily="Consolas"
                                    FontSize="13"
                                    Foreground="{StaticResource XFilesForegroundBrush}"
                                    TextWrapping="Wrap"
@@ -70,19 +70,19 @@
                                    Foreground="#D0B060"
                                    Margin="0,0,0,4" />
                         <TextBlock Text="• XB Homebrew Vault (PC) — Tools → Loopback Exempt wizard"
-                                   FontFamily="ms-appx:///Assets/Fonts/Inconsolata-Regular.ttf#Inconsolata"
+                                   FontFamily="Consolas"
                                    FontSize="12"
                                    Foreground="#C8CED6"
                                    TextWrapping="Wrap"
                                    Margin="12,0,0,2" />
                         <TextBlock Text="• Release zip — tools/liberate-loopback.ps1 (Windows) or .sh (Linux/Android + sshpass)"
-                                   FontFamily="ms-appx:///Assets/Fonts/Inconsolata-Regular.ttf#Inconsolata"
+                                   FontFamily="Consolas"
                                    FontSize="12"
                                    Foreground="#C8CED6"
                                    TextWrapping="Wrap"
                                    Margin="12,0,0,2" />
                         <TextBlock Text="• Manual SSH + Termux — see docs, QR on the left"
-                                   FontFamily="ms-appx:///Assets/Fonts/Inconsolata-Regular.ttf#Inconsolata"
+                                   FontFamily="Consolas"
                                    FontSize="12"
                                    Foreground="#C8CED6"
                                    TextWrapping="Wrap"
@@ -94,7 +94,7 @@
                                    Foreground="#D0B060"
                                    Margin="0,0,0,4" />
                         <TextBlock Text="Set once in Developer Mode → Remote Access (user + password)."
-                                   FontFamily="ms-appx:///Assets/Fonts/Inconsolata-Regular.ttf#Inconsolata"
+                                   FontFamily="Consolas"
                                    FontSize="12"
                                    Foreground="#C8CED6"
                                    TextWrapping="Wrap"

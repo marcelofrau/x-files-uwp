@@ -78,7 +78,7 @@
     <!-- ═══ Typography ═══ -->
     <FontFamily x:Key="XFilesTitleFont">ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium</FontFamily>
     <FontFamily x:Key="XFilesBodyFont">ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium</FontFamily>
-    <FontFamily x:Key="XFilesMonoFontFamily">ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata</FontFamily>
+    <FontFamily x:Key="XFilesMonoFontFamily">Consolas</FontFamily>
 
     <!-- ═══ ListView ═══ -->
     <Style x:Key="RetroListViewStyle" TargetType="ListView">
@@ -219,5 +219,70 @@
         <Setter Property="Padding" Value="8,6" />
         <Setter Property="SelectionHighlightColor" Value="{StaticResource XFilesAccentBrush}" />
         <Setter Property="MinHeight" Value="32" />
+    </Style>
+
+    <!-- ═══ Progress bar (operation dialog) ═══ -->
+    <Style x:Key="RetroProgressBarStyle" TargetType="ProgressBar">
+        <Setter Property="Foreground" Value="{StaticResource XFilesAccentBrush}" />
+        <Setter Property="Background" Value="{StaticResource XFilesBorderBrush}" />
+        <Setter Property="Height" Value="14" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ProgressBar">
+                    <Grid x:Name="Root">
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Determinate">
+                                    <VisualState.Setters>
+                                        <Setter Target="ProgressBarIndicator.Visibility" Value="Visible" />
+                                        <Setter Target="IndeterminateBar.Visibility" Value="Collapsed" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Indeterminate">
+                                    <VisualState.Setters>
+                                        <Setter Target="ProgressBarIndicator.Visibility" Value="Collapsed" />
+                                        <Setter Target="IndeterminateBar.Visibility" Value="Visible" />
+                                    </VisualState.Setters>
+                                    <VisualState.Storyboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Duration="0:0:2.2"
+                                                             From="-280"
+                                                             To="1400"
+                                                             AutoReverse="True"
+                                                             RepeatBehavior="Forever"
+                                                             Storyboard.TargetName="IndeterminateBar"
+                                                             Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)" />
+                                        </Storyboard>
+                                    </VisualState.Storyboard>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+
+                        <Rectangle x:Name="TrackRound"
+                                   Fill="{TemplateBinding Background}"
+                                   RadiusX="3"
+                                   RadiusY="3" />
+                        <Rectangle x:Name="ProgressBarIndicator"
+                                   Fill="{TemplateBinding Foreground}"
+                                   HorizontalAlignment="Left"
+                                   Stretch="Fill"
+                                   RadiusX="3"
+                                   RadiusY="3" />
+                        <Rectangle x:Name="IndeterminateBar"
+                                   Visibility="Collapsed"
+                                   Fill="{TemplateBinding Foreground}"
+                                   Width="240"
+                                   HorizontalAlignment="Left"
+                                   RadiusX="3"
+                                   RadiusY="3">
+                            <Rectangle.RenderTransform>
+                                <TranslateTransform X="-280" />
+                            </Rectangle.RenderTransform>
+                        </Rectangle>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 </ResourceDictionary>

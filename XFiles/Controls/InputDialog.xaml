@@ -26,7 +26,7 @@
 
                 <TextBox x:Name="InputBox"
                          Style="{StaticResource DarkTextBoxStyle}"
-                         FontFamily="ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata"
+                          FontFamily="Consolas"
                          FontSize="15"
                          MaxWidth="850"
                          HorizontalAlignment="Stretch"

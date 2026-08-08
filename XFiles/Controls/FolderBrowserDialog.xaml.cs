@@ -47,7 +47,9 @@ namespace XFiles.Controls
 
             string dirName = string.IsNullOrEmpty(path)
                 ? "\\\\ (Drives)"
-                : System.IO.Path.GetFileName(path.TrimEnd('\\')) ?? path;
+                : System.IO.Path.GetFileName(path.TrimEnd('\\'));
+            if (string.IsNullOrEmpty(dirName))
+                dirName = path.TrimEnd('\\');
             CurrentPathText.Text = path ?? "\\\\ (Drives)";
 
             // Update Move Here label with current folder name
@@ -108,9 +110,19 @@ namespace XFiles.Controls
 
             // Update A button label based on selection
             if (selected.IsVirtual)
-                FooterALabel.Text = _currentPath != null
-                    ? $"Move Here ({System.IO.Path.GetFileName(_currentPath.TrimEnd('\\'))})"
-                    : "Move Here";
+            {
+                if (_currentPath != null)
+                {
+                    string name = System.IO.Path.GetFileName(_currentPath.TrimEnd('\\'));
+                    if (string.IsNullOrEmpty(name))
+                        name = _currentPath.TrimEnd('\\');
+                    FooterALabel.Text = $"Move Here ({name})";
+                }
+                else
+                {
+                    FooterALabel.Text = "Move Here";
+                }
+            }
             else
                 FooterALabel.Text = "Navigate";
         }
