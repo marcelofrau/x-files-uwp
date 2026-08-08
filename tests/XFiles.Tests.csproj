@@ -22,6 +22,10 @@
     <Compile Include="..\XFiles\FileSystem\DirectoryEntryOrder.cs" Link="Linked\FileSystem\DirectoryEntryOrder.cs" />
     <Compile Include="..\XFiles\FileSystem\Formatting.cs" Link="Linked\FileSystem\Formatting.cs" />
     <Compile Include="..\XFiles\FileSystem\DiskSpaceGuard.cs" Link="Linked\FileSystem\DiskSpaceGuard.cs" />
+    <Compile Include="..\XFiles\FileSystem\TransferMeter.cs" Link="Linked\FileSystem\TransferMeter.cs" />
+    <Compile Include="..\XFiles\FileSystem\ClipboardState.cs" Link="Linked\FileSystem\ClipboardState.cs" />
+    <Compile Include="..\XFiles\FileSystem\Win32FileStream.cs" Link="Linked\FileSystem\Win32FileStream.cs" />
+    <Compile Include="..\XFiles\FileSystem\Win32FileWriteStream.cs" Link="Linked\FileSystem\Win32FileWriteStream.cs" />
     <Compile Include="..\XFiles\Controls\PieGeometry.cs" Link="Linked\Controls\PieGeometry.cs" />
     <Compile Include="..\XFiles\Controls\TransferStats.cs" Link="Linked\Controls\TransferStats.cs" />
     <Compile Include="..\XFiles\FileSystem\HighlightRenderer.cs" Link="Linked\FileSystem\HighlightRenderer.cs" />
