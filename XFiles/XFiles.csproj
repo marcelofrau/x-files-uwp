@@ -126,6 +126,7 @@
     <Compile Include="FileSystem\RomHeaderParser.cs" />
     <Compile Include="FileSystem\GamelistParser.cs" />
     <Compile Include="FileSystem\FileOperations.cs" />
+    <Compile Include="FileSystem\TransferMeter.cs" />
     <Compile Include="FileSystem\DiskSpaceGuard.cs" />
     <Compile Include="Controls\PieGeometry.cs" />
     <Compile Include="Controls\TransferStats.cs" />
@@ -648,7 +649,6 @@
     <Content Include="Assets\highlight.min.js" />
     <Content Include="Assets\highlight-aco.css" />
     <Content Include="Assets\editor.js" />
-    <Content Include="Assets\Inconsolata-Regular.ttf" />
     <Content Include="Assets\Fonts\Oxanium-Bold.ttf" />
     <Content Include="Assets\Fonts\Oxanium-Regular.ttf" />
     <Content Include="Assets\mac-startup.mp3" />

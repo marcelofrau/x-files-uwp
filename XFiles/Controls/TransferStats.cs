@@ -30,16 +30,36 @@ namespace XFiles.Controls
         }
 
         /// <summary>
-        /// Bytes/second computed from the first and last samples in the window.
-        /// Returns 0 when there is not enough data.
+        /// Bytes/second computed from the first and last samples within the requested
+        /// window (default 4s). Returns 0 when there is not enough data. A longer
+        /// window smooths burst noise (the chart uses ~2s, the ETA/number uses 4s).
         /// </summary>
-        public double SpeedBytesPerSecond()
+        public double SpeedBytesPerSecond(double windowSeconds = WindowSeconds)
         {
             if (_samples.Count < 2) return 0;
-            var first = _samples[0];
             var last = _samples[_samples.Count - 1];
+            double cutoff = last.Sec - windowSeconds;
+            int firstIdx = _samples.Count - 1;
+            while (firstIdx > 0 && _samples[firstIdx - 1].Sec >= cutoff) firstIdx--;
+            var first = _samples[firstIdx];
             double dt = last.Sec - first.Sec;
             double db = last.Bytes - first.Bytes;
+            if (dt <= 0.05 || db <= 0) return 0;
+            return db / dt;
+        }
+
+        /// <summary>
+        /// Instantaneous speed from the LAST two samples only (delta bytes / delta
+        /// time). This reflects real throughput fluctuations; the windowed average is
+        /// smoother but flattens the chart into a near-constant line.
+        /// </summary>
+        public double IntervalSpeedBytesPerSecond()
+        {
+            if (_samples.Count < 2) return 0;
+            var a = _samples[_samples.Count - 2];
+            var b = _samples[_samples.Count - 1];
+            double dt = b.Sec - a.Sec;
+            double db = b.Bytes - a.Bytes;
             if (dt <= 0.05 || db <= 0) return 0;
             return db / dt;
         }

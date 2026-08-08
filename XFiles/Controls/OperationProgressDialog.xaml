@@ -10,8 +10,7 @@
                 BorderBrush="#2A2D33"
                 BorderThickness="1"
                 CornerRadius="6"
-                MaxWidth="1100"
-                MinWidth="800"
+                Width="700"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"
                 Padding="32,24">
@@ -26,40 +25,101 @@
                            Text="" />
 
                 <!-- Source -->
-                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                <Grid Margin="0,0,0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
                     <TextBlock Text="From:"
                                Foreground="#66FFFFFF"
                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                FontSize="12"
-                               Margin="0,0,8,0"
                                VerticalAlignment="Center" />
                     <TextBlock x:Name="SourceText"
+                               Grid.Column="1"
                                Foreground="{StaticResource XFilesForegroundBrush}"
-                               FontFamily="ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                FontSize="13"
                                TextTrimming="CharacterEllipsis"
-                               MaxWidth="1050"
                                VerticalAlignment="Center"
                                Text="" />
-                </StackPanel>
+                </Grid>
 
                 <!-- Destination -->
-                <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                <Grid Margin="0,0,0,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
                     <TextBlock Text="To:"
                                Foreground="#66FFFFFF"
                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                FontSize="12"
-                               Margin="0,0,8,0"
                                VerticalAlignment="Center" />
                     <TextBlock x:Name="DestText"
+                               Grid.Column="1"
                                Foreground="{StaticResource XFilesForegroundBrush}"
-                               FontFamily="ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                FontSize="13"
                                TextTrimming="CharacterEllipsis"
-                               MaxWidth="1580"
                                VerticalAlignment="Center"
                                Text="" />
-                </StackPanel>
+                </Grid>
+
+                <!-- Live speed chart (60s window; stretches to the same width as the
+                     progress bars below so the trace never rescales) -->
+                <Border x:Name="SpeedChartPanel"
+                        Visibility="Collapsed"
+                        Background="#14171C"
+                        BorderBrush="#2A2D33"
+                        BorderThickness="1"
+                        CornerRadius="4"
+                        Height="84"
+                        Margin="0,0,0,14">
+                    <Grid>
+                        <Grid x:Name="SpeedChartArea" Margin="12,24,12,7">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <Rectangle Grid.Row="1" Height="1" VerticalAlignment="Center"
+                                       Fill="#26FFFFFF" />
+                            <Rectangle Grid.Row="2" Height="1" VerticalAlignment="Center"
+                                       Fill="#26FFFFFF" />
+                            <Rectangle Grid.Row="3" Height="1" VerticalAlignment="Center"
+                                       Fill="#26FFFFFF" />
+                            <Polygon x:Name="SpeedFillArea"
+                                     Grid.RowSpan="4"
+                                     Fill="#2693C43C"
+                                     HorizontalAlignment="Stretch"
+                                     VerticalAlignment="Stretch" />
+                            <Polyline x:Name="SpeedPolyline"
+                                      Grid.RowSpan="4"
+                                      Stroke="{StaticResource XFilesAccentBrush}"
+                                      StrokeThickness="2"
+                                      StrokeLineJoin="Round"
+                                      StrokeEndLineCap="Round"
+                                      HorizontalAlignment="Stretch"
+                                      VerticalAlignment="Stretch" />
+                        </Grid>
+                        <TextBlock Text="Speed"
+                                   Foreground="#66FFFFFF"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                   FontSize="11"
+                                   Margin="12,7,0,0"
+                                   VerticalAlignment="Top" />
+                        <TextBlock x:Name="SpeedValueText"
+                                   Foreground="{StaticResource XFilesAccentBrush}"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                                   FontSize="14"
+                                   Margin="0,4,12,0"
+                                   HorizontalAlignment="Right"
+                                   VerticalAlignment="Top"
+                                   Text="" />
+                    </Grid>
+                </Border>
 
                 <!-- Overall progress bar (multi-file) -->
                 <StackPanel x:Name="OverallProgressPanel" Visibility="Collapsed">
@@ -70,72 +130,85 @@
                                Margin="0,0,0,4"
                                Text="Overall" />
                     <ProgressBar x:Name="OverallProgressBar"
+                                 Style="{StaticResource RetroProgressBarStyle}"
                                  Minimum="0" Maximum="100"
                                  Value="0"
                                  Height="10"
-                                 Margin="0,0,0,10"
-                                 Foreground="{StaticResource XFilesAccentBrush}"
-                                 Background="#2A2D33" />
+                                 Margin="0,0,0,12" />
                 </StackPanel>
 
                 <!-- Per-file progress bar -->
-                <TextBlock x:Name="FileLabel"
-                           Foreground="#66FFFFFF"
-                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                           FontSize="11"
-                           Margin="0,0,0,4"
-                           Text="File" />
                 <ProgressBar x:Name="ProgressBar"
+                             Style="{StaticResource RetroProgressBarStyle}"
                              Minimum="0" Maximum="100"
                              Value="0"
-                             Height="28"
-                             Margin="0,0,0,10" />
+                             Height="14"
+                             Margin="0,0,0,8" />
 
-                <!-- Current file -->
-                <TextBlock x:Name="CurrentFileText"
-                           Foreground="#99FFFFFF"
-                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                           FontSize="12"
-                           TextTrimming="CharacterEllipsis"
-                           Text="" />
+                <!-- Current file + bytes (bytes right-aligned) -->
+                <Grid Margin="0,0,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="CurrentFileText"
+                               Grid.Column="0"
+                               Foreground="#99FFFFFF"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="12"
+                               TextTrimming="CharacterEllipsis"
+                               Text="" />
+                    <TextBlock x:Name="BytesText"
+                               Grid.Column="1"
+                               Foreground="#66FFFFFF"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="12"
+                               TextAlignment="Right"
+                               Text="" />
+                </Grid>
 
-                <!-- Bytes info -->
-                <TextBlock x:Name="BytesText"
-                           Foreground="#66FFFFFF"
-                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                           FontSize="12"
-                           Margin="0,4,0,0"
-                           Text="" />
-
-                <!-- Live stats: percent / speed / ETA -->
-                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                <!-- Live stats: percent (left) / speed + ETA (right-aligned) -->
+                <Grid Margin="0,10,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
                     <TextBlock x:Name="PercentText"
+                               Grid.Column="0"
                                Foreground="{StaticResource XFilesAccentBrush}"
                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
-                               FontSize="16"
-                               Margin="0,0,20,0"
+                               FontSize="26"
+                               TextAlignment="Left"
                                VerticalAlignment="Center"
                                Text="" />
-                    <TextBlock x:Name="SpeedText"
-                               Foreground="{StaticResource XFilesForegroundBrush}"
-                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                               FontSize="13"
-                               Margin="0,0,20,0"
-                               VerticalAlignment="Center"
-                               Text="" />
-                    <TextBlock x:Name="EtaText"
-                               Foreground="{StaticResource XFilesTextMutedBrush}"
-                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                               FontSize="13"
-                               VerticalAlignment="Center"
-                               Text="" />
-                </StackPanel>
+                    <StackPanel Grid.Column="1"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center">
+                        <TextBlock x:Name="SpeedText"
+                                   Foreground="{StaticResource XFilesForegroundBrush}"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                   FontSize="13"
+                                   MinWidth="140"
+                                   TextAlignment="Right"
+                                   VerticalAlignment="Center"
+                                   Text="" />
+                        <TextBlock x:Name="EtaText"
+                                   Foreground="{StaticResource XFilesTextMutedBrush}"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                   FontSize="13"
+                                   MinWidth="120"
+                                   TextAlignment="Right"
+                                   Margin="20,0,0,0"
+                                   VerticalAlignment="Center"
+                                   Text="" />
+                    </StackPanel>
+                </Grid>
 
                 <!-- Cancel hint -->
                 <StackPanel x:Name="CancelHint"
                             Orientation="Horizontal"
                             HorizontalAlignment="Center"
-                            Margin="0,16,0,0">
+                            Margin="0,18,0,0">
                     <Image Source="ms-appx:///Assets/GamepadButtons/abxy/b.png"
                            Width="14" Height="14" Margin="0,0,4,0"
                            VerticalAlignment="Center" />
@@ -148,7 +221,7 @@
 
                 <!-- Cancelled summary (shown after cancel) -->
                 <StackPanel x:Name="SummaryPanel" Visibility="Collapsed"
-                            Margin="0,16,0,0">
+                            Margin="0,18,0,0">
                     <Border Background="#1A2A1A"
                             BorderBrush="#3393C43C"
                             BorderThickness="1"
@@ -163,7 +236,7 @@
                                        Text="Operation Cancelled" />
                             <TextBlock x:Name="SummaryText"
                                        Foreground="{StaticResource XFilesForegroundBrush}"
-                                       FontFamily="ms-appx:///Assets/Inconsolata-Regular.ttf#Inconsolata"
+                                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                        FontSize="12"
                                        TextWrapping="Wrap"
                                        Text="" />

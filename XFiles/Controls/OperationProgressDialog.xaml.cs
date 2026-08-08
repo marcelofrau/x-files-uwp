@@ -2,9 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading;
+using Windows.Foundation;
+using Windows.System.Display;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Input;
+using Windows.UI.Xaml.Media;
 using XFiles.FileSystem;
 using static XFiles.FileSystem.FileOperations;
 
@@ -13,6 +16,8 @@ namespace XFiles.Controls
     public sealed partial class OperationProgressDialog : UserControl
     {
         private CancellationTokenSource _cts;
+        private readonly DisplayRequest _displayRequest = new DisplayRequest();
+        private bool _displayActive;
         private bool _isIndeterminate;
         private int _completedFileCount;
         private long _completedBytes;
@@ -25,12 +30,20 @@ namespace XFiles.Controls
         private readonly System.Diagnostics.Stopwatch _sw = new System.Diagnostics.Stopwatch();
         private readonly TransferStats _stats = new TransferStats();
 
+        // Speed chart (60s window, ~3 samples/sec for a smooth trace)
+        private const int ChartWindowSamples = 200;
+        private readonly List<double> _chartSpeeds = new List<double>(ChartWindowSamples + 4);
+        private double _lastChartSampleSec;
+        private readonly DispatcherTimer _chartTimer;
+
         public bool IsOpen => Visibility == Visibility.Visible;
         public CancellationToken CancelToken => _cts?.Token ?? CancellationToken.None;
 
         public OperationProgressDialog()
         {
             this.InitializeComponent();
+            _chartTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
+            _chartTimer.Tick += OnChartTimerTick;
         }
 
         public void Show(string title, string source, string destination, int fileIndex = 0, int fileTotal = 0)
@@ -54,18 +67,24 @@ namespace XFiles.Controls
             _sw.Restart();
             _stats.Reset();
 
+            // Reset speed chart
+            _chartSpeeds.Clear();
+            _lastChartSampleSec = 0;
+            SpeedValueText.Text = "";
+            SpeedChartPanel.Visibility = Visibility.Collapsed;
+            SpeedFillArea.Points?.Clear();
+            SpeedPolyline.Points?.Clear();
+
             // Show/hide overall progress bar for multi-file operations
             if (fileTotal > 1)
             {
                 OverallProgressPanel.Visibility = Visibility.Visible;
                 OverallProgressBar.Maximum = fileTotal;
                 OverallProgressBar.Value = fileIndex;
-                FileLabel.Text = "Current file";
             }
             else
             {
                 OverallProgressPanel.Visibility = Visibility.Collapsed;
-                FileLabel.Text = "";
             }
 
             // Show cancel hint, hide summary
@@ -74,6 +93,16 @@ namespace XFiles.Controls
 
             Visibility = Visibility.Visible;
             Overlay.Visibility = Visibility.Visible;
+
+            _chartTimer.Start();
+
+            // Keep the display awake so the Xbox idle dim doesn't throttle the
+            // transfer (dimming drops copy throughput dramatically).
+            if (!_displayActive)
+            {
+                _displayRequest.RequestActive();
+                _displayActive = true;
+            }
         }
 
         /// <summary>
@@ -189,6 +218,10 @@ namespace XFiles.Controls
             EtaText.Text = "";
             _sw.Stop();
             _stats.Reset();
+            _chartSpeeds.Clear();
+            _lastChartSampleSec = 0;
+            SpeedValueText.Text = "";
+            SpeedChartPanel.Visibility = Visibility.Collapsed;
         }
 
         /// <summary>
@@ -227,14 +260,24 @@ namespace XFiles.Controls
             SummaryPanel.Visibility = Visibility.Visible;
             CancelHint.Visibility = Visibility.Collapsed;
             CurrentFileText.Text = "Cancelled";
+            _chartSpeeds.Clear();
+            _lastChartSampleSec = 0;
+            SpeedValueText.Text = "";
+            SpeedChartPanel.Visibility = Visibility.Collapsed;
         }
 
         public void Close()
         {
+            _chartTimer.Stop();
             Overlay.Visibility = Visibility.Collapsed;
             Visibility = Visibility.Collapsed;
             _cts?.Cancel();
             _cts = null;
+            if (_displayActive)
+            {
+                _displayRequest.RequestRelease();
+                _displayActive = false;
+            }
             OnClosed?.Invoke();
         }
 
@@ -252,6 +295,20 @@ namespace XFiles.Controls
                 SpeedText.Text = "—";
                 EtaText.Text = "";
                 return;
+            }
+
+            // Feed the speed chart every ~300ms (60s window). Each chart sample is the
+            // ~2s sliding-average speed from TransferStats (monotonic-clamped), not the
+            // raw delta between progress callbacks — those arrive at uneven rates and
+            // reflect per-chunk bursts that never show up in the real sustained speed.
+            // The window is fixed: the oldest sample sits at the left edge and the trace
+            // fills left-to-right, then scrolls once the window is full.
+            if (now - _lastChartSampleSec >= 0.3)
+            {
+                _lastChartSampleSec = now;
+                _chartSpeeds.Add(_stats.SpeedBytesPerSecond(2.0));
+                while (_chartSpeeds.Count > ChartWindowSamples)
+                    _chartSpeeds.RemoveAt(0);
             }
 
             SpeedText.Text = FormatBytes((long)speedBps) + "/s";
@@ -272,6 +329,87 @@ namespace XFiles.Controls
         private void OnOverlayTapped(object sender, TappedRoutedEventArgs e)
         {
             // Don't close on tap — only cancel via B button
+        }
+
+        private void OnChartTimerTick(object sender, object e)
+        {
+            if (Visibility != Visibility.Visible) return;
+            RedrawChart();
+        }
+
+        /// <summary>
+        /// Rebuilds the speed chart from the last 60s of samples. Hides the panel when
+        /// there is no byte-accurate progress (e.g. portal transfers use fraction only).
+        /// The panel stretches to the dialog width (same as the progress bars), so the
+        /// trace always matches their width. The x-axis maps to the full fixed window
+        /// (ChartWindowSamples), inset by a small pad on each side. The newest sample
+        /// sits at the RIGHT edge and the trace fills right-to-left over the first 60s,
+        /// then scrolls once full. Unfilled leading slots are zero-padded to pin the
+        /// baseline. The vertical scale rounds up to a "nice" 1/2/5×10^n value so the
+        /// trace fluctuates visibly instead of being pinned to the top by a max-fit scale.
+        /// </summary>
+        private void RedrawChart()
+        {
+            if (_chartSpeeds.Count < 2)
+            {
+                SpeedChartPanel.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            SpeedChartPanel.Visibility = Visibility.Visible;
+
+            double w = SpeedChartArea.ActualWidth;
+            double h = SpeedChartArea.ActualHeight;
+            if (w <= 0 || h <= 0) return; // just became visible — layout not done yet; draw next tick
+
+            double xPad = Math.Min(10, w * 0.08);
+
+            double max = 0;
+            for (int i = 0; i < _chartSpeeds.Count; i++)
+                if (_chartSpeeds[i] > max) max = _chartSpeeds[i];
+            max = RoundUpNice(max);
+            if (max <= 0)
+            {
+                SpeedChartPanel.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            int pad = ChartWindowSamples - _chartSpeeds.Count;
+            var line = new PointCollection();
+            for (int i = 0; i < ChartWindowSamples; i++)
+            {
+                double value = i < pad ? 0 : _chartSpeeds[i - pad];
+                double x = xPad + i / (double)(ChartWindowSamples - 1) * (w - 2 * xPad);
+                double y = h - (Math.Min(value, max) / max) * h;
+                line.Add(new Point(x, y));
+            }
+            SpeedPolyline.Points = line;
+
+            var area = new PointCollection();
+            area.Add(new Point(xPad, h));
+            for (int i = 0; i < line.Count; i++)
+                area.Add(line[i]);
+            area.Add(new Point(w - xPad, h));
+            SpeedFillArea.Points = area;
+
+            SpeedValueText.Text = FormatBytes((long)_chartSpeeds[_chartSpeeds.Count - 1]) + "/s";
+        }
+
+        /// <summary>
+        /// Rounds a value up to the nearest "nice" 1/2/5×10^n number, giving a stable
+        /// chart scale (1, 2, 5, 10, 20, 50, 100 MB/s …).
+        /// </summary>
+        private static double RoundUpNice(double value)
+        {
+            if (value <= 0) return 1;
+            double mag = Math.Pow(10, Math.Floor(Math.Log10(value)));
+            double norm = value / mag;
+            double step;
+            if (norm <= 1) step = 1;
+            else if (norm <= 2) step = 2;
+            else if (norm <= 5) step = 5;
+            else step = 10;
+            return step * mag;
         }
 
         private static string FormatBytes(long bytes)
