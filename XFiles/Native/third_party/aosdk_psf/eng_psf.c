@@ -53,6 +53,8 @@ typedef struct {
     mips_cpu_context *mips_cpu;
     char *spu_pOutput;
     uint32 initialPC, initialGP, initialSP;
+    uint32 sampleAccum;
+    uint32 frameSamples;
 } psf_synth_t;
 
 
@@ -368,16 +370,35 @@ int32 psf_gen(void *handle, int16 *buffer, uint32 samples)
     psf_synth_t *s = handle;
 	int i;
 
+	/* The frame IRQ (VBlank) must fire once per video frame, not once per
+	   psf_gen() call. The original aosdk caller invokes psf_gen() exactly once
+	   per frame (735 samples @ 44100Hz for 60Hz, 882 for 50Hz), so the trailing
+	   psx_hw_frame() was frame-accurate there. RetroAudio renders in large
+	   chunks (up to 8192 samples), which would fire one VBlank per chunk and
+	   run VSync-driven game music ~11x too slow. Fire at sample boundaries
+	   instead, so timing is independent of the caller's chunk size. */
+	if (s->frameSamples == 0)
+	{
+		int refresh = s->mips_cpu->psf_refresh;
+		if (refresh < 50 || refresh > 60) refresh = 60;
+		s->frameSamples = 44100 / refresh;
+		if (s->frameSamples == 0) s->frameSamples = 735;
+	}
+
 	for (i = 0; i < samples; i++)
 	{
 		psx_hw_slice(s->mips_cpu);
 		SPUasync(s->mips_cpu, 384);
+		s->sampleAccum++;
+		if (s->sampleAccum >= s->frameSamples)
+		{
+			s->sampleAccum -= s->frameSamples;
+			psx_hw_frame(s->mips_cpu);
+		}
 	}
 
     s->spu_pOutput = (char *)buffer;
 	SPU_flushboot(s->mips_cpu);
-
-	psx_hw_frame(s->mips_cpu);
 
 	return AO_SUCCESS;
 }

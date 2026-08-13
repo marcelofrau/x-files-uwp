@@ -481,7 +481,7 @@ namespace XFiles.Audio
                 _graph.Start();
                 _isGraphRunning = true;
                 StartDriftMonitor();
-                Log.Info("AudioLevelService: resumed");
+                MediaOpened?.Invoke(this, EventArgs.Empty);
             }
             catch (Exception ex)
             {
@@ -580,18 +580,19 @@ namespace XFiles.Audio
             Log.Info("AudioLevelService: stopped");
         }
 
-        public async Task SwapSourceAsync(string filePath)
+        public async Task SwapSourceAsync(string filePath, bool forceStream = false)
         {
             if (string.IsNullOrEmpty(filePath))
                 return;
 
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             _swapCts?.Cancel();
             _swapCts?.Dispose();
             _swapCts = new CancellationTokenSource();
 
             if (_graph == null)
             {
-                await LoadAndPlay(filePath);
+                await LoadAndPlay(filePath, forceStream);
                 return;
             }
 
@@ -634,20 +635,26 @@ namespace XFiles.Audio
 
             try
             {
+                // Chiptune WAVs (possibly at game AI rate, e.g. USF 22047 Hz) must go
+                // through the stream path used by the initial load — the file node
+                // path can fail to open them inside an already-running graph.
                 StorageFile storageFile = null;
-                try { storageFile = await StorageFile.GetFileFromPathAsync(filePath); }
-                catch { }
-
-                if (storageFile == null)
+                if (!forceStream)
                 {
-                    try
-                    {
-                        string dir = Path.GetDirectoryName(filePath);
-                        string name = Path.GetFileName(filePath);
-                        var folder = await StorageFolder.GetFolderFromPathAsync(dir);
-                        storageFile = await folder.GetFileAsync(name);
-                    }
+                    try { storageFile = await StorageFile.GetFileFromPathAsync(filePath); }
                     catch { }
+
+                    if (storageFile == null)
+                    {
+                        try
+                        {
+                            string dir = Path.GetDirectoryName(filePath);
+                            string name = Path.GetFileName(filePath);
+                            var folder = await StorageFolder.GetFolderFromPathAsync(dir);
+                            storageFile = await folder.GetFileAsync(name);
+                        }
+                        catch { }
+                    }
                 }
 
                 if (storageFile != null)
@@ -673,7 +680,7 @@ namespace XFiles.Audio
                         FileShare.Read | FileShare.Write | FileShare.Delete,
                         1048576, true);
                     var mediaSource = MediaSource.CreateFromStream(
-                        fileStream.AsRandomAccessStream(), "audio/mpeg");
+                        fileStream.AsRandomAccessStream(), forceStream ? "audio/wav" : "audio/mpeg");
                     var nodeResult = await _graph.CreateMediaSourceAudioInputNodeAsync(mediaSource);
                     if (nodeResult.Status != MediaSourceAudioInputNodeCreationStatus.Success)
                     {
@@ -712,6 +719,7 @@ namespace XFiles.Audio
                 _isGraphRunning = true;
                 StartDriftMonitor();
                 MediaOpened?.Invoke(this, EventArgs.Empty);
+                Log.Info("AudioLevelService: SwapSource done in {Elapsed}ms", sw.ElapsedMilliseconds);
             }
             catch (Exception ex)
             {

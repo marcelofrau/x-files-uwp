@@ -314,7 +314,16 @@ namespace XFiles.Controls
 
         private async void OnPreviewChanged()
         {
-            try { await UpdatePreviewColumnAsync(); }
+#if INPUT_LATENCY_DEBUG
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+#endif
+            try
+            {
+                await UpdatePreviewColumnAsync();
+#if INPUT_LATENCY_DEBUG
+                Log.Info("PREVIEW: UpdatePreviewColumn done in {Elapsed}ms", sw.ElapsedMilliseconds);
+#endif
+            }
             catch (Exception ex) { Log.Err("OnPreviewChanged: {Ex}", ex); }
         }
 

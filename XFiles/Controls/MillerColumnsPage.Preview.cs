@@ -582,13 +582,21 @@ namespace XFiles.Controls
             }
         }
 
+#if INPUT_LATENCY_DEBUG
+        private long _selectionFrameTick = -1;
+        private long _lastRenderLagLogMs;
+        private static bool _renderProbeHooked;
+#endif
+
         private void CurrentList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             var items = _navigator.Current?.Entries;
             string itemName = (items != null && CurrentList.SelectedIndex >= 0 && CurrentList.SelectedIndex < items.Count)
                 ? items[CurrentList.SelectedIndex].Name : "(none)";
-            Log.Info("SELECTION: index={Index} item=\"{Item}\" count={Count} updating={Updating} isMediaActive={MediaActive}",
-                CurrentList.SelectedIndex, itemName, items?.Count ?? 0, _updating, _isMediaPlayerActive);
+#if INPUT_LATENCY_DEBUG
+            Log.Info("SELECTION: index={Index} item=\"{Item}\" count={Count} updating={Updating} isMediaActive={MediaActive} at +{T}ms",
+                CurrentList.SelectedIndex, itemName, items?.Count ?? 0, _updating, _isMediaPlayerActive, Environment.TickCount);
+#endif
 
             if (_updating) return;
             if (CurrentList.SelectedIndex >= 0 && _navigator.Current != null)
@@ -637,7 +645,36 @@ namespace XFiles.Controls
 
             // Refresh checkbox colors on selection change
             if (_isBatchMode) UpdateBatchCheckboxes();
+
+#if INPUT_LATENCY_DEBUG
+            Log.Info("SELECTION-DONE: index={Index} at +{T}ms", CurrentList.SelectedIndex, Environment.TickCount);
+
+            // Render-lag probe: measures the delta between the selection event and
+            // the next composition frame. Distinguishes a slow frame pipeline from a
+            // slow selection animation (frame arrives fast, highlight fades in slow).
+            _selectionFrameTick = Environment.TickCount;
+            if (!_renderProbeHooked)
+            {
+                _renderProbeHooked = true;
+                CompositionTarget.Rendering += OnRenderFrameProbe;
+            }
+#endif
         }
+
+#if INPUT_LATENCY_DEBUG
+        private void OnRenderFrameProbe(object sender, object e)
+        {
+            if (_selectionFrameTick < 0) return;
+            long now = Environment.TickCount;
+            long lag = now - _selectionFrameTick;
+            _selectionFrameTick = -1;
+            if (lag > 120 && now - _lastRenderLagLogMs > 1000)
+            {
+                Log.Info("RENDER-LAG: selection→frame {Lag}ms", lag);
+                _lastRenderLagLogMs = now;
+            }
+        }
+#endif
 
         private void OnPreviewDebounceTick(object sender, object e)
         {

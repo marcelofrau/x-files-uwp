@@ -979,6 +979,7 @@ namespace XFiles.Controls
         private Windows.UI.Xaml.Media.Imaging.BitmapImage _fsAlbumArtBitmap;
         private MetadataGuesser _fsMetadataGuesser = new MetadataGuesser();
         private int _fsGeneration;
+        private int _prefetchGeneration;
         private bool _fsPickerVisible;
         private List<VisualizerPickerItem> _fsPickerItems;
 
@@ -1087,6 +1088,8 @@ namespace XFiles.Controls
 
             if (_fsVisualizerMode != AudioFullscreenMode.Default)
                 ApplyAudioVisualizerMode();
+
+            PrefetchNextChiptuneTrack();
         }
 
         private async Task LoadAudioFullscreenMetadataAsync(string filePath)
@@ -1156,6 +1159,7 @@ namespace XFiles.Controls
         {
             Log.Info("CloseAudioFullscreen");
             ++_fsGeneration; // abort in-flight chiptune decodes
+            ++_prefetchGeneration; // abort in-flight next-track prefetches
             StopFsAudioAnalysis();
             FsVisualizerCanvas.Deactivate();
             FsVisualizerCanvas.DetachService();
@@ -1327,6 +1331,7 @@ namespace XFiles.Controls
             if (string.IsNullOrEmpty(_audioFullscreenPath) || _navigator.Current == null) return;
 
             int gen = ++_fsGeneration;
+            ++_prefetchGeneration; // abort in-flight next-track prefetches
 
             // Multi-track chiptune: advance subsongs within the same source.
             if (!string.IsNullOrEmpty(_fsChiptuneSource) && _fsChiptuneTrackCount > 1 &&
@@ -1341,6 +1346,7 @@ namespace XFiles.Controls
                 ShowAudioOsd(direction > 0 ? "Next" : "Prev",
                     direction > 0 ? "ms-appx:///Assets/Views/MillerColumnsPage/osd/osd-next-48.png" : "ms-appx:///Assets/Views/MillerColumnsPage/osd/osd-prev-48.png", 1200);
                 _ = LoadFsChiptuneAsync(gen, _fsChiptuneSource, nextTrack);
+                PrefetchNextChiptuneTrack();
                 return;
             }
 
@@ -1407,6 +1413,7 @@ namespace XFiles.Controls
             if (isChip)
             {
                 _ = LoadFsChiptuneAsync(gen, chipSource, chipTrack);
+                PrefetchNextChiptuneTrack();
             }
             else if (AudioLevelService.Instance.IsFileLoaded)
             {
@@ -1446,12 +1453,97 @@ namespace XFiles.Controls
         }
 
         /// <summary>
+        /// Prefetch the next chiptune track's WAV into the cache while the current
+        /// track plays, so next/prev becomes near-instant (the decode is the slow
+        /// part for PSF/USF/SPC etc). Guarded by _prefetchGeneration — a navigation
+        /// or player close aborts the pending prefetch.
+        /// </summary>
+        private void PrefetchNextChiptuneTrack()
+        {
+            try
+            {
+                if (_audioFullscreenPath == null || _navigator.Current == null) return;
+
+                string nextSource;
+                int nextTrack;
+
+                // Multi-track chiptune: prefetch the next subsong within the same source.
+                if (!string.IsNullOrEmpty(_fsChiptuneSource) && _fsChiptuneTrackCount > 1 &&
+                    string.Equals(_fsChiptuneSource, _audioFullscreenPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    nextSource = _fsChiptuneSource;
+                    nextTrack = (_fsChiptuneTrack + 1) % _fsChiptuneTrackCount;
+                }
+                else
+                {
+                    var audioFiles = _navigator.Current.Entries
+                        .Where(e => !e.IsDirectory && (e.IsChiptune
+                            || FilePreviewService.IsAudioFile(System.IO.Path.GetExtension(e.Name))
+                            || FilePreviewService.IsChiptuneFile(System.IO.Path.GetExtension(e.Name))))
+                        .ToList();
+                    if (audioFiles.Count == 0) return;
+
+                    int currentIdx = audioFiles.FindIndex(e =>
+                        string.Equals(e.FullPath, _audioFullscreenPath, StringComparison.OrdinalIgnoreCase));
+                    if (currentIdx < 0) return;
+
+                    var nextFile = audioFiles[(currentIdx + 1) % audioFiles.Count];
+                    if (!nextFile.IsChiptune && !RetroAudioPlayer.IsChiptuneFile(nextFile.FullPath))
+                        return; // only chiptune decodes benefit from a WAV prefetch
+                    nextSource = nextFile.ChiptuneSourcePath ?? nextFile.FullPath;
+                    nextTrack = Math.Max(0, nextFile.ChiptuneTrackIndex);
+                }
+
+                WarmChiptuneCache(nextSource, nextTrack);
+            }
+            catch (Exception ex)
+            {
+                Log.Dbg("PrefetchNextChiptuneTrack: {Error}", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Decode a chiptune source/track to its cached WAV in the background. No-op
+        /// for already-cached renders. Uses RetroAudioPlayer directly (not the
+        /// MediaPreview state), so it is safe to run while the current track plays.
+        /// </summary>
+        private void WarmChiptuneCache(string source, int track)
+        {
+            if (RetroAudioPlayer.IsArchiveEntryPath(source)) return; // lib resolution needs a real path
+            int gen = ++_prefetchGeneration;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(1500);
+                    if (gen != _prefetchGeneration) return;
+
+                    string wav = await RetroAudioPlayer.RenderToWavAsync(
+                        source, null, System.IO.Path.GetExtension(source), track);
+                    if (gen != _prefetchGeneration)
+                    {
+                        Log.Dbg("Chiptune prefetch: stale result for {Path} track {Track} — discarded", source, track);
+                        return;
+                    }
+                    Log.Dbg("Chiptune prefetch: WAV ready for {Path} track {Track}: {Wav}",
+                        source, track, wav ?? "(null)");
+                }
+                catch (Exception ex)
+                {
+                    Log.Dbg("Chiptune prefetch: skipped {Path} track {Track}: {Error}", source, track, ex.Message);
+                }
+            });
+        }
+
+        /// <summary>
         /// Decode a chiptune subsong to WAV and play it in the fullscreen audio
         /// player. Guarded by the fullscreen generation so a decode superseded by
         /// another navigation is discarded instead of hijacking playback.
         /// </summary>
         private async Task LoadFsChiptuneAsync(int gen, string source, int track)
         {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             string wav = await MediaPreview.GetChiptuneWavPathAsync(source, track);
             if (gen != _fsGeneration)
             {
@@ -1464,6 +1556,7 @@ namespace XFiles.Controls
                 FsPlayPauseIcon.Glyph = "\uE768";
                 return;
             }
+            Log.Info("CHIPTUNE-NAV: decode of {Path} track={Track} took {Elapsed}ms", source, track, sw.ElapsedMilliseconds);
 
             _fsChiptuneSource = source;
             _fsChiptuneTrack = track;
@@ -1477,7 +1570,7 @@ namespace XFiles.Controls
             if (AudioLevelService.Instance.IsFileLoaded)
             {
                 Log.Info("NavigateAudioTrack: reusing AudioLevelService, SwapSource to chiptune WAV {Path}", wav);
-                await AudioLevelService.Instance.SwapSourceAsync(wav);
+                await AudioLevelService.Instance.SwapSourceAsync(wav, forceStream: true);
             }
             else
             {

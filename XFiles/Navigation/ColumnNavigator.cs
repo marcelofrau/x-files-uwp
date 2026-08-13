@@ -1042,7 +1042,9 @@ namespace XFiles.Navigation
 
         /// <summary>
         /// Called when selection changes in current column -> update preview (debounced).
-        /// Rapid scrolling cancels previous load; preview loads only after 150ms pause.
+        /// The MillerColumnsPage 90ms debounce already settles rapid scrolling; the scan
+        /// runs on a background thread and is cancelled when a newer selection arrives,
+        /// so no additional settle delay is needed here.
         /// </summary>
         public async Task OnSelectionChangedAsync()
         {
@@ -1053,14 +1055,13 @@ namespace XFiles.Navigation
 
             try
             {
-                await Task.Delay(150, token);
+                await UpdatePreviewAsync();
             }
             catch (OperationCanceledException)
             {
                 return;
             }
 
-            await UpdatePreviewAsync();
             PreviewChanged?.Invoke();
         }
 

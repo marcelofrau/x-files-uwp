@@ -54,3 +54,6 @@ Thumbs.db
 
 session.txt
 bugs-ideias.txt
+
+# magic-context plugin local state (never committed)
+.cortexkit/

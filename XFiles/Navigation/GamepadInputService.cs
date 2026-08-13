@@ -1,5 +1,7 @@
 using System;
+using System.Threading;
 using Windows.Gaming.Input;
+using Windows.System;
 using Windows.UI.Xaml;
 
 namespace XFiles.Navigation
@@ -7,9 +9,23 @@ namespace XFiles.Navigation
     public sealed class GamepadInputService
     {
         private readonly DispatcherTimer _timer;
-        private Gamepad _gamepad;
+        private readonly DispatcherQueue _dispatcherQueue;
+        private volatile Gamepad _gamepad;
         private GamepadReading _prevReading;
         private GamepadButtons _prevButtons;
+        private System.Diagnostics.Stopwatch _sw;
+
+        // Background poll thread: reads the gamepad at ~125Hz and enqueues an
+        // immediate UI dispatch on any button edge. The Xbox DispatcherTimer fires
+        // at ~50ms (Dev Mode composition clock), so without this a button press can
+        // wait up to a full tick before the app notices it.
+        private Thread _pollThread;
+        private volatile bool _pollRunning;
+        private volatile GamepadButtons _pollButtons;
+        private int _dispatchPending; // 0/1 via Interlocked — coalesce to one in-flight UI dispatch
+#if INPUT_LATENCY_DEBUG
+        private long _lastLatLogMs;
+#endif
 
         // Analog stick deadzone
         private const double Deadzone = 0.5;
@@ -30,6 +46,10 @@ namespace XFiles.Navigation
                 Interval = TimeSpan.FromMilliseconds(33)
             };
             _timer.Tick += OnTick;
+            _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
+            _sw = System.Diagnostics.Stopwatch.StartNew();
+            _lastDpadTickMs = 0;
+            _lastProbeWarnMs = 0;
 
             RefreshGamepad();
 
@@ -40,14 +60,78 @@ namespace XFiles.Navigation
 
         public void Start()
         {
-            Log.Info("GamepadInputService.Start()");
+            Log.Info("GamepadInputService.Start() — starting background poll thread (8ms)");
             _timer.Start();
+            _pollRunning = true;
+            _pollThread = new Thread(PollLoop)
+            {
+                IsBackground = true,
+                Name = "GamepadPoll"
+            };
+            _pollThread.Start();
         }
 
         public void Stop()
         {
             Log.Info("GamepadInputService.Stop()");
+            _pollRunning = false;
             _timer.Stop();
+        }
+
+        /// <summary>
+        /// High-frequency reader on a background thread. Detects button-state edges
+        /// and enqueues an immediate UI dispatch, bypassing the DispatcherTimer's
+        /// ~50ms floor on Xbox. The timer remains the periodic processor (repeats,
+        /// sticks, holds) — this only cuts the edge-detection latency.
+        /// </summary>
+        private void PollLoop()
+        {
+            while (_pollRunning)
+            {
+                try
+                {
+                    var g = _gamepad;
+                    if (g != null)
+                    {
+                        var reading = g.GetCurrentReading();
+                        if (reading.Buttons != _pollButtons)
+                        {
+                            _pollButtons = reading.Buttons;
+                            RequestDispatch();
+                        }
+                    }
+                }
+                catch
+                {
+                    // Gamepad removed mid-read — next poll refreshes state.
+                }
+                Thread.Sleep(8);
+            }
+        }
+
+        private void RequestDispatch()
+        {
+            if (Interlocked.Exchange(ref _dispatchPending, 1) != 0) return;
+#if INPUT_LATENCY_DEBUG
+            long enqueueMs = _sw.ElapsedMilliseconds;
+#endif
+            if (!_dispatcherQueue.TryEnqueue(() =>
+                {
+                    _dispatchPending = 0;
+#if INPUT_LATENCY_DEBUG
+                    long nowMs = _sw.ElapsedMilliseconds;
+                    if (nowMs - _lastLatLogMs > 1000)
+                    {
+                        // Proves whether the early dispatch beats the 50ms timer on Xbox.
+                        Log.Info("INPUT-LAT: edge→UI dispatch {Dt}ms", nowMs - enqueueMs);
+                        _lastLatLogMs = nowMs;
+                    }
+#endif
+                    OnTick(null, null);
+                }))
+            {
+                _dispatchPending = 0; // queue unavailable — don't wedge
+            }
         }
 
         private void OnGamepadAdded(object sender, Gamepad e)
@@ -106,6 +190,9 @@ namespace XFiles.Navigation
                 return;
             }
 
+            // Sync the poll thread's view so it doesn't re-enqueue the same state.
+            _pollButtons = reading.Buttons;
+
             var nav = ActiveNavigable;
             if (nav == null)
             {
@@ -116,13 +203,36 @@ namespace XFiles.Navigation
 
             _dpadNavigatedThisTick = false;
 
+            // Time since the previous poll tick (real wall-clock). Used for the D-pad
+            // repeat cooldown and long-press thresholds so timing stays correct even
+            // when UI-thread work delays the 16ms DispatcherTimer.
+            long nowMs = _sw.ElapsedMilliseconds;
+            long elapsedMs = nowMs - _lastDpadTickMs;
+            if (elapsedMs < 1) elapsedMs = 1;
+
+#if GAMEPAD_POLL_DEBUG
+            // Tick-cadence probe: a large gap means the UI thread was busy and input
+            // was starved. Rate-limited to one warning/second to avoid log flooding.
+            if (_lastDpadTickMs > 0 && nowMs - _lastProbeWarnMs > 1000)
+            {
+                long gap = nowMs - _lastDpadTickMs;
+                if (gap > 80)
+                {
+                    Log.Warn("POLL: tick gap {Gap}ms since tick #{Tick} — UI thread busy?", gap, _tickCount);
+                    _lastProbeWarnMs = nowMs;
+                }
+            }
+#endif
+
+            _lastDpadTickMs = nowMs;
+
             var pressed = reading.Buttons;
             var justPressed = (pressed ^ _prevButtons) & pressed;
             var justReleased = (pressed ^ _prevButtons) & _prevButtons;
 
 #if GAMEPAD_INPUT_DEBUG
-            if (justPressed != 0) Log.Info("INPUT-DBG: justPressed={Buttons}", justPressed);
-            if (justReleased != 0) Log.Info("INPUT-DBG: justReleased={Buttons}", justReleased);
+            if (justPressed != 0) Log.Info("INPUT-DBG: justPressed={Buttons} at +{T}ms readTs={Ts}", justPressed, Environment.TickCount, reading.Timestamp);
+            if (justReleased != 0) Log.Info("INPUT-DBG: justReleased={Buttons} at +{T}ms readTs={Ts}", justReleased, Environment.TickCount, reading.Timestamp);
             double dbgLx = reading.LeftThumbstickX, dbgLy = reading.LeftThumbstickY;
             double dbgRx = reading.RightThumbstickX, dbgRy = reading.RightThumbstickY;
             if (Math.Abs(dbgLx) > 0.3 || Math.Abs(dbgLy) > 0.3 || Math.Abs(dbgRx) > 0.3 || Math.Abs(dbgRy) > 0.3)
@@ -147,7 +257,8 @@ namespace XFiles.Navigation
             _dpadNavigatedThisTick = false;
 
 #if GAMEPAD_POLL_DEBUG
-            if (dpadNow != 0 || dpadJustPressed != 0 || dpadJustReleased != 0)
+            // State-change only (press/release) to keep the hot path quiet
+            if (dpadJustPressed != 0 || dpadJustReleased != 0)
             {
                 Log.Verb("DPAD state: now={Now} justPressed={JP} justReleased={JR} held={Held} cooldown={Cd}",
                     dpadNow, dpadJustPressed, dpadJustReleased, _dpadHeld, _dpadRepeatCooldown);
@@ -188,7 +299,7 @@ namespace XFiles.Navigation
             }
 
             // Repeat while held (skip if initial press already handled this tick)
-            if (_dpadRepeatCooldown > 0) _dpadRepeatCooldown -= 33;
+            if (_dpadRepeatCooldown > 0) _dpadRepeatCooldown -= elapsedMs;
             if (_dpadRepeatCooldown <= 0 && dpadNow != 0 && !_dpadNavigatedThisTick)
             {
                 if ((dpadNow & GamepadButtons.DPadUp) != 0)
@@ -225,6 +336,15 @@ namespace XFiles.Navigation
 
             _dpadHeld = dpadNow;
 
+#if INPUT_LATENCY_DEBUG
+            // Release seen by the app — a gap between the physical release and this
+            // log means the gamepad reading was stale (input continues to repeat).
+            if ((justReleased & (GamepadButtons.DPadUp | GamepadButtons.DPadDown | GamepadButtons.DPadLeft | GamepadButtons.DPadRight)) != 0)
+            {
+                Log.Info("INPUT: D-pad released at +{T}ms — reading now shows {Buttons}", Environment.TickCount, pressed);
+            }
+#endif
+
             // A, B — just pressed only
             if ((justPressed & GamepadButtons.A) != 0)
             {
@@ -241,21 +361,21 @@ namespace XFiles.Navigation
                 nav.OnBack();
             }
 
-            // Y — long-press detection (500ms = ~15 ticks)
-            const int YLongPressTicks = 15;
+            // Y — long-press detection (500ms)
+            const double YLongPressMs = 500;
             if ((justPressed & GamepadButtons.Y) != 0)
             {
 #if GAMEPAD_INPUT_DEBUG
                 Log.Info("INPUT: Y pressed — starting hold timer");
 #endif
                 _yHeld = true;
-                _yHeldTicks = 0;
+                _yHeldMs = 0;
                 _yLongPressHandled = false;
             }
             if (_yHeld && (pressed & GamepadButtons.Y) != 0)
             {
-                _yHeldTicks++;
-                if (_yHeldTicks >= YLongPressTicks && !_yLongPressHandled)
+                _yHeldMs += elapsedMs;
+                if (_yHeldMs >= YLongPressMs && !_yLongPressHandled)
                 {
                     Log.Verb("Button: Y long-press triggered");
                     nav.OnContextMenuLongPress();
@@ -270,7 +390,7 @@ namespace XFiles.Navigation
                     nav.OnContextMenu();
                 }
                 _yHeld = false;
-                _yHeldTicks = 0;
+                _yHeldMs = 0;
                 _yLongPressHandled = false;
             }
 
@@ -289,22 +409,22 @@ namespace XFiles.Navigation
                 nav.OnSettings();
             }
 
-            // View/Select — long-press detection (~500ms = ~15 ticks)
-            const int ViewLongPressTicks = 15;
+            // View/Select — long-press detection (500ms)
+            const double ViewLongPressMs = 500;
             if ((justPressed & GamepadButtons.View) != 0)
             {
 #if GAMEPAD_INPUT_DEBUG
                 Log.Info("INPUT: View pressed — starting hold timer");
 #endif
                 _viewHeld = true;
-                _viewHeldTicks = 0;
+                _viewHeldMs = 0;
                 _viewLongPressHandled = false;
                 _viewCtxFullscreen = nav.IsMediaFullscreen || nav.IsMediaPlayerActive;
             }
             if (_viewHeld && (pressed & GamepadButtons.View) != 0)
             {
-                _viewHeldTicks++;
-                if (_viewHeldTicks >= ViewLongPressTicks && !_viewLongPressHandled)
+                _viewHeldMs += elapsedMs;
+                if (_viewHeldMs >= ViewLongPressMs && !_viewLongPressHandled)
                 {
 #if GAMEPAD_INPUT_DEBUG
                     Log.Info("Button: View long-press triggered");
@@ -327,7 +447,7 @@ namespace XFiles.Navigation
                         nav.OnToggleBatch();
                 }
                 _viewHeld = false;
-                _viewHeldTicks = 0;
+                _viewHeldMs = 0;
                 _viewLongPressHandled = false;
                 _viewCtxFullscreen = false;
             }
@@ -382,11 +502,11 @@ namespace XFiles.Navigation
         }
 
         private bool _yHeld;
-        private int _yHeldTicks;
+        private double _yHeldMs;
         private bool _yLongPressHandled;
 
         private bool _viewHeld;
-        private int _viewHeldTicks;
+        private double _viewHeldMs;
         private bool _viewLongPressHandled;
         private bool _viewCtxFullscreen;
 
@@ -396,8 +516,10 @@ namespace XFiles.Navigation
         private double _dpadRepeatCooldown;
         private GamepadButtons _dpadHeld;
         private bool _dpadNavigatedThisTick;
-private const double DpadInitialDelay = 250;
-private const double DpadRepeatInterval = 60;
+        private long _lastDpadTickMs;
+        private long _lastProbeWarnMs;
+        private const double DpadInitialDelay = 350;
+        private const double DpadRepeatInterval = 90;
         private const double StickDeadzone = 0.18;
         private const double StickMinSpeed = 6.0;   // items/sec at deadzone edge
         private const double StickMaxSpeed = 28.0;   // items/sec at full deflection

@@ -116,6 +116,7 @@ namespace XFiles.Controls
             Log.Dbg("MediaPreviewControl.LoadFile: enter for {Path} (wasPlaying={WasPlaying})", filePath, _isPlaying);
             Stop();
             _hasEnded = false;
+            ResetProgressUi();
             Log.Info("MediaPreviewControl: loading {Path}", filePath);
 
             _currentFilePath = filePath;
@@ -174,8 +175,9 @@ namespace XFiles.Controls
             _currentFilePath = source;
             _isAudioMode = true;
             _chiptuneSource = source;
-            _chiptuneTrack = track;
+            _chiptuneTrack = Math.Max(0, track);
             _chiptuneTitle = null;
+            ResetProgressUi();
 
             AudioInfoPanel.Visibility = Visibility.Visible;
             AlbumArtBorder.Visibility = Visibility.Collapsed;
@@ -234,6 +236,7 @@ namespace XFiles.Controls
             _currentFilePath = filePath;
             _hasEnded = false;
             _isPlaying = false;
+            ResetProgressUi();
 
             if (_isAudioMode)
             {
@@ -267,6 +270,7 @@ namespace XFiles.Controls
         {
             if (string.IsNullOrEmpty(filePath)) return;
             Stop();
+            ResetProgressUi();
             Log.Dbg("MediaPreviewControl: showing placeholder for {Path}", filePath);
 
             _isAudioMode = true;
@@ -289,6 +293,7 @@ namespace XFiles.Controls
         {
             Log.Info("MediaPreviewControl.StartAudioPlayback: starting for {Path}", filePath ?? "(null)");
             int gen = ++_loadGeneration;
+            ResetProgressUi();
             try
             {
                 string playPath = filePath;
@@ -847,6 +852,18 @@ namespace XFiles.Controls
         private void OnProgressTimerTick(object sender, object e)
         {
             _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Low, _progressUpdateHandler);
+        }
+
+        /// <summary>
+        /// Zero the progress display when a new track starts loading. Without this,
+        /// the bar keeps the previous track's position during the chiptune decode
+        /// window (AudioLevelService still reports the old node), so the player
+        /// looks like it resumed mid-song.
+        /// </summary>
+        private void ResetProgressUi()
+        {
+            ProgressSlider.Value = 0;
+            TimeText.Text = "0:00 / 0:00";
         }
 
         private void UpdateProgress()

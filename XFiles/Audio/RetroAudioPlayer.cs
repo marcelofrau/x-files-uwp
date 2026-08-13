@@ -205,8 +205,14 @@ namespace XFiles.Audio
                 string wavPath = GetCachedWavPath(cacheKey);
                 if (File.Exists(wavPath))
                 {
-                    Log.Dbg("RetroAudioPlayer: reuse cached render {Path}", wavPath);
-                    return wavPath;
+                    if (IsValidCachedWav(wavPath))
+                    {
+                        Log.Dbg("RetroAudioPlayer: reuse cached render {Path}", wavPath);
+                        return wavPath;
+                    }
+                    Log.Warn("RetroAudioPlayer: cached render {Path} is corrupt ({Size} bytes) — re-rendering", wavPath, new FileInfo(wavPath).Length);
+                    try { File.Delete(wavPath); }
+                    catch (Exception delEx) { Log.Dbg("RetroAudioPlayer: failed to delete corrupt cache: {Error}", delEx.Message); }
                 }
 
                 IntPtr handle;
@@ -420,6 +426,41 @@ namespace XFiles.Audio
             catch (Exception ex)
             {
                 Log.Warn("RetroAudioPlayer: WAV silence scan failed for {Path}", ex);
+            }
+        }
+
+        /// <summary>
+        /// A cached WAV is only reusable if it is a real, non-empty render. Corrupt
+        /// entries (empty data chunk, truncated write, stale file from an older
+        /// build) otherwise get played as silence and look like a hang.
+        /// </summary>
+        private static bool IsValidCachedWav(string path)
+        {
+            try
+            {
+                using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                {
+                    if (fs.Length < 44) return false;
+                    var hdr = new byte[44];
+                    int read = 0;
+                    while (read < 44)
+                    {
+                        int n = fs.Read(hdr, read, 44 - read);
+                        if (n <= 0) break;
+                        read += n;
+                    }
+                    if (read < 44) return false;
+                    if (!(hdr[0] == 'R' && hdr[1] == 'I' && hdr[2] == 'F' && hdr[3] == 'F')) return false;
+                    if (!(hdr[8] == 'W' && hdr[9] == 'A' && hdr[10] == 'V' && hdr[11] == 'E')) return false;
+                    if (!(hdr[36] == 'd' && hdr[37] == 'a' && hdr[38] == 't' && hdr[39] == 'a')) return false;
+                    uint dataBytes = (uint)(hdr[40] | (hdr[41] << 8) | (hdr[42] << 16) | (hdr[43] << 24));
+                    return dataBytes > 0;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Dbg("RetroAudioPlayer: cache validation failed for {Path}: {Error}", path, ex.Message);
+                return false;
             }
         }
 
