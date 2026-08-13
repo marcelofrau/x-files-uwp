@@ -132,7 +132,7 @@ namespace XFiles.Controls
                 case VirtualKey.GamepadB:
                 case VirtualKey.Escape:
                     e.Handled = true;
-                    Close(NoButton.Visibility == Visibility.Visible);
+                    Close(NoButton.Visibility != Visibility.Visible);
                     break;
                 case VirtualKey.GamepadDPadUp:
                 case VirtualKey.GamepadDPadDown:
@@ -173,7 +173,7 @@ namespace XFiles.Controls
                     break;
                 case VirtualKey.GamepadB:
                 case VirtualKey.Escape:
-                    Close(NoButton.Visibility == Visibility.Visible);
+                    Close(NoButton.Visibility != Visibility.Visible);
                     break;
             }
         }

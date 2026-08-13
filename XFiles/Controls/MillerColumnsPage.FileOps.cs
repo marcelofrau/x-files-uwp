@@ -293,6 +293,9 @@ namespace XFiles.Controls
                     SizeBytes = selected.SizeBytes,
                     ArchiveRootPath = selected.ArchiveRootPath,
                     ArchiveInternalPath = selected.ArchiveInternalPath,
+                    IsChiptune = selected.IsChiptune,
+                    ChiptuneTrackIndex = selected.ChiptuneTrackIndex,
+                    ChiptuneSourcePath = selected.ChiptuneSourcePath,
                     IsPortal = selected.IsPortal,
                     PortalKnownFolder = selected.PortalKnownFolder,
                     PortalPackageFullName = selected.PortalPackageFullName,
@@ -384,6 +387,9 @@ namespace XFiles.Controls
                 case FileAction.DiskSpace:
                     await HandleDiskSpaceAsync(entry);
                     break;
+                case FileAction.Download:
+                    await HandleDownloadAsync(entry);
+                    break;
             }
         }
 
@@ -449,7 +455,7 @@ namespace XFiles.Controls
             Log.Info("HandleBatchMoveAsync: {Count} items", entries.Count);
 
             UpdateFooterALabel("Select");
-            var destDir = await FolderBrowserDialogControl.ShowAsync(_navigator.Current?.Path ?? null);
+            var destDir = await FolderBrowserDialogControl.ShowAsync(MoveDialogInitialPath());
             UpdateFooterALabelFromSelection();
 
             if (string.IsNullOrEmpty(destDir))
@@ -1526,6 +1532,18 @@ namespace XFiles.Controls
             await _navigator.RefreshCurrentAsync();
         }
 
+        /// <summary>
+        /// Initial path for the move destination dialog. Only real local folders are
+        /// usable; portals and archives open the dialog at the drives root instead.
+        /// </summary>
+        private string MoveDialogInitialPath()
+        {
+            var current = _navigator.Current;
+            return current != null && !current.IsPortal && !current.IsArchive
+                ? current.Path
+                : null;
+        }
+
         private async Task HandleMoveAsync(FileEntry entry)
         {
             Log.Info("HandleMoveAsync: {File}", entry.FullPath);
@@ -1539,7 +1557,7 @@ namespace XFiles.Controls
 
             // 1. Choose destination folder
             UpdateFooterALabel("Select");
-            var destDir = await FolderBrowserDialogControl.ShowAsync(_navigator.Current?.Path ?? null);
+            var destDir = await FolderBrowserDialogControl.ShowAsync(MoveDialogInitialPath());
             UpdateFooterALabelFromSelection();
 
             if (string.IsNullOrEmpty(destDir))
@@ -1627,7 +1645,7 @@ namespace XFiles.Controls
 
             // 1. Choose local destination folder
             UpdateFooterALabel("Select");
-            var destDir = await FolderBrowserDialogControl.ShowAsync(_navigator.Current?.Path ?? null);
+            var destDir = await FolderBrowserDialogControl.ShowAsync(MoveDialogInitialPath());
             UpdateFooterALabelFromSelection();
 
             if (string.IsNullOrEmpty(destDir))
@@ -2361,6 +2379,116 @@ namespace XFiles.Controls
                 volumes.Count,
                 volumes.Count == 0 ? "<none>" : string.Join(", ", volumes.Select(v => v.Label == null ? v.Root : $"{v.Root} ({v.Label})")));
             return volumes.Where(v => !string.IsNullOrEmpty(v.Root)).ToList();
+        }
+
+        /// <summary>
+        /// Download from URL into the current local folder. Direct links are streamed
+        /// to disk; links that resolve to an HTML page fall through to the WebView
+        /// overlay for a manual click-through download.
+        /// </summary>
+        private async Task HandleDownloadAsync(FileEntry entry)
+        {
+            if (_navigator.Current == null ||
+                _navigator.Current.IsPortal ||
+                _navigator.Current.IsArchive ||
+                _navigator.Current.IsFavorite)
+            {
+                Log.Warn("HandleDownloadAsync: not available in current location");
+                _ = AlertDialogControl.ShowAsync("Download from URL is only available in local folders.", AlertType.Info);
+                return;
+            }
+
+            string destDir = _navigator.Current.Path;
+            if (string.IsNullOrEmpty(destDir))
+            {
+                Log.Warn("HandleDownloadAsync: current path is empty");
+                _ = AlertDialogControl.ShowAsync("Cannot determine the download folder.", AlertType.Error);
+                return;
+            }
+
+            UpdateFooterALabel("OK");
+            string url = await InputDialogControl.ShowAsync("Download from URL", "");
+            UpdateFooterALabelFromSelection();
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                Log.Verb("HandleDownloadAsync: cancelled");
+                return;
+            }
+
+            url = url.Trim();
+            if (!url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+                !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                url = "https://" + url;
+            }
+
+            Log.Info("HandleDownloadAsync: url={Url} dest={Dest}", url, destDir);
+
+            string directUrl = await DownloadService.ResolveAsync(url, CancellationToken.None) ?? url;
+
+            OpProgressDialog.Show("Downloading", url, destDir, 0, 1);
+            var result = await DownloadService.TryDownloadAsync(
+                directUrl,
+                destDir,
+                (copied, total) =>
+                {
+                    _ = Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
+                    {
+                        OpProgressDialog.UpdateProgress(new FileOperations.OperationProgress
+                        {
+                            FileName = "Downloading...",
+                            BytesCopied = copied,
+                            TotalBytes = total,
+                            PercentComplete = total > 0 ? Math.Min(100, copied * 100.0 / total) : 0
+                        });
+                    });
+                },
+                OpProgressDialog.CancelToken);
+
+            if (result.Outcome == DownloadService.DownloadOutcome.Downloaded)
+            {
+                OpProgressDialog.Complete();
+                await Task.Delay(300);
+                OpProgressDialog.Close();
+                OnRefresh();
+                _ = AlertDialogControl.ShowAsync($"Downloaded \"{Path.GetFileName(result.SavedPath)}\" to {destDir}.", AlertType.Success);
+                return;
+            }
+
+            OpProgressDialog.Close();
+
+            if (result.Outcome == DownloadService.DownloadOutcome.Canceled)
+            {
+                Log.Info("HandleDownloadAsync: cancelled");
+                return;
+            }
+
+            if (result.Outcome == DownloadService.DownloadOutcome.NeedsBrowser)
+            {
+                Log.Info("HandleDownloadAsync: opening browser overlay for {Url}", url);
+                var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                Action<string> onDownloaded = null;
+                onDownloaded = path => tcs.TrySetResult(true);
+                Action onClosed = null;
+                onClosed = () => tcs.TrySetResult(false);
+
+                UrlDownloadOverlayControl.DownloadCompleted += onDownloaded;
+                UrlDownloadOverlayControl.OnClosed += onClosed;
+                UrlDownloadOverlayControl.Show(url, destDir);
+                bool downloaded = await tcs.Task;
+                UrlDownloadOverlayControl.DownloadCompleted -= onDownloaded;
+                UrlDownloadOverlayControl.OnClosed -= onClosed;
+
+                if (downloaded)
+                {
+                    OnRefresh();
+                    _ = AlertDialogControl.ShowAsync($"Downloaded to {destDir}.", AlertType.Success);
+                }
+                return;
+            }
+
+            Log.Warn("HandleDownloadAsync: failed — {Error}", result.Error ?? "unknown");
+            _ = AlertDialogControl.ShowAsync($"Download failed.\n\n{result.Error ?? "See the log for details."}", AlertType.Error);
         }
     }
 }

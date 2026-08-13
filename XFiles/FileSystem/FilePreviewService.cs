@@ -217,6 +217,21 @@ namespace XFiles.FileSystem
                 ".aac", ".wma", ".opus", ".mid", ".midi"
             };
 
+        private static readonly HashSet<string> ChiptuneExtensions =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                // game-music-emu
+                ".spc", ".gbs", ".nsf", ".nsfe", ".vgm", ".vgz", ".gym",
+                ".sid", ".hes", ".kss", ".ay", ".sap",
+                // libopenmpt
+                ".mod", ".xm", ".s3m", ".it", ".mtm", ".stm", ".669", ".med",
+                ".far", ".mdl", ".ult", ".ptm", ".dbm", ".dsm", ".amf", ".okt",
+                ".dmf", ".ams", ".mt2", ".pol", ".ppm", ".cba", ".psm", ".j2b",
+                ".mpm", ".umx", ".mo3",
+                // aosdk engine_psf (PlayStation), lazyusf (N64)
+                ".psf", ".minipsf", ".usf", ".miniusf"
+            };
+
         private static readonly HashSet<string> VideoExtensions =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
@@ -246,6 +261,11 @@ namespace XFiles.FileSystem
             return !string.IsNullOrEmpty(extension) && AudioExtensions.Contains(extension);
         }
 
+        public static bool IsChiptuneFile(string extension)
+        {
+            return !string.IsNullOrEmpty(extension) && ChiptuneExtensions.Contains(extension);
+        }
+
         public static bool IsVideoFile(string extension)
         {
             return !string.IsNullOrEmpty(extension) && VideoExtensions.Contains(extension);
@@ -253,7 +273,7 @@ namespace XFiles.FileSystem
 
         public static bool IsMediaFile(string extension)
         {
-            return IsAudioFile(extension) || IsVideoFile(extension);
+            return IsAudioFile(extension) || IsChiptuneFile(extension) || IsVideoFile(extension);
         }
 
         public static bool IsSvgFile(string extension)
@@ -317,6 +337,13 @@ namespace XFiles.FileSystem
                     result.Type = FilePreviewType.Video;
                 }
                 else if (IsAudioFile(ext))
+                {
+                    long fileSize = 0;
+                    GetFileSizeWin32(filePath, out fileSize);
+                    result.FileSizeBytes = fileSize;
+                    result.Type = FilePreviewType.Audio;
+                }
+                else if (IsChiptuneFile(ext))
                 {
                     long fileSize = 0;
                     GetFileSizeWin32(filePath, out fileSize);
@@ -394,6 +421,13 @@ namespace XFiles.FileSystem
                     else if (RomHeaderParser.IsRomFile(ext))
                     {
                         await LoadRomPreviewFromStream(stream, result, ext);
+                    }
+                    else if (IsChiptuneFile(ext))
+                    {
+                        // Chiptune inside an archive (.rsn → .spc): preview as audio.
+                        result.Type = FilePreviewType.Audio;
+                        long len = stream.Length;
+                        result.FileSizeBytes = len;
                     }
                     else
                     {
@@ -861,6 +895,30 @@ namespace XFiles.FileSystem
                 { "sg", "SG-1000 ROM" }, { "msx", "MSX ROM" },
                 { "sna", "ZX Spectrum Snapshot" }, { "z80", "ZX Spectrum Snapshot" },
                 { "vec", "Vectrex ROM" },
+                // Chiptune formats (game-music-emu + libopenmpt)
+                { "rsn", "RSN Archive" },
+                { "spc", "SPC (SNES)" }, { "gbs", "GBS (Game Boy)" },
+                { "nsf", "NSF (Nintendo)" }, { "nsfe", "NSFE (Nintendo)" },
+                { "vgm", "VGM (SEGA)" }, { "vgz", "VGZ (SEGA)" },
+                { "gym", "GYM (Genesis)" }, { "sid", "SID (C64)" },
+                { "hes", "HES (PCEngine)" }, { "kss", "KSS (MSX)" },
+                { "ay", "AY (ZX/Amstrad)" }, { "sap", "SAP (Atari)" },
+                { "mod", "MOD Tracker" }, { "xm", "XM Tracker" },
+                { "s3m", "S3M Tracker" }, { "it", "IT Tracker" },
+                { "mtm", "MTM Tracker" }, { "stm", "STM Tracker" },
+                { "669", "669 Composer" }, { "med", "MED Tracker" },
+                { "far", "FAR Tracker" }, { "mdl", "MDL Tracker" },
+                { "ult", "ULT Tracker" }, { "ptm", "PTM Tracker" },
+                { "dbm", "DBM Tracker" }, { "dsm", "DSM Tracker" },
+                { "amf", "AMF Tracker" }, { "okt", "OKT Tracker" },
+                { "dmf", "DMF Tracker" }, { "ams", "AMS Tracker" },
+                { "mt2", "MT2 Tracker" }, { "pol", "Polly Tracker" },
+                { "ppm", "PPM Tracker" }, { "cba", "CBA Tracker" },
+                { "psm", "PSM Tracker" }, { "j2b", "J2B (Jazz)" },
+                { "mpm", "MPM Tracker" }, { "umx", "UMX (Unreal)" },
+                { "mo3", "MO3 Tracker" },
+                { "psf", "PSF (PlayStation)" }, { "minipsf", "PSF (PlayStation)" },
+                { "usf", "USF (N64)" }, { "miniusf", "USF (N64)" },
             };
 
         private static string GetFileTypeLabel(string extension, string filePath = null)

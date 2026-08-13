@@ -110,6 +110,7 @@
     <Compile Include="Navigation\InputRouter.cs" />
     <Compile Include="Navigation\ColumnNavigator.cs" />
     <Compile Include="FileSystem\FileEntry.cs" />
+    <Compile Include="FileSystem\ChiptuneBrowser.cs" />
     <Compile Include="FileSystem\Formatting.cs" />
     <Compile Include="FileSystem\HighlightRenderer.cs" />
     <Compile Include="FileSystem\RomCoverProvider.cs" />
@@ -164,6 +165,9 @@
     <Compile Include="Controls\Converters.cs" />
     <Compile Include="Controls\FileActionSheet.xaml.cs">
       <DependentUpon>FileActionSheet.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\UrlDownloadOverlay.xaml.cs">
+      <DependentUpon>UrlDownloadOverlay.xaml</DependentUpon>
     </Compile>
     <Compile Include="Controls\StartMenu.xaml.cs">
       <DependentUpon>StartMenu.xaml</DependentUpon>
@@ -230,6 +234,7 @@
     <Compile Include="FileSystem\EncodingDetector.cs" />
     <Compile Include="Services\PdfPreviewService.cs" />
     <Compile Include="Services\FileShareService.cs" />
+    <Compile Include="Services\DownloadService.cs" />
     <Compile Include="Services\ProgressStream.cs" />
     <Compile Include="Services\DevicePortalService.cs" />
     <Compile Include="Services\PortalModels.cs" />
@@ -238,6 +243,7 @@
     <Compile Include="DevPortalSecrets.g.cs" />
     <Compile Include="Audio\IMemoryBufferAccess.cs" />
     <Compile Include="Audio\AudioLevelService.cs" />
+    <Compile Include="Audio\RetroAudioPlayer.cs" />
     <Compile Include="Audio\FftHelper.cs" />
     <Compile Include="Controls\VuMeterBar.xaml.cs">
       <DependentUpon>VuMeterBar.xaml</DependentUpon>
@@ -314,6 +320,10 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Controls\FileActionSheet.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\UrlDownloadOverlay.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
@@ -686,6 +696,9 @@
     <Content Include="Assets\GamepadButtons\system\xbox_menu-pressed.png" />
     <Content Include="Assets\GamepadButtons\system\xbox_view-pressed.png" />
     <Content Include="Assets\GamepadButtons\full-gamepad.png" />
+    <Content Include="Assets\FileTypes\filetype-audio-x-generic-24.png" />
+    <Content Include="Assets\FileTypes\filetype-audio-x-generic-128.png" />
+    <Content Include="Native\bin\RetroAudio.dll" Link="RetroAudio.dll" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <PropertyGroup>
     <PreBuildEvent>powershell -ExecutionPolicy Bypass -NoProfile -File "$(SolutionDir)tools\increment-version.ps1" &amp; powershell -ExecutionPolicy Bypass -NoProfile -File "$(SolutionDir)tools\generate-devportal-secrets.ps1"</PreBuildEvent>

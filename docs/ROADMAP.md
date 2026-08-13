@@ -5,9 +5,9 @@
 **Released v1.2.0.** The MVP plus post-MVP features are shipped: 3-column Miller
 navigation with live preview, audio player + 29 visualizers, video player with subtitles
 and track switching, archive browsing (zip/7z/rar), full file operations (copy/move/
-rename/delete/extract/create-zip), text editor, PDF viewer, ROM preview, metadata guesser
-(MusicBrainz + SQLite cache), QR file sharing, batch mode, favorites, settings, and log
-viewer.
+rename/delete/extract/create-zip), text editor, PDF viewer, ROM preview, chiptune/tracker
+playback, metadata guesser (MusicBrainz + SQLite cache), QR file sharing, batch mode,
+favorites, settings, and log viewer.
 
 Below: which phases are closed, what's still open, and the remaining backlog.
 
@@ -71,6 +71,13 @@ Settings page cache management. **Done.**
 `TextEditorService` (Win32 I/O, encoding detection, 4MB tier), `TextEditorOverlay`
 (WebView + contentEditable + hidden TextBox system-keyboard bridge), two-mode input,
 dirty-state save confirmation, `Assets/editor.js`. **Done.** See `docs/text-editor/`.
+
+### Phase 13 — Chiptune/Tracker Playback
+RetroAudio native DLL (static game-music-emu 0.6.5 + libopenmpt 0.8.7 + aosdk engine_psf
++ lazyusf 1.2 + zlib), 44+ extensions (console chips nsf/spc/vgm/sid/gbs + tracker
+mod/xm/s3m/it + PSF/USF), multi-subsong drill-in, archive-embedded playback (.rsn→.spc),
+render-to-cached-WAV feeding the existing AudioGraph path, next/prev/seek/mute in the
+audio player, Papirus `audio-x-generic` icons. **Done.** See ADR-011.
 
 ---
 

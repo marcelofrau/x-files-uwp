@@ -369,3 +369,62 @@ keyboard visible for typing). Toggle via Select/View button.
 - `MillerColumnsPage.xaml(.cs)` — editor overlay integration + input routing
 - `FileActionSheet.xaml(.cs)` — "Edit" action for text files
 - `XFiles.csproj` — new file references
+
+---
+
+## ADR-011: game-music-emu + libopenmpt for chiptune/tracker playback
+
+**Context**: the audio player supported container formats (mp3/flac/ogg/m4a/wma/aac)
+via MediaFoundation, but not chiptune/tracker formats (.mod/.xm/.s3m/.it/.nsf/.spc/.vgm/
+.sid — 40+ extensions). User requested a software player for these.
+
+**Options considered**:
+1. **game-music-emu (GME)** (C++, LGPL-2.1+) — the standard for console chiptune chips:
+   NSF/SPC/GBS/VGM/SID/HES/KSS/AY/SAP; links statically into RetroAudio.dll.
+2. **libopenmpt** (C++, BSD-3-Clause) — the standard for MOD-family tracker formats
+   (mod/xm/s3m/it + 20 more); links statically into the same DLL.
+3. Full libretro core stack — 3-4 native DLLs (Rust cores built 2023), heavier
+   integration, more per-core glue.
+4. Per-format native libs (libgme, libsidplay, libay...) — too many DLLs, more
+   maintenance.
+
+**Decision**: RetroAudio native DLL (C++ shim statically linking **game-music-emu 0.6.5**
++ **libopenmpt 0.8.7** + zlib/miniz for .vgz/.j2b inflate). Single DLL decodes both
+chip formats and tracker formats, renders the chosen subsong to a cached WAV in
+`LocalFolder/ChiptuneCache`, and the existing `AudioLevelService` path plays the WAV —
+no new playback engine needed.
+
+**Later expansion**: PlayStation (**aosdk engine_psf**, GPL-2.0+) and Nintendo 64
+(**lazyusf 1.2**, CC0-1.0) added to the same DLL for .psf/.minipsf/.usf/.miniusf.
+PSF is mono and up-mixed to stereo; USF renders at the N64 AI output rate. Both are
+single-track, resolve sibling .psflib/.usflib files via a `baseDir` argument to
+`RA_Open` (empty for archive-embedded sources).
+
+**Reason**:
+- GME alone covers all 12 console chip extensions in the table
+- libopenmpt alone covers all 27 tracker extensions
+- Static linking avoids DLL-hell on Xbox (single `RetroAudio.dll` next to the exe)
+- Render-to-WAV lets the whole player share one existing playback pipeline
+- Win32 desktop build keeps unit tests runnable on the dev machine
+- Both engines build from vendored sources via `Native/build-native.ps1` (plain `cl.exe`,
+  no CMake)
+
+**Accepted risks**: render is capped at 10 min per subsong (tracks loop forever by
+design); multi-subsong drill-in (track 2 of an NSF) requires probing the whole file;
+GME emulates chips but not all mixer quirks of the original hardware.
+
+**New files**:
+- `Native/retroaudio/` — C++ shim (retroaudio.cpp/h)
+- `Native/third_party/` — game-music-emu-0.6.5, libopenmpt-0.8.7, zlib-1.3.1
+- `Native/build-native.ps1` — vendored native build (cl.exe, /MT static CRT)
+- `XFiles/Audio/RetroAudioPlayer.cs` — P/Invoke wrapper + WAV render cache
+- `XFiles/FileSystem/ChiptuneBrowser.cs` — multi-subsong virtual track list
+
+**Updated files**:
+- `AudioLevelService.cs` — plays rendered WAV via existing stream fallback
+- `FilePreviewService.cs` — chiptune preview (extract from archive + render)
+- `MediaPreviewControl.xaml(.cs)` — chiptune playback (next/prev/seek/mute)
+- `DirectoryScanner.cs` — marks chiptune extensions via `RetroAudioPlayer.IsChiptuneExt`
+- `ColumnNavigator.cs` — drill-in multi-track chiptune (incl. archive entries)
+- `ColumnListView.xaml.cs` — 40+ ExtIcons entries (→ `filetype-audio-x-generic`)
+- `Assets/FileTypes/` — `filetype-audio-x-generic-24/128.png` (Papirus `audio-x-generic`)

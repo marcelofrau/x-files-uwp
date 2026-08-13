@@ -36,9 +36,9 @@ namespace XFiles.Controls
     {
         // --- Fullscreen Video ---
 
-        public async Task OpenFullscreenForFile(string filePath, TimeSpan position)
+        public async Task OpenFullscreenForFile(string filePath, TimeSpan position, int chiptuneTrack = -1)
         {
-            OpenAudioFullscreen(filePath, position);
+            OpenAudioFullscreen(filePath, position, chiptuneTrack);
             await System.Threading.Tasks.Task.CompletedTask;
         }
 
@@ -982,13 +982,20 @@ namespace XFiles.Controls
         private bool _fsPickerVisible;
         private List<VisualizerPickerItem> _fsPickerItems;
 
+        // Chiptune subsong state for the fullscreen audio player. Track navigation
+        // advances subsongs within the same source when _fsChiptuneTrackCount > 1,
+        // otherwise it advances to the next audio file in the list.
+        private string _fsChiptuneSource;
+        private int _fsChiptuneTrack;
+        private int _fsChiptuneTrackCount = 1;
+
         // MediaPlayer/Session helpers for fullscreen video + audio (migrated from MediaElement)
         private Windows.Media.Playback.MediaPlayer FsVideoPlayer => VideoFullScreenPlayer.MediaPlayer;
         private Windows.Media.Playback.MediaPlaybackSession FsVideoSession => FsVideoPlayer.PlaybackSession;
         private Windows.Media.Playback.MediaPlayer FsAudioPlayer2 => FsAudioPlayer.MediaPlayer;
         private Windows.Media.Playback.MediaPlaybackSession FsAudioSession => FsAudioPlayer2.PlaybackSession;
 
-        public async void OpenAudioFullscreen(string filePath, TimeSpan position)
+        public async void OpenAudioFullscreen(string filePath, TimeSpan position, int chiptuneTrack = -1)
         {
             Log.Info("OpenAudioFullscreen: {Path}", filePath);
             int gen = ++_fsGeneration;
@@ -999,16 +1006,67 @@ namespace XFiles.Controls
 
             MediaPreview.Stop();
 
+            bool fsChiptune = false;
+            string fsDisplayPath = filePath;
+
             StopFsAudioAnalysis();
             if (!wasAlreadyFullscreen)
                 _fsVisualizerMode = AudioFullscreenMode.Default;
             AudioLevelService.Instance.MediaOpened += OnFsAudioOpened;
             AudioLevelService.Instance.MediaEnded += OnFsAudioEnded;
             AudioLevelService.Instance.MediaFailed += OnFsAudioFailed;
+
+            // Show the fullscreen surface immediately — a chiptune decode can take
+            // seconds on first render, and the VU meter must be visible up front.
+            FsTitleText.Text = System.IO.Path.GetFileNameWithoutExtension(fsDisplayPath);
+            FsArtistText.Text = "";
+            FsArtistText.Visibility = Visibility.Collapsed;
+            FsAlbumText.Text = "";
+            FsAlbumText.Visibility = Visibility.Collapsed;
+            FsAlbumArtBorder.Visibility = Visibility.Collapsed;
+            FsDefaultArtPanel.Visibility = Visibility.Visible;
+            _fsHasAlbumArt = false;
+            AudioFullScreenPanel.Visibility = Visibility.Visible;
+            _fsHideTimer.Stop();
 #if AUDIO_ANALYSIS
             FsVuMeter.AttachService(AudioLevelService.Instance);
 #endif
-            await AudioLevelService.Instance.LoadAndPlay(filePath);
+            FsVuMeter.EnsureInitialized();
+            UpdateMediaPlayerFocusUI();
+            UpdateDisplayRequest();
+
+            // Chiptune sources have no playable path — decode to cached WAV first.
+            if (RetroAudioPlayer.IsChiptuneFile(filePath))
+            {
+                fsChiptune = true;
+                if (chiptuneTrack >= 0)
+                    MediaPreview.SetChiptuneTrack(filePath, chiptuneTrack);
+                string wav = await MediaPreview.GetChiptuneWavPathAsync(filePath);
+                if (wav == null)
+                {
+                    Log.Warn("OpenAudioFullscreen: chiptune decode failed for {Path}", filePath);
+                    CloseAudioFullscreen();
+                    return;
+                }
+                if (gen != _fsGeneration)
+                {
+                    Log.Dbg("OpenAudioFullscreen: stale generation after decode, aborting");
+                    return;
+                }
+                _fsChiptuneSource = filePath;
+                _fsChiptuneTrack = MediaPreview.CurrentChiptuneTrack;
+                _fsChiptuneTrackCount = MediaPreview.CurrentChiptuneTrackCount;
+                fsDisplayPath = filePath;
+                filePath = wav;
+            }
+            else
+            {
+                _fsChiptuneSource = null;
+                _fsChiptuneTrack = 0;
+                _fsChiptuneTrackCount = 1;
+            }
+
+            await AudioLevelService.Instance.LoadAndPlay(filePath, forceStream: fsChiptune);
 
             if (gen != _fsGeneration)
             {
@@ -1022,25 +1080,10 @@ namespace XFiles.Controls
             FsPlayPauseIcon.Glyph = "\uE769";
             FsVolumeText.Text = $"Vol {(int)(_audioVolume * 100)}%";
 
-            FsTitleText.Text = System.IO.Path.GetFileNameWithoutExtension(filePath);
-            FsArtistText.Text = "";
-            FsArtistText.Visibility = Visibility.Collapsed;
-            FsAlbumText.Text = "";
-            FsAlbumText.Visibility = Visibility.Collapsed;
-            FsAlbumArtBorder.Visibility = Visibility.Collapsed;
-            FsDefaultArtPanel.Visibility = Visibility.Visible;
-            _fsHasAlbumArt = false;
-
-            AudioFullScreenPanel.Visibility = Visibility.Visible;
-            _fsHideTimer.Stop();
-            FsVuMeter.EnsureInitialized();
-            UpdateMediaPlayerFocusUI();
-            UpdateDisplayRequest();
-
             if (_fullscreenProgressTimer.IsEnabled == false)
                 _fullscreenProgressTimer.Start();
 
-            _ = LoadAudioFullscreenMetadataAsync(filePath);
+            _ = LoadAudioFullscreenMetadataAsync(fsDisplayPath);
 
             if (_fsVisualizerMode != AudioFullscreenMode.Default)
                 ApplyAudioVisualizerMode();
@@ -1053,7 +1096,8 @@ namespace XFiles.Controls
             {
                 Log.Dbg("FsMetadata: starting async load for {Path}", filePath);
                 _fsMetadataGuesser.SetInternetAvailable(true);
-                var match = await _fsMetadataGuesser.ResolveAsync(filePath);
+                bool skipOnline = RetroAudioPlayer.IsChiptuneFile(filePath);
+                var match = await _fsMetadataGuesser.ResolveAsync(filePath, skipOnline: skipOnline);
                 var tag = match?.Metadata;
 
                 Log.Info("FsMetadata: source={Source} score={Score:F2} title='{Title}' artist='{Artist}' album='{Album}' art={HasArt}",
@@ -1111,6 +1155,7 @@ namespace XFiles.Controls
         public void CloseAudioFullscreen()
         {
             Log.Info("CloseAudioFullscreen");
+            ++_fsGeneration; // abort in-flight chiptune decodes
             StopFsAudioAnalysis();
             FsVisualizerCanvas.Deactivate();
             FsVisualizerCanvas.DetachService();
@@ -1119,6 +1164,9 @@ namespace XFiles.Controls
             _fsVisualizerMode = AudioFullscreenMode.Default;
             _isAudioFullscreen = false;
             _audioFullscreenPath = null;
+            _fsChiptuneSource = null;
+            _fsChiptuneTrack = 0;
+            _fsChiptuneTrackCount = 1;
             AudioFullScreenPanel.Visibility = Visibility.Collapsed;
             // Stop shared progress timer only if no video fullscreen is active
             if (VideoFullScreenPanel.Visibility != Visibility.Visible)
@@ -1144,28 +1192,51 @@ namespace XFiles.Controls
             }
         }
 
-        private void NavigatePreviewTrack(int direction)
+        private bool NavigatePreviewTrack(int direction)
         {
             if (string.IsNullOrEmpty(MediaPreview.CurrentFilePath) || _navigator.Current == null)
             {
                 Log.Warn("NavigatePreviewTrack: early exit — filePath={FilePath} current={Current}", MediaPreview.CurrentFilePath ?? "(null)", _navigator.Current != null);
-                return;
+                return false;
             }
 
             var audioFiles = _navigator.Current.Entries
-                .Where(e => !e.IsDirectory && FilePreviewService.IsAudioFile(System.IO.Path.GetExtension(e.Name)))
+                .Where(e => !e.IsDirectory && (e.IsChiptune
+                    || FilePreviewService.IsAudioFile(System.IO.Path.GetExtension(e.Name))
+                    || FilePreviewService.IsChiptuneFile(System.IO.Path.GetExtension(e.Name))))
                 .ToList();
 
             if (audioFiles.Count == 0)
             {
                 Log.Warn("NavigatePreviewTrack: no audio files in current directory ({Total} entries total)", _navigator.Current.Entries.Count);
-                return;
+                return false;
             }
 
-            int currentIdx = audioFiles.FindIndex(e =>
-                string.Equals(e.FullPath, MediaPreview.CurrentFilePath, StringComparison.OrdinalIgnoreCase));
+            int currentIdx = -1;
+
+            // Multi-track chiptune: match the current subsong (all track entries
+            // share the same FullPath, so the source alone is ambiguous).
+            if (MediaPreview.CurrentChiptuneSource != null && MediaPreview.CurrentChiptuneTrackCount > 1 &&
+                string.Equals(MediaPreview.CurrentChiptuneSource, MediaPreview.CurrentFilePath, StringComparison.OrdinalIgnoreCase))
+            {
+                currentIdx = audioFiles.FindIndex(e =>
+                    e.IsChiptune && e.ChiptuneTrackIndex == MediaPreview.CurrentChiptuneTrack &&
+                    string.Equals(e.ChiptuneSourcePath ?? e.FullPath, MediaPreview.CurrentChiptuneSource, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (currentIdx < 0)
+            {
+                currentIdx = audioFiles.FindIndex(e =>
+                    string.Equals(e.FullPath, MediaPreview.CurrentFilePath, StringComparison.OrdinalIgnoreCase));
+            }
 
             Log.Info("NavigatePreviewTrack: {Count} audio files, currentIdx={Idx}, direction={Dir}", audioFiles.Count, currentIdx, direction > 0 ? "next" : "prev");
+
+            if (currentIdx < 0)
+            {
+                Log.Warn("NavigatePreviewTrack: current {Path} not in audio list — aborting", MediaPreview.CurrentFilePath);
+                return false;
+            }
 
             int nextIdx = currentIdx + direction;
             if (nextIdx < 0) nextIdx = audioFiles.Count - 1;
@@ -1188,9 +1259,18 @@ namespace XFiles.Controls
                 FooterItemCount.Text = totalCount > 0 ? $"{mainIdx + 1}/{totalCount}" : "";
             }
 
+            // Chiptune track entry: load the specific subsong (source + track).
+            if (nextFile.IsChiptune)
+            {
+                MediaPreview.LoadChiptuneTrack(nextFile.ChiptuneSourcePath ?? nextFile.FullPath, nextFile.ChiptuneTrackIndex);
+                MediaPreview.TogglePlayPause();
+                return true;
+            }
+
             MediaPreview.Stop();
             MediaPreview.LoadFile(nextFile.FullPath);
             MediaPreview.TogglePlayPause();
+            return true;
         }
 
         private void NavigatePreviewVideoTrack(int direction)
@@ -1246,14 +1326,45 @@ namespace XFiles.Controls
         {
             if (string.IsNullOrEmpty(_audioFullscreenPath) || _navigator.Current == null) return;
 
+            int gen = ++_fsGeneration;
+
+            // Multi-track chiptune: advance subsongs within the same source.
+            if (!string.IsNullOrEmpty(_fsChiptuneSource) && _fsChiptuneTrackCount > 1 &&
+                string.Equals(_fsChiptuneSource, _audioFullscreenPath, StringComparison.OrdinalIgnoreCase))
+            {
+                int nextTrack = (_fsChiptuneTrack + direction + _fsChiptuneTrackCount) % _fsChiptuneTrackCount;
+                Log.Info("NavigateAudioTrack: chiptune subsong {Dir} -> {Next}/{Count} of {Path}",
+                    direction > 0 ? "next" : "prev", nextTrack + 1, _fsChiptuneTrackCount, _fsChiptuneSource);
+                _fsChiptuneTrack = nextTrack;
+                _fsAudioEnded = false;
+                UpdateFsSelectionToChiptuneTrack(nextTrack);
+                ShowAudioOsd(direction > 0 ? "Next" : "Prev",
+                    direction > 0 ? "ms-appx:///Assets/Views/MillerColumnsPage/osd/osd-next-48.png" : "ms-appx:///Assets/Views/MillerColumnsPage/osd/osd-prev-48.png", 1200);
+                _ = LoadFsChiptuneAsync(gen, _fsChiptuneSource, nextTrack);
+                return;
+            }
+
+            // File-list navigation. Includes chiptune track entries (drilled-in
+            // virtual list) and plain audio/chiptune files.
             var audioFiles = _navigator.Current.Entries
-                .Where(e => !e.IsDirectory && FilePreviewService.IsAudioFile(System.IO.Path.GetExtension(e.Name)))
+                .Where(e => !e.IsDirectory && (e.IsChiptune
+                    || FilePreviewService.IsAudioFile(System.IO.Path.GetExtension(e.Name))
+                    || FilePreviewService.IsChiptuneFile(System.IO.Path.GetExtension(e.Name))))
                 .ToList();
 
-            if (audioFiles.Count == 0) return;
+            if (audioFiles.Count == 0)
+            {
+                Log.Warn("NavigateAudioTrack: no audio files in current list ({Total} entries total)", _navigator.Current.Entries.Count);
+                return;
+            }
 
             int currentIdx = audioFiles.FindIndex(e =>
                 string.Equals(e.FullPath, _audioFullscreenPath, StringComparison.OrdinalIgnoreCase));
+            if (currentIdx < 0)
+            {
+                Log.Warn("NavigateAudioTrack: current {Path} not in audio list — aborting", _audioFullscreenPath);
+                return;
+            }
 
             int nextIdx = currentIdx + direction;
             if (nextIdx < 0) nextIdx = audioFiles.Count - 1;
@@ -1263,8 +1374,26 @@ namespace XFiles.Controls
             _audioFullscreenPath = nextFile.FullPath;
             _fsAudioEnded = false;
 
+            bool isChip = nextFile.IsChiptune || RetroAudioPlayer.IsChiptuneFile(nextFile.FullPath);
+            string chipSource = nextFile.ChiptuneSourcePath ?? nextFile.FullPath;
+            int chipTrack = Math.Max(0, nextFile.ChiptuneTrackIndex);
+
+            if (isChip)
+            {
+                _fsChiptuneSource = chipSource;
+                _fsChiptuneTrack = chipTrack;
+                _fsChiptuneTrackCount = 1; // updated by the decode probe
+            }
+            else
+            {
+                _fsChiptuneSource = null;
+                _fsChiptuneTrack = 0;
+                _fsChiptuneTrackCount = 1;
+            }
+
             // Show placeholder immediately
-            FsTitleText.Text = System.IO.Path.GetFileNameWithoutExtension(nextFile.FullPath);
+            string displayName = nextFile.IsChiptune ? nextFile.Name : System.IO.Path.GetFileNameWithoutExtension(nextFile.FullPath);
+            FsTitleText.Text = displayName;
             FsArtistText.Text = "";
             FsArtistText.Visibility = Visibility.Collapsed;
             FsAlbumText.Text = "";
@@ -1273,8 +1402,13 @@ namespace XFiles.Controls
             FsDefaultArtPanel.Visibility = Visibility.Visible;
             _fsHasAlbumArt = false;
 
-            // Load next track via AudioGraph (reuse if possible)
-            if (AudioLevelService.Instance.IsFileLoaded)
+            // Load next track. Chiptunes are decoded to a cached WAV first —
+            // AudioGraph cannot read .spc/.nsf/.psf etc directly.
+            if (isChip)
+            {
+                _ = LoadFsChiptuneAsync(gen, chipSource, chipTrack);
+            }
+            else if (AudioLevelService.Instance.IsFileLoaded)
             {
                 Log.Info("NavigateAudioTrack: reusing AudioLevelService, SwapSource to {Path}", nextFile.FullPath);
                 _ = AudioLevelService.Instance.SwapSourceAsync(nextFile.FullPath);
@@ -1296,12 +1430,81 @@ namespace XFiles.Controls
                 ApplyAudioVisualizerMode();
 
             FsPlayPauseIcon.Glyph = "\uE769";
-            ShowAudioOsd(direction > 0 ? "Next" : "Prev", direction > 0 ? "ms-appx:///Assets/Views/MillerColumnsPage/osd/osd-next-48.png" : "ms-appx:///Assets/Views/MillerColumnsPage/osd/osd-prev-48.png", 1200);
+            ShowAudioOsd(direction > 0 ? "Next" : "Prev",
+                direction > 0 ? "ms-appx:///Assets/Views/MillerColumnsPage/osd/osd-next-48.png" : "ms-appx:///Assets/Views/MillerColumnsPage/osd/osd-prev-48.png", 1200);
 
             _ = LoadAudioFullscreenMetadataAsync(nextFile.FullPath);
 
             // Update selection in main list
             int mainIdx = _navigator.Current.Entries.IndexOf(nextFile);
+            if (mainIdx >= 0)
+            {
+                _updating = true;
+                CurrentList.SelectedIndex = mainIdx;
+                _updating = false;
+            }
+        }
+
+        /// <summary>
+        /// Decode a chiptune subsong to WAV and play it in the fullscreen audio
+        /// player. Guarded by the fullscreen generation so a decode superseded by
+        /// another navigation is discarded instead of hijacking playback.
+        /// </summary>
+        private async Task LoadFsChiptuneAsync(int gen, string source, int track)
+        {
+            string wav = await MediaPreview.GetChiptuneWavPathAsync(source, track);
+            if (gen != _fsGeneration)
+            {
+                Log.Dbg("NavigateAudioTrack: stale chiptune decode (gen {Gen} != {Current}) — aborting", gen, _fsGeneration);
+                return;
+            }
+            if (string.IsNullOrEmpty(wav))
+            {
+                Log.Warn("NavigateAudioTrack: chiptune decode failed for {Path}", source);
+                FsPlayPauseIcon.Glyph = "\uE768";
+                return;
+            }
+
+            _fsChiptuneSource = source;
+            _fsChiptuneTrack = track;
+            _fsChiptuneTrackCount = MediaPreview.CurrentChiptuneTrackCount;
+            if (_fsChiptuneTrackCount < 1) _fsChiptuneTrackCount = 1;
+
+            string title = MediaPreview.CurrentChiptuneTitle;
+            if (!string.IsNullOrEmpty(title))
+                FsTitleText.Text = title;
+
+            if (AudioLevelService.Instance.IsFileLoaded)
+            {
+                Log.Info("NavigateAudioTrack: reusing AudioLevelService, SwapSource to chiptune WAV {Path}", wav);
+                await AudioLevelService.Instance.SwapSourceAsync(wav);
+            }
+            else
+            {
+                StopFsAudioAnalysis();
+                AudioLevelService.Instance.MediaOpened += OnFsAudioOpened;
+                AudioLevelService.Instance.MediaEnded += OnFsAudioEnded;
+                AudioLevelService.Instance.MediaFailed += OnFsAudioFailed;
+#if AUDIO_ANALYSIS
+                FsVuMeter.AttachService(AudioLevelService.Instance);
+#endif
+                await AudioLevelService.Instance.LoadAndPlay(wav, forceStream: true);
+            }
+
+            if (gen != _fsGeneration)
+            {
+                Log.Dbg("NavigateAudioTrack: playback superseded — aborting");
+                return;
+            }
+            FsPlayPauseIcon.Glyph = "\uE769";
+        }
+
+        private void UpdateFsSelectionToChiptuneTrack(int track)
+        {
+            if (_navigator.Current == null) return;
+            int mainIdx = _navigator.Current.Entries.FindIndex(e =>
+                e.IsChiptune && e.ChiptuneTrackIndex == track &&
+                string.Equals(e.ChiptuneSourcePath ?? e.FullPath, _fsChiptuneSource, StringComparison.OrdinalIgnoreCase));
             if (mainIdx >= 0)
             {
                 _updating = true;
@@ -1334,6 +1537,12 @@ namespace XFiles.Controls
         {
             await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
             {
+                if (_fsAudioEnded)
+                {
+                    Log.Dbg("FsAudio: ended already handled — skipping");
+                    return;
+                }
+                _fsAudioEnded = true;
                 Log.Info("FsAudio: ended — auto-advancing");
                 NavigateAudioTrack(1);
             });

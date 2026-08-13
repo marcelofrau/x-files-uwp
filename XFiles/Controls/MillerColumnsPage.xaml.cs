@@ -208,7 +208,12 @@ namespace XFiles.Controls
         private void OnMediaPreviewAudioEnded(object sender, EventArgs e)
         {
             Log.Info("MillerColumns: {File} — audio ended event received, calling NavigatePreviewTrack(1)", MediaPreview.CurrentFilePath ?? "(null)");
-            NavigatePreviewTrack(1);
+            if (!NavigatePreviewTrack(1))
+            {
+                Log.Info("MillerColumns: no next audio track — stopping player cleanly");
+                MediaPreview.StopPlayer();
+                UpdateMediaPlayerFocusUI();
+            }
         }
 
         private void OnMediaPreviewVideoEnded(object sender, EventArgs e)

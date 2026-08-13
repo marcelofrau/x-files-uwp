@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading;
@@ -76,6 +77,15 @@ namespace XFiles.Audio
         private bool _firstBandDataLogged;
         private bool _quantumTidLogged;
         private string _currentFilePath;
+
+        private CancellationTokenSource _driftCts;
+        private long _driftStartTicks;
+        private TimeSpan _driftStartPos;
+        private int _driftWarnCount;
+
+        private int _silenceRunQuantums;
+        private int _silenceRunStartQuantum;
+        private long _silenceGapTotal;
 
 #if AUDIO_ANALYSIS
         public float[] BandLevels => _bandLevels;
@@ -162,9 +172,9 @@ namespace XFiles.Audio
         }
 #endif
 
-        public async Task LoadAndPlay(string filePath)
+        public async Task LoadAndPlay(string filePath, bool forceStream = false)
         {
-            await LoadInternal(filePath, createDeviceOutput: true);
+            await LoadInternal(filePath, createDeviceOutput: true, forceStream: forceStream);
         }
 
         public async Task StartAnalysis(string filePath)
@@ -175,20 +185,22 @@ namespace XFiles.Audio
         private readonly SemaphoreSlim _loadLock = new SemaphoreSlim(1, 1);
         private string _pendingLoadPath;
         private bool _pendingCreateDeviceOutput;
+        private bool _pendingForceStream;
 
-        private async Task LoadInternal(string filePath, bool createDeviceOutput)
+        private async Task LoadInternal(string filePath, bool createDeviceOutput, bool forceStream = false)
         {
             if (!await _loadLock.WaitAsync(0))
             {
                 Log.Info("AudioLevelService: load already in progress, queuing {Path}", filePath);
                 _pendingLoadPath = filePath;
                 _pendingCreateDeviceOutput = createDeviceOutput;
+                _pendingForceStream = forceStream;
                 return;
             }
 
             try
             {
-                await LoadInternalCore(filePath, createDeviceOutput);
+                await LoadInternalCore(filePath, createDeviceOutput, forceStream);
             }
             finally
             {
@@ -198,18 +210,26 @@ namespace XFiles.Audio
                 {
                     var pending = _pendingLoadPath;
                     var pendingDevice = _pendingCreateDeviceOutput;
+                    var pendingStream = _pendingForceStream;
                     _pendingLoadPath = null;
-                    _ = LoadInternal(pending, pendingDevice);
+                    _ = LoadInternal(pending, pendingDevice, pendingStream);
                 }
             }
         }
 
-        private async Task LoadInternalCore(string filePath, bool createDeviceOutput)
+        private async Task LoadInternalCore(string filePath, bool createDeviceOutput, bool forceStream = false)
         {
             if (_isGraphRunning)
                 Stop();
             _currentFilePath = filePath;
             Log.Info("AudioLevelService: loading {Path}", filePath);
+
+            if (forceStream)
+            {
+                Log.Info("AudioLevelService: forceStream requested — using stream via MediaSourceAudioInputNode");
+                await LoadViaStream(filePath, createDeviceOutput, mimeType: "audio/wav");
+                return;
+            }
 
             StorageFile storageFile = null;
 
@@ -267,8 +287,9 @@ namespace XFiles.Audio
             InitBandMappings(_sampleRate);
 #endif
 
-            Log.Info("AudioLevelService: graph enc={Enc} rate={Rate} ch={Ch}",
-                localGraph.EncodingProperties.Subtype, _sampleRate, _channels);
+            Log.Info("AudioLevelService: graph enc={Enc} rate={Rate} ch={Ch} quantum={QuantumMs:F1}ms desiredSamples={Desired}",
+                localGraph.EncodingProperties.Subtype, _sampleRate, _channels,
+                4800.0 / _sampleRate * 1000.0, 4800);
 
             var deviceResult = await localGraph.CreateDeviceOutputNodeAsync();
             if (deviceResult.Status != AudioDeviceNodeCreationStatus.Success)
@@ -337,6 +358,7 @@ namespace XFiles.Audio
                 }
                 _graph.Start();
                 _isGraphRunning = true;
+                StartDriftMonitor();
                 MediaOpened?.Invoke(this, EventArgs.Empty);
             }
             catch (Exception ex)
@@ -347,7 +369,7 @@ namespace XFiles.Audio
             }
         }
 
-        private async Task LoadViaStream(string filePath, bool createDeviceOutput)
+        private async Task LoadViaStream(string filePath, bool createDeviceOutput, string mimeType = "audio/mpeg")
         {
             try
             {
@@ -357,9 +379,19 @@ namespace XFiles.Audio
                     bufferSize: 1048576, useAsync: true);
 
                 var stream = fileStream.AsRandomAccessStream();
-                var mediaSource = MediaSource.CreateFromStream(stream, "audio/mpeg");
+                var mediaSource = MediaSource.CreateFromStream(stream, mimeType);
+
+                Log.Info("AudioLevelService: stream path mime={Mime} size={Size}MB",
+                    mimeType, new FileInfo(filePath).Length / (1024.0 * 1024.0));
 
                 await CreateGraphCommon(createDeviceOutput);
+
+                int wavRate = LogWavHeader(filePath);
+                if (wavRate > 0 && wavRate != _sampleRate)
+                {
+                    Log.Warn("AudioLevelService: WAV rate {WavRate} != graph device rate {GraphRate} — in-graph resample (glitch risk on Xbox)",
+                        wavRate, _sampleRate);
+                }
 
                 var nodeResult = await _graph.CreateMediaSourceAudioInputNodeAsync(mediaSource);
                 if (nodeResult.Status != MediaSourceAudioInputNodeCreationStatus.Success)
@@ -398,6 +430,7 @@ namespace XFiles.Audio
                 }
                 _graph.Start();
                 _isGraphRunning = true;
+                StartDriftMonitor();
                 MediaOpened?.Invoke(this, EventArgs.Empty);
             }
             catch (Exception ex)
@@ -422,6 +455,7 @@ namespace XFiles.Audio
                 _graph.Stop();
                 EndGcRegion();
                 _isGraphRunning = false;
+                _driftCts?.Cancel();
                 Log.Info("AudioLevelService: paused");
             }
             catch (Exception ex)
@@ -446,6 +480,7 @@ namespace XFiles.Audio
                 }
                 _graph.Start();
                 _isGraphRunning = true;
+                StartDriftMonitor();
                 Log.Info("AudioLevelService: resumed");
             }
             catch (Exception ex)
@@ -475,6 +510,7 @@ namespace XFiles.Audio
                 {
                     _fileInputNode.Seek(position);
                 }
+                StartDriftMonitor();
             }
             catch (Exception ex)
             {
@@ -514,6 +550,11 @@ namespace XFiles.Audio
             _swapCts?.Dispose();
             _swapCts = null;
 
+            _driftCts?.Cancel();
+            _driftCts?.Dispose();
+            _driftCts = null;
+            _driftWarnCount = 0;
+
             _currentFilePath = null;
             _firstBandDataLogged = false;
 
@@ -532,6 +573,8 @@ namespace XFiles.Audio
             _beat = 0f;
             _energyHistory = 0f;
             _waveformCount = 0;
+            _silenceRunQuantums = 0;
+            _silenceGapTotal = 0;
 #endif
 
             Log.Info("AudioLevelService: stopped");
@@ -667,6 +710,7 @@ namespace XFiles.Audio
                 }
                 _graph.Start();
                 _isGraphRunning = true;
+                StartDriftMonitor();
                 MediaOpened?.Invoke(this, EventArgs.Empty);
             }
             catch (Exception ex)
@@ -712,6 +756,31 @@ namespace XFiles.Audio
                     _firstBandDataLogged = true;
                     Log.Info("AudioLevelService: FIRST non-zero band data quantum#{Cnt} rate={Rate} ch={Ch} sum={Sum:F4} lvl0={L0:F4} lvl5={L5:F4}",
                         _quantumLogCounter, _sampleRate, _channels, bandsSum, _bandLevels[0], _bandLevels[5]);
+                }
+
+                // Live silence-gap detector: consecutive near-silent quantums mid-playback
+                // point to underrun (source starved) or gaps baked into the source.
+                const float SilenceSum = 0.0005f;
+                if (_quantumLogCounter > 20)
+                {
+                    if (bandsSum < SilenceSum)
+                    {
+                        if (_silenceRunQuantums == 0)
+                            _silenceRunStartQuantum = _quantumLogCounter;
+                        _silenceRunQuantums++;
+                        if (_silenceRunQuantums == 3)
+                        {
+                            _silenceGapTotal++;
+                            int qMs = (int)(4800.0 / _sampleRate * 1000.0);
+                            Log.Warn("AudioLevelService: AUDIO SILENCE GAP quantum#{Start}-#{End} dur={Dur}ms sum={Sum:F5} gapsTotal={Total}",
+                                _silenceRunStartQuantum, _quantumLogCounter,
+                                _silenceRunQuantums * qMs, bandsSum, _silenceGapTotal);
+                        }
+                    }
+                    else
+                    {
+                        _silenceRunQuantums = 0;
+                    }
                 }
 
 #if AUDIO_LEVEL_DEBUG
@@ -894,6 +963,124 @@ namespace XFiles.Audio
             catch (Exception ex)
             {
                 Log.Warn("AudioLevelService: SetVolume failed", ex);
+            }
+        }
+
+        private TimeSpan CurrentNodePosition()
+        {
+            if (_mediaSourceNode != null) return _mediaSourceNode.Position;
+            if (_fileInputNode != null) return _fileInputNode.Position;
+            return TimeSpan.Zero;
+        }
+
+        private TimeSpan CurrentNodeDuration()
+        {
+            if (_mediaSourceNode != null) return _mediaSourceNode.Duration;
+            if (_fileInputNode != null) return _fileInputNode.Duration;
+            return TimeSpan.Zero;
+        }
+
+        private void StartDriftMonitor()
+        {
+            _driftCts?.Cancel();
+            _driftCts?.Dispose();
+            _driftCts = new CancellationTokenSource();
+            _driftStartTicks = Stopwatch.GetTimestamp();
+            _driftStartPos = CurrentNodePosition();
+            _ = DriftMonitorLoopAsync(_driftCts.Token);
+        }
+
+        private async Task DriftMonitorLoopAsync(CancellationToken ct)
+        {
+            int beat = 0;
+            try
+            {
+                while (!ct.IsCancellationRequested)
+                {
+                    await Task.Delay(5000, ct).ConfigureAwait(false);
+                    if (!_isGraphRunning) continue;
+                    if (_mediaSourceNode == null && _fileInputNode == null) continue;
+
+                    TimeSpan pos = CurrentNodePosition();
+                    TimeSpan dur = CurrentNodeDuration();
+                    TimeSpan expected = _driftStartPos +
+                        TimeSpan.FromSeconds((double)(Stopwatch.GetTimestamp() - _driftStartTicks) / Stopwatch.Frequency);
+                    double driftMs = (pos - expected).TotalMilliseconds;
+                    beat++;
+
+                    if (Math.Abs(driftMs) > 750.0)
+                    {
+                        _driftWarnCount++;
+                        Log.Warn("AudioLevelService: PLAYBACK DRIFT pos={Pos:F1}s expected={Exp:F1}s dur={Dur:F1}s drift={Drift:+#0;-0;0}ms warn#{W} — underrun/stutter suspect",
+                            pos.TotalSeconds, expected.TotalSeconds, dur.TotalSeconds, driftMs, _driftWarnCount);
+                        _driftStartTicks = Stopwatch.GetTimestamp();
+                        _driftStartPos = pos;
+                    }
+                    else if (beat % 3 == 0)
+                    {
+                        Log.Info("AudioLevelService: playback heartbeat pos={Pos:F1}s / {Dur:F1}s drift={Drift:+#0;-0;0}ms q={Q} gaps={Gaps}",
+                            pos.TotalSeconds, dur.TotalSeconds, driftMs, _quantumLogCounter, _silenceGapTotal);
+                    }
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                Log.Warn("AudioLevelService: drift monitor error", ex);
+            }
+        }
+
+        private static int LogWavHeader(string filePath)
+        {
+            try
+            {
+                using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read,
+                    FileShare.ReadWrite | FileShare.Delete))
+                {
+                    byte[] head = new byte[64];
+                    int n = fs.Read(head, 0, head.Length);
+                    if (n < 12 || head[0] != 'R' || head[1] != 'I' || head[2] != 'F' || head[3] != 'F')
+                    {
+                        Log.Info("AudioLevelService: {Path} not RIFF (n={N}) — skipping WAV header log", filePath, n);
+                        return 0;
+                    }
+
+                    int rate = 0, ch = 0, bits = 0;
+                    long dataBytes = -1;
+                    int off = 12;
+                    while (off + 8 <= n)
+                    {
+                        var id = System.Text.Encoding.ASCII.GetString(head, off, 4);
+                        int size = head[off + 4] | (head[off + 5] << 8) | (head[off + 6] << 16) | (head[off + 7] << 24);
+                        if (id == "fmt ")
+                        {
+                            if (off + 24 <= n)
+                            {
+                                ch = head[off + 10] | (head[off + 11] << 8);
+                                rate = head[off + 12] | (head[off + 13] << 8) | (head[off + 14] << 16) | (head[off + 15] << 24);
+                                bits = head[off + 22] | (head[off + 23] << 8);
+                            }
+                        }
+                        else if (id == "data")
+                        {
+                            dataBytes = size;
+                        }
+                        off += 8 + size + (size & 1);
+                    }
+
+                    if (rate > 0)
+                    {
+                        double durSec = dataBytes > 0 ? dataBytes / (double)(rate * Math.Max(ch, 1) * Math.Max(bits / 8, 1)) : -1;
+                        Log.Info("AudioLevelService: WAV header {Path}: rate={Rate} ch={Ch} bits={Bits} dataBytes={Data} dur={Dur:F1}s",
+                            filePath, rate, ch, bits, dataBytes, durSec);
+                    }
+                    return rate;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("AudioLevelService: LogWavHeader failed for {Path}", ex);
+                return 0;
             }
         }
 

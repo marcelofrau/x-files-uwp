@@ -93,6 +93,9 @@ namespace XFiles.Controls
                     IsDrive = e.IsDrive,
                     IsArchive = e.IsArchive,
                     SizeBytes = e.SizeBytes,
+                    IsChiptune = e.IsChiptune,
+                    ChiptuneTrackIndex = e.ChiptuneTrackIndex,
+                    ChiptuneSourcePath = e.ChiptuneSourcePath,
                     IsDotDot = (e.Name == "..")
                 });
             }

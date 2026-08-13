@@ -34,7 +34,19 @@ namespace XFiles.Controls
         private bool _hasEnded;
         private MetadataGuesser _metadataGuesser;
         private CancellationTokenSource _metadataCts;
-        
+        private readonly ArchiveBrowser _archiveBrowser = new ArchiveBrowser();
+
+        // Chiptune subsong state: which track of which source is loaded.
+        private string _chiptuneSource;
+        private int _chiptuneTrack;
+        private int _chiptuneTrackCount = 1;
+        private string _chiptuneTitle;
+
+        // Generation of the audio load currently attached to the AudioLevelService
+        // MediaOpened/MediaEnded/MediaFailed events. Used to discard stale events
+        // from a superseded load (prevents a dead player state).
+        private int _ownedAudioGen = -1;
+
 
         private MediaPlaybackItem _currentPlaybackItem;
         private List<SubtitleTrack> _currentSubtitleTracks = new List<SubtitleTrack>();
@@ -48,6 +60,26 @@ namespace XFiles.Controls
         public bool IsAudioMode => _isAudioMode;
         public string CurrentFilePath => _currentFilePath;
         public bool IsFileLoaded(string filePath) => _currentFilePath == filePath;
+
+        /// <summary>
+        /// Chiptune subsong currently selected by the preview (used by the
+        /// fullscreen player to continue track navigation).
+        /// </summary>
+        public string CurrentChiptuneSource => _chiptuneSource;
+        public int CurrentChiptuneTrack => _chiptuneTrack;
+        public int CurrentChiptuneTrackCount => _chiptuneTrackCount;
+        public string CurrentChiptuneTitle => _chiptuneTitle ?? "";
+
+        /// <summary>
+        /// Select a specific chiptune subsong for the given source, so the next
+        /// decode renders that track. Used when opening the fullscreen player from
+        /// a drilled-in track list.
+        /// </summary>
+        public void SetChiptuneTrack(string source, int track)
+        {
+            _chiptuneSource = source;
+            _chiptuneTrack = Math.Max(0, track);
+        }
 
         public MediaPlaybackItem CurrentPlaybackItem => _currentPlaybackItem;
         public List<SubtitleTrack> CurrentSubtitleTracks => _currentSubtitleTracks;
@@ -88,7 +120,7 @@ namespace XFiles.Controls
 
             _currentFilePath = filePath;
             string ext = Path.GetExtension(filePath);
-            _isAudioMode = FilePreviewService.IsAudioFile(ext);
+            _isAudioMode = FilePreviewService.IsAudioFile(ext) || FilePreviewService.IsChiptuneFile(ext);
             Log.Dbg("MediaPreviewControl: ext={Ext} isAudio={IsAudio}", ext, _isAudioMode);
 
             if (_isAudioMode)
@@ -96,12 +128,24 @@ namespace XFiles.Controls
                 AudioInfoPanel.Visibility = Visibility.Visible;
                 AlbumArtBorder.Visibility = Visibility.Collapsed;
                 DefaultArtPanel.Visibility = Visibility.Visible;
-                TitleText.Text = Path.GetFileNameWithoutExtension(filePath);
+                TitleText.Text = GetDisplayName(filePath);
                 ArtistText.Text = "";
                 ArtistText.Visibility = Visibility.Collapsed;
                 AlbumText.Text = "";
                 AlbumText.Visibility = Visibility.Collapsed;
-                _ = LoadMetadataAsync(filePath);
+
+                if (RetroAudioPlayer.IsChiptuneFile(filePath))
+                {
+                    _chiptuneSource = filePath;
+                    _chiptuneTrack = 0;
+                    _chiptuneTrackCount = 1;
+                    _chiptuneTitle = null;
+                }
+                else
+                {
+                    _chiptuneSource = null;
+                    _ = LoadMetadataAsync(filePath);
+                }
             }
             else
             {
@@ -116,12 +160,65 @@ namespace XFiles.Controls
             Visibility = Visibility.Visible;
         }
 
+        /// <summary>
+        /// Load a specific chiptune subsong from a source (file or archive entry).
+        /// Playback begins on the next play action, like regular audio files.
+        /// </summary>
+        public void LoadChiptuneTrack(string source, int track)
+        {
+            if (string.IsNullOrEmpty(source)) return;
+            Log.Dbg("MediaPreviewControl.LoadChiptuneTrack: enter for {Source} track={Track} (wasPlaying={WasPlaying})", source, track, _isPlaying);
+            Stop();
+            _hasEnded = false;
+
+            _currentFilePath = source;
+            _isAudioMode = true;
+            _chiptuneSource = source;
+            _chiptuneTrack = track;
+            _chiptuneTitle = null;
+
+            AudioInfoPanel.Visibility = Visibility.Visible;
+            AlbumArtBorder.Visibility = Visibility.Collapsed;
+            DefaultArtPanel.Visibility = Visibility.Visible;
+            TitleText.Text = GetDisplayName(source);
+            ArtistText.Text = "";
+            ArtistText.Visibility = Visibility.Collapsed;
+            AlbumText.Text = "";
+            AlbumText.Visibility = Visibility.Collapsed;
+
+            _isPlaying = false;
+            UpdatePlayPauseIcon();
+            Visibility = Visibility.Visible;
+        }
+
+        private static string GetDisplayName(string filePath)
+        {
+            if (string.IsNullOrEmpty(filePath)) return filePath ?? "";
+            if (RetroAudioPlayer.IsArchiveEntryPath(filePath))
+            {
+                // "archivePath|internalPath" — show the entry name, not the archive.
+                int pipe = filePath.LastIndexOf('|');
+                return Path.GetFileNameWithoutExtension(filePath.Substring(pipe + 1));
+            }
+            return Path.GetFileNameWithoutExtension(filePath);
+        }
+
         public void LoadNextTrack(string filePath)
         {
             if (string.IsNullOrEmpty(filePath)) return;
 
+            // Multi-track chiptune: advance to the next subsong of the same source.
+            if (_chiptuneSource != null && _chiptuneTrackCount > 1 &&
+                string.Equals(_chiptuneSource, filePath, StringComparison.OrdinalIgnoreCase))
+            {
+                int next = (_chiptuneTrack + 1) % _chiptuneTrackCount;
+                Log.Info("MediaPreviewControl: chiptune next track {Next}/{Count} of {Path}", next + 1, _chiptuneTrackCount, filePath);
+                LoadChiptuneTrack(_chiptuneSource, next);
+                return;
+            }
+
             string ext = Path.GetExtension(filePath);
-            bool newIsAudio = FilePreviewService.IsAudioFile(ext);
+            bool newIsAudio = FilePreviewService.IsAudioFile(ext) || FilePreviewService.IsChiptuneFile(ext);
 
             Log.Dbg("MediaPreviewControl.LoadNextTrack: enter for {Path} isAudio={IsAudio} wasPlaying={WasPlaying}", filePath, newIsAudio, _isPlaying);
 
@@ -133,6 +230,7 @@ namespace XFiles.Controls
             }
 
             Log.Info("MediaPreviewControl: swapping source for {Path}", filePath);
+            _loadGeneration++;
             _currentFilePath = filePath;
             _hasEnded = false;
             _isPlaying = false;
@@ -190,16 +288,45 @@ namespace XFiles.Controls
         private async Task StartAudioPlayback(string filePath)
         {
             Log.Info("MediaPreviewControl.StartAudioPlayback: starting for {Path}", filePath ?? "(null)");
+            int gen = ++_loadGeneration;
             try
             {
+                string playPath = filePath;
+                bool chiptune = false;
+                if (RetroAudioPlayer.IsChiptuneFile(filePath))
+                {
+                    chiptune = true;
+                    playPath = await PrepareChiptuneAsync(filePath);
+                    if (gen != _loadGeneration)
+                    {
+                        Log.Dbg("MediaPreviewControl.StartAudioPlayback: stale chiptune load (gen {Gen} != {Current}) — aborting", gen, _loadGeneration);
+                        _isLoadingPlayback = false;
+                        return;
+                    }
+                    if (playPath == null)
+                    {
+                        Log.Warn("MediaPreviewControl: chiptune decode failed for {Path}", filePath);
+                        _isLoadingPlayback = false;
+                        _isPlaying = false;
+                        _progressTimer.Stop();
+                        UpdatePlayPauseIcon();
+                        PlayerStateChanged?.Invoke(this, EventArgs.Empty);
+                        return;
+                    }
+                }
+
+                _ownedAudioGen = gen;
+                AudioLevelService.Instance.MediaOpened -= OnAudioMediaOpened;
                 AudioLevelService.Instance.MediaOpened += OnAudioMediaOpened;
+                AudioLevelService.Instance.MediaEnded -= OnAudioMediaEnded;
                 AudioLevelService.Instance.MediaEnded += OnAudioMediaEnded;
+                AudioLevelService.Instance.MediaFailed -= OnAudioMediaFailed;
                 AudioLevelService.Instance.MediaFailed += OnAudioMediaFailed;
 #if AUDIO_ANALYSIS
                 VuMeter.AttachService(AudioLevelService.Instance);
 #endif
-                await AudioLevelService.Instance.LoadAndPlay(filePath);
                 _ownsAudioService = true;
+                await AudioLevelService.Instance.LoadAndPlay(playPath, forceStream: chiptune);
             }
             catch (Exception ex)
             {
@@ -211,12 +338,124 @@ namespace XFiles.Controls
             }
             finally
             {
-                _isLoadingPlayback = false;
+                if (gen == _loadGeneration)
+                    _isLoadingPlayback = false;
             }
         }
 
+        /// <summary>
+        /// Decode a chiptune source to a cached WAV and return its path.
+        /// Handles plain files and archive-entry addresses ("archive|internal").
+        /// </summary>
+        private async Task<string> PrepareChiptuneAsync(string source)
+        {
+            try
+            {
+                string ext = Path.GetExtension(source);
+                byte[] data = await ReadChiptuneSourceAsync(source);
+
+                var probe = RetroAudioPlayer.Probe(source, data, ext);
+                if (probe != null)
+                {
+                    _chiptuneTrackCount = probe.TrackCount;
+                    _chiptuneTitle = null;
+
+                    if (_chiptuneSource != null && _chiptuneTrack >= 0 && _chiptuneTrack < probe.TrackCount &&
+                        !string.IsNullOrEmpty(probe.Titles[_chiptuneTrack]))
+                    {
+                        _chiptuneTitle = probe.Titles[_chiptuneTrack];
+                        TitleText.Text = _chiptuneTitle;
+                    }
+                }
+
+                string wav = await RetroAudioPlayer.RenderToWavAsync(source, data, ext, _chiptuneTrack);
+                return wav;
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("MediaPreviewControl.PrepareChiptuneAsync failed for '{Path}': {Error}", source, ex.Message);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Track count for a chiptune source — used to decide play-vs-drill-in on
+        /// the confirm button. Returns 1 when the source cannot be probed.
+        /// </summary>
+        public async Task<int> GetChiptuneTrackCountAsync(string source)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(source) || !RetroAudioPlayer.IsChiptuneFile(source)) return 1;
+                string ext = Path.GetExtension(source);
+                byte[] data = await ReadChiptuneSourceAsync(source);
+                var info = RetroAudioPlayer.Probe(source, data, ext);
+                return info?.TrackCount ?? 1;
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("MediaPreviewControl.GetChiptuneTrackCountAsync failed for '{Path}': {Error}", source, ex.Message);
+                return 1;
+            }
+        }
+
+        /// <summary>
+        /// Decode a chiptune source to its cached WAV (for fullscreen playback).
+        /// Uses the currently selected subsong when the source matches, else track 0.
+        /// </summary>
+        public async Task<string> GetChiptuneWavPathAsync(string source)
+        {
+            if (_chiptuneSource == null || !string.Equals(_chiptuneSource, source, StringComparison.OrdinalIgnoreCase))
+            {
+                _chiptuneSource = source;
+                _chiptuneTrack = 0;
+            }
+            return await PrepareChiptuneAsync(source);
+        }
+
+        /// <summary>
+        /// Decode a specific chiptune subsong to its cached WAV. Selects the track
+        /// first so the probe/decoder render the right subsong.
+        /// </summary>
+        public async Task<string> GetChiptuneWavPathAsync(string source, int track)
+        {
+            _chiptuneSource = source;
+            _chiptuneTrack = Math.Max(0, track);
+            return await PrepareChiptuneAsync(source);
+        }
+
+        private async Task<byte[]> ReadChiptuneSourceAsync(string source)
+        {
+            if (RetroAudioPlayer.IsArchiveEntryPath(source))
+            {
+                int pipe = source.IndexOf('|');
+                string archivePath = source.Substring(0, pipe);
+                string internalPath = source.Substring(pipe + 1);
+
+                using (var stream = _archiveBrowser.OpenEntryStream(archivePath, internalPath))
+                {
+                    if (stream == null)
+                    {
+                        Log.Warn("MediaPreviewControl: cannot open archive entry '{Archive}|{Internal}'", archivePath, internalPath);
+                        return null;
+                    }
+                    using (var ms = new MemoryStream())
+                    {
+                        await stream.CopyToAsync(ms);
+                        return ms.ToArray();
+                    }
+                }
+            }
+            return null;
+        }
+
+        private int _loadGeneration;
+
         public void StopPlayer()
         {
+            _loadGeneration++;
+            _isLoadingPlayback = false;
+            _ownedAudioGen = -1;
             if (_isPlaying)
             {
                 if (_isAudioMode)
@@ -254,6 +493,9 @@ namespace XFiles.Controls
 
         public void Stop()
 		{
+			_loadGeneration++;
+			_isLoadingPlayback = false;
+			_ownedAudioGen = -1;
 			_progressTimer.Stop();
 			_metadataCts?.Cancel();
 			_metadataCts = null;
@@ -462,6 +704,11 @@ namespace XFiles.Controls
         {
             await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
             {
+                if (_ownedAudioGen != _loadGeneration)
+                {
+                    Log.Dbg("MediaPreviewControl: stale media-opened event (gen {Gen} != {Current}) — ignoring", _ownedAudioGen, _loadGeneration);
+                    return;
+                }
                 Log.Info("AudioLevelService: media opened — starting playback state");
                 _isLoadingPlayback = false;
                 _isPlaying = true;
@@ -482,6 +729,7 @@ namespace XFiles.Controls
                 VuMeter.DetachService();
 #endif
                 _isPlaying = false;
+                _isLoadingPlayback = false;
                 UpdatePlayPauseIcon();
                 _progressTimer.Stop();
                 ProgressSlider.Value = 100;
@@ -500,6 +748,7 @@ namespace XFiles.Controls
                 VuMeter.DetachService();
 #endif
                 _isPlaying = false;
+                _isLoadingPlayback = false;
                 _progressTimer.Stop();
                 UpdatePlayPauseIcon();
                 PlayerStateChanged?.Invoke(this, EventArgs.Empty);
@@ -636,10 +885,18 @@ namespace XFiles.Controls
                     _progressTimer.Stop();
                     ProgressSlider.Value = 100;
                     PlayerStateChanged?.Invoke(this, EventArgs.Empty);
-                    if (_isAudioMode)
-                        AudioTrackEnded?.Invoke(this, EventArgs.Empty);
-                    else
-                        VideoTrackEnded?.Invoke(this, EventArgs.Empty);
+                if (_isAudioMode)
+                {
+                    AudioLevelService.Instance.Stop();
+#if AUDIO_ANALYSIS
+                    VuMeter.DetachService();
+#endif
+                    AudioTrackEnded?.Invoke(this, EventArgs.Empty);
+                }
+                else
+                {
+                    VideoTrackEnded?.Invoke(this, EventArgs.Empty);
+                }
                 }
             }
         }
@@ -731,9 +988,12 @@ namespace XFiles.Controls
                 {
                     var filePath = _currentFilePath;
                     var position = AudioLevelService.Instance.Position;
+                    int chipTrack = RetroAudioPlayer.IsChiptuneFile(filePath)
+                        ? _chiptuneTrack
+                        : -1;
                     StopPlayer();
                     PlayerStateChanged?.Invoke(this, EventArgs.Empty);
-                    await millerPage.OpenFullscreenForFile(filePath, position);
+                    await millerPage.OpenFullscreenForFile(filePath, position, chipTrack);
                 }
             }
             else if (_currentSourceUri != null)

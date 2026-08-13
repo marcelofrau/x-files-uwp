@@ -230,6 +230,13 @@ namespace XFiles.Navigation
                 return;
             }
 
+            // Handle chiptune sources (multi-track files drill into a track list)
+            if (selected.IsChiptune && selected.ChiptuneTrackIndex < 0)
+            {
+                await DrillIntoChiptuneAsync(selected);
+                return;
+            }
+
             // Handle archives
             if (selected.IsArchive)
             {
@@ -331,6 +338,74 @@ namespace XFiles.Navigation
                 IsArchive = true,
                 ArchiveRootPath = archiveEntry.FullPath,
                 ArchiveInternalPath = "",
+                PortalKnownFolder = _current.PortalKnownFolder,
+                PortalPackageFullName = _current.PortalPackageFullName,
+                PortalPath = _current.PortalPath
+            };
+            _current.ClearSearch();
+
+            // Update preview: show first item of new current
+            await UpdatePreviewAsync();
+
+            ColumnsChanged?.Invoke();
+        }
+
+        /// <summary>
+        /// Drill into a chiptune source — probe its subsongs and show them as a
+        /// virtual track list (parent column | tracks).
+        /// </summary>
+        private async Task DrillIntoChiptuneAsync(FileEntry chipEntry)
+        {
+            ++_previewGeneration;
+            Log.Info("ColumnNavigator: drilling into chiptune {Path}", chipEntry.FullPath);
+
+            // Push current state to history
+            _history.Push(new ColumnState
+            {
+                Path = _current.Path,
+                Label = _current.Label,
+                SelectedIndex = _current.SelectedIndex,
+                Entries = _current.Entries
+            });
+
+            byte[] data = null;
+            if (!string.IsNullOrEmpty(chipEntry.ArchiveRootPath))
+            {
+                // Chiptune lives inside an archive (.rsn → .spc): read its bytes.
+                using (var stream = _archiveBrowser.OpenEntryStream(chipEntry.ArchiveRootPath, chipEntry.ArchiveInternalPath))
+                {
+                    if (stream != null)
+                    {
+                        using (var ms = new System.IO.MemoryStream())
+                        {
+                            await stream.CopyToAsync(ms);
+                            data = ms.ToArray();
+                        }
+                    }
+                }
+            }
+
+            var entries = ChiptuneBrowser.BuildTrackEntries(
+                chipEntry.FullPath, data, System.IO.Path.GetExtension(chipEntry.FullPath));
+
+            if (entries.Count <= 1)
+            {
+                // Single-track chiptune: drilling into a 1-item list is useless.
+                // Restore the pushed history and stay on the current column.
+                if (_history.Count > 0)
+                    _current = _history.Pop();
+                Log.Info("ColumnNavigator: single-track chiptune ({Count}) — skipping drill-in for {Path}", entries.Count, chipEntry.FullPath);
+                return;
+            }
+
+            _current = new ColumnState
+            {
+                Path = chipEntry.FullPath,
+                Label = chipEntry.Name,
+                Entries = entries.ToList(),
+                IsChiptune = true,
+                ArchiveRootPath = chipEntry.ArchiveRootPath,
+                ArchiveInternalPath = chipEntry.ArchiveInternalPath,
                 PortalKnownFolder = _current.PortalKnownFolder,
                 PortalPackageFullName = _current.PortalPackageFullName,
                 PortalPath = _current.PortalPath
@@ -723,6 +798,26 @@ namespace XFiles.Navigation
                 }
                 else
                 {
+                    // Chiptune subsong entry: route straight to the audio preview,
+                    // addressing the source + track so the media control can decode it.
+                    if (selected.IsChiptune && selected.ChiptuneTrackIndex >= 0)
+                    {
+                        string source = selected.ChiptuneSourcePath ?? selected.FullPath;
+                        _preview = new ColumnState
+                        {
+                            Path = selected.FullPath,
+                            Label = selected.Name,
+                            IsFilePreview = true,
+                            PreviewType = FilePreviewType.Audio,
+                            PreviewFilePath = source,
+                            PreviewFileType = $"Track {selected.ChiptuneTrackIndex + 1}",
+                            PreviewFileSize = selected.SizeBytes,
+                            PreviewChiptuneTrack = selected.ChiptuneTrackIndex,
+                            PreviewChiptuneSource = source
+                        };
+                        return;
+                    }
+
                     _preview = new ColumnState
                     {
                         Path = selected.FullPath,
@@ -1078,6 +1173,32 @@ namespace XFiles.Navigation
                     await _current.LoadArchiveDirectoryAsync(_archiveBrowser,
                         _current.ArchiveRootPath, _current.ArchiveInternalPath ?? "");
                 }
+                else if (_current.IsChiptune)
+                {
+                    // Virtual chiptune track-list column: the "directory" is really a
+                    // chiptune file, so re-probe it and rebuild the track entries
+                    // instead of scanning the file path as a directory.
+                    byte[] chipData = null;
+                    if (!string.IsNullOrEmpty(_current.ArchiveRootPath))
+                    {
+                        using (var stream = _archiveBrowser.OpenEntryStream(
+                            _current.ArchiveRootPath, _current.ArchiveInternalPath))
+                        {
+                            if (stream != null)
+                            {
+                                using (var ms = new System.IO.MemoryStream())
+                                {
+                                    await stream.CopyToAsync(ms);
+                                    chipData = ms.ToArray();
+                                }
+                            }
+                        }
+                    }
+                    var trackEntries = ChiptuneBrowser.BuildTrackEntries(
+                        _current.Path, chipData, System.IO.Path.GetExtension(_current.Path));
+                    if (trackEntries.Count > 0)
+                        _current.Entries = trackEntries.ToList();
+                }
                 else if (_current.IsPortal)
                 {
                     _portalBusy = true;
@@ -1204,6 +1325,7 @@ namespace XFiles.Navigation
         public bool IsSearchActive => !string.IsNullOrEmpty(SearchQuery);
         public bool IsFilePreview { get; set; }
         public bool IsArchive { get; set; }
+        public bool IsChiptune { get; set; }
         public bool IsFavorite { get; set; }
         public bool IsPortal { get; set; }
         public string PortalKnownFolder { get; set; }
@@ -1226,6 +1348,11 @@ namespace XFiles.Navigation
         public int PreviewPdfPageCount { get; set; }
         public string PreviewRomSystem { get; set; }
         public string PreviewRomIconPath { get; set; }
+
+        // Chiptune subsong preview: PreviewChiptuneTrack >= 0 means the current
+        // selection is a subsong of PreviewChiptuneSource (file or "archive|internal").
+        public int PreviewChiptuneTrack { get; set; } = -1;
+        public string PreviewChiptuneSource { get; set; }
 
         // Gamelist enrichment data
         public bool PreviewHasGamelistData { get; set; }

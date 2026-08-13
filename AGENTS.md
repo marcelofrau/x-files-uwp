@@ -125,7 +125,7 @@ PDF, QR share). Cross-cutting: `Metadata/*` (MusicBrainz/Deezer + SQLite cache),
 ```
 Unit tests (desktop, xUnit):
 ```powershell
-dotnet test tests/XFiles.Tests
+dotnet test tests/XFiles.Tests.csproj
 ```
 Deploy to Xbox: see `docs/DEPLOY-XBOX.md`.
 

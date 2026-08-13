@@ -59,13 +59,13 @@
                               ContainerContentChanging="OnActionContainerChanging">
                         <ListView.ItemTemplate>
                             <DataTemplate>
-                                <StackPanel Orientation="Horizontal" Padding="16,12">
+                                 <StackPanel Orientation="Horizontal" Padding="16,7">
                                     <Image Source="{Binding IconPath}"
                                            Width="24" Height="24"
                                            VerticalAlignment="Center" />
                                     <TextBlock Text="{Binding Label}"
                                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                                               FontSize="18"
+                                                   FontSize="16"
                                                VerticalAlignment="Center"
                                                Margin="14,0,0,0" />
                                 </StackPanel>

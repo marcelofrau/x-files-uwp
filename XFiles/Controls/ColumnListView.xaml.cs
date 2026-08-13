@@ -53,6 +53,11 @@ namespace XFiles.Controls
         public string ArchiveRootPath { get; set; }
         public string ArchiveInternalPath { get; set; }
 
+        // Chiptune subsong entry (multi-track chiptune drilled into a track list).
+        public bool IsChiptune { get; set; }
+        public int ChiptuneTrackIndex { get; set; } = -1;
+        public string ChiptuneSourcePath { get; set; }
+
         /// <summary>
         /// Root-level container entries (drives, portal browser roots, the AppData
         /// shortcut) — only offer Refresh / Disk Space and are excluded from batch.
@@ -127,11 +132,11 @@ namespace XFiles.Controls
             [".wav"]  = "filetype-audio-wav-24.png",
             [".ogg"]  = "filetype-audio-ogg-24.png",
             [".m4a"]  = "filetype-audio-m4a-24.png",
-            [".wma"]  = "filetype-audio-generic-24.png",
-            [".aac"]  = "filetype-audio-generic-24.png",
+            [".wma"]  = "filetype-audio-x-generic-24.png",
+            [".aac"]  = "filetype-audio-x-generic-24.png",
             [".opus"] = "filetype-audio-ogg-24.png",
-            [".mid"]  = "filetype-audio-generic-24.png",
-            [".midi"] = "filetype-audio-generic-24.png",
+            [".mid"]  = "filetype-audio-x-generic-24.png",
+            [".midi"] = "filetype-audio-x-generic-24.png",
 
             // Archives
             [".zip"]  = "file-archive-24.png",
@@ -243,6 +248,50 @@ namespace XFiles.Controls
             [".dll"]  = "filetype-application-executable-24.png",
             [".so"]   = "filetype-application-executable-24.png",
             [".dylib"] = "filetype-application-executable-24.png",
+            // Chiptune formats (game-music-emu + libopenmpt) — see RetroAudioPlayer.
+            [".spc"]  = "filetype-audio-x-generic-24.png",
+            [".gbs"]  = "filetype-audio-x-generic-24.png",
+            [".nsf"]  = "filetype-audio-x-generic-24.png",
+            [".nsfe"] = "filetype-audio-x-generic-24.png",
+            [".vgm"]  = "filetype-audio-x-generic-24.png",
+            [".vgz"]  = "filetype-audio-x-generic-24.png",
+            [".gym"]  = "filetype-audio-x-generic-24.png",
+            [".sid"]  = "filetype-audio-x-generic-24.png",
+            [".hes"]  = "filetype-audio-x-generic-24.png",
+            [".kss"]  = "filetype-audio-x-generic-24.png",
+            [".ay"]   = "filetype-audio-x-generic-24.png",
+            [".sap"]  = "filetype-audio-x-generic-24.png",
+            [".mod"]  = "filetype-audio-x-generic-24.png",
+            [".xm"]   = "filetype-audio-x-generic-24.png",
+            [".s3m"]  = "filetype-audio-x-generic-24.png",
+            [".it"]   = "filetype-audio-x-generic-24.png",
+            [".mtm"]  = "filetype-audio-x-generic-24.png",
+            [".stm"]  = "filetype-audio-x-generic-24.png",
+            [".669"]  = "filetype-audio-x-generic-24.png",
+            [".med"]  = "filetype-audio-x-generic-24.png",
+            [".far"]  = "filetype-audio-x-generic-24.png",
+            [".mdl"]  = "filetype-audio-x-generic-24.png",
+            [".ult"]  = "filetype-audio-x-generic-24.png",
+            [".ptm"]  = "filetype-audio-x-generic-24.png",
+            [".dbm"]  = "filetype-audio-x-generic-24.png",
+            [".dsm"]  = "filetype-audio-x-generic-24.png",
+            [".amf"]  = "filetype-audio-x-generic-24.png",
+            [".okt"]  = "filetype-audio-x-generic-24.png",
+            [".dmf"]  = "filetype-audio-x-generic-24.png",
+            [".ams"]  = "filetype-audio-x-generic-24.png",
+            [".mt2"]  = "filetype-audio-x-generic-24.png",
+            [".pol"]  = "filetype-audio-x-generic-24.png",
+            [".ppm"]  = "filetype-audio-x-generic-24.png",
+            [".cba"]  = "filetype-audio-x-generic-24.png",
+            [".psm"]  = "filetype-audio-x-generic-24.png",
+            [".j2b"]  = "filetype-audio-x-generic-24.png",
+            [".mpm"]  = "filetype-audio-x-generic-24.png",
+            [".umx"]  = "filetype-audio-x-generic-24.png",
+            [".mo3"]  = "filetype-audio-x-generic-24.png",
+            [".psf"]  = "filetype-audio-x-generic-24.png",
+            [".minipsf"] = "filetype-audio-x-generic-24.png",
+            [".usf"]  = "filetype-audio-x-generic-24.png",
+            [".miniusf"] = "filetype-audio-x-generic-24.png",
         };
 
         private static readonly string GenericIcon = "file-generic-24.png";
@@ -261,8 +310,11 @@ namespace XFiles.Controls
                             ? "ms-appx:///Assets/FileTypes/favorite-24.png"
                             : IsDirectory
                                 ? $"ms-appx:///Assets/FileTypes/folder-{_folderColor}-24.png"
-                                : (IsArchive ? "ms-appx:///Assets/FileTypes/file-archive-24.png"
-                                              : $"ms-appx:///Assets/FileTypes/{GetFileIcon(Name)}");
+                                : IsArchive
+                                    ? "ms-appx:///Assets/FileTypes/file-archive-24.png"
+                                    : IsChiptune && ChiptuneTrackIndex >= 0
+                                        ? "ms-appx:///Assets/FileTypes/filetype-audio-x-generic-24.png"
+                                        : $"ms-appx:///Assets/FileTypes/{GetFileIcon(Name)}";
 
         public static string GetFileIcon(string fileName)
         {
@@ -396,6 +448,9 @@ namespace XFiles.Controls
                     IsDrive = e.IsDrive,
                     IsArchive = e.IsArchive,
                     SizeBytes = e.SizeBytes,
+                    IsChiptune = e.IsChiptune,
+                    ChiptuneTrackIndex = e.ChiptuneTrackIndex,
+                    ChiptuneSourcePath = e.ChiptuneSourcePath,
                     IsDotDot = (e.Name == "..")
                 })
                 .ToList();

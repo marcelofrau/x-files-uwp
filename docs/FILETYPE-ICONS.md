@@ -37,6 +37,8 @@ All file-type icons are **24×24 PNG** (`-24.png`). Directory: `XFiles/Assets/Fi
 | `.png`/`.jpg`/`.jpeg`/`.bmp`/`.gif`/`.svg`/`.tiff`/`.tga`/`.webp`/`.heic` | `filetype-image-{…}-24.png` |
 | `.mp4`/`.avi`/`.mkv`/`.webm`/`.flv`/`.wmv`/`.mov`/`.m4v`/`.ts`/`.vob`/`.3gp` | `filetype-video-{…}-24.png` |
 | `.mp3`/`.flac`/`.wav`/`.ogg`/`.m4a`/`.wma`/`.aac`/`.opus`/`.mid`/`.midi` | `filetype-audio-{…}-24.png` |
+| Chiptune (`.nsf`/`.nsfe`/`.spc`/`.gbs`/`.vgm`/`.vgz`/`.gym`/`.sid`/`.hes`/`.kss`/`.ay`/`.sap`) | `filetype-audio-x-generic-24.png` |
+| Tracker (`.mod`/`.xm`/`.s3m`/`.it`/`.mtm`/`.stm`/`.669`/`.med`/`.far`/`.mdl`/`.ult`/`.ptm`/`.dbm`/`.dsm`/`.amf`/`.okt`/`.dmf`/`.ams`/`.mt2`/`.pol`/`.ppm`/`.cba`/`.psm`/`.j2b`/`.mpm`/`.umx`/`.mo3`) | `filetype-audio-x-generic-24.png` |
 | `.tar`/`.gz`/`.bz2`/`.xz`/`.tgz`/`.zst` | `filetype-application-tar/gzip-24.png` |
 | `.iso`/`.img`/`.cdi`/`.gdi`/`.cue`/`.nrg`/`.mdf`/`.ciso` | `filetype-application-iso-24.png` |
 | `.pdf` | `filetype-application-pdf-24.png` |
@@ -76,6 +78,7 @@ The "No Preview" (Unsupported) panel in the preview column shows the file's own 
 | `filetype-image-pbm-128.png` | `image-x-portable-bitmap` | pbm/pgm/ppm |
 | `filetype-image-tga-128.png` | `image-x-tga` | tga |
 | `filetype-image-jpeg-128.png` | `image-jpeg` | raw/cr2/nef/arw |
+| `filetype-audio-x-generic-128.png` | `audio-x-generic` | chiptune/tracker formats |
 | `file-generic-128.png` | `application-octet-stream` | unmapped |
 
 ## Adding a New File-Type Icon

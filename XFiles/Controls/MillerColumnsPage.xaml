@@ -1126,6 +1126,7 @@
         <controls:PdfFullScreenOverlay x:Name="PdfFullScreen" />
         <controls:ImageFullScreenOverlay x:Name="ImageFullScreen" />
         <controls:TextEditorOverlay x:Name="TextEditorOverlayControl" />
+        <controls:UrlDownloadOverlay x:Name="UrlDownloadOverlayControl" />
         <controls:SettingsPage x:Name="SettingsPageControl" />
 
         <!-- Fullscreen audio overlay -->

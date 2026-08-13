@@ -168,6 +168,11 @@ namespace XFiles.Controls
                 },
                 (k) => { FileActionSheetControl.ForwardDPad(k); return true; }));
 
+            _router.Add(new OverlayHandler(57,
+                () => UrlDownloadOverlayControl.IsOpen,
+                (k, r) => { UrlDownloadOverlayControl.HandleDPad(k, r); return true; },
+                (k) => { UrlDownloadOverlayControl.HandleButton(k); return true; }));
+
             _router.Add(new OverlayHandler(45,
                 () => LogsPageControl.IsVisible,
                 (k, r) => { LogsPageControl.HandleDPad(k); return true; },
@@ -425,6 +430,16 @@ namespace XFiles.Controls
                 {
                     _ = PlayAudioAsync(selected);
                 }
+                else if (selected.IsChiptune && selected.ChiptuneTrackIndex >= 0)
+                {
+                    // Chiptune subsong selected from a drilled-in track list.
+                    PlayChiptuneTrack(selected);
+                }
+                else if (selected.IsChiptune)
+                {
+                    // Chiptune file: single-track plays directly, multi-track drills in.
+                    _ = OnChiptuneFileConfirmAsync(selected);
+                }
                 else if (FilePreviewService.IsVideoFile(ext))
                 {
                     _ = PlayVideoAsync(selected);
@@ -507,6 +522,41 @@ namespace XFiles.Controls
                 MediaPreview.LoadFile(path);
                 MediaPreview.TogglePlayPause();
                 UpdateMediaPlayerFocusUI();
+            }
+        }
+
+        /// <summary>
+        /// Play a specific chiptune subsong (selected from a drilled-in track list).
+        /// </summary>
+        private void PlayChiptuneTrack(EntryViewModel selected)
+        {
+            string source = selected.ChiptuneSourcePath ?? selected.FullPath;
+            int track = selected.ChiptuneTrackIndex;
+            Log.Info("OnConfirm: playing chiptune track {Track} of {Path}", track + 1, source);
+            _mediaLoadTimer.Stop();
+            _pendingMediaPath = null;
+            MediaPreview.LoadChiptuneTrack(source, track);
+            MediaPreview.TogglePlayPause();
+            UpdateMediaPlayerFocusUI();
+        }
+
+        /// <summary>
+        /// Chiptune file confirm: probe track count — single-track plays directly,
+        /// multi-track drills into the track list.
+        /// </summary>
+        private async Task OnChiptuneFileConfirmAsync(EntryViewModel selected)
+        {
+            int trackCount = await MediaPreview.GetChiptuneTrackCountAsync(selected.FullPath);
+            if (trackCount <= 1)
+            {
+                Log.Info("OnConfirm: single-track chiptune — playing {Path}", selected.FullPath);
+                await PlayAudioAsync(selected);
+            }
+            else
+            {
+                Log.Info("OnConfirm: multi-track chiptune ({Count} tracks) — drilling into {Path}", trackCount, selected.FullPath);
+                _slideFromRight = true;
+                await _navigator.DrillInAsync();
             }
         }
 
@@ -734,10 +784,24 @@ namespace XFiles.Controls
                     return;
                 }
 
-                if (FilePreviewService.IsAudioFile(ext))
+                if (FilePreviewService.IsAudioFile(ext) || FilePreviewService.IsChiptuneFile(ext))
                 {
                     Log.Info("OnRefresh: audio file → fullscreen");
                     _ = OpenAudioFullscreenAsync(selected);
+                    return;
+                }
+
+                // Chiptune subsong selected from a drilled-in track list: open the
+                // fullscreen player on that specific track instead of refreshing.
+                if (selected.IsChiptune && selected.ChiptuneTrackIndex >= 0)
+                {
+                    string source = selected.ChiptuneSourcePath ?? selected.FullPath;
+                    var pos = (_isMediaPlayerActive && MediaPreview.IsAudioMode)
+                        ? MediaPreview.CurrentPosition
+                        : TimeSpan.Zero;
+                    Log.Info("OnRefresh: chiptune track → fullscreen ({Track} of {Source})",
+                        selected.ChiptuneTrackIndex + 1, source);
+                    _ = OpenFullscreenForFile(source, pos, selected.ChiptuneTrackIndex);
                     return;
                 }
             }
@@ -1125,6 +1189,7 @@ namespace XFiles.Controls
         {
             if (ControlsGuideControl.IsVisible) { ControlsGuideControl.HandleStick(x, y); return; }
             if (TextEditorOverlayControl.IsOpen) { TextEditorOverlayControl.HandleLeftStick(x, y); return; }
+            if (UrlDownloadOverlayControl.IsOpen) { UrlDownloadOverlayControl.HandleLeftStick(x, y); return; }
             if (LogsPageControl.IsVisible) { LogsPageControl.HandleLeftStick(x, y); return; }
             if (ShareDialogControl.IsVisible) return;
             if (FolderBrowserDialogControl.IsOpen)
@@ -1169,6 +1234,7 @@ namespace XFiles.Controls
         {
             if (ControlsGuideControl.IsVisible) { ControlsGuideControl.HandleStick(x, y); return; }
             if (TextEditorOverlayControl.IsOpen) { TextEditorOverlayControl.HandleStick(x, y); return; }
+            if (UrlDownloadOverlayControl.IsOpen) { UrlDownloadOverlayControl.HandleRightStick(x, y); return; }
             if (LogsPageControl.IsVisible) { LogsPageControl.HandleRightStick(x, y); return; }
             if (ShareDialogControl.IsVisible) return;
             if (FolderBrowserDialogControl.IsOpen)

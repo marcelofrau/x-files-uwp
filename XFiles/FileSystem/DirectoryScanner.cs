@@ -6,6 +6,7 @@ using System.Runtime.InteropServices.ComTypes;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.Storage;
+using XFiles.Audio;
 
 namespace XFiles.FileSystem
 {
@@ -167,9 +168,13 @@ namespace XFiles.FileSystem
             return await ScanDirectoryAsync(path, token);
         }
 
-        private static List<FileEntry> ScanRoot()
+        /// <summary>
+        /// Enumerates local drive letters only - no AppData, favorites or portal
+        /// entries. Used by the move destination dialog.
+        /// </summary>
+        public static List<FileEntry> ScanDrivesOnly()
         {
-            Log.Verb("Scanning root — enumerating logical drives via GetLogicalDrives");
+            Log.Verb("Scanning drives - enumerating logical drives via GetLogicalDrives");
             var entries = new List<FileEntry>();
 
             uint drives = GetLogicalDrives();
@@ -188,6 +193,13 @@ namespace XFiles.FileSystem
                     Log.Verb("  Drive found: {Drive}", driveLetter);
                 }
             }
+
+            return entries;
+        }
+
+        private static List<FileEntry> ScanRoot()
+        {
+            var entries = ScanDrivesOnly();
 
             try
             {
@@ -257,7 +269,8 @@ namespace XFiles.FileSystem
                             FullPath = fullPath,
                             IsDirectory = isDir,
                             SizeBytes = size,
-                            IsArchive = !isDir && ArchiveExtensions.Contains(Path.GetExtension(name))
+                            IsArchive = !isDir && ArchiveExtensions.Contains(Path.GetExtension(name)),
+                            IsChiptune = !isDir && Audio.RetroAudioPlayer.IsChiptuneFile(name)
                         };
 
                         if (isDir) dirs.Add(entry);

@@ -1,0 +1,8 @@
+﻿miniz <https://github.com/richgel999/miniz> v3.1.1 (2026-02-03)
+
+Modifications for OpenMPT:
+ *  #define MINIZ_NO_STDIO has been set because OpenMPT does not need stdio
+    functionality and miniz relies on secure-CRT file i/o functions in windows
+    builds which are not available on all mingw64 versions.
+ *  Modifications have been marked by "// OpenMPT"
+ *  No further changes have been made.

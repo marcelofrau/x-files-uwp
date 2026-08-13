@@ -25,7 +25,8 @@ namespace XFiles.FileSystem
             string ext = Path.GetExtension(filePath);
             return string.Equals(ext, ".zip", StringComparison.OrdinalIgnoreCase) ||
                    string.Equals(ext, ".7z", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(ext, ".rar", StringComparison.OrdinalIgnoreCase);
+                   string.Equals(ext, ".rar", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(ext, ".rsn", StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>

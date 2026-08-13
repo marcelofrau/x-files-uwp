@@ -19,6 +19,13 @@ namespace XFiles.FileSystem
         // Virtual entry (e.g. Favorites pseudo-folder in root)
         public bool IsVirtual { get; set; }
 
+        // Chiptune subsong entry produced by ChiptuneBrowser when a multi-track
+        // chiptune is drilled into. ChiptuneTrackIndex is the subsong index to play;
+        // ChiptuneSourcePath is the source file (or "archive|internal" address).
+        public bool IsChiptune { get; set; }
+        public int ChiptuneTrackIndex { get; set; } = -1;
+        public string ChiptuneSourcePath { get; set; }
+
         // Visual-only divider row in a column list (not navigable/selectable)
         public bool IsSeparator { get; set; }
 

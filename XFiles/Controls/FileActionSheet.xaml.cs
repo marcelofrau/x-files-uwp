@@ -184,6 +184,8 @@ namespace XFiles.Controls
             bool isFolder = entry.IsDirectory;
             bool isPortal = entry.IsPortal;
             bool isDotDot = entry.Name == "..";
+            // Chiptune subsong entry — never allow rename/delete/move on the source.
+            bool isChiptuneTrack = entry.IsChiptune && entry.ChiptuneTrackIndex >= 0;
 
             if (isDotDot)
             {
@@ -357,9 +359,48 @@ namespace XFiles.Controls
 
                 actions.Add(new ActionItem
                 {
+                    Action = FileAction.DiskSpace,
+                    Label = "Disk Space",
+                    IconPath = IconBase + ActionDiskSpace,
+                    LabelBrush = accent
+                });
+
+                if (!isPortal && !isInArchive)
+                {
+                    actions.Add(new ActionItem
+                    {
+                        Action = FileAction.Download,
+                        Label = "Download from URL",
+                        IconPath = IconBase + ActionDownload,
+                        LabelBrush = accent
+                    });
+                }
+            }
+            else if (isChiptuneTrack)
+            {
+                // Chiptune subsong entries only offer safe actions (no rename/delete
+                // on the underlying source file).
+                actions.Add(new ActionItem
+                {
                     Action = FileAction.Refresh,
                     Label = "Refresh",
                     IconPath = IconBase + ActionRefresh,
+                    LabelBrush = accent
+                });
+
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.Copy,
+                    Label = "Copy",
+                    IconPath = IconBase + ActionCopy,
+                    LabelBrush = accent
+                });
+
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.DiskSpace,
+                    Label = "Disk Space",
+                    IconPath = IconBase + ActionDiskSpace,
                     LabelBrush = accent
                 });
             }
@@ -425,6 +466,14 @@ namespace XFiles.Controls
                     Action = FileAction.Share,
                     Label = "Share",
                     IconPath = IconBase + ActionShare,
+                    LabelBrush = accent
+                });
+
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.Download,
+                    Label = "Download from URL",
+                    IconPath = IconBase + ActionDownload,
                     LabelBrush = accent
                 });
 

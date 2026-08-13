@@ -23,7 +23,7 @@ namespace XFiles.Metadata
             _internetAvailable = available;
         }
 
-        public async Task<MetadataMatch> ResolveAsync(string filePath, CancellationToken ct = default)
+        public async Task<MetadataMatch> ResolveAsync(string filePath, CancellationToken ct = default, bool skipOnline = false)
         {
             Log.Dbg("MetadataGuesser: resolving {Path}", filePath);
 
@@ -68,7 +68,7 @@ namespace XFiles.Metadata
                     return cached;
                 }
 
-                if (!local.HasAlbumArt && _internetAvailable)
+                if (!local.HasAlbumArt && _internetAvailable && !skipOnline)
                 {
                     string coverKey = MetadataCache.BuildCoverArtKey(local.Artist, local.Album);
                     var existingCover = await _cache.GetCoverArtAsync(local.Artist, local.Album);
@@ -80,7 +80,7 @@ namespace XFiles.Metadata
                 }
             }
 
-            if (_internetAvailable)
+            if (_internetAvailable && !skipOnline)
             {
                 var online = await _deezer.SearchAsync(
                     local.Artist, local.Title, local.Album, ct);

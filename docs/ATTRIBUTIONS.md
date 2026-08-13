@@ -15,6 +15,31 @@ Full license text: https://creativecommons.org/licenses/by-sa/4.0/legalcode
 
 ## UI/Control Icons
 
+### game-music-emu (console chiptune decode)
+
+- **Source:** https://github.com/libgme/game-music-emu
+- **License:** LGPL-2.1-or-later (static link OK — app is GPL-3.0)
+- **Copyright:** game-music-emu contributors
+- **Used for:** console chip formats inside `Native/RetroAudio` (NSF/SPC/GBS/VGM/SID/HES/KSS/AY/SAP)
+- **How obtained:** vendored in `Native/third_party/game-music-emu-0.6.5`
+
+### libopenmpt (tracker module decode)
+
+- **Source:** https://github.com/OpenMPT/openmpt
+- **License:** BSD-3-Clause
+- **Copyright:** OpenMPT Project / libopenmpt contributors
+- **Used for:** MOD-family tracker formats inside `Native/RetroAudio` (mod/xm/s3m/it + more)
+- **How obtained:** vendored in `Native/third_party/libopenmpt-0.8.7`
+
+### zlib / miniz (compressed chiptune inflate)
+
+- **Source:** https://zlib.net / https://github.com/richgel999/miniz
+- **License:** zlib / MIT
+- **Used for:** `.vgz` (gzip VGM) and `.j2b` inflate in `Native/RetroAudio`
+- **How obtained:** vendored in `Native/third_party/zlib-1.3.1`, `libopenmpt/include/miniz`
+
+## Gamepad Button Icons
+
 ### Personal Icons8-derived set
 
 - **Source:** `F:\workspace\icons8-personal-set\`

@@ -38,6 +38,24 @@ namespace XFiles.Controls
         {
             HideAllPreviewPanels();
 
+            // If the incoming preview is NOT audio/video media, the inline player
+            // must stop — otherwise the AudioGraph keeps playing with no UI to stop it
+            // (music continues in the "background" after navigating to a folder/file).
+            bool isMediaPreview = _navigator.Preview != null && _navigator.Preview.IsFilePreview &&
+                (_navigator.Preview.PreviewType == FilePreviewType.Audio ||
+                 _navigator.Preview.PreviewType == FilePreviewType.Video);
+
+            if (!isMediaPreview && MediaPreview.IsPlayerActive)
+            {
+                Log.Info("UpdatePreviewColumn: non-media preview — stopping inline player");
+                _mediaLoadTimer.Stop();
+                _pendingMediaPath = null;
+                MediaPreview.StopPlayer();
+                _isMediaPlayerActive = false;
+                UpdateMediaPlayerFocusUI();
+                UpdateDisplayRequest();
+            }
+
             // At root: QuickRefPanel is visible, skip preview update
             if (_navigator.Parent == null)
             {
@@ -148,6 +166,19 @@ namespace XFiles.Controls
                     case FilePreviewType.Audio:
                         string audioPath = _navigator.Preview.PreviewFilePath;
                         Log.Dbg("UpdatePreviewColumn: media type={Type} path={Path}", _navigator.Preview.PreviewType, audioPath);
+
+                        if (_navigator.Preview.PreviewChiptuneTrack >= 0)
+                        {
+                            // Chiptune subsong selected from a drilled-in track list:
+                            // decode that specific track from the source.
+                            PreviewStatus.Text = _navigator.Preview.PreviewFileType;
+                            PreviewMediaPanel.Visibility = Visibility.Visible;
+                            MediaPreview.LoadChiptuneTrack(
+                                _navigator.Preview.PreviewChiptuneSource,
+                                _navigator.Preview.PreviewChiptuneTrack);
+                            break;
+                        }
+
                         PreviewStatus.Text = _navigator.Preview.PreviewFileType;
                         PreviewMediaPanel.Visibility = Visibility.Visible;
                         MediaPreview.ShowPlaceholder(audioPath);
@@ -297,7 +328,8 @@ namespace XFiles.Controls
                             string previewPath = _navigator.Preview.PreviewFilePath ?? "";
                             bool isInsideArchive = previewPath.Contains("|");
                             string fileExt = System.IO.Path.GetExtension(previewPath);
-                            bool isMedia = FilePreviewService.IsAudioFile(fileExt) || FilePreviewService.IsVideoFile(fileExt);
+                            bool isMedia = FilePreviewService.IsAudioFile(fileExt) || FilePreviewService.IsVideoFile(fileExt)
+                                || FilePreviewService.IsChiptuneFile(fileExt);
 
                             if (isInsideArchive && isMedia)
                             {
@@ -422,6 +454,9 @@ namespace XFiles.Controls
                 SizeBytes = e.SizeBytes,
                 ArchiveRootPath = e.ArchiveRootPath,
                 ArchiveInternalPath = e.ArchiveInternalPath,
+                IsChiptune = e.IsChiptune,
+                ChiptuneTrackIndex = e.ChiptuneTrackIndex,
+                ChiptuneSourcePath = e.ChiptuneSourcePath,
                 IsDotDot = (e.Name == "..")
             }).ToList();
 
@@ -447,6 +482,9 @@ namespace XFiles.Controls
                 SizeBytes = e.SizeBytes,
                 ArchiveRootPath = e.ArchiveRootPath,
                 ArchiveInternalPath = e.ArchiveInternalPath,
+                IsChiptune = e.IsChiptune,
+                ChiptuneTrackIndex = e.ChiptuneTrackIndex,
+                ChiptuneSourcePath = e.ChiptuneSourcePath,
                 IsHighlighted = (highlightName != null && e.Name == highlightName),
                 IsDotDot = (e.Name == "..")
             }).ToList();
@@ -473,6 +511,9 @@ namespace XFiles.Controls
                 SizeBytes = e.SizeBytes,
                 ArchiveRootPath = e.ArchiveRootPath,
                 ArchiveInternalPath = e.ArchiveInternalPath,
+                IsChiptune = e.IsChiptune,
+                ChiptuneTrackIndex = e.ChiptuneTrackIndex,
+                ChiptuneSourcePath = e.ChiptuneSourcePath,
                 IsDotDot = (e.Name == "..")
             }).ToList();
 

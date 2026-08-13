@@ -43,17 +43,25 @@ namespace XFiles.Controls
         private async void LoadDirectory(string path)
         {
             Log.Info("FolderBrowserDialog.LoadDirectory: {Path}", path ?? "(root)");
+
+            // Only real local disk paths are supported. Portals, archives and any
+            // other non-local path fall back to the drives root.
+            if (!string.IsNullOrEmpty(path) && !IsLocalDiskPath(path))
+            {
+                Log.Warn("FolderBrowserDialog.LoadDirectory: non-local path {Path} - showing drives", path);
+                path = null;
+            }
+
             _currentPath = path;
 
-            string dirName = string.IsNullOrEmpty(path)
-                ? "\\\\ (Drives)"
-                : System.IO.Path.GetFileName(path.TrimEnd('\\'));
+            bool isRoot = string.IsNullOrEmpty(path);
+            string dirName = isRoot ? "Drives" : System.IO.Path.GetFileName(path.TrimEnd('\\'));
             if (string.IsNullOrEmpty(dirName))
                 dirName = path.TrimEnd('\\');
-            CurrentPathText.Text = path ?? "\\\\ (Drives)";
+            CurrentPathText.Text = isRoot ? "Drives" : path;
 
             // Update Move Here label with current folder name
-            string moveHereName = string.IsNullOrEmpty(path)
+            string moveHereName = isRoot
                 ? "Move Here"
                 : $"Move Here ({dirName})";
             FooterALabel.Text = moveHereName;
@@ -71,20 +79,44 @@ namespace XFiles.Controls
             List<FileEntry> rawEntries;
             try
             {
-                rawEntries = await DirectoryScanner.ScanAsync(path);
+                rawEntries = isRoot
+                    ? DirectoryScanner.ScanDrivesOnly()
+                    : await DirectoryScanner.ScanAsync(path);
             }
             catch (Exception ex)
             {
-                Log.Err("FolderBrowserDialog.LoadDirectory: scan failed", ex);
-                CurrentPathText.Text = $"ERROR: {ex.Message}";
-                _entries.Clear();
-                _entries.Add(moveHereEntry);
-                EntryList.ItemsSource = _entries;
-                EntryList.SelectedIndex = 0;
+                if (isRoot)
+                {
+                    Log.Err("FolderBrowserDialog.LoadDirectory: root scan failed", ex);
+                    CurrentPathText.Text = $"ERROR: {ex.Message}";
+                    _entries.Clear();
+                    _entries.Add(moveHereEntry);
+                    EntryList.ItemsSource = _entries;
+                    EntryList.SelectedIndex = 0;
+                    return;
+                }
+                Log.Warn("FolderBrowserDialog.LoadDirectory: scan failed for {Path} - showing drives", ex, path);
+                LoadDirectory(null);
                 return;
             }
 
             _entries = new List<BrowserEntry> { moveHereEntry };
+
+            // Quick jump to the drives root from any folder
+            if (!isRoot)
+            {
+                _entries.Add(new BrowserEntry
+                {
+                    Name = "Drives",
+                    FullPath = null,
+                    IsDirectory = true,
+                    IsDrive = false,
+                    Icon = "ms-appx:///Assets/Views/FileActionSheet/fileactionsheet-hdd-48.png"
+                });
+            }
+
+            string driveIcon = "ms-appx:///Assets/Views/FileActionSheet/fileactionsheet-hdd-48.png";
+            string folderIcon = $"ms-appx:///Assets/FileTypes/folder-{EntryViewModel.FolderColor}-24.png";
             _entries.AddRange(rawEntries
                 .Where(e => e.IsDirectory)
                 .OrderBy(e => e.IsDrive ? 0 : 1)
@@ -95,13 +127,27 @@ namespace XFiles.Controls
                     FullPath = e.FullPath,
                     IsDirectory = true,
                     IsDrive = e.IsDrive,
-                    Icon = $"ms-appx:///Assets/FileTypes/folder-{EntryViewModel.FolderColor}-24.png"
+                    Icon = e.IsDrive ? driveIcon : folderIcon
                 }));
 
             EntryList.ItemsSource = _entries;
             EntryList.SelectedIndex = 0;
 
             EntryList.Focus(FocusState.Programmatic);
+        }
+
+        private static bool IsLocalDiskPath(string path)
+        {
+            try
+            {
+                return System.IO.Path.IsPathRooted(path)
+                    && System.IO.Path.GetPathRoot(path) != null
+                    && System.IO.Directory.Exists(path);
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private void EntryList_SelectionChanged(object sender, SelectionChangedEventArgs e)
