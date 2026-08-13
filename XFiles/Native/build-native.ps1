@@ -37,7 +37,22 @@ $psfDir = Join-Path $vendorRoot "aosdk_psf"
 $usfRoot = Join-Path $vendorRoot "lazyusf"
 
 if (-not (Test-Path $VcVarsAll)) {
-    Write-Error "vcvars64.bat not found at '$VcVarsAll'. Pass -VcVarsAll with the correct path."
+    # Auto-detect via vswhere when the configured path is missing (e.g. CI runners
+    # where VS edition/version differs from the local default).
+    $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+    if (Test-Path $vswhere) {
+        $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>$null
+        if ($vsPath) {
+            $candidate = Join-Path ($vsPath | Select-Object -First 1) "VC\Auxiliary\Build\vcvars64.bat"
+            if (Test-Path $candidate) {
+                Write-Host "Auto-detected MSVC toolset via vswhere: $candidate"
+                $VcVarsAll = $candidate
+            }
+        }
+    }
+}
+if (-not (Test-Path $VcVarsAll)) {
+    Write-Error "vcvars64.bat not found at '$VcVarsAll' and vswhere auto-detection failed. Pass -VcVarsAll with the correct path."
 }
 
 Write-Host "== RetroAudio native build =="

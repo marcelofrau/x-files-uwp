@@ -65,6 +65,10 @@ jobs:
       - name: Restore NuGet packages
         run: nuget restore XFiles.sln
 
+      - name: Build native RetroAudio.dll
+        shell: pwsh
+        run: .\XFiles\Native\build-native.ps1
+
       - name: Build
         shell: pwsh
         run: |
