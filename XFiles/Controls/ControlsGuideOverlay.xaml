@@ -13,7 +13,7 @@
 
             <Grid Grid.Row="0">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="440" />
+                    <ColumnDefinition Width="340" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
@@ -35,7 +35,7 @@
                             CornerRadius="12"
                             Padding="20">
                         <Image Source="ms-appx:///Assets/GamepadButtons/full-gamepad.png"
-                               Width="340"
+                               Width="220"
                                HorizontalAlignment="Center"
                                Stretch="Uniform" />
                     </Border>
