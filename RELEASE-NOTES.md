@@ -1,4 +1,4 @@
-> 🎮 **Chiptune playback + background music.** v1.8.0 brings native console-music playback (PSF, USF, SPC, GBS, NSF, VGM/VGZ, SID, trackers) with streaming play-while-render, and a background-music feature with a bundled default track — all gamepad-first, all built for Xbox.
+> 🎮 **Chiptune playback + background music.** v1.5.0 brings native console-music playback (PSF, USF, SPC, GBS, NSF, VGM/VGZ, SID, trackers) with streaming play-while-render, and a background-music feature with a bundled default track — all gamepad-first, all built for Xbox.
 
 ---
 
