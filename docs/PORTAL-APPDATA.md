@@ -80,10 +80,8 @@ curl -k -u <portal-user>:<portal-pass> "https://<XBOX-IP>:11443/ext/smb/develope
 
 # 2. SSH into the console and unlock
 ssh DevToolsUser@<XBOX-IP>
-checknetisolation
-loopbackexempt -a -n=XFiles.Xbox_jgz7qwhvc5jpc
-checknetisolation
-loopbackexempt -s    # verify → look for X-Files
+checknetisolation loopbackexempt -a -n=XFiles.Xbox_jgz7qwhvc5jpc
+checknetisolation loopbackexempt -s    # verify → look for X-Files
 exit
 ```
 
@@ -215,8 +213,7 @@ The default for X-Files is `XFiles.Xbox_jgz7qwhvc5jpc`.
 
 ```pwsh
 ssh DevToolsUser@<XBOX-IP>
-checknetisolation
-loopbackexempt -a -n=XFiles.Xbox_jgz7qwhvc5jpc
+checknetisolation loopbackexempt -a -n=XFiles.Xbox_jgz7qwhvc5jpc
 # → OK.
 exit
 ```
@@ -225,8 +222,7 @@ exit
 
 ```pwsh
 ssh DevToolsUser@<XBOX-IP>
-checknetisolation
-loopbackexempt -s
+checknetisolation loopbackexempt -s
 # → look for: Name: XFiles.Xbox_jgz7qwhvc5jpc
 exit
 ```
