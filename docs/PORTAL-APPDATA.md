@@ -80,8 +80,10 @@ curl -k -u <portal-user>:<portal-pass> "https://<XBOX-IP>:11443/ext/smb/develope
 
 # 2. SSH into the console and unlock
 ssh DevToolsUser@<XBOX-IP>
-checknetisolation loopbackexempt -a -n=XFiles.Xbox_jgz7qwhvc5jpc
-checknetisolation loopbackexempt -s    # verify → look for X-Files
+checknetisolation
+loopbackexempt -a -n=XFiles.Xbox_jgz7qwhvc5jpc
+checknetisolation
+loopbackexempt -s    # verify → look for X-Files
 exit
 ```
 
@@ -183,7 +185,7 @@ ways to get it:
 **Via REST (same as xbHomebrewVault does):**
 
 ```pwsh
-curl -k -u <portal-user>:<portal-password> "https://<XBOX-IP>:11443/ext/smb/developerfolder"
+curl -k -u <username>:<password> "https://<xbox ip>:11443/ext/smb/developerfolder"
 # → {"Password":"<rotating-ssh-password>", ...}
 ```
 
@@ -203,7 +205,7 @@ The "hash" in `XFiles.Xbox_jgz7qwhvc5jpc` (`jgz7qwhvc5jpc`) is the
 hardcode it — the portal returns the full PFN:
 
 ```pwsh
-curl -k -u <portal-user>:<portal-password> "https://<XBOX-IP>:11443/api/app/packagemanager/packages"
+curl -k -u <username>:<password> "https://<xbox ip>:11443/api/app/packagemanager/packages"
 # find the object where "Name" == "XFiles.Xbox", read "PackageFamilyName"
 ```
 
@@ -213,7 +215,8 @@ The default for X-Files is `XFiles.Xbox_jgz7qwhvc5jpc`.
 
 ```pwsh
 ssh DevToolsUser@<XBOX-IP>
-checknetisolation loopbackexempt -a -n=XFiles.Xbox_jgz7qwhvc5jpc
+checknetisolation
+loopbackexempt -a -n=XFiles.Xbox_jgz7qwhvc5jpc
 # → OK.
 exit
 ```
@@ -222,7 +225,8 @@ exit
 
 ```pwsh
 ssh DevToolsUser@<XBOX-IP>
-checknetisolation loopbackexempt -s
+checknetisolation
+loopbackexempt -s
 # → look for: Name: XFiles.Xbox_jgz7qwhvc5jpc
 exit
 ```
