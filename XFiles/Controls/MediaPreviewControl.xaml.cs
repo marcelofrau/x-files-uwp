@@ -31,6 +31,17 @@ namespace XFiles.Controls
         private Uri _currentSourceUri;
         private bool _isPlaying;
         private bool _isLoadingPlayback;
+
+        private string _lastLoadedSource;
+        private int _lastLoadedTrack = -1;
+
+        private void SetLoadingState(bool value)
+        {
+            _isLoadingPlayback = value;
+            if (LoadingSpinner == null) return;
+            LoadingSpinner.IsActive = value;
+            LoadingSpinner.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
+        }
         private bool _hasEnded;
         private MetadataGuesser _metadataGuesser;
         private CancellationTokenSource _metadataCts;
@@ -169,7 +180,13 @@ namespace XFiles.Controls
         {
             if (string.IsNullOrEmpty(source)) return;
             Log.Dbg("MediaPreviewControl.LoadChiptuneTrack: enter for {Source} track={Track} (wasPlaying={WasPlaying})", source, track, _isPlaying);
-            Stop();
+
+            // When the AudioGraph is already live (inline next/prev mid-playback),
+            // skip the full teardown: SwapSourceAsync keeps the graph and swaps the
+            // source node, avoiding the slow MF graph stop+recreate on Xbox.
+            bool swap = _ownsAudioService && AudioLevelService.Instance.IsGraphLive;
+            if (!swap)
+                Stop();
             _hasEnded = false;
 
             _currentFilePath = source;
@@ -249,7 +266,7 @@ namespace XFiles.Controls
                 AlbumText.Text = "";
                 AlbumText.Visibility = Visibility.Collapsed;
                 _ = LoadMetadataAsync(filePath);
-                _isLoadingPlayback = true;
+                SetLoadingState(true);
                 _ = AudioLevelService.Instance.SwapSourceAsync(filePath);
             }
             else
@@ -293,6 +310,16 @@ namespace XFiles.Controls
         {
             Log.Info("MediaPreviewControl.StartAudioPlayback: starting for {Path}", filePath ?? "(null)");
             int gen = ++_loadGeneration;
+            if (!string.IsNullOrEmpty(_lastLoadedSource) &&
+                !string.Equals(_lastLoadedSource, filePath, StringComparison.OrdinalIgnoreCase))
+            {
+                // Free the native session lock held by the render of the track being
+                // left, so the new decode does not wait for the orphaned render to
+                // finish (that was the multi-second gap on next/prev).
+                RetroAudioPlayer.CancelChiptuneRender(_lastLoadedSource, _lastLoadedTrack);
+            }
+            _lastLoadedSource = filePath;
+            _lastLoadedTrack = _chiptuneTrack;
             ResetProgressUi();
             try
             {
@@ -301,17 +328,18 @@ namespace XFiles.Controls
                 if (RetroAudioPlayer.IsChiptuneFile(filePath))
                 {
                     chiptune = true;
-                    playPath = await PrepareChiptuneAsync(filePath);
+                    playPath = await StartChiptuneStreamingAsync(filePath);
                     if (gen != _loadGeneration)
                     {
                         Log.Dbg("MediaPreviewControl.StartAudioPlayback: stale chiptune load (gen {Gen} != {Current}) — aborting", gen, _loadGeneration);
-                        _isLoadingPlayback = false;
+                        SetLoadingState(false);
                         return;
                     }
                     if (playPath == null)
                     {
                         Log.Warn("MediaPreviewControl: chiptune decode failed for {Path}", filePath);
-                        _isLoadingPlayback = false;
+                        AudioLevelService.Instance.Stop(); // swap path left the old track playing
+                        SetLoadingState(false);
                         _isPlaying = false;
                         _progressTimer.Stop();
                         UpdatePlayPauseIcon();
@@ -331,11 +359,15 @@ namespace XFiles.Controls
                 VuMeter.AttachService(AudioLevelService.Instance);
 #endif
                 _ownsAudioService = true;
-                await AudioLevelService.Instance.LoadAndPlay(playPath, forceStream: chiptune);
+                if (AudioLevelService.Instance.IsGraphLive)
+                    await AudioLevelService.Instance.SwapSourceAsync(playPath, forceStream: chiptune);
+                else
+                    await AudioLevelService.Instance.LoadAndPlay(playPath, forceStream: chiptune);
             }
             catch (Exception ex)
             {
                 Log.Warn("Failed to start audio playback", ex);
+                AudioLevelService.Instance.Stop();
                 _isPlaying = false;
                 _progressTimer.Stop();
                 UpdatePlayPauseIcon();
@@ -344,7 +376,7 @@ namespace XFiles.Controls
             finally
             {
                 if (gen == _loadGeneration)
-                    _isLoadingPlayback = false;
+                    SetLoadingState(false);
             }
         }
 
@@ -379,6 +411,43 @@ namespace XFiles.Controls
             catch (Exception ex)
             {
                 Log.Warn("MediaPreviewControl.PrepareChiptuneAsync failed for '{Path}': {Error}", source, ex.Message);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Decode a chiptune source to its cached WAV path. Returns immediately once
+        /// enough audio exists to start streaming playback (the renderer keeps filling
+        /// the cache file in the background), instead of waiting for the full render.
+        /// Handles plain files and archive-entry addresses ("archive|internal").
+        /// </summary>
+        private async Task<string> StartChiptuneStreamingAsync(string source)
+        {
+            try
+            {
+                string ext = Path.GetExtension(source);
+                byte[] data = await ReadChiptuneSourceAsync(source);
+
+                var probe = RetroAudioPlayer.Probe(source, data, ext);
+                if (probe != null)
+                {
+                    _chiptuneTrackCount = probe.TrackCount;
+                    _chiptuneTitle = null;
+
+                    if (_chiptuneSource != null && _chiptuneTrack >= 0 && _chiptuneTrack < probe.TrackCount &&
+                        !string.IsNullOrEmpty(probe.Titles[_chiptuneTrack]))
+                    {
+                        _chiptuneTitle = probe.Titles[_chiptuneTrack];
+                        TitleText.Text = _chiptuneTitle;
+                    }
+                }
+
+                var handle = RetroAudioPlayer.StartChiptuneStream(source, data, ext, _chiptuneTrack);
+                return await RetroAudioPlayer.WaitForStreamableWavAsync(handle);
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("MediaPreviewControl.StartChiptuneStreamingAsync failed for '{Path}': {Error}", source, ex.Message);
                 return null;
             }
         }
@@ -419,6 +488,21 @@ namespace XFiles.Controls
         }
 
         /// <summary>
+        /// Streaming variant of <see cref="GetChiptuneWavPathAsync(string)"/>: returns
+        /// as soon as enough audio exists to start playback, render continues in
+        /// background.
+        /// </summary>
+        public async Task<string> GetChiptuneStreamingWavPathAsync(string source)
+        {
+            if (_chiptuneSource == null || !string.Equals(_chiptuneSource, source, StringComparison.OrdinalIgnoreCase))
+            {
+                _chiptuneSource = source;
+                _chiptuneTrack = 0;
+            }
+            return await StartChiptuneStreamingAsync(source);
+        }
+
+        /// <summary>
         /// Decode a specific chiptune subsong to its cached WAV. Selects the track
         /// first so the probe/decoder render the right subsong.
         /// </summary>
@@ -427,6 +511,20 @@ namespace XFiles.Controls
             _chiptuneSource = source;
             _chiptuneTrack = Math.Max(0, track);
             return await PrepareChiptuneAsync(source);
+        }
+
+        /// <summary>
+        /// Streaming variant of <see cref="GetChiptuneWavPathAsync(string, int)"/>:
+        /// returns the WAV path as soon as enough audio exists to start playback
+        /// (the render continues filling the cache in the background). Used by the
+        /// fullscreen player so PSF/USF starts in ~1s instead of after the full
+        /// render.
+        /// </summary>
+        public async Task<string> GetChiptuneStreamingWavPathAsync(string source, int track)
+        {
+            _chiptuneSource = source;
+            _chiptuneTrack = Math.Max(0, track);
+            return await StartChiptuneStreamingAsync(source);
         }
 
         private async Task<byte[]> ReadChiptuneSourceAsync(string source)
@@ -459,8 +557,9 @@ namespace XFiles.Controls
         public void StopPlayer()
         {
             _loadGeneration++;
-            _isLoadingPlayback = false;
+            SetLoadingState(false);
             _ownedAudioGen = -1;
+            ResetProgressUi();
             if (_isPlaying)
             {
                 if (_isAudioMode)
@@ -499,7 +598,7 @@ namespace XFiles.Controls
         public void Stop()
 		{
 			_loadGeneration++;
-			_isLoadingPlayback = false;
+			SetLoadingState(false);
 			_ownedAudioGen = -1;
 			_progressTimer.Stop();
 			_metadataCts?.Cancel();
@@ -572,20 +671,30 @@ namespace XFiles.Controls
                 Player.Play();
         }
 
+        private void BeginPlaybackLoad()
+        {
+            if (_isLoadingPlayback) return;
+            if (string.IsNullOrEmpty(_currentFilePath)) return;
+            SetLoadingState(true);
+            _hasEnded = false;
+            _isPlaying = true;
+            UpdatePlayPauseIcon();
+            _progressTimer.Start();
+            PlayerStateChanged?.Invoke(this, EventArgs.Empty);
+            _ = StartAudioPlayback(_currentFilePath);
+        }
+
         public void TogglePlayPause()
         {
             if (_isAudioMode)
             {
                 if (string.IsNullOrEmpty(_currentFilePath)) return;
-                if (!AudioLevelService.Instance.IsFileLoaded && !_isLoadingPlayback)
+                bool sourceChanged =
+                    !string.Equals(_currentFilePath, _lastLoadedSource, StringComparison.OrdinalIgnoreCase) ||
+                    _chiptuneTrack != _lastLoadedTrack;
+                if ((!AudioLevelService.Instance.IsFileLoaded || sourceChanged) && !_isLoadingPlayback)
                 {
-                    _isLoadingPlayback = true;
-                    _hasEnded = false;
-                    _isPlaying = true;
-                    UpdatePlayPauseIcon();
-                    _progressTimer.Start();
-                    PlayerStateChanged?.Invoke(this, EventArgs.Empty);
-                    _ = StartAudioPlayback(_currentFilePath);
+                    BeginPlaybackLoad();
                     return;
                 }
                 if (_isLoadingPlayback) return;
@@ -715,7 +824,7 @@ namespace XFiles.Controls
                     return;
                 }
                 Log.Info("AudioLevelService: media opened — starting playback state");
-                _isLoadingPlayback = false;
+                SetLoadingState(false);
                 _isPlaying = true;
                 UpdatePlayPauseIcon();
                 _progressTimer.Start();
@@ -728,13 +837,21 @@ namespace XFiles.Controls
         {
             await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
             {
+                if (_isLoadingPlayback)
+                {
+                    // The old track hit EOF because its render was cancelled when we
+                    // navigated; a new track is about to swap in. Ignoring prevents
+                    // the premature auto-advance cascade.
+                    Log.Dbg("MediaPreview: old track ended while a new load is pending — ignoring");
+                    return;
+                }
                 Log.Info("MediaPreview: {File} — audio ended, cleaning up, firing AudioTrackEnded", _currentFilePath ?? "(null)");
                 AudioLevelService.Instance.Stop();
 #if AUDIO_ANALYSIS
                 VuMeter.DetachService();
 #endif
                 _isPlaying = false;
-                _isLoadingPlayback = false;
+                SetLoadingState(false);
                 UpdatePlayPauseIcon();
                 _progressTimer.Stop();
                 ProgressSlider.Value = 100;
@@ -747,13 +864,18 @@ namespace XFiles.Controls
         {
             await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
             {
+                if (_isLoadingPlayback)
+                {
+                    Log.Dbg("MediaPreview: old track failed while a new load is pending — ignoring");
+                    return;
+                }
                 Log.Info("AudioLevelService media failed — cleaning up");
                 AudioLevelService.Instance.Stop();
 #if AUDIO_ANALYSIS
                 VuMeter.DetachService();
 #endif
                 _isPlaying = false;
-                _isLoadingPlayback = false;
+                SetLoadingState(false);
                 _progressTimer.Stop();
                 UpdatePlayPauseIcon();
                 PlayerStateChanged?.Invoke(this, EventArgs.Empty);

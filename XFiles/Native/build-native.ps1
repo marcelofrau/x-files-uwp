@@ -80,7 +80,7 @@ if exist "%OBJ%\*.obj" del /Q "%OBJ%\*.obj"
 rem ---------- compile game-music-emu ----------
 echo [gme] compiling...
 for %%F in ("%GME%\*.cpp") do (
-    cl /nologo /c /O2 /MT /EHsc /std:c++17 /W2 /DNDEBUG /DBLARGG_LITTLE_ENDIAN=1 /DVGM_YM2612_NUKED /DHAVE_ZLIB_H /I "%GME%" /I "%ZLIBDIR%" "%%F" /Fo"%OBJ%\gme_%%~nF.obj" /Fd"%OBJ%\gme.pdb"
+    cl /nologo /c /O2 /MT /EHsc /std:c++17 /W2 /DNDEBUG /DBLARGG_LITTLE_ENDIAN=1 /DVGM_YM2612_GENS /DHAVE_ZLIB_H /I "%GME%" /I "%ZLIBDIR%" "%%F" /Fo"%OBJ%\gme_%%~nF.obj" /Fd"%OBJ%\gme.pdb"
     if errorlevel 1 exit /b 1
 )
 rem emu2413 (VRC7 OPLL) - plain C sources under gme\ext

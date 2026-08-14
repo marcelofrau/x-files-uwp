@@ -27,6 +27,35 @@ extern "C" {
 #include "../third_party/lazyusf/usf.h"
 
 /* ------------------------------------------------------------------ */
+/* Session serialization                                               */
+/* ------------------------------------------------------------------ */
+
+/* The aosdk PSF engine (and lazyusf boot) reads uninitialized heap
+   memory while it renders - the content of that memory is whatever the
+   process's previous allocation activity left behind. When a second RA
+   handle is alive in the same process (e.g. a next-track prefetch
+   rendering while the current track streams), the leftover heap data is
+   the OTHER track's fresh PCM, which mixes into the render as additive
+   white noise (measured -40dB on desktop, audible on Xbox). Two handles
+   corrupt each other even when their calls are serialized, because the
+   pollution is persistent state, not a call race. GME is immune (fully
+   per-instance state); PSF is corrupted by ANY concurrent session.
+   Fix: hold ONE process-wide lock for the whole session (RA_Open..RA_Free)
+   so only a single emulator instance is ever live at a time. SRWLOCK
+   has a static initializer (CRITICAL_SECTION does not). */
+static SRWLOCK g_raSessLock = SRWLOCK_INIT;
+
+static void ra_sess_acquire(void)
+{
+    AcquireSRWLockExclusive(&g_raSessLock);
+}
+
+static void ra_sess_release(void)
+{
+    ReleaseSRWLockExclusive(&g_raSessLock);
+}
+
+/* ------------------------------------------------------------------ */
 /* Format routing tables                                               */
 /* ------------------------------------------------------------------ */
 
@@ -488,11 +517,17 @@ RA_API int RA_Open(const void* data, size_t size, const char* ext,
     *outHandle = NULL;
     if (data == NULL || size == 0) return RA_ERR_OPEN;
 
+    ra_sess_acquire();
+
     char e[16] = "";
     if (ext != NULL) lowerExt(e, sizeof(e), ext);
 
     RA_Handle* h = (RA_Handle*)calloc(1, sizeof(RA_Handle));
-    if (h == NULL) return RA_ERR_NOMEM;
+    if (h == NULL)
+    {
+        ra_sess_release();
+        return RA_ERR_NOMEM;
+    }
     h->sampleRate = RA_SAMPLE_RATE;
     h->channels = RA_CHANNELS;
 
@@ -503,6 +538,7 @@ RA_API int RA_Open(const void* data, size_t size, const char* ext,
         if (err != NULL || gme == NULL)
         {
             free(h);
+            ra_sess_release();
             return RA_ERR_OPEN;
         }
         h->backend = BACKEND_GME;
@@ -530,6 +566,7 @@ RA_API int RA_Open(const void* data, size_t size, const char* ext,
         if (mod == NULL)
         {
             free(h);
+            ra_sess_release();
             return RA_ERR_OPEN;
         }
         openmpt_module_set_repeat_count(mod, 0); /* play through once */
@@ -543,6 +580,7 @@ RA_API int RA_Open(const void* data, size_t size, const char* ext,
         if (rc != RA_OK)
         {
             free(h);
+            ra_sess_release();
             return rc;
         }
     }
@@ -553,12 +591,14 @@ RA_API int RA_Open(const void* data, size_t size, const char* ext,
         if (rc != RA_OK)
         {
             free(h);
+            ra_sess_release();
             return rc;
         }
     }
     else
     {
         free(h);
+        ra_sess_release();
         return RA_ERR_FORMAT;
     }
 
@@ -581,6 +621,7 @@ RA_API void RA_Free(RA_Handle* h)
         free(h->usf);
     }
     free(h);
+    ra_sess_release();
 }
 
 RA_API int RA_GetSampleRate(RA_Handle* h)

@@ -1,9 +1,12 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Windows.Storage;
 using XFiles.FileSystem;
@@ -20,6 +23,46 @@ namespace XFiles.Audio
         public int Channels { get; set; }
         public string[] Titles { get; set; }
         public double[] DurationsSec { get; set; }
+    }
+
+    /// <summary>
+    /// In-flight chiptune render that the caller may start playing before the
+    /// full track is decoded. The renderer writes the WAV progressively (header
+    /// pre-declares the full size, body pre-allocated) so the audio graph can
+    /// stream it while <see cref="BytesWritten"/> grows toward the declared size.
+    /// </summary>
+    public sealed class ChiptuneRenderHandle
+    {
+        private long _bytesWritten;
+
+        /// <summary>Final cache path of the render (exists once the render completes).</summary>
+        public string WavPath { get; }
+
+        /// <summary>Cache key (sourceKey+track) this handle reports progress for.</summary>
+        internal string CacheKey { get; }
+
+        /// <summary>Completes when the full render lands (path) or failed (null).</summary>
+        public Task<string> RenderTask => _renderTask;
+
+        /// <summary>Data bytes written so far (approximate, updated per render chunk).</summary>
+        public long BytesWritten => Volatile.Read(ref _bytesWritten);
+
+        internal void ReportProgress(long bytes)
+        {
+            Volatile.Write(ref _bytesWritten, bytes);
+            if (!string.IsNullOrEmpty(CacheKey)) RetroAudioPlayer._renderProgress[CacheKey] = bytes;
+        }
+
+        internal void SetTask(Task<string> task) { _renderTask = task; }
+
+        private Task<string> _renderTask;
+
+        internal ChiptuneRenderHandle(string wavPath, string cacheKey, Task<string> renderTask)
+        {
+            WavPath = wavPath;
+            CacheKey = cacheKey;
+            _renderTask = renderTask;
+        }
     }
 
     /// <summary>
@@ -182,19 +225,125 @@ namespace XFiles.Audio
             }
         }
 
+        private static readonly ConcurrentDictionary<string, Task<string>> _inflightRenders =
+            new ConcurrentDictionary<string, Task<string>>();
+
+        private static readonly ConcurrentDictionary<string, CancellationTokenSource> _inflightCancels =
+            new ConcurrentDictionary<string, CancellationTokenSource>();
+
+        internal static readonly ConcurrentDictionary<string, long> _renderProgress =
+            new ConcurrentDictionary<string, long>();
+
         /// <summary>
         /// Render track to a cached WAV file. Returns the WAV path or null on failure.
         /// sourceKey is used for the cache key (file path or "archive|internal").
+        /// Concurrent renders of the same source+track share a single task.
         /// </summary>
         public static Task<string> RenderToWavAsync(string sourceKey, byte[] data, string extension, int track)
         {
-            return Task.Run(() => RenderToWavSync(sourceKey, data, extension, track));
+            string cacheKey = ComputeCacheKey(sourceKey, track);
+            string wavPath = GetCachedWavPath(cacheKey);
+            if (File.Exists(wavPath) && IsValidCachedWav(wavPath))
+                return Task.FromResult(wavPath);
+            return GetOrStartRenderTask(cacheKey, sourceKey, data, extension, track);
         }
 
-        private static string RenderToWavSync(string sourceKey, byte[] data, string extension, int track)
+        /// <summary>
+        /// Start a streaming-capable render. Returns immediately with a handle that
+        /// lets the caller poll <see cref="ChiptuneRenderHandle.BytesWritten"/> and
+        /// start playback as soon as enough audio exists, while the render continues
+        /// filling the cache file in the background.
+        /// </summary>
+        public static ChiptuneRenderHandle StartChiptuneStream(string sourceKey, byte[] data, string extension, int track)
+        {
+            string cacheKey = ComputeCacheKey(sourceKey, track);
+            string wavPath = GetCachedWavPath(cacheKey);
+            if (File.Exists(wavPath) && IsValidCachedWav(wavPath))
+                return new ChiptuneRenderHandle(wavPath, cacheKey, Task.FromResult(wavPath));
+
+            var handle = new ChiptuneRenderHandle(wavPath, cacheKey, null);
+            Task<string> task = GetOrStartRenderTask(cacheKey, sourceKey, data, extension, track, handle.ReportProgress);
+            handle.SetTask(task);
+            return handle;
+        }
+
+        /// <summary>
+        /// Request cancellation of an in-flight render for a source+track. The render
+        /// loop aborts at the next chunk boundary and the native session lock (held
+        /// for the whole open→free session) is released, so a navigation does not
+        /// wait for the orphaned render of the track being left. No-op when the
+        /// render already completed or was never started.
+        /// </summary>
+        public static void CancelChiptuneRender(string sourceKey, int track)
+        {
+            if (string.IsNullOrEmpty(sourceKey)) return;
+            string cacheKey = ComputeCacheKey(sourceKey, track);
+            if (_inflightCancels.TryGetValue(cacheKey, out var cts))
+            {
+                Log.Dbg("RetroAudioPlayer: cancelling in-flight render '{Key}' track {Track}", sourceKey, track);
+                cts.Cancel();
+            }
+        }
+
+        /// <summary>
+        /// Wait until a streaming render has enough audio to start playback (or the
+        /// render completes/fails). Cached renders return immediately.
+        /// </summary>
+        public static async Task<string> WaitForStreamableWavAsync(ChiptuneRenderHandle handle, double minSeconds = 8.0)
+        {
+            if (handle.RenderTask.IsCompleted)
+                return await handle.RenderTask;
+
+            long minBytes = (long)(minSeconds * 44100 * 2 * 2); // conservative: 44100 Hz stereo 16-bit
+            var sw = Stopwatch.StartNew();
+            while (!handle.RenderTask.IsCompleted)
+            {
+                long shared = 0;
+                if (!string.IsNullOrEmpty(handle.CacheKey)) _renderProgress.TryGetValue(handle.CacheKey, out shared);
+                long written = Math.Max(handle.BytesWritten, shared);
+                if (written >= minBytes)
+                    return handle.WavPath;
+                if (sw.ElapsedMilliseconds > 60000)
+                {
+                    Log.Warn("RetroAudioPlayer.WaitForStreamableWavAsync: timeout waiting for render of '{Path}'", handle.WavPath);
+                    break;
+                }
+                await Task.Delay(100);
+            }
+            return await handle.RenderTask;
+        }
+
+        private static Task<string> GetOrStartRenderTask(string cacheKey, string sourceKey, byte[] data, string extension, int track, Action<long> onProgress = null)
+        {
+            if (_inflightRenders.TryGetValue(cacheKey, out var existing) &&
+                (!_inflightCancels.TryGetValue(cacheKey, out var existingCts) || !existingCts.IsCancellationRequested))
+            {
+                return existing;
+            }
+
+            _inflightRenders.TryRemove(cacheKey, out _);
+            _inflightCancels.TryRemove(cacheKey, out _);
+            _renderProgress.TryRemove(cacheKey, out _);
+
+            var cts = new CancellationTokenSource();
+            _inflightCancels[cacheKey] = cts;
+            Task<string> task = _inflightRenders.GetOrAdd(cacheKey, _ =>
+                Task.Run(() => RenderToWavSync(sourceKey, data, extension, track, onProgress, cts.Token)));
+            _ = task.ContinueWith(completedTask =>
+            {
+                _inflightRenders.TryRemove(cacheKey, out _);
+                _inflightCancels.TryRemove(cacheKey, out _);
+                _renderProgress.TryRemove(cacheKey, out _);
+            }, TaskContinuationOptions.ExecuteSynchronously);
+            return task;
+        }
+
+        private static string RenderToWavSync(string sourceKey, byte[] data, string extension, int track, Action<long> onProgress = null, CancellationToken ct = default)
         {
             try
             {
+                if (ct.IsCancellationRequested) return null;
+
                 if (data == null)
                 {
                     if (IsArchiveEntryPath(sourceKey)) return null;
@@ -240,22 +389,36 @@ namespace XFiles.Audio
                     }
 
                     Directory.CreateDirectory(_cacheDir ?? (_cacheDir = CacheDir()));
-                CleanupOldCache();
-                    WriteWav(handle, wavPath, track);
-                    if (new FileInfo(wavPath).Length <= 44)
+                    CleanupOldCache();
+
+                    string tmpPath = wavPath + ".tmp";
+                    if (!WriteWav(handle, tmpPath, track, onProgress, ct))
                     {
-                        // Header-only WAV: render produced no audio (decode failed or
-                        // track dead). Don't cache a broken file — the next play would
-                        // load a 0-second track and look like a hang.
+                        if (ct.IsCancellationRequested)
+                        {
+                            // Leave the partial .tmp in place: the departing graph may
+                            // still be reading it, and it is not a valid cache anyway
+                            // (cleaned up or overwritten by the next render).
+                            Log.Info("RetroAudioPlayer: render of '{Key}' cancelled — partial cache kept", sourceKey);
+                            return null;
+                        }
+                        // Render failed mid-track: discard the partial file so it can't
+                        // poison the cache (a pre-allocated, header-complete partial would
+                        // otherwise play as silence and look like a hang).
                         Log.Warn("RetroAudioPlayer: render produced no audio for '{Key}' — discarding", sourceKey);
-                        try { File.Delete(wavPath); } catch (Exception delEx) { Log.Dbg("RetroAudioPlayer: failed to delete empty WAV: {Error}", delEx.Message); }
+                        try { File.Delete(tmpPath); } catch (Exception delEx) { Log.Dbg("RetroAudioPlayer: failed to delete empty WAV: {Error}", delEx.Message); }
                         return null;
                     }
+
                     int scanRate = RA_GetSampleRate(handle);
                     if (scanRate <= 0) scanRate = 44100;
-                    ScanWavSilenceRuns(wavPath, scanRate);
+                    ScanWavSilenceRuns(tmpPath, scanRate);
 
                     RA_EndTrack(handle);
+
+                    try { if (File.Exists(wavPath)) File.Delete(wavPath); } catch (Exception oldEx) { Log.Dbg("RetroAudioPlayer: failed to remove stale cache {Path}: {Error}", wavPath, oldEx.Message); }
+                    File.Move(tmpPath, wavPath);
+
                     Log.Info("RetroAudioPlayer: rendered track {Track} of '{Key}' -> {Wav}", track, sourceKey, wavPath);
                     return wavPath;
                 }
@@ -271,7 +434,16 @@ namespace XFiles.Audio
             }
         }
 
-        private static void WriteWav(IntPtr handle, string wavPath, int track)
+        /// <summary>
+        /// Render the track into tmpPath as a WAV whose header pre-declares the full
+        /// size and whose body is pre-allocated, so streaming readers see a
+        /// complete-length file while the renderer fills it progressively (the
+        /// renderer runs far faster than realtime, so playback never catches up).
+        /// Truncates the pre-allocated tail and patches the header to the actual
+        /// written size before returning. Returns false when the render fails or
+        /// produces no audio (caller discards the partial file).
+        /// </summary>
+        private static bool WriteWav(IntPtr handle, string tmpPath, int track, Action<long> onProgress = null, CancellationToken ct = default)
         {
             int sampleRate = RA_GetSampleRate(handle);
             int channels = RA_GetChannels(handle);
@@ -281,60 +453,93 @@ namespace XFiles.Audio
             int bytesPerFrame = channels * 2;
             long maxFrames = MaxSeconds * (long)sampleRate;
 
-            using (var fs = new FileStream(wavPath, FileMode.Create, FileAccess.ReadWrite))
+            double durSec = RA_GetDurationSec(handle, track);
+            long declaredBytes = 0;
+            if (durSec > 0 && durSec < MaxSeconds)
+                declaredBytes = (long)(durSec * sampleRate) * bytesPerFrame;
+            if (declaredBytes <= 0) declaredBytes = maxFrames * bytesPerFrame;
+
+            using (var fs = new FileStream(tmpPath, FileMode.Create, FileAccess.ReadWrite, FileShare.Read))
             using (var bw = new BinaryWriter(fs))
             {
-                // Header placeholders — patched after render.
-                bw.Write(Encoding.ASCII.GetBytes("RIFF"));
-                bw.Write(0u);
-                bw.Write(Encoding.ASCII.GetBytes("WAVE"));
-                bw.Write(Encoding.ASCII.GetBytes("fmt "));
-                bw.Write(16u);
-                bw.Write((ushort)1);
-                bw.Write((ushort)channels);
-                bw.Write(sampleRate);
-                bw.Write(sampleRate * bytesPerFrame);
-                bw.Write((ushort)bytesPerFrame);
-                bw.Write((ushort)16);
-                bw.Write(Encoding.ASCII.GetBytes("data"));
-                bw.Write(0u);
+                // Header pre-patched to the declared size so the parser sees the full
+                // duration and stream Length is full while the body is still being filled.
+                WriteWavHeader(bw, declaredBytes, sampleRate, channels, bytesPerFrame);
+                fs.SetLength(44 + declaredBytes);
 
                 int chunkBytes = ChunkFrames * bytesPerFrame;
                 IntPtr pcm = Marshal.AllocHGlobal(chunkBytes);
                 try
                 {
                     byte[] buffer = new byte[chunkBytes];
-                    long totalBytes = 0;
                     long dataBytes = 0;
 
-                    while (totalBytes < maxFrames * bytesPerFrame)
+                    while (dataBytes < declaredBytes)
                     {
+                        if (ct.IsCancellationRequested)
+                        {
+                            Log.Dbg("RetroAudioPlayer: render cancelled — stopping write of {Tmp}", tmpPath);
+                            return false;
+                        }
+
                         int written;
                         int ended;
                         int rrc = RA_RenderFrames(handle, pcm, ChunkFrames, out written, out ended);
-                        if (rrc != 0 || written <= 0) break;
+                        if (rrc != 0 || written <= 0)
+                        {
+                            Log.Warn("RetroAudioPlayer: RA_RenderFrames rc={Rc} written={Written} — render aborted", rrc, written);
+                            return false;
+                        }
 
                         int byteCount = written * bytesPerFrame;
                         Marshal.Copy(pcm, buffer, 0, byteCount);
                         bw.Write(buffer, 0, byteCount);
                         dataBytes += byteCount;
-                        totalBytes += byteCount;
+                        onProgress?.Invoke(dataBytes);
 
                         if (ended != 0) break;
+
+                        // Make written data visible to the streaming reader promptly.
+                        // The audio graph opens this file while it is still growing, so
+                        // every chunk must reach the OS — a 4096-byte FileStream buffer
+                        // tail would let the graph read pre-allocated zeros instead of
+                        // the just-rendered audio (audible as a gap/click on Xbox).
+                        fs.Flush();
                     }
+
+                    if (dataBytes <= 0) return false;
+
+                    // Truncate the pre-allocated tail and patch the header to the actual size.
+                    fs.SetLength(44 + dataBytes);
+                    bw.Seek(4, SeekOrigin.Begin);
+                    bw.Write((uint)(dataBytes + 36));
+                    bw.Seek(40, SeekOrigin.Begin);
+                    bw.Write((uint)dataBytes);
+                    bw.Flush();
+                    return true;
                 }
                 finally
                 {
                     Marshal.FreeHGlobal(pcm);
                 }
-
-                long fileLength = fs.Length;
-                bw.Seek(4, SeekOrigin.Begin);
-                bw.Write((uint)(fileLength - 8));
-                bw.Seek(40, SeekOrigin.Begin);
-                bw.Write((uint)(fileLength - 44));
-                bw.Flush();
             }
+        }
+
+        private static void WriteWavHeader(BinaryWriter bw, long dataBytes, int sampleRate, int channels, int bytesPerFrame)
+        {
+            bw.Write(Encoding.ASCII.GetBytes("RIFF"));
+            bw.Write((uint)(dataBytes + 36));
+            bw.Write(Encoding.ASCII.GetBytes("WAVE"));
+            bw.Write(Encoding.ASCII.GetBytes("fmt "));
+            bw.Write(16u);
+            bw.Write((ushort)1);
+            bw.Write((ushort)channels);
+            bw.Write(sampleRate);
+            bw.Write(sampleRate * bytesPerFrame);
+            bw.Write((ushort)bytesPerFrame);
+            bw.Write((ushort)16);
+            bw.Write(Encoding.ASCII.GetBytes("data"));
+            bw.Write((uint)dataBytes);
         }
 
         private static string GetTrackTitle(IntPtr handle, int track)
@@ -454,7 +659,12 @@ namespace XFiles.Audio
                     if (!(hdr[8] == 'W' && hdr[9] == 'A' && hdr[10] == 'V' && hdr[11] == 'E')) return false;
                     if (!(hdr[36] == 'd' && hdr[37] == 'a' && hdr[38] == 't' && hdr[39] == 'a')) return false;
                     uint dataBytes = (uint)(hdr[40] | (hdr[41] << 8) | (hdr[42] << 16) | (hdr[43] << 24));
-                    return dataBytes > 0;
+                    if (dataBytes <= 0) return false;
+                    // The renderer pre-declares the full size in the header before the
+                    // body is written; a valid cache entry must contain the declared
+                    // data (a truncated write or a crashed streaming render leaves a
+                    // header-complete but body-short file that would play as silence).
+                    return fs.Length >= dataBytes + 44L;
                 }
             }
             catch (Exception ex)
@@ -512,6 +722,20 @@ namespace XFiles.Audio
             return Path.Combine(_cacheDir ?? (_cacheDir = CacheDir()), cacheKey + ".wav");
         }
 
+        /// <summary>
+        /// Resolve the path that currently exists for a chiptune render. A streaming
+        /// render writes to "{final}.tmp" until it completes, then renames it to the
+        /// final path — the audio loader must open whichever exists at open time.
+        /// </summary>
+        public static string ResolveChiptuneWavPath(string finalPath)
+        {
+            if (string.IsNullOrEmpty(finalPath)) return finalPath;
+            if (File.Exists(finalPath)) return finalPath;
+            string tmp = finalPath + ".tmp";
+            if (File.Exists(tmp)) return tmp;
+            return finalPath;
+        }
+
         private const int CacheRetentionHours = 24;
         private static DateTime _lastCacheCleanupUtc = DateTime.MinValue;
 
@@ -529,6 +753,18 @@ namespace XFiles.Audio
 
                 string dir = CacheDir();
                 if (!Directory.Exists(dir)) return;
+
+                // Stale .tmp files only exist mid-render; a leftover after a crash is
+                // garbage regardless of age and would confuse streaming loads.
+                try
+                {
+                    foreach (string file in Directory.GetFiles(dir, "*.tmp"))
+                    {
+                        try { File.Delete(file); }
+                        catch (Exception ex) { Log.Dbg("RetroAudioPlayer.CleanupOldCache: failed to delete stale tmp {Path}: {Error}", file, ex.Message); }
+                    }
+                }
+                catch (Exception ex) { Log.Warn("RetroAudioPlayer.CleanupOldCache: tmp cleanup failed: {Error}", ex.Message); }
 
                 var cutoff = now - TimeSpan.FromHours(CacheRetentionHours);
                 foreach (string file in Directory.GetFiles(dir, "*.wav"))
@@ -559,7 +795,7 @@ namespace XFiles.Audio
         {
             using (var sha = SHA1.Create())
             {
-                byte[] hash = sha.ComputeHash(Encoding.UTF8.GetBytes(sourceKey + "|" + track + "|render3"));
+                byte[] hash = sha.ComputeHash(Encoding.UTF8.GetBytes(sourceKey + "|" + track + "|render5"));
                 var sb = new StringBuilder(16);
                 foreach (byte b in hash) sb.Append(b.ToString("x2"));
                 return sb.ToString().Substring(0, 16);

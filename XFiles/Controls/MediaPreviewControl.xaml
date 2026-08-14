@@ -99,6 +99,11 @@
                              IsTabStop="False" IsHitTestVisible="False"
                              Foreground="{StaticResource XFilesAccentBrush}"
                              Background="#2A2D33" />
+                <ProgressRing x:Name="LoadingSpinner" Width="20" Height="20"
+                              IsActive="False" Visibility="Collapsed"
+                              IsHitTestVisible="False"
+                              HorizontalAlignment="Center" VerticalAlignment="Center"
+                              Foreground="{StaticResource XFilesAccentBrush}" />
             </Grid>
 
             <TextBlock x:Name="TimeText" Grid.Column="2"

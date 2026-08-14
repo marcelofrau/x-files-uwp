@@ -452,16 +452,16 @@ namespace XFiles.Navigation
                 _viewCtxFullscreen = false;
             }
 
-            // LB, RB — continuous seek while held
+            // LB, RB — one navigation step on press; continuous seek while held
             if ((justPressed & GamepadButtons.LeftShoulder) != 0)
             {
                 nav.OnSeekBack();
-                _shoulderSeekCooldown = 0;
+                _shoulderSeekCooldown = 60;
             }
             if ((justPressed & GamepadButtons.RightShoulder) != 0)
             {
                 nav.OnSeekForward();
-                _shoulderSeekCooldown = 0;
+                _shoulderSeekCooldown = 60;
             }
             if (_shoulderSeekCooldown > 0) _shoulderSeekCooldown -= 33;
             if (_shoulderSeekCooldown <= 0)

@@ -1071,8 +1071,8 @@ namespace XFiles.Controls
         public void OnSeekRepeat(int seconds)
         {
             if (VideoFullScreenPanel.Visibility == Visibility.Visible) { HandleContinuousSeek(seconds); return; }
-            if (AudioFullScreenPanel.Visibility == Visibility.Visible) { return; }
-            if (_isMediaPlayerActive) { MediaPreview.Seek(TimeSpan.FromSeconds(seconds)); return; }
+            // Audio (inline or fullscreen): LB/RB are track next/previous only —
+            // no seek on hold. Seeking in the inline player is D-pad left/right.
         }
 
         public void OnTriggerHeld(float leftTrigger, float rightTrigger)

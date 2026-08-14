@@ -109,6 +109,7 @@ namespace XFiles.Audio
         public bool IsPlaying => _isGraphRunning;
         public string CurrentFilePath => _currentFilePath;
         public bool IsFileLoaded => _fileInputNode != null || _mediaSourceNode != null;
+        public bool IsGraphLive => _graph != null;
 
         public TimeSpan Position
         {
@@ -373,6 +374,9 @@ namespace XFiles.Audio
         {
             try
             {
+                // A streaming chiptune render may still be writing "{path}.tmp" — open
+                // whichever exists (the renderer renames .tmp -> final on completion).
+                filePath = XFiles.Audio.RetroAudioPlayer.ResolveChiptuneWavPath(filePath);
                 var fileStream = new FileStream(filePath,
                     FileMode.Open, FileAccess.Read,
                     FileShare.Read | FileShare.Write | FileShare.Delete,
@@ -675,6 +679,9 @@ namespace XFiles.Audio
                 }
                 else
                 {
+                    // Same resolution as LoadViaStream: a streaming render's .tmp file
+                    // may still be growing, or the render just completed and renamed it.
+                    filePath = XFiles.Audio.RetroAudioPlayer.ResolveChiptuneWavPath(filePath);
                     var fileStream = new FileStream(filePath,
                         FileMode.Open, FileAccess.Read,
                         FileShare.Read | FileShare.Write | FileShare.Delete,

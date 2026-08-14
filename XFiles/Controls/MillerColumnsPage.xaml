@@ -1192,6 +1192,13 @@
             <vis:AudioVisualizerBase x:Name="FsVisualizerCanvas" Grid.Row="0"
                                      Visibility="Collapsed" />
 
+            <!-- Loading spinner (chiptune decode/stream in flight) -->
+            <ProgressRing x:Name="FsLoadingSpinner" Width="64" Height="64"
+                          IsActive="False" Visibility="Collapsed"
+                          IsHitTestVisible="False"
+                          HorizontalAlignment="Center" VerticalAlignment="Center"
+                          Foreground="{StaticResource XFilesAccentBrush}" />
+
             <!-- Transport controls -->
             <Grid Grid.Row="1" Background="#CC1A1D23" Padding="16,10">
                 <Grid.ColumnDefinitions>

@@ -332,7 +332,7 @@ namespace XFiles.Controls
             return icon;
         }
 
-        public string SizeDisplay => IsDirectory ? "" : FormatSize(SizeBytes);
+        public string SizeDisplay => IsDirectory || (IsChiptune && ChiptuneTrackIndex >= 0) ? "" : FormatSize(SizeBytes);
 
         public bool IsDotDot { get; set; }
 

@@ -1028,7 +1028,11 @@ namespace XFiles.Controls
             FsDefaultArtPanel.Visibility = Visibility.Visible;
             _fsHasAlbumArt = false;
             AudioFullScreenPanel.Visibility = Visibility.Visible;
+            SetFsLoading(true);
             _fsHideTimer.Stop();
+            FsAudioProgress.Value = 0;
+            FsCurrentTimeText.Text = "0:00";
+            FsTotalTimeText.Text = "0:00";
 #if AUDIO_ANALYSIS
             FsVuMeter.AttachService(AudioLevelService.Instance);
 #endif
@@ -1042,7 +1046,7 @@ namespace XFiles.Controls
                 fsChiptune = true;
                 if (chiptuneTrack >= 0)
                     MediaPreview.SetChiptuneTrack(filePath, chiptuneTrack);
-                string wav = await MediaPreview.GetChiptuneWavPathAsync(filePath);
+                string wav = await MediaPreview.GetChiptuneStreamingWavPathAsync(filePath);
                 if (wav == null)
                 {
                     Log.Warn("OpenAudioFullscreen: chiptune decode failed for {Path}", filePath);
@@ -1052,6 +1056,7 @@ namespace XFiles.Controls
                 if (gen != _fsGeneration)
                 {
                     Log.Dbg("OpenAudioFullscreen: stale generation after decode, aborting");
+                    SetFsLoading(false);
                     return;
                 }
                 _fsChiptuneSource = filePath;
@@ -1072,6 +1077,7 @@ namespace XFiles.Controls
             if (gen != _fsGeneration)
             {
                 Log.Dbg("OpenAudioFullscreen: stale generation, aborting");
+                SetFsLoading(false);
                 return;
             }
 
@@ -1172,6 +1178,7 @@ namespace XFiles.Controls
             _fsChiptuneTrack = 0;
             _fsChiptuneTrackCount = 1;
             AudioFullScreenPanel.Visibility = Visibility.Collapsed;
+            SetFsLoading(false);
             // Stop shared progress timer only if no video fullscreen is active
             if (VideoFullScreenPanel.Visibility != Visibility.Visible)
                 _fullscreenProgressTimer.Stop();
@@ -1345,6 +1352,7 @@ namespace XFiles.Controls
                 UpdateFsSelectionToChiptuneTrack(nextTrack);
                 ShowAudioOsd(direction > 0 ? "Next" : "Prev",
                     direction > 0 ? "ms-appx:///Assets/Views/MillerColumnsPage/osd/osd-next-48.png" : "ms-appx:///Assets/Views/MillerColumnsPage/osd/osd-prev-48.png", 1200);
+                SetFsLoading(true);
                 _ = LoadFsChiptuneAsync(gen, _fsChiptuneSource, nextTrack);
                 PrefetchNextChiptuneTrack();
                 return;
@@ -1384,6 +1392,14 @@ namespace XFiles.Controls
             string chipSource = nextFile.ChiptuneSourcePath ?? nextFile.FullPath;
             int chipTrack = Math.Max(0, nextFile.ChiptuneTrackIndex);
 
+            // Free the native session lock held by the render of the fullscreen track
+            // being left, so the new decode does not wait for the orphaned render.
+            if (_fsChiptuneSource != null &&
+                !string.Equals(_fsChiptuneSource, chipSource, StringComparison.OrdinalIgnoreCase))
+            {
+                RetroAudioPlayer.CancelChiptuneRender(_fsChiptuneSource, _fsChiptuneTrack);
+            }
+
             if (isChip)
             {
                 _fsChiptuneSource = chipSource;
@@ -1412,12 +1428,14 @@ namespace XFiles.Controls
             // AudioGraph cannot read .spc/.nsf/.psf etc directly.
             if (isChip)
             {
+                SetFsLoading(true);
                 _ = LoadFsChiptuneAsync(gen, chipSource, chipTrack);
                 PrefetchNextChiptuneTrack();
             }
             else if (AudioLevelService.Instance.IsFileLoaded)
             {
                 Log.Info("NavigateAudioTrack: reusing AudioLevelService, SwapSource to {Path}", nextFile.FullPath);
+                SetFsLoading(true);
                 _ = AudioLevelService.Instance.SwapSourceAsync(nextFile.FullPath);
             }
             else
@@ -1429,6 +1447,7 @@ namespace XFiles.Controls
 #if AUDIO_ANALYSIS
                 FsVuMeter.AttachService(AudioLevelService.Instance);
 #endif
+                SetFsLoading(true);
                 _ = AudioLevelService.Instance.LoadAndPlay(nextFile.FullPath);
             }
 
@@ -1519,14 +1538,15 @@ namespace XFiles.Controls
                     await Task.Delay(1500);
                     if (gen != _prefetchGeneration) return;
 
-                    string wav = await RetroAudioPlayer.RenderToWavAsync(
+                    var handle = RetroAudioPlayer.StartChiptuneStream(
                         source, null, System.IO.Path.GetExtension(source), track);
+                    string wav = await RetroAudioPlayer.WaitForStreamableWavAsync(handle);
                     if (gen != _prefetchGeneration)
                     {
                         Log.Dbg("Chiptune prefetch: stale result for {Path} track {Track} — discarded", source, track);
                         return;
                     }
-                    Log.Dbg("Chiptune prefetch: WAV ready for {Path} track {Track}: {Wav}",
+                    Log.Dbg("Chiptune prefetch: streamable for {Path} track {Track}: {Wav}",
                         source, track, wav ?? "(null)");
                 }
                 catch (Exception ex)
@@ -1544,16 +1564,18 @@ namespace XFiles.Controls
         private async Task LoadFsChiptuneAsync(int gen, string source, int track)
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
-            string wav = await MediaPreview.GetChiptuneWavPathAsync(source, track);
+            string wav = await MediaPreview.GetChiptuneStreamingWavPathAsync(source, track);
             if (gen != _fsGeneration)
             {
                 Log.Dbg("NavigateAudioTrack: stale chiptune decode (gen {Gen} != {Current}) — aborting", gen, _fsGeneration);
+                SetFsLoading(false);
                 return;
             }
             if (string.IsNullOrEmpty(wav))
             {
                 Log.Warn("NavigateAudioTrack: chiptune decode failed for {Path}", source);
                 FsPlayPauseIcon.Glyph = "\uE768";
+                SetFsLoading(false);
                 return;
             }
             Log.Info("CHIPTUNE-NAV: decode of {Path} track={Track} took {Elapsed}ms", source, track, sw.ElapsedMilliseconds);
@@ -1587,6 +1609,7 @@ namespace XFiles.Controls
             if (gen != _fsGeneration)
             {
                 Log.Dbg("NavigateAudioTrack: playback superseded — aborting");
+                SetFsLoading(false);
                 return;
             }
             FsPlayPauseIcon.Glyph = "\uE769";
@@ -1617,11 +1640,18 @@ namespace XFiles.Controls
             AudioLevelService.Instance.Stop();
         }
 
+        private void SetFsLoading(bool value)
+        {
+            FsLoadingSpinner.IsActive = value;
+            FsLoadingSpinner.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
+        }
+
         private async void OnFsAudioOpened(object sender, EventArgs e)
         {
             await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
             {
                 FsPlayPauseIcon.Glyph = "\uE769";
+                SetFsLoading(false);
                 Log.Info("FsAudio: opened");
             });
         }
@@ -1630,6 +1660,14 @@ namespace XFiles.Controls
         {
             await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
             {
+                if (FsLoadingSpinner.Visibility == Visibility.Visible)
+                {
+                    // The old track hit EOF because its render was cancelled when we
+                    // navigated; a new track is about to swap in. Ignoring prevents
+                    // the premature double-advance.
+                    Log.Dbg("FsAudio: ended while a load is pending — ignoring");
+                    return;
+                }
                 if (_fsAudioEnded)
                 {
                     Log.Dbg("FsAudio: ended already handled — skipping");
@@ -1647,6 +1685,7 @@ namespace XFiles.Controls
             {
                 Log.Warn("FsAudio: failed");
                 FsPlayPauseIcon.Glyph = "\uE768";
+                SetFsLoading(false);
             });
         }
     }
