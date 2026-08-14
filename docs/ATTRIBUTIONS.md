@@ -46,6 +46,7 @@ Full license text: https://creativecommons.org/licenses/by-sa/4.0/legalcode
 - **License:** See original Icons8 license terms
 - **Used for:** UI controls, toolbar buttons, view-specific icons
 - **Disk Space dialog + drive menu:** `icons8-hdd-48.png` → `Assets/Views/FileActionSheet/fileactionsheet-hdd-48.png`, `icons8-hdd-100.png` → `Assets/Views/DiskUsageDialog/diskusagedialog-hdd-100.png`
+- **Settings page icons:** `icons8-hdd-48.png` → `Assets/Views/SettingsPage/settingspage-hide-drives-48.png`, `fluentui-back-arrow-48.png` → `Assets/Views/SettingsPage/settingspage-back-48.png` (bgm/volume/clear-credentials icons also derive from this set)
 
 ## Gamepad Button Icons
 

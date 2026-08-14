@@ -92,6 +92,7 @@ namespace XFiles.Controls
             VideoFullScreenPanel.Visibility = Visibility.Visible;
             ShowFsControls();
             UpdateDisplayRequest();
+            UpdateBgmDucking();
             ShowFsOsd("PLAY", "ms-appx:///Assets/Views/MillerColumnsPage/osd/osd-play-48.png");
             Log.Info("ShowMediaFullscreenAsync: started fullscreen video at {Position}, {SubCount} external subs", position, _fsSubtitles.Count);
             await System.Threading.Tasks.Task.CompletedTask;
@@ -402,6 +403,7 @@ namespace XFiles.Controls
             }
 
             UpdateDisplayRequest();
+            UpdateBgmDucking();
         }
 
         private async System.Threading.Tasks.Task HandleEditAsync(FileEntry entry)
@@ -1039,6 +1041,7 @@ namespace XFiles.Controls
             FsVuMeter.EnsureInitialized();
             UpdateMediaPlayerFocusUI();
             UpdateDisplayRequest();
+            UpdateBgmDucking();
 
             // Chiptune sources have no playable path — decode to cached WAV first.
             if (RetroAudioPlayer.IsChiptuneFile(filePath))
@@ -1183,6 +1186,7 @@ namespace XFiles.Controls
             if (VideoFullScreenPanel.Visibility != Visibility.Visible)
                 _fullscreenProgressTimer.Stop();
             UpdateDisplayRequest();
+            UpdateBgmDucking();
         }
 
         public void ToggleAudioFullscreenPlayPause()

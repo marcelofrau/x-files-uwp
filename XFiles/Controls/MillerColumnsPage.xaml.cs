@@ -184,7 +184,35 @@ namespace XFiles.Controls
                 _isMediaPlayerActive = MediaPreview.IsPlayerActive;
                 UpdateMediaPlayerFocusUI();
                 UpdateDisplayRequest();
+                UpdateBgmDucking();
             });
+        }
+
+        private bool _bgmDucked;
+
+        // Pause the background music while any media player is engaged (inline
+        // player, audio fullscreen or video fullscreen) and request a cooldown
+        // resume when they all release.
+        private void UpdateBgmDucking()
+        {
+            bool mediaActive = _isMediaPlayerActive
+                || AudioFullScreenPanel.Visibility == Visibility.Visible
+                || VideoFullScreenPanel.Visibility == Visibility.Visible;
+
+            var bgm = BackgroundMusicService.Instance;
+            if (mediaActive)
+            {
+                if (!_bgmDucked)
+                {
+                    _bgmDucked = true;
+                    bgm.Pause();
+                }
+            }
+            else if (_bgmDucked)
+            {
+                _bgmDucked = false;
+                bgm.RequestResume();
+            }
         }
 
         private void UpdateDisplayRequest()

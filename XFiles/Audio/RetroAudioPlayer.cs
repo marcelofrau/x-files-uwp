@@ -268,6 +268,25 @@ namespace XFiles.Audio
         }
 
         /// <summary>
+        /// Start a streaming render that writes to an explicit target path (not
+        /// the render cache) — the background-music default install uses this so
+        /// the growing .tmp lives in LocalState\BGM\ and the final WAV is renamed
+        /// to bgm.wav in place. The inflight key folds in the target so a media
+        /// player render of the same source never shares (and corrupts) the BGM file.
+        /// </summary>
+        public static ChiptuneRenderHandle StartChiptuneStreamToFile(string sourceKey, byte[] data, string extension, int track, string targetWavPath)
+        {
+            string cacheKey = ComputeCacheKey(sourceKey + "\u0001" + targetWavPath, track);
+            if (File.Exists(targetWavPath) && IsValidCachedWav(targetWavPath))
+                return new ChiptuneRenderHandle(targetWavPath, cacheKey, Task.FromResult(targetWavPath));
+
+            var handle = new ChiptuneRenderHandle(targetWavPath, cacheKey, null);
+            Task<string> task = GetOrStartRenderTask(cacheKey, sourceKey, data, extension, track, handle.ReportProgress, targetWavPath);
+            handle.SetTask(task);
+            return handle;
+        }
+
+        /// <summary>
         /// Request cancellation of an in-flight render for a source+track. The render
         /// loop aborts at the next chunk boundary and the native session lock (held
         /// for the whole open→free session) is released, so a navigation does not
@@ -313,7 +332,7 @@ namespace XFiles.Audio
             return await handle.RenderTask;
         }
 
-        private static Task<string> GetOrStartRenderTask(string cacheKey, string sourceKey, byte[] data, string extension, int track, Action<long> onProgress = null)
+        private static Task<string> GetOrStartRenderTask(string cacheKey, string sourceKey, byte[] data, string extension, int track, Action<long> onProgress = null, string targetWavPath = null)
         {
             if (_inflightRenders.TryGetValue(cacheKey, out var existing) &&
                 (!_inflightCancels.TryGetValue(cacheKey, out var existingCts) || !existingCts.IsCancellationRequested))
@@ -328,7 +347,7 @@ namespace XFiles.Audio
             var cts = new CancellationTokenSource();
             _inflightCancels[cacheKey] = cts;
             Task<string> task = _inflightRenders.GetOrAdd(cacheKey, _ =>
-                Task.Run(() => RenderToWavSync(sourceKey, data, extension, track, onProgress, cts.Token)));
+                Task.Run(() => RenderToWavSync(sourceKey, data, extension, track, onProgress, cts.Token, targetWavPath)));
             _ = task.ContinueWith(completedTask =>
             {
                 _inflightRenders.TryRemove(cacheKey, out _);
@@ -338,7 +357,7 @@ namespace XFiles.Audio
             return task;
         }
 
-        private static string RenderToWavSync(string sourceKey, byte[] data, string extension, int track, Action<long> onProgress = null, CancellationToken ct = default)
+        private static string RenderToWavSync(string sourceKey, byte[] data, string extension, int track, Action<long> onProgress = null, CancellationToken ct = default, string targetWavPath = null)
         {
             try
             {
@@ -351,7 +370,7 @@ namespace XFiles.Audio
                 }
 
                 string cacheKey = ComputeCacheKey(sourceKey, track);
-                string wavPath = GetCachedWavPath(cacheKey);
+                string wavPath = targetWavPath ?? GetCachedWavPath(cacheKey);
                 if (File.Exists(wavPath))
                 {
                     if (IsValidCachedWav(wavPath))

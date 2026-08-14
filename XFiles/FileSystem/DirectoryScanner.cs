@@ -1,12 +1,15 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.ComTypes;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.Storage;
 using XFiles.Audio;
+using XFiles.Settings;
 
 namespace XFiles.FileSystem
 {
@@ -172,29 +175,162 @@ namespace XFiles.FileSystem
         /// Enumerates local drive letters only - no AppData, favorites or portal
         /// entries. Used by the move destination dialog.
         /// </summary>
+        /// <summary>
+        /// Xbox Dev Mode exposes system XVDs under fixed drive letters (S: =
+        /// Settings.xvd, Q: = user home, etc.). GetLogicalDrives may not return
+        /// all of them to a UWP app container, so probe the known set explicitly.
+        /// </summary>
+        private static readonly string[] KnownXboxDrives =
+        {
+            "C", "D", "E", "G", "J", "L", "M", "N", "O", "Q", "S", "T", "U", "V", "X", "Y"
+        };
+
+        private static readonly object DriveCacheLock = new object();
+        private static readonly Dictionary<string, bool> DriveAccessCache = new Dictionary<string, bool>();
+        private static int _probeWarmStarted;
+
         public static List<FileEntry> ScanDrivesOnly()
         {
             Log.Verb("Scanning drives - enumerating logical drives via GetLogicalDrives");
-            var entries = new List<FileEntry>();
 
             uint drives = GetLogicalDrives();
+            var present = new List<string>();
             for (int i = 0; i < 26; i++)
             {
                 if ((drives & (1 << i)) != 0)
+                    present.Add(((char)('A' + i)).ToString());
+            }
+
+            Log.Info("Drive scan: GetLogicalDrives returned [{0}]", string.Join(",", present));
+
+            bool hideInaccessible = XFilesSettings.HideEmptyDrivesCached;
+            var visible = hideInaccessible
+                ? FilterAccessible(present)
+                : present;
+
+            // Root scans run on the UI thread and a denied probe costs ~210ms on
+            // Xbox, so never probe here. If the background warm hasn't landed
+            // yet, show everything this pass and let the next scan apply the
+            // filter once the cache fills.
+            if (hideInaccessible && visible.Count == 0 && present.Count > 0)
+                visible = present;
+
+            WarmDriveProbesAsync();
+
+            var entries = new List<FileEntry>();
+            foreach (string letter in visible)
+            {
+                string driveLetter = letter + ":\\";
+                entries.Add(new FileEntry
                 {
-                    string driveLetter = $"{(char)('A' + i)}:\\";
-                    entries.Add(new FileEntry
-                    {
-                        Name = driveLetter,
-                        FullPath = driveLetter,
-                        IsDirectory = true,
-                        IsDrive = true
-                    });
-                    Log.Verb("  Drive found: {Drive}", driveLetter);
-                }
+                    Name = driveLetter,
+                    FullPath = driveLetter,
+                    IsDirectory = true,
+                    IsDrive = true
+                });
+                Log.Verb("  Drive found: {Drive}", driveLetter);
             }
 
             return entries;
+        }
+
+        /// <summary>
+        /// Probes drive accessibility on a background thread (never the UI
+        /// thread) and caches the results for the session. Idempotent — at most
+        /// one warm runs. Kicked off from App.OnLaunched and from root scans.
+        /// Covers the drives GetLogicalDrives returned plus the known Xbox
+        /// system set it may have missed (XBVault-style hardcoded list).
+        /// </summary>
+        public static void WarmDriveProbesAsync()
+        {
+            if (Interlocked.Exchange(ref _probeWarmStarted, 1) != 0)
+                return;
+
+            Task.Run(() =>
+            {
+                try
+                {
+                    var letters = new List<string>(KnownXboxDrives);
+                    uint drives = GetLogicalDrives();
+                    for (int i = 0; i < 26; i++)
+                    {
+                        if ((drives & (1 << i)) != 0)
+                            letters.Add(((char)('A' + i)).ToString());
+                    }
+
+                    ProbeDrivesConcurrent(letters.Distinct());
+                }
+                catch (Exception ex)
+                {
+                    Log.Warn("DirectoryScanner: drive probe warm failed", ex);
+                }
+            });
+        }
+
+        /// <summary>
+        /// Returns the subset of drive letters that a FindFirstFileExFromAppW
+        /// call can enumerate (i.e. non-empty, non-access-denied).
+        /// </summary>
+        private static List<string> FilterAccessible(List<string> letters)
+        {
+            lock (DriveCacheLock)
+                return letters.Where(l => DriveAccessCache.TryGetValue(l, out bool ok) && ok).ToList();
+        }
+
+        /// <summary>
+        /// Probe one drive letter with FindFirstFileExFromAppW. Returns a short
+        /// human-readable summary (OK + first entry, or the Win32 error code).
+        /// </summary>
+        private static string ProbeDriveFindFirst(string driveLetter)
+        {
+            string pattern = driveLetter + ":\\*";
+            IntPtr hFind = FindFirstFileExFromAppW(pattern, FINDEX_INFO_LEVELS.FindExInfoStandard,
+                out WIN32_FIND_DATA findData, FINDEX_SEARCH_OPS.FindExSearchNameMatch,
+                IntPtr.Zero, FIND_FIRST_EX_LARGE_FETCH);
+            if (hFind == new IntPtr(INVALID_HANDLE_VALUE))
+            {
+                int err = Marshal.GetLastWin32Error();
+                return $"FindFirstFileExFromAppW failed (error {err})";
+            }
+            string first = findData.cFileName;
+            FindClose(hFind);
+            return $"FindFirstFileExFromAppW OK, first entry '{first}'";
+        }
+
+        private static bool DriveReadableFromResult(string result)
+            => !result.StartsWith("FindFirstFileExFromAppW failed", StringComparison.Ordinal);
+
+        /// <summary>
+        /// Probe uncached drive letters (in parallel — a denied probe costs
+        /// ~210ms on Xbox, so serializing 16 of them makes the root scan ~3.4s
+        /// slow). Results and the per-drive diagnostic lines are logged once per
+        /// session and cached; a drive plugged mid-session appears in
+        /// GetLogicalDrives with an empty cache slot, so it is probed then.
+        /// </summary>
+        private static void ProbeDrivesConcurrent(IEnumerable<string> letters)
+        {
+            var candidates = new List<string>();
+            lock (DriveCacheLock)
+            {
+                foreach (string letter in letters)
+                    if (!DriveAccessCache.ContainsKey(letter))
+                        candidates.Add(letter);
+            }
+
+            if (candidates.Count == 0)
+                return;
+
+            var results = new ConcurrentDictionary<string, bool>();
+            Parallel.ForEach(candidates, letter =>
+            {
+                string result = ProbeDriveFindFirst(letter);
+                results[letter] = DriveReadableFromResult(result);
+                Log.Info("Drive probe {0}:\\: {1}", letter, result);
+            });
+
+            lock (DriveCacheLock)
+                foreach (var kv in results)
+                    DriveAccessCache[kv.Key] = kv.Value;
         }
 
         private static List<FileEntry> ScanRoot()

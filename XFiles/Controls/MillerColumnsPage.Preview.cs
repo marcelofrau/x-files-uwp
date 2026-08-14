@@ -54,6 +54,7 @@ namespace XFiles.Controls
                 _isMediaPlayerActive = false;
                 UpdateMediaPlayerFocusUI();
                 UpdateDisplayRequest();
+                UpdateBgmDucking();
             }
 
             // At root: QuickRefPanel is visible, skip preview update

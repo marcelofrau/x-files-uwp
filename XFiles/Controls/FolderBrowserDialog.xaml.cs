@@ -12,11 +12,19 @@ using XFiles.Navigation;
 
 namespace XFiles.Controls
 {
+    public enum PickerMode
+    {
+        Folder,
+        File
+    }
+
     public sealed partial class FolderBrowserDialog : UserControl
     {
         private TaskCompletionSource<string> _tcs;
         private string _currentPath;
         private List<BrowserEntry> _entries = new List<BrowserEntry>();
+        private PickerMode _mode = PickerMode.Folder;
+        private IReadOnlyList<string> _fileExtensions;
 
         public bool IsOpen => Visibility == Visibility.Visible;
 
@@ -27,11 +35,23 @@ namespace XFiles.Controls
 
         public Task<string> ShowAsync(string initialPath = null)
         {
+            return ShowAsync(initialPath, PickerMode.Folder, null);
+        }
+
+        public Task<string> ShowAsync(string initialPath, PickerMode mode,
+            IReadOnlyList<string> fileExtensions = null)
+        {
+            _mode = mode;
+            _fileExtensions = fileExtensions;
             _tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
             _currentPath = initialPath;
 
             Visibility = Visibility.Visible;
             Overlay.Visibility = Visibility.Visible;
+
+            TitleText.Text = mode == PickerMode.File
+                ? "Select file"
+                : "Select destination";
 
             LoadDirectory(initialPath);
 
@@ -60,13 +80,15 @@ namespace XFiles.Controls
                 dirName = path.TrimEnd('\\');
             CurrentPathText.Text = isRoot ? "Drives" : path;
 
-            // Update Move Here label with current folder name
+            bool fileMode = _mode == PickerMode.File;
+            string footerA = fileMode ? "Navigate" : "Move Here";
             string moveHereName = isRoot
                 ? "Move Here"
                 : $"Move Here ({dirName})";
-            FooterALabel.Text = moveHereName;
+            FooterALabel.Text = fileMode ? footerA : moveHereName;
 
-            // Rebuild virtual entry with updated name
+            // Rebuild virtual entry with updated name (folder mode only — file
+            // mode selects actual files instead).
             var moveHereEntry = new BrowserEntry
             {
                 Name = moveHereName,
@@ -90,7 +112,8 @@ namespace XFiles.Controls
                     Log.Err("FolderBrowserDialog.LoadDirectory: root scan failed", ex);
                     CurrentPathText.Text = $"ERROR: {ex.Message}";
                     _entries.Clear();
-                    _entries.Add(moveHereEntry);
+                    if (!fileMode)
+                        _entries.Add(moveHereEntry);
                     EntryList.ItemsSource = _entries;
                     EntryList.SelectedIndex = 0;
                     return;
@@ -100,7 +123,9 @@ namespace XFiles.Controls
                 return;
             }
 
-            _entries = new List<BrowserEntry> { moveHereEntry };
+            _entries = new List<BrowserEntry>();
+            if (!fileMode)
+                _entries.Add(moveHereEntry);
 
             // Quick jump to the drives root from any folder
             if (!isRoot)
@@ -130,10 +155,47 @@ namespace XFiles.Controls
                     Icon = e.IsDrive ? driveIcon : folderIcon
                 }));
 
+            // File mode: also list files (directories above). When a filter is
+            // given, only matching extensions are shown; a null filter lists all.
+            if (fileMode)
+            {
+                var filter = _fileExtensions;
+                _entries.AddRange(rawEntries
+                    .Where(e => !e.IsDirectory
+                        && (filter == null
+                            || filter.Contains(System.IO.Path.GetExtension(e.Name), StringComparer.OrdinalIgnoreCase)))
+                    .OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
+                    .Select(e => new BrowserEntry
+                    {
+                        Name = e.Name,
+                        FullPath = e.FullPath,
+                        IsDirectory = false,
+                        IsDrive = false,
+                        Icon = FileIcon(e.Name)
+                    }));
+            }
+
             EntryList.ItemsSource = _entries;
             EntryList.SelectedIndex = 0;
 
             EntryList.Focus(FocusState.Programmatic);
+        }
+
+        private static string FileIcon(string fileName)
+        {
+            string ext = System.IO.Path.GetExtension(fileName);
+            if (MusicFormatClassifier.IsChiptune(ext))
+                return "ms-appx:///Assets/FileTypes/filetype-audio-x-generic-24.png";
+            switch (ext.ToLowerInvariant())
+            {
+                case ".mp3": return "ms-appx:///Assets/FileTypes/filetype-audio-mp3-24.png";
+                case ".flac": return "ms-appx:///Assets/FileTypes/filetype-audio-flac-24.png";
+                case ".wav": return "ms-appx:///Assets/FileTypes/filetype-audio-wav-24.png";
+                case ".ogg": return "ms-appx:///Assets/FileTypes/filetype-audio-ogg-24.png";
+                case ".m4a": return "ms-appx:///Assets/FileTypes/filetype-audio-m4a-24.png";
+                case ".pdf": return "ms-appx:///Assets/FileTypes/filetype-application-pdf-24.png";
+                default: return "ms-appx:///Assets/FileTypes/file-generic-24.png";
+            }
         }
 
         private static bool IsLocalDiskPath(string path)
@@ -153,6 +215,15 @@ namespace XFiles.Controls
         private void EntryList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (!(EntryList.SelectedItem is BrowserEntry selected)) return;
+
+            if (_mode == PickerMode.File)
+            {
+                // File mode: files select, directories navigate.
+                FooterALabel.Text = !selected.IsDirectory && !selected.IsVirtual
+                    ? "Select File"
+                    : "Navigate";
+                return;
+            }
 
             // Update A button label based on selection
             if (selected.IsVirtual)
@@ -179,12 +250,16 @@ namespace XFiles.Controls
             {
                 if (clicked.IsVirtual)
                 {
-                    ConfirmSelection();
+                    ConfirmSelection(_currentPath);
                     return;
                 }
                 if (clicked.IsDirectory)
                 {
                     LoadDirectory(clicked.FullPath);
+                }
+                else if (_mode == PickerMode.File)
+                {
+                    ConfirmSelection(clicked.FullPath);
                 }
             }
         }
@@ -242,13 +317,17 @@ namespace XFiles.Controls
 
             if (selected.IsVirtual)
             {
-                ConfirmSelection();
+                ConfirmSelection(_currentPath);
                 return;
             }
 
             if (selected.IsDirectory)
             {
                 LoadDirectory(selected.FullPath);
+            }
+            else if (_mode == PickerMode.File)
+            {
+                ConfirmSelection(selected.FullPath);
             }
         }
 
@@ -257,11 +336,10 @@ namespace XFiles.Controls
             Close(null);
         }
 
-        private void ConfirmSelection()
+        private void ConfirmSelection(string result)
         {
-            var destDir = _currentPath;
-            Log.Info("FolderBrowserDialog: confirmed destination '{Dest}'", destDir ?? "(root)");
-            Close(destDir);
+            Log.Info("FolderBrowserDialog: confirmed '{Result}'", result ?? "(root)");
+            Close(result);
         }
 
         private void Close(string result)

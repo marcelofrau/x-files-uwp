@@ -37,6 +37,7 @@
 
                     <!-- Selectable menu items -->
                     <ListView x:Name="SettingsList"
+                              MaxHeight="480"
                               Style="{StaticResource RetroListViewStyle}"
                               ItemContainerStyle="{StaticResource RetroListViewItemStyle}"
                               SelectionChanged="OnSelectionChanged"
@@ -81,5 +82,27 @@
         </Grid>
 
         <controls:AlertDialog x:Name="AlertDialogControl" />
+        <controls:FolderBrowserDialog x:Name="BgmPickerControl" />
+
+        <!-- BGM loading overlay (chiptune render before copy) -->
+        <Grid x:Name="BgmLoadingOverlay"
+              Visibility="Collapsed"
+              Background="#CC0D1117"
+              IsHitTestVisible="True">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <ProgressRing x:Name="BgmLoadingRing"
+                              IsActive="True"
+                              Width="64" Height="64"
+                              Foreground="#B0D8A0"
+                              HorizontalAlignment="Center" />
+                <TextBlock x:Name="BgmLoadingText"
+                           Text="Rendering music file..."
+                           Foreground="#B0D8A0"
+                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                           FontSize="14"
+                           Margin="0,12,0,0"
+                           HorizontalAlignment="Center" />
+            </StackPanel>
+        </Grid>
     </Grid>
 </UserControl>

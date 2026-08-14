@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Windows.System;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
+using XFiles.Audio;
+using XFiles.FileSystem;
 using XFiles.Metadata;
 using XFiles.Services;
 using XFiles.Settings;
@@ -18,6 +21,7 @@ namespace XFiles.Controls
         public string Description { get; set; }
         public string IconPath { get; set; }
         public string Action { get; set; }
+        public List<SettingsMenuItem> Children { get; set; }
     }
 
     public sealed partial class SettingsPage : UserControl
@@ -26,19 +30,67 @@ namespace XFiles.Controls
         private bool _cacheWasCleared;
         public Action OnClosed;
 
+        /// <summary>Action of the submenu currently shown, or null for the top level.</summary>
+        private string _activeSubmenuAction;
+
+        private static readonly SettingsMenuItem BackItem = new SettingsMenuItem
+        {
+            Label = "Back",
+            Description = "Return to the previous level",
+            IconPath = "ms-appx:///Assets/Views/SettingsPage/settingspage-back-48.png",
+            Action = "back"
+        };
+
         private static readonly string IconBase = "ms-appx:///Assets/Views/StartMenu/";
         private static readonly string[] LogLevels = { "Verbose", "Debug", "Info", "Warning", "Error" };
 
-        private static List<SettingsMenuItem> BuildMenuItems(string cacheDesc, string logLevel, string portalDesc)
+        private static async Task<List<SettingsMenuItem>> BuildMenuItemsAsync()
         {
+            int cacheCount = 0;
+            try
+            {
+                var cache = new MetadataCache();
+                cacheCount = await cache.GetEntryCountAsync();
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("SettingsPage: failed to read cache count", ex);
+            }
+
+            string logLevel = Log.GetCurrentLevel();
+            string portalDesc = await GetPortalDescAsync();
+            bool bgmOn = await XFilesSettings.GetBgmEnabledAsync();
+            string bgmFile = await XFilesSettings.GetBgmFileNameAsync();
+            string bgmSource = await XFilesSettings.GetBgmSourceNameAsync();
+            string bgmName = string.IsNullOrEmpty(bgmSource) ? bgmFile : bgmSource;
+            int bgmVol = await XFilesSettings.GetBgmVolumeAsync();
+            bool hideDrives = await XFilesSettings.GetHideEmptyDrivesAsync();
+
             return new List<SettingsMenuItem>
             {
                 new SettingsMenuItem
                 {
-                    Label = "Clear Cache",
-                    Description = cacheDesc,
+                    Label = "Clear Data",
+                    Description = "Cache and portal credentials",
                     IconPath = IconBase + "startmenu-close-48.png",
-                    Action = "clear-cache"
+                    Action = "menu-clear-data",
+                    Children = new List<SettingsMenuItem>
+                    {
+                        new SettingsMenuItem
+                        {
+                            Label = "Clear Cache",
+                            Description = $"Remove all {cacheCount} cached metadata and cover art entries",
+                            IconPath = IconBase + "startmenu-close-48.png",
+                            Action = "clear-cache"
+                        },
+                        new SettingsMenuItem
+                        {
+                            Label = "Clear Portal Credentials",
+                            Description = portalDesc,
+                            IconPath = "ms-appx:///Assets/Views/SettingsPage/settingspage-clear-credentials-48.png",
+                            Action = "clear-portal-creds"
+                        }
+                    }
                 },
                 new SettingsMenuItem
                 {
@@ -49,10 +101,43 @@ namespace XFiles.Controls
                 },
                 new SettingsMenuItem
                 {
-                    Label = "Clear Portal Credentials",
-                    Description = portalDesc,
-                    IconPath = "ms-appx:///Assets/Views/SettingsPage/settingspage-clear-credentials-48.png",
-                    Action = "clear-portal-creds"
+                    Label = "Background Music",
+                    Description = bgmOn ? $"On: {bgmName}" : "Off",
+                    IconPath = "ms-appx:///Assets/Views/SettingsPage/settingspage-bgm-48.png",
+                    Action = "menu-bgm",
+                    Children = new List<SettingsMenuItem>
+                    {
+                        new SettingsMenuItem
+                        {
+                            Label = "Enable Background Music",
+                            Description = bgmOn ? "On" : "Off",
+                            IconPath = "ms-appx:///Assets/Views/SettingsPage/settingspage-bgm-48.png",
+                            Action = "bgm-toggle"
+                        },
+                        new SettingsMenuItem
+                        {
+                            Label = "Choose Music File",
+                            Description = bgmOn ? $"Track: {bgmName}" : "Choose a music file for background playback",
+                            IconPath = "ms-appx:///Assets/Views/SettingsPage/settingspage-bgm-pick-48.png",
+                            Action = "bgm-pick"
+                        },
+                        new SettingsMenuItem
+                        {
+                            Label = "BGM Volume",
+                            Description = $"Current: {bgmVol}%",
+                            IconPath = "ms-appx:///Assets/Views/SettingsPage/settingspage-volume-48.png",
+                            Action = "bgm-volume"
+                        }
+                    }
+                },
+                new SettingsMenuItem
+                {
+                    Label = "Hide Empty Drives",
+                    Description = hideDrives
+                        ? "On: inaccessible or empty drives are hidden from the drive list"
+                        : "Off: all drives are shown",
+                    IconPath = "ms-appx:///Assets/Views/SettingsPage/settingspage-hide-drives-48.png",
+                    Action = "hide-drives"
                 }
             };
         }
@@ -66,32 +151,66 @@ namespace XFiles.Controls
         {
             _tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             _cacheWasCleared = false;
+            _activeSubmenuAction = null;
             Visibility = Visibility.Visible;
             Overlay.Visibility = Visibility.Visible;
 
-            int cacheCount = 0;
-            try
-            {
-                var cache = new MetadataCache();
-                cacheCount = await cache.GetEntryCountAsync();
-            }
-            catch (Exception ex)
-            {
-                Log.Warn("SettingsPage: failed to read cache count", ex);
-            }
-
-            string currentLevel = await XFilesSettings.GetLogLevelAsync();
-
-            string portalDesc = await GetPortalDescAsync();
-
-            CacheStatsText.Text = $"{cacheCount} cached entries";
-
-            SettingsList.ItemsSource = BuildMenuItems(
-                $"Remove all {cacheCount} cached metadata and cover art entries", currentLevel, portalDesc);
-            SettingsList.SelectedIndex = 0;
-            SettingsList.Focus(FocusState.Programmatic);
-
+            await RenderAsync();
             return await _tcs.Task;
+        }
+
+        /// <summary>
+        /// Rebuilds the menu tree and binds the visible list (top level, or the
+        /// active submenu with a leading Back row). Keeps the item whose Action
+        /// matches <paramref name="reselectAction"/> selected when provided.
+        /// </summary>
+        private async Task RenderAsync(string reselectAction = null)
+        {
+            var top = await BuildMenuItemsAsync();
+            List<SettingsMenuItem> view;
+            if (_activeSubmenuAction != null)
+            {
+                var parent = top.FirstOrDefault(i => i.Action == _activeSubmenuAction);
+                view = new List<SettingsMenuItem> { BackItem };
+                if (parent?.Children != null)
+                    view.AddRange(parent.Children);
+            }
+            else
+            {
+                view = top;
+            }
+
+            SettingsList.ItemsSource = view;
+
+            int idx = -1;
+            if (reselectAction != null)
+                idx = view.FindIndex(i => i.Action == reselectAction);
+            if (idx < 0)
+                idx = _activeSubmenuAction != null ? 1 : 0;
+            if (idx >= view.Count)
+                idx = 0;
+
+            SettingsList.SelectedIndex = idx;
+            SettingsList.ScrollIntoView(SettingsList.SelectedItem);
+            SettingsList.Focus(FocusState.Programmatic);
+        }
+
+        private async void EnterSubmenu(SettingsMenuItem parent)
+        {
+            _activeSubmenuAction = parent.Action;
+            await RenderAsync();
+        }
+
+        private async void GoBack()
+        {
+            if (_activeSubmenuAction == null)
+            {
+                Close();
+                return;
+            }
+            string parentAction = _activeSubmenuAction;
+            _activeSubmenuAction = null;
+            await RenderAsync(parentAction);
         }
 
         private static async Task<string> GetPortalDescAsync()
@@ -113,11 +232,27 @@ namespace XFiles.Controls
         public void HandleDPad(VirtualKey key)
         {
             if (!IsVisible) return;
+
+            // Block all input while a chiptune render/copy is in flight.
+            if (BgmLoadingOverlay.Visibility == Visibility.Visible)
+                return;
+
+            // File picker owns all input while open.
+            if (BgmPickerControl.IsOpen)
+            {
+                BgmPickerControl.HandleDPad(key);
+                if (key == VirtualKey.GamepadA || key == VirtualKey.Enter
+                    || key == VirtualKey.GamepadB || key == VirtualKey.Escape)
+                    BgmPickerControl.HandleButton(key);
+                return;
+            }
+
             if (AlertDialogControl.IsDialogVisible)
             {
                 AlertDialogControl.HandleButton(key);
                 return;
             }
+
             switch (key)
             {
                 case VirtualKey.Up:
@@ -125,21 +260,33 @@ namespace XFiles.Controls
                         SettingsList.SelectedIndex--;
                     else if (SettingsList.Items.Count > 0)
                         SettingsList.SelectedIndex = SettingsList.Items.Count - 1;
+                    SettingsList.ScrollIntoView(SettingsList.SelectedItem);
                     break;
                 case VirtualKey.Down:
                     if (SettingsList.SelectedIndex < SettingsList.Items.Count - 1)
                         SettingsList.SelectedIndex++;
                     else if (SettingsList.Items.Count > 0)
                         SettingsList.SelectedIndex = 0;
+                    SettingsList.ScrollIntoView(SettingsList.SelectedItem);
                     break;
                 case VirtualKey.GamepadA:
                 case VirtualKey.Enter:
                     if (SettingsList.SelectedItem is SettingsMenuItem item)
-                        ExecuteAction(item);
+                    {
+                        if (item.Action == "back")
+                            GoBack();
+                        else if (item.Children != null)
+                            EnterSubmenu(item);
+                        else
+                            ExecuteAction(item);
+                    }
                     break;
                 case VirtualKey.GamepadB:
                 case VirtualKey.Escape:
-                    Close();
+                    if (_activeSubmenuAction != null)
+                        GoBack();
+                    else
+                        Close();
                     break;
             }
         }
@@ -161,11 +308,6 @@ namespace XFiles.Controls
                         CacheStatsText.Text = $"Cleared {cleared} entries";
                         Log.Info("SettingsPage: cleared {Count} cache entries", cleared);
                         _cacheWasCleared = true;
-
-                        SettingsList.ItemsSource = BuildMenuItems(
-                            "Remove all 0 cached metadata and cover art entries", Log.GetCurrentLevel(),
-                            await GetPortalDescAsync());
-                        SettingsList.SelectedIndex = 0;
                     }
                     catch (Exception ex)
                     {
@@ -175,7 +317,7 @@ namespace XFiles.Controls
                 }
 
                 Overlay.Visibility = Visibility.Visible;
-                SettingsList.Focus(FocusState.Programmatic);
+                await RenderAsync(item.Action);
             }
             else if (item.Action == "log-level")
             {
@@ -189,12 +331,7 @@ namespace XFiles.Controls
                 Log.SetLogLevel(newLevel);
                 Log.Info("SettingsPage: log level changed to {Level}", newLevel);
 
-                // Refresh the item description
-                SettingsList.ItemsSource = BuildMenuItems(
-                    "Remove cached metadata and cover art entries", newLevel,
-                    await GetPortalDescAsync());
-                SettingsList.SelectedIndex = 1;
-                SettingsList.Focus(FocusState.Programmatic);
+                await RenderAsync(item.Action);
             }
             else if (item.Action == "clear-portal-creds")
             {
@@ -209,24 +346,59 @@ namespace XFiles.Controls
                         DevicePortalService.ClearPortalCredentials();
                         await XFilesSettings.SetPortalCredentialsAsync("", "");
                         Log.Info("SettingsPage: portal credentials cleared");
-
-                        SettingsList.ItemsSource = BuildMenuItems(
-                            "Remove cached metadata and cover art entries", Log.GetCurrentLevel(),
-                            "No portal credentials stored");
-                        SettingsList.SelectedIndex = 2;
                     }
                     catch (Exception ex)
                     {
                         Log.Warn("SettingsPage: clear portal credentials failed", ex);
-                        SettingsList.ItemsSource = BuildMenuItems(
-                            "Remove cached metadata and cover art entries", Log.GetCurrentLevel(),
-                            await GetPortalDescAsync());
-                        SettingsList.SelectedIndex = 2;
                     }
                 }
 
                 Overlay.Visibility = Visibility.Visible;
-                SettingsList.Focus(FocusState.Programmatic);
+                await RenderAsync(item.Action);
+            }
+            else if (item.Action == "bgm-toggle")
+            {
+                bool enabled = await XFilesSettings.GetBgmEnabledAsync();
+                var bgm = BackgroundMusicService.Instance;
+                await bgm.SetEnabledAsync(!enabled);
+                await RenderAsync(item.Action);
+            }
+            else if (item.Action == "bgm-pick")
+            {
+                string picked = await BgmPickerControl.ShowAsync(null, PickerMode.File, MusicFormatClassifier.MusicExtensions);
+                if (!string.IsNullOrEmpty(picked))
+                {
+                    BgmLoadingOverlay.Visibility = Visibility.Visible;
+                    BgmLoadingRing.IsActive = true;
+                    bool ok = await BackgroundMusicService.Instance.SetTrackAsync(picked);
+                    BgmLoadingRing.IsActive = false;
+                    BgmLoadingOverlay.Visibility = Visibility.Collapsed;
+                    if (!ok)
+                    {
+                        Log.Warn("SettingsPage: BGM pick failed for '{Path}'", picked);
+                        await AlertDialogControl.ShowConfirmAsync("Could not load the selected music file.");
+                    }
+                    else
+                    {
+                        Log.Info("SettingsPage: BGM track set to '{Path}'", picked);
+                    }
+                }
+                await RenderAsync(item.Action);
+            }
+            else if (item.Action == "bgm-volume")
+            {
+                int current = await XFilesSettings.GetBgmVolumeAsync();
+                int next = MusicFormatClassifier.NextVolumeLevel(current);
+                await BackgroundMusicService.Instance.SetVolumeAsync(
+                    MusicFormatClassifier.PercentToGain(next));
+                await RenderAsync(item.Action);
+            }
+            else if (item.Action == "hide-drives")
+            {
+                bool current = await XFilesSettings.GetHideEmptyDrivesAsync();
+                await XFilesSettings.SetHideEmptyDrivesAsync(!current);
+                Log.Info("SettingsPage: hide empty drives set to {Value}", !current);
+                await RenderAsync(item.Action);
             }
         }
 

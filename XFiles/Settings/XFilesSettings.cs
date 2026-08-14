@@ -65,5 +65,48 @@ namespace XFiles.Settings
             await SetStringAsync("PortalUser", user ?? "");
             await SetStringAsync("PortalPass", pass ?? "");
         }
+
+        // Background music (BGM)
+        public static async Task<bool> GetBgmEnabledAsync()
+            => await GetBoolAsync("BgmEnabled", true);
+
+        public static async Task SetBgmEnabledAsync(bool value)
+            => await SetBoolAsync("BgmEnabled", value);
+
+        public static async Task<string> GetBgmFileNameAsync()
+            => await GetStringAsync("BgmFileName", "");
+
+        public static async Task SetBgmFileNameAsync(string value)
+            => await SetStringAsync("BgmFileName", value);
+
+        public static async Task<string> GetBgmSourceNameAsync()
+            => await GetStringAsync("BgmSourceName", "");
+
+        public static async Task SetBgmSourceNameAsync(string value)
+            => await SetStringAsync("BgmSourceName", value);
+
+        public static async Task<int> GetBgmVolumeAsync()
+            => await GetIntAsync("BgmVolume", 50);
+
+        public static async Task SetBgmVolumeAsync(int value)
+            => await SetIntAsync("BgmVolume", value);
+
+        // Hide empty/inaccessible drives (root/drive scan). Cached statically so
+        // the sync DirectoryScanner can read it without touching SQLite; the cache
+        // is seeded at startup and kept current by the async getter/setter.
+        public static bool HideEmptyDrivesCached = true;
+
+        public static async Task<bool> GetHideEmptyDrivesAsync()
+        {
+            bool value = await GetBoolAsync("HideEmptyDrives", true);
+            HideEmptyDrivesCached = value;
+            return value;
+        }
+
+        public static async Task SetHideEmptyDrivesAsync(bool value)
+        {
+            HideEmptyDrivesCached = value;
+            await SetBoolAsync("HideEmptyDrives", value);
+        }
     }
 }

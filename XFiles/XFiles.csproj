@@ -111,6 +111,7 @@
     <Compile Include="Navigation\InputRouter.cs" />
     <Compile Include="Navigation\ColumnNavigator.cs" />
     <Compile Include="FileSystem\FileEntry.cs" />
+    <Compile Include="FileSystem\MusicFormatClassifier.cs" />
     <Compile Include="FileSystem\ChiptuneBrowser.cs" />
     <Compile Include="FileSystem\Formatting.cs" />
     <Compile Include="FileSystem\HighlightRenderer.cs" />
@@ -244,6 +245,7 @@
     <Compile Include="DevPortalSecrets.g.cs" />
     <Compile Include="Audio\IMemoryBufferAccess.cs" />
     <Compile Include="Audio\AudioLevelService.cs" />
+    <Compile Include="Audio\BackgroundMusicService.cs" />
     <Compile Include="Audio\RetroAudioPlayer.cs" />
     <Compile Include="Audio\FftHelper.cs" />
     <Compile Include="Controls\VuMeterBar.xaml.cs">
@@ -616,6 +618,12 @@
     <Content Include="Assets\Views\StartMenu\startmenu-close-48.png" />
     <Content Include="Assets\Views\StartMenu\startmenu-favorites-128.png" />
     <Content Include="Assets\Views\SettingsPage\settingspage-clear-credentials-48.png" />
+    <Content Include="Assets\Views\SettingsPage\settingspage-bgm-48.png" />
+    <Content Include="Assets\Views\SettingsPage\settingspage-bgm-pick-48.png" />
+    <Content Include="Assets\Views\SettingsPage\settingspage-volume-48.png" />
+    <Content Include="Assets\Views\SettingsPage\settingspage-hide-drives-48.png" />
+    <Content Include="Assets\Views\SettingsPage\settingspage-back-48.png" />
+    <Content Include="Assets\Audio\default-bgm.spc" />
     <Content Include="Assets\Views\StartMenu\startmenu-guide-48.png" />
     <Content Include="Assets\Views\StartMenu\startmenu-logs-48.png" />
     <Content Include="Assets\Views\StartMenu\startmenu-logs-48.png" />

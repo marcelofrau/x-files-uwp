@@ -36,6 +36,7 @@
     <Compile Include="..\XFiles\Metadata\TrackMetadata.cs" Link="Linked\Metadata\TrackMetadata.cs" />
     <Compile Include="..\XFiles\Services\PortalCore.cs" Link="Linked\Services\PortalCore.cs" />
     <Compile Include="..\XFiles\Services\PortalModels.cs" Link="Linked\Services\PortalModels.cs" />
+    <Compile Include="..\XFiles\FileSystem\MusicFormatClassifier.cs" Link="Linked\FileSystem\MusicFormatClassifier.cs" />
   </ItemGroup>
 
 </Project>

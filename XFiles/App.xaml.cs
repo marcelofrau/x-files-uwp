@@ -9,6 +9,7 @@ using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Media.Animation;
 using Windows.UI.Xaml.Navigation;
 using XFiles.Controls;
+using XFiles.FileSystem;
 using XFiles.Navigation;
 
 namespace XFiles
@@ -91,6 +92,21 @@ namespace XFiles
                 Log.Warn("App: failed to load log level, using default Info", ex);
             }
 
+            // Seed the sync drive-hide setting cache (read by the scanner).
+            try
+            {
+                await Settings.XFilesSettings.GetHideEmptyDrivesAsync();
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("App: failed to load HideEmptyDrives setting", ex);
+            }
+
+            // Warm the drive-accessibility probe cache on a background thread so
+            // the first root scan can hide inaccessible drives without blocking
+            // the UI thread (~210ms per denied drive on Xbox).
+            FileSystem.DirectoryScanner.WarmDriveProbesAsync();
+
             // Portal setup: load persisted Device Portal credentials, arm the portal
             // client, clear the session cache, and probe reachability (fire-and-forget).
             try
@@ -157,7 +173,21 @@ namespace XFiles
                 ShowSplashOverlay(Window.Current.Content as Grid);
 
                 // Play Mac boot chime
-                PlayBootChime();
+                Task chimeDone = PlayBootChime();
+
+                // Background music: read settings and start looping playback (if the
+                // feature is enabled) without delaying first paint. Fired after the
+                // UI is up (post-navigation) so the first-run native render never
+                // overlaps the XAML construction. The BGM waits for the chime to
+                // finish playing before it fades in.
+                try
+                {
+                    _ = Audio.BackgroundMusicService.Instance.InitializeAsync(chimeDone);
+                }
+                catch (Exception ex)
+                {
+                    Log.Warn("App: background music startup failed: {Message}", ex.Message);
+                }
 
                 // Remove Xbox safe zone (overscan margin) — app fills entire screen
                 var view = ApplicationView.GetForCurrentView();
@@ -182,7 +212,14 @@ namespace XFiles
             Log.Info("Frame navigated to {Page}", e.SourcePageType?.Name ?? "null");
         }
 
-        private async void PlayBootChime()
+        private Task PlayBootChime()
+        {
+            var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            PlayBootChimeAsync(tcs);
+            return tcs.Task;
+        }
+
+        private async void PlayBootChimeAsync(TaskCompletionSource<bool> tcs)
         {
             try
             {
@@ -193,14 +230,27 @@ namespace XFiles
                 _bootChimePlayer = new Windows.Media.Playback.MediaPlayer();
                 _bootChimePlayer.Volume = 0.4;
                 _bootChimePlayer.Source = source;
-                _bootChimePlayer.MediaEnded += (s, e) => _bootChimePlayer = null;
-                _bootChimePlayer.MediaFailed += (s, e) => _bootChimePlayer = null;
                 _bootChimePlayer.Play();
                 Log.Info("Boot chime playing");
+
+                // MediaEnded is unreliable on UWP — complete based on the chime's
+                // real duration (+ buffer for MF start latency) instead.
+                double seconds = 3.0;
+                try
+                {
+                    var props = await file.Properties.GetMusicPropertiesAsync();
+                    if (props.Duration.TotalMilliseconds > 0)
+                        seconds = props.Duration.TotalMilliseconds / 1000.0;
+                }
+                catch (Exception ex) { Log.Warn("Boot chime: duration read failed", ex); }
+                await Task.Delay((int)(seconds * 1000.0) + 400);
+                _bootChimePlayer = null;
+                tcs.TrySetResult(true);
             }
             catch (Exception ex)
             {
                 Log.Warn("Failed to play boot chime", ex);
+                tcs.TrySetResult(true);
             }
         }
 
