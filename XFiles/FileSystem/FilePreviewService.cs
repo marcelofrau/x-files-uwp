@@ -372,6 +372,64 @@ namespace XFiles.FileSystem
             return result;
         }
 
+        /// <summary>
+        /// Builds a preview from a remote (network) file stream. Only the first
+        /// bytes are read over the wire — text/image/svg/rom previews need at
+        /// most a few hundred KB, so this stays cheap on SMB. PDF previews
+        /// return metadata only (rendering is path-based; fullscreen open caches
+        /// the file locally first). The caller owns and disposes the stream.
+        /// </summary>
+        public static async Task<FilePreviewResult> GetPreviewFromNetworkAsync(
+            Stream stream, string fileName, long fileSize)
+        {
+            var result = new FilePreviewResult();
+            result.Type = FilePreviewType.Unsupported;
+            result.FileSizeBytes = fileSize;
+
+            string ext = string.IsNullOrEmpty(fileName) ? "" : Path.GetExtension(fileName);
+            result.FileType = GetFileTypeLabel(ext, null);
+
+            try
+            {
+                if (IsImageFile(ext) && !IsSvgFile(ext))
+                {
+                    await LoadImagePreviewFromStream(stream, result);
+                }
+                else if (IsSvgFile(ext))
+                {
+                    await LoadSvgPreviewFromStream(stream, result);
+                }
+                else if (IsPdfFile(ext))
+                {
+                    result.Type = FilePreviewType.Pdf;
+                }
+                else if (IsTextFile(ext))
+                {
+                    await LoadTextPreviewFromStream(stream, result);
+                }
+                else if (IsAudioFile(ext) || IsChiptuneFile(ext))
+                {
+                    result.Type = FilePreviewType.Audio;
+                }
+                else if (IsVideoFile(ext))
+                {
+                    result.Type = FilePreviewType.Video;
+                }
+                else if (RomHeaderParser.IsRomFile(ext))
+                {
+                    await LoadRomPreviewFromStream(stream, result, ext);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warn($"FilePreviewService.GetPreviewFromNetwork: failed for {fileName}", ex);
+                result.Type = FilePreviewType.Error;
+                result.ErrorMessage = $"Cannot preview remote file: {ex.Message}";
+            }
+
+            return result;
+        }
+
         public static async Task<FilePreviewResult> GetPreviewFromArchiveAsync(
             ArchiveBrowser archiveBrowser, string archivePath, string internalPath)
         {
@@ -921,7 +979,7 @@ namespace XFiles.FileSystem
                 { "usf", "USF (N64)" }, { "miniusf", "USF (N64)" },
             };
 
-        private static string GetFileTypeLabel(string extension, string filePath = null)
+        internal static string GetFileTypeLabel(string extension, string filePath = null)
         {
             if (string.IsNullOrEmpty(extension))
                 return "Unknown";
@@ -944,7 +1002,10 @@ namespace XFiles.FileSystem
                         }
                     }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    Log.Warn("GetFileTypeLabel: md content probe failed ({Msg})", ex.Message);
+                }
                 return "Markdown";
             }
 

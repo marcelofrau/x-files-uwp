@@ -733,68 +733,6 @@
 
                             <Border Height="1" Background="{StaticResource XFilesBorderBrush}" Margin="0,0,0,14" />
 
-                            <!-- Media -->
-                            <TextBlock Text="MEDIA"
-                                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
-                                        FontSize="11" Foreground="{StaticResource XFilesTextMutedBrush}"
-                                        Margin="0,0,0,8" />
-
-                            <!-- LB/RB -->
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                <Image Source="ms-appx:///Assets/GamepadButtons/lr/button_xbox_digital_bumper_light_1.png"
-                                       Width="26" Height="16" Margin="0,0,4,0"
-                                       VerticalAlignment="Center" />
-                                <Image Source="ms-appx:///Assets/GamepadButtons/lr/button_xbox_digital_bumper_light_2.png"
-                                       Width="26" Height="16" Margin="0,0,10,0"
-                                       VerticalAlignment="Center" />
-                                <StackPanel VerticalAlignment="Center">
-                                    <TextBlock Text="Seek 5s"
-                                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                                               FontSize="13" Foreground="#CCFFFFFF" />
-                                    <TextBlock Text="Back / Forward while media plays"
-                                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                                               FontSize="10" Foreground="{StaticResource XFilesTextDimBrush}"
-                                               Margin="0,1,0,0" />
-                                </StackPanel>
-                            </StackPanel>
-
-                            <!-- LT/RT -->
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                <Image Source="ms-appx:///Assets/GamepadButtons/lr/button_xbox_analog_trigger_light_1.png"
-                                       Width="16" Height="26" Margin="0,0,4,0"
-                                       VerticalAlignment="Center" />
-                                <Image Source="ms-appx:///Assets/GamepadButtons/lr/button_xbox_analog_trigger_light_2.png"
-                                       Width="16" Height="26" Margin="0,0,10,0"
-                                       VerticalAlignment="Center" />
-                                <StackPanel VerticalAlignment="Center">
-                                    <TextBlock Text="Accelerating seek"
-                                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                                               FontSize="13" Foreground="#CCFFFFFF" />
-                                    <TextBlock Text="Hold longer = seek faster"
-                                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                                               FontSize="10" Foreground="{StaticResource XFilesTextDimBrush}"
-                                               Margin="0,1,0,0" />
-                                </StackPanel>
-                            </StackPanel>
-
-                            <!-- L/R Stick -->
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-                                <Image Source="ms-appx:///Assets/GamepadButtons/analog/button_xbox_analog_l.png"
-                                       Width="26" Height="26" Margin="0,0,10,0"
-                                       VerticalAlignment="Center" />
-                                <StackPanel VerticalAlignment="Center">
-                                    <TextBlock Text="Volume"
-                                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                                               FontSize="13" Foreground="#CCFFFFFF" />
-                                    <TextBlock Text="Left / Right stick adjusts volume"
-                                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                                               FontSize="10" Foreground="{StaticResource XFilesTextDimBrush}"
-                                               Margin="0,1,0,0" />
-                                </StackPanel>
-                            </StackPanel>
-
-                            <Border Height="1" Background="{StaticResource XFilesBorderBrush}" Margin="0,0,0,14" />
-
                             <!-- File ops -->
                             <TextBlock Text="ACTIONS"
                                        FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
@@ -856,6 +794,13 @@
                                                Margin="0,1,0,0" />
                                 </StackPanel>
                             </StackPanel>
+
+                            <Border Height="1" Background="{StaticResource XFilesBorderBrush}" Margin="0,0,14,14" />
+
+                            <TextBlock Text="Full button guide available in Settings."
+                                       FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                       FontSize="10" Foreground="{StaticResource XFilesTextDimBrush}"
+                                       TextWrapping="Wrap" />
                         </StackPanel>
                     </ScrollViewer>
                 </Grid>
@@ -930,6 +875,226 @@
                                                FontSize="10" Foreground="{StaticResource XFilesTextDimBrush}"
                                                Margin="0,1,0,0" />
                                 </StackPanel>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+
+                <Grid x:Name="NetworkGuidePanel" Grid.Row="0" Grid.RowSpan="3"
+                      Visibility="Collapsed" Background="#0F1318">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="20,24,20,24">
+
+                            <!-- ═══ Context: general overview (..) ═══ -->
+                            <StackPanel x:Name="NetworkOverviewPanel">
+                                <TextBlock Text="NETWORK"
+                                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                                           FontSize="13" Foreground="{StaticResource XFilesAccentBrush}"
+                                           Margin="0,0,0,16" />
+
+                                <Image Source="ms-appx:///Assets/Views/MainPage/mainpage-network-128.png"
+                                       Width="88" Height="88"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,4,0,16" />
+
+                                <TextBlock Text="Browse files on other computers and fetch files from the internet."
+                                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                           FontSize="12" Foreground="#AAFFFFFF"
+                                           TextWrapping="Wrap"
+                                           TextAlignment="Center"
+                                           Margin="0,0,0,20" />
+
+                                <Border Height="1" Background="{StaticResource XFilesBorderBrush}" Margin="0,0,0,16" />
+
+                                <!-- Quick tips -->
+                                <TextBlock Text="QUICK TIPS"
+                                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                                           FontSize="10" Foreground="{StaticResource XFilesTextDimBrush}"
+                                           Margin="0,0,0,10" />
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                    <Image Source="ms-appx:///Assets/Views/MainPage/mainpage-network-tip-shared-32.png"
+                                           Width="32" Height="32" Margin="0,0,10,0"
+                                           VerticalAlignment="Center" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Shared folders"
+                                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                                   FontSize="13" Foreground="#CCFFFFFF" />
+                                        <TextBlock Text="Access PC / NAS folders using SMB."
+                                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                                   FontSize="10" Foreground="{StaticResource XFilesTextDimBrush}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,1,0,0" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                    <Image Source="ms-appx:///Assets/Views/MainPage/mainpage-network-tip-download-32.png"
+                                           Width="32" Height="32" Margin="0,0,10,0"
+                                           VerticalAlignment="Center" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Direct downloads"
+                                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                                   FontSize="13" Foreground="#CCFFFFFF" />
+                                        <TextBlock Text="Fetch remote web resources straight to this console."
+                                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                                   FontSize="10" Foreground="{StaticResource XFilesTextDimBrush}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,1,0,0" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                    <Image Source="ms-appx:///Assets/Views/MainPage/mainpage-network-tip-server-32.png"
+                                           Width="32" Height="32" Margin="0,0,10,0"
+                                           VerticalAlignment="Center" />
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Saved locations"
+                                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                                   FontSize="13" Foreground="#CCFFFFFF" />
+                                        <TextBlock Text="Keep frequently used servers pinned here for one-press access."
+                                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                                   FontSize="10" Foreground="{StaticResource XFilesTextDimBrush}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,1,0,0" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- ═══ Context: Add location ═══ -->
+                            <StackPanel x:Name="NetworkAddPanel" Visibility="Collapsed">
+                                <TextBlock Text="NETWORK"
+                                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                                           FontSize="13" Foreground="{StaticResource XFilesAccentBrush}"
+                                           Margin="0,0,0,16" />
+
+                                <Image Source="ms-appx:///Assets/Views/MainPage/mainpage-network-add-128.png"
+                                       Width="88" Height="88"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,4,0,16" />
+
+                                <TextBlock Text="Add location"
+                                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                                           FontSize="15" Foreground="#CCFFFFFF"
+                                           TextAlignment="Center"
+                                           Margin="0,0,0,6" />
+
+                                <TextBlock Text="Connect to a local network share or NAS over SMB and browse it like a local drive."
+                                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                           FontSize="12" Foreground="#AAFFFFFF"
+                                           TextWrapping="Wrap"
+                                           TextAlignment="Center"
+                                           Margin="0,0,0,14" />
+
+                                <Border Height="1" Background="{StaticResource XFilesBorderBrush}" Margin="0,0,0,14" />
+
+                                <TextBlock Text="Press A to open the connection wizard — name, host, user and password."
+                                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                           FontSize="11" Foreground="{StaticResource XFilesTextDimBrush}"
+                                           TextWrapping="Wrap"
+                                           TextAlignment="Center" />
+                            </StackPanel>
+
+                            <!-- ═══ Context: Download from URL ═══ -->
+                            <StackPanel x:Name="NetworkDownloadPanel" Visibility="Collapsed">
+                                <TextBlock Text="NETWORK"
+                                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                                           FontSize="13" Foreground="{StaticResource XFilesAccentBrush}"
+                                           Margin="0,0,0,16" />
+
+                                <Image Source="ms-appx:///Assets/Views/MainPage/mainpage-network-download-128.png"
+                                       Width="88" Height="88"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,4,0,16" />
+
+                                <TextBlock Text="Download from URL"
+                                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                                           FontSize="15" Foreground="#CCFFFFFF"
+                                           TextAlignment="Center"
+                                           Margin="0,0,0,6" />
+
+                                <TextBlock Text="Fetch a file directly from an HTTP/HTTPS link and save it to this console."
+                                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                           FontSize="12" Foreground="#AAFFFFFF"
+                                           TextWrapping="Wrap"
+                                           TextAlignment="Center"
+                                           Margin="0,0,0,14" />
+
+                                <Border Height="1" Background="{StaticResource XFilesBorderBrush}" Margin="0,0,0,14" />
+
+                                <TextBlock Text="Press A — paste the link, then pick the destination folder."
+                                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                           FontSize="11" Foreground="{StaticResource XFilesTextDimBrush}"
+                                           TextWrapping="Wrap"
+                                           TextAlignment="Center" />
+                            </StackPanel>
+
+                            <!-- ═══ Context: saved server details ═══ -->
+                            <StackPanel x:Name="NetworkServerPanel" Visibility="Collapsed">
+                                <TextBlock Text="NETWORK"
+                                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                                           FontSize="13" Foreground="{StaticResource XFilesAccentBrush}"
+                                           Margin="0,0,0,16" />
+
+                                <Image Source="ms-appx:///Assets/Views/MainPage/mainpage-network-server-128.png"
+                                       Width="88" Height="88"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,4,0,16" />
+
+                                <TextBlock x:Name="NetworkServerTitle"
+                                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                                           FontSize="15" Foreground="#CCFFFFFF"
+                                           TextAlignment="Center"
+                                           TextWrapping="Wrap"
+                                           Margin="0,0,0,16" />
+
+                                <Border Height="1" Background="{StaticResource XFilesBorderBrush}" Margin="0,0,0,12" />
+
+                                <StackPanel Margin="6,0,6,14">
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,7">
+                                        <TextBlock Text="Protocol"
+                                                   Width="86"
+                                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                                   FontSize="11" Foreground="{StaticResource XFilesTextDimBrush}" />
+                                        <TextBlock Text="Windows Share (SMB)"
+                                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                                   FontSize="11" Foreground="#CCFFFFFF" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,7">
+                                        <TextBlock Text="Server"
+                                                   Width="86"
+                                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                                   FontSize="11" Foreground="{StaticResource XFilesTextDimBrush}" />
+                                        <TextBlock x:Name="NetworkServerHost"
+                                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                                   FontSize="11" Foreground="#CCFFFFFF" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,7">
+                                        <TextBlock Text="User"
+                                                   Width="86"
+                                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                                   FontSize="11" Foreground="{StaticResource XFilesTextDimBrush}" />
+                                        <TextBlock x:Name="NetworkServerUser"
+                                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                                   FontSize="11" Foreground="#CCFFFFFF" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="Share"
+                                                   Width="86"
+                                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                                   FontSize="11" Foreground="{StaticResource XFilesTextDimBrush}" />
+                                        <TextBlock x:Name="NetworkServerShare"
+                                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                                   FontSize="11" Foreground="#CCFFFFFF"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <TextBlock Text="Press A to browse this server's shares."
+                                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                           FontSize="11" Foreground="{StaticResource XFilesTextDimBrush}"
+                                           TextWrapping="Wrap"
+                                           TextAlignment="Center" />
                             </StackPanel>
                         </StackPanel>
                     </ScrollViewer>
@@ -1118,6 +1283,7 @@
         <controls:InputDialog x:Name="InputDialogControl" />
         <controls:PortalSetupDialog x:Name="PortalSetupDialogControl" />
         <controls:PortalCredentialsDialog x:Name="PortalCredentialsDialogControl" />
+        <controls:NetworkLocationDialog x:Name="NetworkLocationDialogControl" />
         <controls:OverwriteDialog x:Name="OverwriteDialogControl" />
         <controls:FileOperationConfirmDialog x:Name="FileOperationConfirmDialogControl" />
         <controls:FolderBrowserDialog x:Name="FolderBrowserDialogControl" />
@@ -1149,16 +1315,24 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
                 <StackPanel Grid.Row="0" HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <Border x:Name="FsAlbumArtBorder" CornerRadius="8"
-                            Width="280" Height="280"
-                            Visibility="Collapsed">
-                        <Image x:Name="FsAlbumArtImage" Stretch="UniformToFill" />
-                    </Border>
-                    <Grid x:Name="FsDefaultArtPanel" Width="280" Height="280"
-                          Visibility="Collapsed" Background="#1A1D23" CornerRadius="8">
-                        <FontIcon Glyph="&#xE8D6;" FontSize="80" HorizontalAlignment="Center"
-                                  VerticalAlignment="Center"
-                                  Foreground="{StaticResource XFilesAccentDimBrush}" />
+                    <Grid Width="280" Height="280">
+                        <Border x:Name="FsAlbumArtBorder" CornerRadius="8"
+                                Width="280" Height="280"
+                                Visibility="Collapsed">
+                            <Image x:Name="FsAlbumArtImage" Stretch="UniformToFill" />
+                        </Border>
+                        <Grid x:Name="FsDefaultArtPanel" Width="280" Height="280"
+                              Visibility="Collapsed" Background="#1A1D23" CornerRadius="8">
+                            <FontIcon Glyph="&#xE8D6;" FontSize="80" HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"
+                                      Foreground="{StaticResource XFilesAccentDimBrush}" />
+                        </Grid>
+                        <!-- Loading spinner — spins over the album-art area -->
+                        <ProgressRing x:Name="FsLoadingSpinner" Width="48" Height="48"
+                                      IsActive="False" Visibility="Collapsed"
+                                      IsHitTestVisible="False"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center"
+                                      Foreground="{StaticResource XFilesAccentBrush}" />
                     </Grid>
                 </StackPanel>
 
@@ -1191,13 +1365,6 @@
             <!-- Audio visualizer canvas (shown when cycling with Select) -->
             <vis:AudioVisualizerBase x:Name="FsVisualizerCanvas" Grid.Row="0"
                                      Visibility="Collapsed" />
-
-            <!-- Loading spinner (chiptune decode/stream in flight) -->
-            <ProgressRing x:Name="FsLoadingSpinner" Width="64" Height="64"
-                          IsActive="False" Visibility="Collapsed"
-                          IsHitTestVisible="False"
-                          HorizontalAlignment="Center" VerticalAlignment="Center"
-                          Foreground="{StaticResource XFilesAccentBrush}" />
 
             <!-- Transport controls -->
             <Grid Grid.Row="1" Background="#CC1A1D23" Padding="16,10">

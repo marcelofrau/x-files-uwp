@@ -24,6 +24,7 @@ namespace XFiles.Controls
         public void Show(string url, string title = "Shared")
         {
             Log.Info("ShareDialog.Show: url={Url} title={Title}", url ?? "(null)", title);
+            Canvas.SetZIndex(this, 500);
             Visibility = Visibility.Visible;
             Overlay.Visibility = Visibility.Visible;
             TitleText.Text = title;

@@ -8,6 +8,9 @@ namespace XFiles.Network
     /// </summary>
     public class NetworkServerConfig
     {
+        /// <summary>Row id in the NetworkServerEntry table; 0 when not persisted.</summary>
+        public int Id { get; set; }
+
         /// <summary>Protocol used to reach this server (SMB for now).</summary>
         public NetworkProtocol Protocol { get; set; } = NetworkProtocol.Smb;
 

@@ -26,6 +26,7 @@ using XFiles.Audio;
 using XFiles.FileSystem;
 using XFiles.Metadata;
 using XFiles.Navigation;
+using XFiles.Network;
 using XFiles.Services;
 using XFiles.Visualizers;
 
@@ -71,6 +72,15 @@ namespace XFiles.Controls
             if (_navigator.Current?.IsFavorite == true)
             {
                 ShowFavoritesGuide();
+                return;
+            }
+
+            // Network locations column (no location context yet): show the how-to
+            // guide for Add location / Download from URL. Shares and remote tree
+            // columns (NetworkLocationId > 0) fall through to the live listing.
+            if (_navigator.Current?.IsNetwork == true && _navigator.Current.NetworkLocationId == 0)
+            {
+                await ShowNetworkGuideAsync();
                 return;
             }
 
@@ -168,6 +178,15 @@ namespace XFiles.Controls
                         string audioPath = _navigator.Preview.PreviewFilePath;
                         Log.Dbg("UpdatePreviewColumn: media type={Type} path={Path}", _navigator.Preview.PreviewType, audioPath);
 
+                        if (IsRemoteMediaPreview)
+                        {
+                            // Remote SMB audio: stream inline into the AudioGraph player.
+                            PreviewStatus.Text = _navigator.Preview.PreviewFileType;
+                            PreviewMediaPanel.Visibility = Visibility.Visible;
+                            await PlayRemoteAudioInlineAsync();
+                            break;
+                        }
+
                         if (_navigator.Preview.PreviewChiptuneTrack >= 0)
                         {
                             // Chiptune subsong selected from a drilled-in track list:
@@ -182,6 +201,7 @@ namespace XFiles.Controls
 
                         PreviewStatus.Text = _navigator.Preview.PreviewFileType;
                         PreviewMediaPanel.Visibility = Visibility.Visible;
+                        _previewNetworkPath = null;
                         MediaPreview.ShowPlaceholder(audioPath);
                         _pendingMediaPath = audioPath;
                         _mediaLoadTimer.Stop();
@@ -191,8 +211,19 @@ namespace XFiles.Controls
                     case FilePreviewType.Video:
                         string videoPath = _navigator.Preview.PreviewFilePath;
                         Log.Dbg("UpdatePreviewColumn: media type={Type} path={Path}", _navigator.Preview.PreviewType, videoPath);
+
+                        if (IsRemoteMediaPreview)
+                        {
+                            // Remote SMB video: stream inline into the pane's player.
+                            PreviewStatus.Text = _navigator.Preview.PreviewFileType;
+                            PreviewMediaPanel.Visibility = Visibility.Visible;
+                            await PlayRemoteVideoInlineAsync();
+                            break;
+                        }
+
                         PreviewStatus.Text = _navigator.Preview.PreviewFileType;
                         PreviewMediaPanel.Visibility = Visibility.Visible;
+                        _previewNetworkPath = null;
                         _pendingMediaPath = videoPath;
                         _mediaLoadTimer.Stop();
                         _mediaLoadTimer.Start();
@@ -359,6 +390,49 @@ namespace XFiles.Controls
             }
         }
 
+        private bool IsRemoteMediaPreview =>
+            _navigator?.Preview != null &&
+            _navigator.Preview.IsNetwork &&
+            !string.IsNullOrEmpty(_navigator.Preview.NetworkShareName) &&
+            !string.IsNullOrEmpty(_navigator.Preview.NetworkPath);
+
+        private async Task PlayRemoteVideoInlineAsync()
+        {
+            var p = _navigator.Preview;
+            if (p == null) return;
+            var stream = await _navigator.OpenNetworkStreamAsync(p.NetworkLocationId, p.NetworkShareName, p.NetworkPath);
+            if (stream == null) return;
+            _previewNetworkLocationId = p.NetworkLocationId;
+            _previewNetworkShare = p.NetworkShareName;
+            _previewNetworkPath = p.NetworkPath;
+            Func<Stream> reopen = () => Task.Run(() =>
+                _navigator.OpenNetworkStreamAsync(p.NetworkLocationId, p.NetworkShareName, p.NetworkPath))
+                .GetAwaiter().GetResult();
+            MediaPreview.LoadRemoteStream(
+                new RemoteStream(stream, reopen),
+                MimeForRemoteFile(Path.GetExtension(p.Label ?? "")));
+            MediaPreview.SetNetworkContext(p.NetworkShareName, p.NetworkPath);
+        }
+
+        private async Task PlayRemoteAudioInlineAsync()
+        {
+            var p = _navigator.Preview;
+            if (p == null) return;
+            var stream = await _navigator.OpenNetworkStreamAsync(p.NetworkLocationId, p.NetworkShareName, p.NetworkPath);
+            if (stream == null) return;
+            _previewNetworkLocationId = p.NetworkLocationId;
+            _previewNetworkShare = p.NetworkShareName;
+            _previewNetworkPath = p.NetworkPath;
+            Func<Stream> reopen = () => Task.Run(() =>
+                _navigator.OpenNetworkStreamAsync(p.NetworkLocationId, p.NetworkShareName, p.NetworkPath))
+                .GetAwaiter().GetResult();
+            await MediaPreview.LoadRemoteAudio(
+                new RemoteStream(stream, reopen),
+                MimeForRemoteFile(Path.GetExtension(p.Label ?? "")),
+                Path.GetFileNameWithoutExtension(p.Label ?? ""));
+            MediaPreview.SetNetworkContext(p.NetworkShareName, p.NetworkPath);
+        }
+
         private void HideAllPreviewPanels()
         {
             _coverArtCts?.Cancel();
@@ -369,11 +443,13 @@ namespace XFiles.Controls
             PreviewMediaPanel.Visibility = Visibility.Collapsed;
             _mediaLoadTimer.Stop();
             MediaPreview.Stop();
+            _previewNetworkPath = null;
             PreviewRomPanel.Visibility = Visibility.Collapsed;
             PreviewErrorPanel.Visibility = Visibility.Collapsed;
             PreviewUnsupportedPanel.Visibility = Visibility.Collapsed;
             PreviewArchiveMediaPanel.Visibility = Visibility.Collapsed;
             FavoritesGuidePanel.Visibility = Visibility.Collapsed;
+            NetworkGuidePanel.Visibility = Visibility.Collapsed;
         }
 
         private void ShowFavoritesGuide()
@@ -382,6 +458,61 @@ namespace XFiles.Controls
             PreviewHeader.Text = "";
             PreviewStatus.Text = "";
             FavoritesGuidePanel.Visibility = Visibility.Visible;
+        }
+
+        /// <summary>
+        /// Network root-column preview: a contextual guide that reacts to the
+        /// selected row — general overview (..), a focused card for each action
+        /// row, or a server details card for a saved location.
+        /// </summary>
+        private async Task ShowNetworkGuideAsync()
+        {
+            HideAllPreviewPanels();
+            PreviewHeader.Text = "";
+            PreviewStatus.Text = "";
+            NetworkGuidePanel.Visibility = Visibility.Visible;
+
+            NetworkOverviewPanel.Visibility = Visibility.Collapsed;
+            NetworkAddPanel.Visibility = Visibility.Collapsed;
+            NetworkDownloadPanel.Visibility = Visibility.Collapsed;
+            NetworkServerPanel.Visibility = Visibility.Collapsed;
+
+            FileEntry selected = null;
+            var current = _navigator.Current;
+            if (current != null && current.SelectedIndex >= 0 && current.SelectedIndex < current.Entries.Count)
+                selected = current.Entries[current.SelectedIndex];
+
+            if (selected == null || selected.IsSeparator || selected.Name == "..")
+            {
+                NetworkOverviewPanel.Visibility = Visibility.Visible;
+                return;
+            }
+
+            switch (selected.ActionKind)
+            {
+                case ActionKind.AddLocation:
+                    NetworkAddPanel.Visibility = Visibility.Visible;
+                    return;
+                case ActionKind.DownloadUrl:
+                    NetworkDownloadPanel.Visibility = Visibility.Visible;
+                    return;
+            }
+
+            if (selected.IsNetwork && selected.NetworkLocationId > 0)
+            {
+                var config = await NetworkServerManager.GetAsync((int)selected.NetworkLocationId);
+                if (config != null)
+                {
+                    NetworkServerTitle.Text = NetworkUrl.DisplayName(config);
+                    NetworkServerHost.Text = config.Host;
+                    NetworkServerUser.Text = string.IsNullOrEmpty(config.Username) ? "(guest)" : config.Username;
+                    NetworkServerShare.Text = string.IsNullOrEmpty(config.Share) ? "(all shares)" : config.Share;
+                    NetworkServerPanel.Visibility = Visibility.Visible;
+                    return;
+                }
+            }
+
+            NetworkOverviewPanel.Visibility = Visibility.Visible;
         }
 
         private async Task<string> BuildHighlightHtmlAsync(string code, string extension)
@@ -458,6 +589,11 @@ namespace XFiles.Controls
                 IsChiptune = e.IsChiptune,
                 ChiptuneTrackIndex = e.ChiptuneTrackIndex,
                 ChiptuneSourcePath = e.ChiptuneSourcePath,
+                IsNetwork = e.IsNetwork,
+                ActionKind = e.ActionKind,
+                NetworkLocationId = e.NetworkLocationId,
+                NetworkShareName = e.NetworkShareName,
+                NetworkPath = e.NetworkPath,
                 IsDotDot = (e.Name == "..")
             }).ToList();
 
@@ -486,6 +622,11 @@ namespace XFiles.Controls
                 IsChiptune = e.IsChiptune,
                 ChiptuneTrackIndex = e.ChiptuneTrackIndex,
                 ChiptuneSourcePath = e.ChiptuneSourcePath,
+                IsNetwork = e.IsNetwork,
+                ActionKind = e.ActionKind,
+                NetworkLocationId = e.NetworkLocationId,
+                NetworkShareName = e.NetworkShareName,
+                NetworkPath = e.NetworkPath,
                 IsHighlighted = (highlightName != null && e.Name == highlightName),
                 IsDotDot = (e.Name == "..")
             }).ToList();
@@ -515,6 +656,11 @@ namespace XFiles.Controls
                 IsChiptune = e.IsChiptune,
                 ChiptuneTrackIndex = e.ChiptuneTrackIndex,
                 ChiptuneSourcePath = e.ChiptuneSourcePath,
+                IsNetwork = e.IsNetwork,
+                ActionKind = e.ActionKind,
+                NetworkLocationId = e.NetworkLocationId,
+                NetworkShareName = e.NetworkShareName,
+                NetworkPath = e.NetworkPath,
                 IsDotDot = (e.Name == "..")
             }).ToList();
 

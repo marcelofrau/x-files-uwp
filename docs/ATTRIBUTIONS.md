@@ -51,6 +51,13 @@ Full license text: https://creativecommons.org/licenses/by-sa/4.0/legalcode
 - **Used for:** UI controls, toolbar buttons, view-specific icons
 - **Disk Space dialog + drive menu:** `icons8-hdd-48.png` → `Assets/Views/FileActionSheet/fileactionsheet-hdd-48.png`, `icons8-hdd-100.png` → `Assets/Views/DiskUsageDialog/diskusagedialog-hdd-100.png`
 - **Settings page icons:** `icons8-hdd-48.png` → `Assets/Views/SettingsPage/settingspage-hide-drives-48.png`, `fluentui-back-arrow-48.png` → `Assets/Views/SettingsPage/settingspage-back-48.png` (bgm/volume/clear-credentials icons also derive from this set)
+- **Network add-location icon:** `icons8-add-24.png` → `Assets/FileTypes/filetype-network-add-location-24.png`
+- **Network download-from-URL icon:** `icons8-download-24.png` → `Assets/FileTypes/filetype-network-download-24.png`
+- **Network guide header:** `icons8-wired-network-128.png` → `Assets/Views/MainPage/mainpage-network-128.png`
+- **Network preview bar — add-location card:** `icons8-shared-folder-128.png` → `Assets/Views/MainPage/mainpage-network-add-128.png`
+- **Network preview bar — download card:** `icons8-download-folder-v-128.png` → `Assets/Views/MainPage/mainpage-network-download-128.png`
+- **Network preview bar — server card:** `icons8-server-128.png` → `Assets/Views/MainPage/mainpage-network-server-128.png`
+- **Network preview bar — quick tips:** `icons8-shared-folder-32.png` / `icons8-downloads-32.png` / `icons8-server-32.png` → `Assets/Views/MainPage/mainpage-network-tip-{shared,download,server}-32.png`
 
 ## Gamepad Button Icons
 

@@ -221,6 +221,65 @@
         <Setter Property="MinHeight" Value="32" />
     </Style>
 
+    <!--
+        ComboBox: the default template resolves ComboBox* theme brushes from the
+        control's resource scope, same trick as the TextControl* overrides above,
+        so the dropdown + items render dark instead of the light system defaults.
+    -->
+    <SolidColorBrush x:Key="ComboBoxBackground" Color="#0F1A0F" />
+    <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="#101B10" />
+    <SolidColorBrush x:Key="ComboBoxBackgroundPressed" Color="#0F1A0F" />
+    <SolidColorBrush x:Key="ComboBoxBackgroundFocused" Color="#0F1A0F" />
+    <SolidColorBrush x:Key="ComboBoxBackgroundDisabled" Color="#0F1A0F" />
+    <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="#4A6220" />
+    <SolidColorBrush x:Key="ComboBoxBorderBrushPointerOver" Color="#7AA832" />
+    <SolidColorBrush x:Key="ComboBoxBorderBrushPressed" Color="#4A6220" />
+    <SolidColorBrush x:Key="ComboBoxBorderBrushFocused" Color="#7AA832" />
+    <SolidColorBrush x:Key="ComboBoxBorderBrushDisabled" Color="#2A2D33" />
+    <SolidColorBrush x:Key="ComboBoxForeground" Color="#F0F0F0" />
+    <SolidColorBrush x:Key="ComboBoxForegroundPointerOver" Color="#F0F0F0" />
+    <SolidColorBrush x:Key="ComboBoxForegroundPressed" Color="#F0F0F0" />
+    <SolidColorBrush x:Key="ComboBoxForegroundFocused" Color="#F0F0F0" />
+    <SolidColorBrush x:Key="ComboBoxForegroundDisabled" Color="#8B8D91" />
+    <SolidColorBrush x:Key="ComboBoxPlaceholderForeground" Color="#8B8D91" />
+    <SolidColorBrush x:Key="ComboBoxPlaceholderForegroundFocused" Color="#8B8D91" />
+    <SolidColorBrush x:Key="ComboBoxPlaceholderForegroundDisabled" Color="#5A5C60" />
+    <SolidColorBrush x:Key="ComboBoxDropDownGlyphForeground" Color="#8B8D91" />
+    <SolidColorBrush x:Key="ComboBoxDropDownGlyphForegroundFocused" Color="#F0F0F0" />
+    <SolidColorBrush x:Key="ComboBoxItemBackground" Color="#0F1A0F" />
+    <SolidColorBrush x:Key="ComboBoxItemBackgroundPointerOver" Color="#1E2A12" />
+    <SolidColorBrush x:Key="ComboBoxItemBackgroundPressed" Color="#284325" />
+    <SolidColorBrush x:Key="ComboBoxItemBackgroundSelected" Color="#93C43C" />
+    <SolidColorBrush x:Key="ComboBoxItemBackgroundPointerOverUnfocused" Color="#1E2A12" />
+    <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedUnfocused" Color="#1E2A12" />
+    <SolidColorBrush x:Key="ComboBoxItemBackgroundDisabled" Color="#0F1A0F" />
+    <SolidColorBrush x:Key="ComboBoxItemForeground" Color="#F0F0F0" />
+    <SolidColorBrush x:Key="ComboBoxItemForegroundPointerOver" Color="#F0F0F0" />
+    <SolidColorBrush x:Key="ComboBoxItemForegroundPressed" Color="#F0F0F0" />
+    <SolidColorBrush x:Key="ComboBoxItemForegroundSelected" Color="#1A1D23" />
+    <SolidColorBrush x:Key="ComboBoxItemForegroundPointerOverUnfocused" Color="#F0F0F0" />
+    <SolidColorBrush x:Key="ComboBoxItemForegroundSelectedUnfocused" Color="#F0F0F0" />
+    <SolidColorBrush x:Key="ComboBoxItemForegroundDisabled" Color="#5A5C60" />
+    <SolidColorBrush x:Key="ComboBoxItemBorderBrush" Color="#2A2D33" />
+    <SolidColorBrush x:Key="ComboBoxItemBorderBrushPointerOver" Color="#7AA832" />
+    <SolidColorBrush x:Key="ComboBoxItemBorderBrushPressed" Color="#7AA832" />
+    <SolidColorBrush x:Key="ComboBoxItemBorderBrushSelected" Color="#93C43C" />
+    <SolidColorBrush x:Key="ComboBoxHeaderForeground" Color="#B0D8A0" />
+    <SolidColorBrush x:Key="ComboBoxHeaderForegroundPointerOver" Color="#B0D8A0" />
+    <SolidColorBrush x:Key="ComboBoxHeaderForegroundFocused" Color="#B0D8A0" />
+    <SolidColorBrush x:Key="ComboBoxHeaderForegroundDisabled" Color="#8B8D91" />
+
+    <Style x:Key="DarkComboBoxStyle" TargetType="ComboBox">
+        <Setter Property="Background" Value="{StaticResource XFilesInputBgBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource XFilesForegroundBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource XFilesInputBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="FontFamily" Value="{StaticResource XFilesBodyFont}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Padding" Value="8,6" />
+        <Setter Property="MinHeight" Value="34" />
+    </Style>
+
     <!-- ═══ Progress bar (operation dialog) ═══ -->
     <Style x:Key="RetroProgressBarStyle" TargetType="ProgressBar">
         <Setter Property="Foreground" Value="{StaticResource XFilesAccentBrush}" />

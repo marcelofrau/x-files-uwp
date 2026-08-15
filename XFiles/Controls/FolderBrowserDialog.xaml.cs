@@ -25,6 +25,8 @@ namespace XFiles.Controls
         private List<BrowserEntry> _entries = new List<BrowserEntry>();
         private PickerMode _mode = PickerMode.Folder;
         private IReadOnlyList<string> _fileExtensions;
+        private string _confirmLabel;
+        private string _confirmIcon;
 
         public bool IsOpen => Visibility == Visibility.Visible;
 
@@ -41,8 +43,22 @@ namespace XFiles.Controls
         public Task<string> ShowAsync(string initialPath, PickerMode mode,
             IReadOnlyList<string> fileExtensions = null)
         {
+            return ShowAsync(initialPath, mode, fileExtensions, null, null);
+        }
+
+        /// <summary>
+        /// Shows the picker. <paramref name="confirmLabel"/> overrides the confirm
+        /// action label ("Move Here" by default); <paramref name="confirmIcon"/>
+        /// overrides the confirm entry icon. A null label keeps the existing
+        /// Move/copy behavior for all current callers.
+        /// </summary>
+        public Task<string> ShowAsync(string initialPath, PickerMode mode,
+            IReadOnlyList<string> fileExtensions, string confirmLabel, string confirmIcon)
+        {
             _mode = mode;
             _fileExtensions = fileExtensions;
+            _confirmLabel = confirmLabel;
+            _confirmIcon = confirmIcon;
             _tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
             _currentPath = initialPath;
 
@@ -81,11 +97,14 @@ namespace XFiles.Controls
             CurrentPathText.Text = isRoot ? "Drives" : path;
 
             bool fileMode = _mode == PickerMode.File;
-            string footerA = fileMode ? "Navigate" : "Move Here";
-            string moveHereName = isRoot
-                ? "Move Here"
-                : $"Move Here ({dirName})";
-            FooterALabel.Text = fileMode ? footerA : moveHereName;
+            // At the drives root the confirm action makes no sense (there is no
+            // destination), so the A button reads "Navigate" and the virtual
+            // confirm entry is not shown.
+            string footerA = fileMode || isRoot ? "Navigate" : (ConfirmLabelForPath(_currentPath) ?? "Move Here");
+            string moveHereName = ConfirmLabelForPath(_currentPath) ?? "Move Here";
+            if (!isRoot)
+                moveHereName = $"{moveHereName} ({dirName})";
+            FooterALabel.Text = footerA;
 
             // Rebuild virtual entry with updated name (folder mode only — file
             // mode selects actual files instead).
@@ -95,7 +114,7 @@ namespace XFiles.Controls
                 FullPath = null,
                 IsDirectory = false,
                 IsVirtual = true,
-                Icon = "ms-appx:///Assets/Views/FileActionSheet/fileactionsheet-move-48.png"
+                Icon = _confirmIcon ?? "ms-appx:///Assets/Views/FileActionSheet/fileactionsheet-move-48.png"
             };
 
             List<FileEntry> rawEntries;
@@ -112,8 +131,6 @@ namespace XFiles.Controls
                     Log.Err("FolderBrowserDialog.LoadDirectory: root scan failed", ex);
                     CurrentPathText.Text = $"ERROR: {ex.Message}";
                     _entries.Clear();
-                    if (!fileMode)
-                        _entries.Add(moveHereEntry);
                     EntryList.ItemsSource = _entries;
                     EntryList.SelectedIndex = 0;
                     return;
@@ -124,7 +141,7 @@ namespace XFiles.Controls
             }
 
             _entries = new List<BrowserEntry>();
-            if (!fileMode)
+            if (!fileMode && !isRoot)
                 _entries.Add(moveHereEntry);
 
             // Quick jump to the drives root from any folder
@@ -181,6 +198,22 @@ namespace XFiles.Controls
             EntryList.Focus(FocusState.Programmatic);
         }
 
+        /// <summary>
+        /// Resolves the confirm label for a given path: the explicit override when
+        /// set, otherwise "Move Here" (with the folder name when inside a folder).
+        /// </summary>
+        private string ConfirmLabelForPath(string path)
+        {
+            if (!string.IsNullOrEmpty(_confirmLabel))
+                return _confirmLabel;
+            if (string.IsNullOrEmpty(path))
+                return "Move Here";
+            string name = System.IO.Path.GetFileName(path.TrimEnd('\\'));
+            if (string.IsNullOrEmpty(name))
+                name = path.TrimEnd('\\');
+            return $"Move Here ({name})";
+        }
+
         private static string FileIcon(string fileName)
         {
             string ext = System.IO.Path.GetExtension(fileName);
@@ -228,17 +261,7 @@ namespace XFiles.Controls
             // Update A button label based on selection
             if (selected.IsVirtual)
             {
-                if (_currentPath != null)
-                {
-                    string name = System.IO.Path.GetFileName(_currentPath.TrimEnd('\\'));
-                    if (string.IsNullOrEmpty(name))
-                        name = _currentPath.TrimEnd('\\');
-                    FooterALabel.Text = $"Move Here ({name})";
-                }
-                else
-                {
-                    FooterALabel.Text = "Move Here";
-                }
+                FooterALabel.Text = ConfirmLabelForPath(_currentPath);
             }
             else
                 FooterALabel.Text = "Navigate";

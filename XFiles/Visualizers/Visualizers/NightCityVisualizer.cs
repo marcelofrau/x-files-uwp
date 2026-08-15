@@ -102,6 +102,12 @@ namespace XFiles.Visualizers.Visualizers
         private readonly CanvasRenderTarget[] _winStatic = new CanvasRenderTarget[MaxBuildings];
         private readonly CanvasRenderTarget[] _winReactive = new CanvasRenderTarget[MaxBuildings];
 
+        // Serializes resource rebuild (GenerateSkyline/BakeWindowMasks on the
+        // render thread) against teardown (Dispose on the UI thread). Without
+        // it, Dispose nulls _winStatic[i]/_device while BakeWindowMasks is
+        // mid-assignment -> NullReferenceException on the next CreateDrawingSession.
+        private readonly object _resLock = new object();
+
         // Grid step shrinks toward the back: distant layers pack more, smaller
         // lights per facade (city glow), front layers space them out a bit.
         private static readonly float[] WindowGridStep = { 5f, 6f, 6.5f };
@@ -279,10 +285,18 @@ namespace XFiles.Visualizers.Visualizers
 
             EnsureSceneTarget();
             if (_sceneTarget == null) return;
-            if (_skylineDirty) { GenerateSkyline(); _skylineDirty = false; }
 
             try
             {
+                // Skyline rebuild allocates render targets, so it must be
+                // serialized against Dispose (UI thread) — and it must never
+                // escape to kill the frame: any transient target/GPU error here
+                // degrades to a skipped scene (logged once) like RenderScene.
+                lock (_resLock)
+                {
+                    if (_skylineDirty) { GenerateSkyline(); _skylineDirty = false; }
+                }
+
                 using (var sceneDs = _sceneTarget.CreateDrawingSession())
                     RenderScene(sceneDs);
 
@@ -1138,11 +1152,17 @@ namespace XFiles.Visualizers.Visualizers
 
                 _winStatic[i]?.Dispose();
                 _winReactive[i]?.Dispose();
-                _winStatic[i] = new CanvasRenderTarget(_device, mw, mh, 96);
-                _winReactive[i] = new CanvasRenderTarget(_device, mw, mh, 96);
 
-                using (var s = _winStatic[i].CreateDrawingSession())
-                using (var r = _winReactive[i].CreateDrawingSession())
+                // Build into locals and publish to the array only once both
+                // targets exist, then draw the locals: a concurrent Dispose can
+                // null the slot, but the locals keep this frame coherent.
+                var winStatic = new CanvasRenderTarget(_device, mw, mh, 96);
+                var winReactive = new CanvasRenderTarget(_device, mw, mh, 96);
+                _winStatic[i] = winStatic;
+                _winReactive[i] = winReactive;
+
+                using (var s = winStatic.CreateDrawingSession())
+                using (var r = winReactive.CreateDrawingSession())
                 {
                     s.Clear(Color.FromArgb(0, 0, 0, 0));
                     r.Clear(Color.FromArgb(0, 0, 0, 0));
@@ -1782,22 +1802,27 @@ namespace XFiles.Visualizers.Visualizers
 
         public void Dispose()
         {
-            _skyBrush?.Dispose();
-            _skyBrush = null;
-            _sceneTarget?.Dispose();
-            _sceneTarget = null;
-            _cloudSprite?.Dispose();
-            _cloudSprite = null;
-            _glowSprite?.Dispose();
-            _glowSprite = null;
-            _shadeSide?.Dispose();
-            _shadeSide = null;
-            _shadeDark?.Dispose();
-            _shadeDark = null;
-            _shadeAo?.Dispose();
-            _shadeAo = null;
-            DisposeWindowMasks();
-            _device = null;
+            // Take the render lock so a mid-frame rebuild (BakeWindowMasks)
+            // never touches resources this thread is disposing underneath it.
+            lock (_resLock)
+            {
+                _skyBrush?.Dispose();
+                _skyBrush = null;
+                _sceneTarget?.Dispose();
+                _sceneTarget = null;
+                _cloudSprite?.Dispose();
+                _cloudSprite = null;
+                _glowSprite?.Dispose();
+                _glowSprite = null;
+                _shadeSide?.Dispose();
+                _shadeSide = null;
+                _shadeDark?.Dispose();
+                _shadeDark = null;
+                _shadeAo?.Dispose();
+                _shadeAo = null;
+                DisposeWindowMasks();
+                _device = null;
+            }
         }
 
         public void ConfigurePipeline(PostProcessPipeline pipeline)

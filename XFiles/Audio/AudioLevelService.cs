@@ -106,6 +106,7 @@ namespace XFiles.Audio
 #endif
 
         private bool _isGraphRunning;
+        private bool _remoteStreamNode;
         public bool IsPlaying => _isGraphRunning;
         public string CurrentFilePath => _currentFilePath;
         public bool IsFileLoaded => _fileInputNode != null || _mediaSourceNode != null;
@@ -176,6 +177,86 @@ namespace XFiles.Audio
         public async Task LoadAndPlay(string filePath, bool forceStream = false)
         {
             await LoadInternal(filePath, createDeviceOutput: true, forceStream: forceStream);
+        }
+
+        /// <summary>
+        /// Plays a remote (network) stream directly through the graph — no local
+        /// file is involved. The caller supplies a blocking IRandomAccessStream
+        /// (e.g. RemoteStream over an SMB read) whose reads pull data on demand,
+        /// so playback starts as soon as the first bytes arrive.
+        /// </summary>
+        public async Task PlayRemoteStreamAsync(Windows.Storage.Streams.IRandomAccessStream stream, string mimeType, bool autoPlay = true)
+        {
+            await _loadLock.WaitAsync();
+            try
+            {
+                await LoadRemoteStreamCore(stream, mimeType, autoPlay);
+            }
+            finally
+            {
+                _loadLock.Release();
+            }
+        }
+
+        private async Task LoadRemoteStreamCore(Windows.Storage.Streams.IRandomAccessStream stream, string mimeType, bool autoPlay)
+        {
+            if (_isGraphRunning)
+                Stop();
+            _currentFilePath = "(network stream)";
+            Log.Info("AudioLevelService: playing remote stream mime={Mime}", mimeType);
+
+            try
+            {
+                var mediaSource = MediaSource.CreateFromStream(stream, mimeType);
+                await CreateGraphCommon(true);
+
+                var nodeResult = await _graph.CreateMediaSourceAudioInputNodeAsync(mediaSource);
+                if (nodeResult.Status != MediaSourceAudioInputNodeCreationStatus.Success)
+                {
+                    Log.Warn("AudioLevelService: remote MediaSourceAudioInputNode failed: {Status}", nodeResult.Status);
+                    try { stream.Dispose(); } catch { }
+                    MediaFailed?.Invoke(this, EventArgs.Empty);
+                    Stop();
+                    return;
+                }
+
+                _mediaSourceNode = nodeResult.Node;
+                _mediaSourceNode.AddOutgoingConnection(_deviceOutputNode);
+                _mediaSourceNode.AddOutgoingConnection(_frameOutputNode);
+
+                _quantumLogCounter = 0;
+                _remoteStreamNode = true;
+
+                if (autoPlay)
+                {
+                    Log.Info("AudioLevelService: remote stream loaded dur={Dur:F1}s — starting playback",
+                        _mediaSourceNode.Duration.TotalSeconds);
+
+                    _mediaSourceNode.Start();
+                    _isAnalyzing = true;
+                    Log.Info("AudioLevelService: IsAnalyzing=true (remote stream)");
+
+                    _graph.Start();
+                    _isGraphRunning = true;
+                    StartDriftMonitor();
+                    MediaOpened?.Invoke(this, EventArgs.Empty);
+                }
+                else
+                {
+                    // Load-only (inline preview): the graph and source node are
+                    // prepared but not started — playback begins on TogglePlayPause.
+                    _isGraphRunning = false;
+                    Log.Info("AudioLevelService: remote stream prepared (load-only) dur={Dur:F1}s",
+                        _mediaSourceNode.Duration.TotalSeconds);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("AudioLevelService: PlayRemoteStream failed", ex);
+                try { stream.Dispose(); } catch { }
+                MediaFailed?.Invoke(this, EventArgs.Empty);
+                Stop();
+            }
         }
 
         public async Task StartAnalysis(string filePath)
@@ -456,6 +537,10 @@ namespace XFiles.Audio
             if (_graph == null) return;
             try
             {
+                if (_remoteStreamNode && _mediaSourceNode != null)
+                {
+                    try { _mediaSourceNode.Stop(); } catch { }
+                }
                 _graph.Stop();
                 EndGcRegion();
                 _isGraphRunning = false;
@@ -482,9 +567,14 @@ namespace XFiles.Audio
                     Log.Verb("AudioLevelService[TID={Tid}]: NoGCRegion restarted (Resume) size={Size}MB setupAlloc={Setup}KB totalMem={Total}KB",
                         tid, NoGcRegionSize / (1024 * 1024), netAlloc / 1024, GC.GetTotalMemory(false) / 1024);
                 }
+                if (_remoteStreamNode && _mediaSourceNode != null)
+                {
+                    try { _mediaSourceNode.Start(); } catch { }
+                }
                 _graph.Start();
                 _isGraphRunning = true;
                 StartDriftMonitor();
+                _isAnalyzing = true;
                 MediaOpened?.Invoke(this, EventArgs.Empty);
             }
             catch (Exception ex)
@@ -526,6 +616,7 @@ namespace XFiles.Audio
         {
             _isAnalyzing = false;
             _isGraphRunning = false;
+            _remoteStreamNode = false;
             Interlocked.Exchange(ref _isProcessing, 0);
 
             if (_mediaSourceNode != null)
@@ -639,12 +730,37 @@ namespace XFiles.Audio
 
             try
             {
-                // Chiptune WAVs (possibly at game AI rate, e.g. USF 22047 Hz) must go
-                // through the stream path used by the initial load — the file node
-                // path can fail to open them inside an already-running graph.
-                StorageFile storageFile = null;
-                if (!forceStream)
+                // Primary path: raw FileStream → MediaSource. Skips the slow
+                // StorageFile.GetFileFromPathAsync + CreateFileInputNodeAsync
+                // round-trip (UWP path resolution is expensive for arbitrary
+                // drive paths on Xbox). The stream path is already proven for
+                // growing chiptune WAVs — MP3s read just as well from a seekable
+                // stream, which is what makes next/prev swaps feel instant.
+                // Chiptune WAVs (possibly at game AI rate, e.g. USF 22047 Hz) also
+                // must go through the stream path — the file node can fail to open
+                // them inside an already-running graph.
+                filePath = XFiles.Audio.RetroAudioPlayer.ResolveChiptuneWavPath(filePath);
+                var fileStream = new FileStream(filePath,
+                    FileMode.Open, FileAccess.Read,
+                    FileShare.Read | FileShare.Write | FileShare.Delete,
+                    1048576, true);
+                var mediaSource = MediaSource.CreateFromStream(
+                    fileStream.AsRandomAccessStream(), forceStream ? "audio/wav" : "audio/mpeg");
+                var nodeResult = await _graph.CreateMediaSourceAudioInputNodeAsync(mediaSource);
+                if (nodeResult.Status == MediaSourceAudioInputNodeCreationStatus.Success)
                 {
+                    _mediaSourceNode = nodeResult.Node;
+                    _mediaSourceNode.AddOutgoingConnection(_deviceOutputNode);
+                    _mediaSourceNode.AddOutgoingConnection(_frameOutputNode);
+                    _mediaSourceNode.Start();
+                }
+                else
+                {
+                    Log.Warn("AudioLevelService: SwapSource stream node failed ({Status}) — falling back to file node", nodeResult.Status);
+                    fileStream.Dispose();
+
+                    // Fallback: StorageFile + file input node (rare).
+                    StorageFile storageFile = null;
                     try { storageFile = await StorageFile.GetFileFromPathAsync(filePath); }
                     catch { }
 
@@ -659,10 +775,15 @@ namespace XFiles.Audio
                         }
                         catch { }
                     }
-                }
 
-                if (storageFile != null)
-                {
+                    if (storageFile == null)
+                    {
+                        Log.Warn("AudioLevelService: SwapSource file fallback — could not resolve {Path}", filePath);
+                        MediaFailed?.Invoke(this, EventArgs.Empty);
+                        Stop();
+                        return;
+                    }
+
                     var fileResult = await _graph.CreateFileInputNodeAsync(storageFile);
                     if (fileResult.Status != AudioFileNodeCreationStatus.Success)
                     {
@@ -676,31 +797,6 @@ namespace XFiles.Audio
                     _fileInputNode.AddOutgoingConnection(_deviceOutputNode);
                     _fileInputNode.AddOutgoingConnection(_frameOutputNode);
                     _fileInputNode.Start();
-                }
-                else
-                {
-                    // Same resolution as LoadViaStream: a streaming render's .tmp file
-                    // may still be growing, or the render just completed and renamed it.
-                    filePath = XFiles.Audio.RetroAudioPlayer.ResolveChiptuneWavPath(filePath);
-                    var fileStream = new FileStream(filePath,
-                        FileMode.Open, FileAccess.Read,
-                        FileShare.Read | FileShare.Write | FileShare.Delete,
-                        1048576, true);
-                    var mediaSource = MediaSource.CreateFromStream(
-                        fileStream.AsRandomAccessStream(), forceStream ? "audio/wav" : "audio/mpeg");
-                    var nodeResult = await _graph.CreateMediaSourceAudioInputNodeAsync(mediaSource);
-                    if (nodeResult.Status != MediaSourceAudioInputNodeCreationStatus.Success)
-                    {
-                        Log.Warn("AudioLevelService: SwapSource stream node failed: {Status}", nodeResult.Status);
-                        fileStream.Dispose();
-                        MediaFailed?.Invoke(this, EventArgs.Empty);
-                        Stop();
-                        return;
-                    }
-                    _mediaSourceNode = nodeResult.Node;
-                    _mediaSourceNode.AddOutgoingConnection(_deviceOutputNode);
-                    _mediaSourceNode.AddOutgoingConnection(_frameOutputNode);
-                    _mediaSourceNode.Start();
                 }
             }
             catch (Exception ex)

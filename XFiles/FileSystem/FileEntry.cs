@@ -2,6 +2,17 @@ using System;
 
 namespace XFiles.FileSystem
 {
+    /// <summary>
+    /// Kind of a fake action row rendered inside a column (e.g. "＋ Add location").
+    /// Confirm (A) on such a row opens the matching flow instead of navigating.
+    /// </summary>
+    public enum ActionKind
+    {
+        None = 0,
+        AddLocation,
+        DownloadUrl
+    }
+
     public class FileEntry
     {
         public string Name { get; set; }
@@ -11,6 +22,21 @@ namespace XFiles.FileSystem
         public bool IsArchive { get; set; }
         public long SizeBytes { get; set; }
         public DateTimeOffset? LastModified { get; set; }
+
+        // Network entries (saved locations, remote shares/directories/files).
+        // FullPath stays null for these — the remote tree is addressed via
+        // NetworkLocationId + NetworkShareName + NetworkPath.
+        public bool IsNetwork { get; set; }
+        public ActionKind ActionKind { get; set; } = ActionKind.None;
+
+        /// <summary>Id of the saved location (NetworkServerEntry) this entry belongs to. 0 = unbound.</summary>
+        public long NetworkLocationId { get; set; }
+
+        /// <summary>Remote share name this entry lives in (null = location/shares level).</summary>
+        public string NetworkShareName { get; set; }
+
+        /// <summary>Remote path within the share ("" = share root, null = no share bound).</summary>
+        public string NetworkPath { get; set; }
 
         // Only set when entry lives INSIDE an archive:
         public string ArchiveRootPath { get; set; }

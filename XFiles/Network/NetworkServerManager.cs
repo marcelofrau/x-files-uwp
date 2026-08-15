@@ -15,8 +15,6 @@ namespace XFiles.Network
     /// </summary>
     public static class NetworkServerManager
     {
-        private const string VaultResourcePrefix = "xfiles-network/";
-
         private static readonly Lazy<Task<NetworkServerStore>> _storeLazy =
             new Lazy<Task<NetworkServerStore>>(async () =>
             {
@@ -96,7 +94,10 @@ namespace XFiles.Network
                     Log.Info("NetworkServerManager.Add: inserted {Url} id={Id}", canonical, id);
                 }
 
-                await SetPasswordAsync(config, password);
+                // null password = "keep what's there" (re-add of an existing
+                // location, or guest with no stored credential yet).
+                if (password != null)
+                    await SetPasswordAsync(config, password);
                 return id;
             }
             catch (Exception ex)
@@ -138,8 +139,11 @@ namespace XFiles.Network
 
                 if (!string.Equals(oldCanonical, newCanonical, StringComparison.Ordinal))
                 {
+                    string effectivePassword = password;
+                    if (effectivePassword == null)
+                        effectivePassword = await GetPasswordAsync(ToConfig(row));
                     RemovePasswordEntry(oldCanonical, row.Username);
-                    await SetPasswordAsync(config, password);
+                    await SetPasswordAsync(config, effectivePassword);
                 }
                 else if (password != null)
                 {
@@ -274,6 +278,7 @@ namespace XFiles.Network
         {
             return new NetworkServerConfig
             {
+                Id = row.Id,
                 Protocol = (NetworkProtocol)row.Protocol,
                 DisplayName = row.DisplayName,
                 Host = row.Host,

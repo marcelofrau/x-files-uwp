@@ -29,6 +29,7 @@ namespace XFiles.Controls
             UserBox.Text = prefilledUser ?? "";
             PassBox.Password = "";
             _tcs = new TaskCompletionSource<PortalCredentialsResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+            Canvas.SetZIndex(this, 400);
             Visibility = Visibility.Visible;
             Overlay.Visibility = Visibility.Visible;
 

@@ -194,6 +194,9 @@
     <Compile Include="Controls\PortalCredentialsDialog.xaml.cs">
       <DependentUpon>PortalCredentialsDialog.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Controls\NetworkLocationDialog.xaml.cs">
+      <DependentUpon>NetworkLocationDialog.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Controls\PortalSetupDialog.xaml.cs">
       <DependentUpon>PortalSetupDialog.xaml</DependentUpon>
     </Compile>
@@ -249,6 +252,16 @@
     <Compile Include="Network\NetworkUrl.cs" />
     <Compile Include="Network\NetworkServerStore.cs" />
     <Compile Include="Network\NetworkServerManager.cs" />
+    <Compile Include="Network\NetworkFileEntry.cs" />
+    <Compile Include="Network\NetworkOperationException.cs" />
+    <Compile Include="Network\INetworkFileSystemProvider.cs" />
+    <Compile Include="Network\SmbReadStream.cs" />
+    <Compile Include="Network\SmbWriteStream.cs" />
+    <Compile Include="Network\RemoteStream.cs" />
+    <Compile Include="Network\SmbSession.cs" />
+    <Compile Include="Network\NetworkPathUtil.cs" />
+    <Compile Include="Network\NetworkCopyService.cs" />
+    <Compile Include="Network\SmbBrowser.cs" />
     <Compile Include="DevPortalSecrets.g.cs" />
     <Compile Include="Audio\IMemoryBufferAccess.cs" />
     <Compile Include="Audio\AudioLevelService.cs" />
@@ -365,6 +378,10 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="Controls\NetworkLocationDialog.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Page Include="Controls\PortalSetupDialog.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
@@ -465,6 +482,15 @@
     <Content Include="Assets\FileTypes\folder-yaru-24.png" />
     <Content Include="Assets\FileTypes\folder-darkcyan-24.png" />
     <Content Include="Assets\FileTypes\folder-orange-24.png" />
+    <Content Include="Assets\FileTypes\folder-blue-network-24.png" />
+    <Content Include="Assets\FileTypes\folder-yellow-network-24.png" />
+    <Content Include="Assets\FileTypes\folder-deeporange-network-24.png" />
+    <Content Include="Assets\FileTypes\folder-green-network-24.png" />
+    <Content Include="Assets\FileTypes\folder-indigo-network-24.png" />
+    <Content Include="Assets\FileTypes\folder-magenta-network-24.png" />
+    <Content Include="Assets\FileTypes\folder-yaru-network-24.png" />
+    <Content Include="Assets\FileTypes\folder-darkcyan-network-24.png" />
+    <Content Include="Assets\FileTypes\folder-orange-network-24.png" />
     <Content Include="Assets\FileTypes\folder-blue-private-24.png" />
     <Content Include="Assets\FileTypes\folder-yellow-private-24.png" />
     <Content Include="Assets\FileTypes\folder-deeporange-private-24.png" />
@@ -487,6 +513,15 @@
     <Content Include="Assets\FileTypes\file-archive-24.png" />
     <Content Include="Assets\FileTypes\file-generic-24.png" />
     <Content Include="Assets\FileTypes\filetype-folder-network-24.png" />
+    <Content Include="Assets\Views\MainPage\mainpage-network-128.png" />
+    <Content Include="Assets\Views\MainPage\mainpage-network-add-128.png" />
+    <Content Include="Assets\Views\MainPage\mainpage-network-download-128.png" />
+    <Content Include="Assets\Views\MainPage\mainpage-network-server-128.png" />
+    <Content Include="Assets\Views\MainPage\mainpage-network-tip-download-32.png" />
+    <Content Include="Assets\Views\MainPage\mainpage-network-tip-server-32.png" />
+    <Content Include="Assets\Views\MainPage\mainpage-network-tip-shared-32.png" />
+<Content Include="Assets\FileTypes\filetype-network-add-location-24.png" />
+    <Content Include="Assets\FileTypes\filetype-network-download-24.png" />
     <Content Include="Assets\FileTypes\file-archive-128.png" />
     <Content Include="Assets\FileTypes\file-generic-128.png" />
     <Content Include="Assets\FileTypes\filetype-application-iso-128.png" />

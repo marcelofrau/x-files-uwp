@@ -17,6 +17,7 @@ File explorer icons (listing columns + preview pane) map file extensions to Papi
 |---|---|
 | File-type icons | `filetype-{category}-{name}-24.png` |
 | Folder icons | `folder-{color}-24.png` (orange/blue/green/yellow/magenta/...; color runtime-selectable) |
+| Folder variants | `folder-{color}-{kind}-24.png` where kind = `private` (portal), `network` (SMB locations/remote dirs), `favorites` (virtual root) — same 9-color system |
 | Drive icon | `drive-harddisk-24.png` |
 | Generic file | `file-generic-24.png` |
 | Archive (zip/7z/rar virtual folder) | `file-archive-24.png` |
@@ -28,7 +29,7 @@ All file-type icons are **24×24 PNG** (`-24.png`). Directory: `XFiles/Assets/Fi
 ## Resolution Order (`ColumnListView.xaml.cs`)
 
 1. `IsVirtual` (favorites root / archive root) → drive / favorite icon.
-2. Directory → `folder-{color}-24.png`.
+2. Directory → `folder-{color}-24.png`; network location/remote dirs → `folder-{color}-network-24.png`.
 3. `.zip`/`.7z`/`.rar` → `file-archive-24.png`.
 4. Known extension → lookup in the static `ExtIcons` dictionary
    (`ColumnListView.xaml.cs:63`).

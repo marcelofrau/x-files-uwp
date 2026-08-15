@@ -35,6 +35,10 @@ namespace XFiles.Controls
         private string _lastLoadedSource;
         private int _lastLoadedTrack = -1;
 
+        // Network (SMB) context of the currently loaded remote media, if any.
+        private string _currentNetworkShare;
+        private string _currentNetworkPath;
+
         private void SetLoadingState(bool value)
         {
             _isLoadingPlayback = value;
@@ -71,6 +75,17 @@ namespace XFiles.Controls
         public bool IsAudioMode => _isAudioMode;
         public string CurrentFilePath => _currentFilePath;
         public bool IsFileLoaded(string filePath) => _currentFilePath == filePath;
+
+        public bool IsNetworkFileLoaded(string share, string path) =>
+            !string.IsNullOrEmpty(_currentNetworkPath) &&
+            string.Equals(_currentNetworkShare, share, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(_currentNetworkPath, path, StringComparison.OrdinalIgnoreCase);
+
+        public void SetNetworkContext(string share, string path)
+        {
+            _currentNetworkShare = share;
+            _currentNetworkPath = path;
+        }
 
         /// <summary>
         /// Chiptune subsong currently selected by the preview (used by the
@@ -170,6 +185,81 @@ namespace XFiles.Controls
             _isPlaying = false;
             UpdatePlayPauseIcon();
             Visibility = Visibility.Visible;
+        }
+
+        /// <summary>
+        /// Load a remote (network) video straight from a stream — no local path.
+        /// The stream is read on demand over SMB; playback starts as soon as the
+        /// media pipeline has enough data. The caller owns the stream; it is
+        /// disposed by the player when the source is replaced.
+        /// </summary>
+        public void LoadRemoteStream(Windows.Storage.Streams.IRandomAccessStream stream, string mimeType)
+        {
+            if (stream == null) return;
+            Log.Dbg("MediaPreviewControl.LoadRemoteStream: enter mime={Mime} (wasPlaying={WasPlaying})", mimeType, _isPlaying);
+            Stop();
+            _hasEnded = false;
+            ResetProgressUi();
+            _currentFilePath = null;
+            _isAudioMode = false;
+            _chiptuneSource = null;
+            Log.Info("MediaPreviewControl: loading remote stream mime={Mime}", mimeType);
+
+            _currentSourceUri = null;
+            var source = MediaSource.CreateFromStream(stream, mimeType);
+            _currentPlaybackItem = new MediaPlaybackItem(source);
+            Player.Source = _currentPlaybackItem;
+
+            _isPlaying = false;
+            UpdatePlayPauseIcon();
+            Visibility = Visibility.Visible;
+        }
+
+        /// <summary>
+        /// Load a remote (network) audio file from a stream into the inline
+        /// AudioGraph player (VU meter, album-art placeholder). The graph plays the
+        /// stream on demand; the caller owns the stream until playback begins.
+        /// </summary>
+        public async Task LoadRemoteAudio(
+            Windows.Storage.Streams.IRandomAccessStream stream, string mimeType, string title)
+        {
+            if (stream == null) return;
+            Stop();
+            ResetProgressUi();
+            Log.Dbg("MediaPreviewControl.LoadRemoteAudio: enter mime={Mime}", mimeType);
+
+            _isAudioMode = true;
+            _currentFilePath = null;
+            _currentSourceUri = null;
+            _chiptuneSource = null;
+            _chiptuneTrack = 0;
+            _chiptuneTrackCount = 1;
+            _chiptuneTitle = null;
+
+            AudioInfoPanel.Visibility = Visibility.Visible;
+            AlbumArtBorder.Visibility = Visibility.Collapsed;
+            DefaultArtPanel.Visibility = Visibility.Visible;
+            TitleText.Text = string.IsNullOrEmpty(title) ? "Remote track" : title;
+            ArtistText.Text = "";
+            ArtistText.Visibility = Visibility.Collapsed;
+            AlbumText.Text = "";
+            AlbumText.Visibility = Visibility.Collapsed;
+
+            _ownedAudioGen = ++_loadGeneration;
+            AudioLevelService.Instance.MediaOpened -= OnAudioMediaOpened;
+            AudioLevelService.Instance.MediaOpened += OnAudioMediaOpened;
+            AudioLevelService.Instance.MediaEnded -= OnAudioMediaEnded;
+            AudioLevelService.Instance.MediaEnded += OnAudioMediaEnded;
+            AudioLevelService.Instance.MediaFailed -= OnAudioMediaFailed;
+            AudioLevelService.Instance.MediaFailed += OnAudioMediaFailed;
+#if AUDIO_ANALYSIS
+            VuMeter.AttachService(AudioLevelService.Instance);
+#endif
+            _ownsAudioService = true;
+            UpdatePlayPauseIcon();
+            Visibility = Visibility.Visible;
+
+            await AudioLevelService.Instance.PlayRemoteStreamAsync(stream, mimeType, autoPlay: false);
         }
 
         /// <summary>
@@ -624,6 +714,8 @@ namespace XFiles.Controls
 			}
             _currentSourceUri = null;
             _currentFilePath = null;
+            _currentNetworkShare = null;
+            _currentNetworkPath = null;
             _isPlaying = false;
             _isAudioMode = false;
             UpdatePlayPauseIcon();
@@ -688,19 +780,30 @@ namespace XFiles.Controls
         {
             if (_isAudioMode)
             {
-                if (string.IsNullOrEmpty(_currentFilePath)) return;
-                bool sourceChanged =
-                    !string.Equals(_currentFilePath, _lastLoadedSource, StringComparison.OrdinalIgnoreCase) ||
-                    _chiptuneTrack != _lastLoadedTrack;
-                if ((!AudioLevelService.Instance.IsFileLoaded || sourceChanged) && !_isLoadingPlayback)
+                if (string.IsNullOrEmpty(_currentFilePath))
                 {
-                    BeginPlaybackLoad();
-                    return;
+                    // Remote (network) audio: the graph was prepared load-only —
+                    // toggling starts/stops the AudioGraph playback.
+                    if (!AudioLevelService.Instance.IsGraphLive || !AudioLevelService.Instance.IsFileLoaded) return;
+                    AudioLevelService.Instance.TogglePlayPause();
+                    _isPlaying = AudioLevelService.Instance.IsPlaying;
+                    if (_isPlaying) _hasEnded = false;
                 }
-                if (_isLoadingPlayback) return;
-                AudioLevelService.Instance.TogglePlayPause();
-                _isPlaying = AudioLevelService.Instance.IsPlaying;
-                if (_isPlaying) _hasEnded = false;
+                else
+                {
+                    bool sourceChanged =
+                        !string.Equals(_currentFilePath, _lastLoadedSource, StringComparison.OrdinalIgnoreCase) ||
+                        _chiptuneTrack != _lastLoadedTrack;
+                    if ((!AudioLevelService.Instance.IsFileLoaded || sourceChanged) && !_isLoadingPlayback)
+                    {
+                        BeginPlaybackLoad();
+                        return;
+                    }
+                    if (_isLoadingPlayback) return;
+                    AudioLevelService.Instance.TogglePlayPause();
+                    _isPlaying = AudioLevelService.Instance.IsPlaying;
+                    if (_isPlaying) _hasEnded = false;
+                }
             }
             else
             {

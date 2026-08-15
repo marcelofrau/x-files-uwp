@@ -53,6 +53,14 @@ namespace XFiles.Controls
         public string ArchiveRootPath { get; set; }
         public string ArchiveInternalPath { get; set; }
 
+        // Network entries (saved locations, remote shares/directories/files).
+        // Mirrors FileEntry; FullPath is null for these.
+        public bool IsNetwork { get; set; }
+        public ActionKind ActionKind { get; set; } = ActionKind.None;
+        public long NetworkLocationId { get; set; }
+        public string NetworkShareName { get; set; }
+        public string NetworkPath { get; set; }
+
         // Chiptune subsong entry (multi-track chiptune drilled into a track list).
         public bool IsChiptune { get; set; }
         public int ChiptuneTrackIndex { get; set; } = -1;
@@ -302,19 +310,27 @@ namespace XFiles.Controls
                 ? (IsDirectory
                     ? $"ms-appx:///Assets/FileTypes/folder-{_folderColor}-private-24.png"
                     : $"ms-appx:///Assets/FileTypes/{GetFileIcon(Name)}")
-                : IsVirtual
-                    ? $"ms-appx:///Assets/FileTypes/folder-{_folderColor}-favorites-24.png"
-                    : IsDrive
-                        ? "ms-appx:///Assets/FileTypes/drive-harddisk-24.png"
-                        : IsFavorite
-                            ? "ms-appx:///Assets/FileTypes/favorite-24.png"
-                            : IsDirectory
-                                ? $"ms-appx:///Assets/FileTypes/folder-{_folderColor}-24.png"
-                                : IsArchive
-                                    ? "ms-appx:///Assets/FileTypes/file-archive-24.png"
-                                    : IsChiptune && ChiptuneTrackIndex >= 0
-                                        ? "ms-appx:///Assets/FileTypes/filetype-audio-x-generic-24.png"
-                                        : $"ms-appx:///Assets/FileTypes/{GetFileIcon(Name)}";
+                : IsNetwork
+                    ? (IsVirtual && ActionKind != ActionKind.None
+                        ? (ActionKind == ActionKind.DownloadUrl
+                            ? "ms-appx:///Assets/FileTypes/filetype-network-download-24.png"
+                            : "ms-appx:///Assets/FileTypes/filetype-network-add-location-24.png")
+                        : IsDirectory
+                            ? $"ms-appx:///Assets/FileTypes/folder-{_folderColor}-network-24.png"
+                            : $"ms-appx:///Assets/FileTypes/{GetFileIcon(Name)}")
+                    : IsVirtual
+                        ? $"ms-appx:///Assets/FileTypes/folder-{_folderColor}-favorites-24.png"
+                        : IsDrive
+                            ? "ms-appx:///Assets/FileTypes/drive-harddisk-24.png"
+                            : IsFavorite
+                                ? "ms-appx:///Assets/FileTypes/favorite-24.png"
+                                : IsDirectory
+                                    ? $"ms-appx:///Assets/FileTypes/folder-{_folderColor}-24.png"
+                                    : IsArchive
+                                        ? "ms-appx:///Assets/FileTypes/file-archive-24.png"
+                                        : IsChiptune && ChiptuneTrackIndex >= 0
+                                            ? "ms-appx:///Assets/FileTypes/filetype-audio-x-generic-24.png"
+                                            : $"ms-appx:///Assets/FileTypes/{GetFileIcon(Name)}";
 
         public static string GetFileIcon(string fileName)
         {

@@ -28,6 +28,13 @@ namespace XFiles.Controls
         // the portal origin so Save uploads the result back to the console.
         private XFiles.Services.PortalFileEntry _portalEntry;
 
+        // When editing a remote network file, the local path is a temp cache copy and
+        // this holds the network origin so Save uploads the result back over SMB.
+        private long _networkLocationId;
+        private string _networkShare;
+        private string _networkPath;
+        public Func<long, string, string, string, Task<bool>> NetworkUploadBack;
+
         // HTML template parts (loaded once)
         private static string _highlightJs;
         private static string _highlightCss;
@@ -97,7 +104,6 @@ namespace XFiles.Controls
             _filePath = filePath;
             _fileName = System.IO.Path.GetFileName(filePath);
             _portalEntry = portalEntry;
-
             // Load file
             var result = await TextEditorService.LoadAsync(filePath);
             if (result == null)
@@ -181,6 +187,19 @@ namespace XFiles.Controls
 
             Log.Info("TextEditorOverlay: opened {File} — tier={Tier}, encoding={Encoding}, lang={Lang}",
                 _fileName, _fileTier, _detectedEncodingName, lang);
+        }
+
+        /// <summary>
+        /// Open a remote network text file in the editor. <paramref name="filePath"/> is a
+        /// temp cache copy; on Save the local result is uploaded back over SMB via
+        /// <see cref="NetworkUploadBack"/>.
+        /// </summary>
+        public async void ShowNetwork(string filePath, long locationId, string share, string networkPath)
+        {
+            _networkLocationId = locationId;
+            _networkShare = share;
+            _networkPath = networkPath;
+            Show(filePath);
         }
 
         /// <summary>
@@ -595,6 +614,19 @@ namespace XFiles.Controls
                 if (_portalEntry != null)
                 {
                     await UploadToPortalAsync();
+                }
+                else if (_networkPath != null && NetworkUploadBack != null)
+                {
+                    bool uploaded = await NetworkUploadBack(_networkLocationId, _networkShare, _networkPath, _filePath);
+                    if (uploaded)
+                    {
+                        ShowToast("Saved to server");
+                    }
+                    else
+                    {
+                        ShowToast("Saved locally — upload failed");
+                        StatusText.Text = "Saved (local only)";
+                    }
                 }
                 await InvokeJs("editor.setDirty(false)");
                 _lastDirtyState = false;

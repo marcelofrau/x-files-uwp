@@ -134,14 +134,13 @@ unaffected.
 | PDF | Direct stream | `PdfDocument.LoadFromStreamAsync` |
 | ROM header | Direct stream | Read first bytes via stream |
 | Archive | **Deferred** | Not in this delivery (path-based `ArchiveBrowser` today) |
-| Audio (mp3/flac/wav/ogg/m4a/wma/aac) | Growing-file streaming | Remote bytes streamed sequentially into a local temp file with `FileShare.Read`; `AudioLevelService.SwapSourceAsync(tmp, forceStream: true)` plays it while it grows; playback starts ~1–2 s after buffer threshold |
-| Video | `MediaPlayer.SetSource` on `SmbReadStream` wrapped as `IRandomAccessStream` | If flaky on Xbox, fall back to the growing-file pattern |
+| Audio (mp3/flac/wav/ogg/m4a/wma/aac) | Streaming | `RemoteStream` (blocking `IRandomAccessStream` over `SmbReadStream`) → `MediaSource.CreateFromStream(stream, mime)` → fullscreen audio surface + VU meter. Consumer is the backpressure; playback starts in ~1–2 s |
+| Video | Streaming | `MediaPlayer.SetSource(MediaSource.CreateFromStream(RemoteStream, mime))` | If flaky on Xbox, growing-file / cache fallback — M6 decides |
 | Chiptune (PSF/USF/SPC/NSF/VGM/…) | Bytes → render | File is small; read full bytes, feed `RA_Open(data, size, ext, …)`, existing `RetroAudioPlayer` renders to a growing WAV and plays it |
 
 Media limitations (documented, accepted for v1):
-- Audio **seek** works only within the already-downloaded region while the
-  file grows; full seek after completion. Same for video via socket stream if
-  the server/seek interplay degrades — M6 decides.
+- Audio/video **seek** over the socket is a server/seek interplay — M6 decides
+  whether to clamp to a buffered region or accept full restart.
 - No gapless / auto-next guarantee on remote playlists while streaming
   (navigation between remote files works; each file streams independently).
 

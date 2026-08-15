@@ -26,6 +26,7 @@ using XFiles.Audio;
 using XFiles.FileSystem;
 using XFiles.Metadata;
 using XFiles.Navigation;
+using XFiles.Network;
 using XFiles.Services;
 using XFiles.Visualizers;
 
@@ -50,6 +51,8 @@ namespace XFiles.Controls
             if (_isMediaPlayerActive) { MediaPreview.StopPlayer(); UpdateMediaPlayerFocusUI(); }
 
             _fsVideoPath = source.LocalPath;
+            _fsIsNetwork = false;
+            _fsNetworkPath = null;
 
             // Detect external subtitles (VLC-style same-name matching)
             _fsSubtitles = SubtitleDetector.FindExternalSubtitles(_fsVideoPath);
@@ -98,6 +101,53 @@ namespace XFiles.Controls
             await System.Threading.Tasks.Task.CompletedTask;
         }
 
+        /// <summary>
+        /// Fullscreen video from a remote (network) stream. The stream reads on
+        /// demand (RemoteStream over SMB), so playback starts without a local
+        /// download. External subtitles are skipped (no local files to match).
+        /// </summary>
+        public async Task ShowMediaFullscreenStreamAsync(
+            Windows.Storage.Streams.IRandomAccessStream stream, string mimeType, string title,
+            long locationId = 0, string share = null, string path = null,
+            TimeSpan position = default)
+        {
+            if (_isMediaPlayerActive) { MediaPreview.StopPlayer(); UpdateMediaPlayerFocusUI(); }
+
+            _fsVideoPath = null;
+            _fsIsNetwork = path != null;
+            _fsNetworkLocationId = locationId;
+            _fsNetworkShare = share;
+            _fsNetworkPath = path;
+            _fsSubtitles = new List<SubtitleTrack>();
+            _fsSelectedSubtitleIndex = -1;
+            _fsSelectedAudioIndex = 0;
+            _fsAudioTracks = new List<AudioTrackInfo>();
+            _fsSuppressTrackEvent = false;
+
+            var mediaSource = Windows.Media.Core.MediaSource.CreateFromStream(stream, mimeType);
+
+            _fsPlaybackItem = new Windows.Media.Playback.MediaPlaybackItem(mediaSource);
+            FsVideoPlayer.Source = _fsPlaybackItem;
+
+            FsVideoPlayer.MediaOpened += OnFsVideoMediaOpened;
+            FsVideoPlayer.MediaEnded += OnFsVideoMediaEnded;
+
+            _fsPendingPosition = position;
+            FsVideoPlayer.Volume = _fsVolume;
+            FsVideoPlayer.Play();
+            _fsVideoPlaying = true;
+            FSPlayPauseIcon.Glyph = "\uE769";
+            FSVolumeText.Text = $"Vol {(int)(_fsVolume * 100)}%";
+            _fullscreenProgressTimer.Start();
+            VideoFullScreenPanel.Visibility = Visibility.Visible;
+            ShowFsControls();
+            UpdateDisplayRequest();
+            UpdateBgmDucking();
+            ShowFsOsd("PLAY", "ms-appx:///Assets/Views/MillerColumnsPage/osd/osd-play-48.png");
+            Log.Info("ShowMediaFullscreenStreamAsync: started fullscreen video stream '{Title}' mime={Mime}", title, mimeType);
+            await System.Threading.Tasks.Task.CompletedTask;
+        }
+
         private void OnEmbeddedSubtitleCueEntered(TimedMetadataTrack sender, MediaCueEventArgs args)
         {
             if (args.Cue is TimedTextCue ttCue && ttCue.CueStyle == null)
@@ -143,6 +193,12 @@ namespace XFiles.Controls
         {
             _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
             {
+                if (_fsPendingPosition > TimeSpan.Zero)
+                {
+                    FsVideoSession.Position = _fsPendingPosition;
+                    _fsPendingPosition = TimeSpan.Zero;
+                    Log.Verb("OnFsVideoMediaOpened: restored position {Pos}", FsVideoSession.Position);
+                }
                 EnumerateAllTracks();
             });
         }
@@ -159,6 +215,13 @@ namespace XFiles.Controls
         private void NavigateFullscreenVideo(int direction)
         {
             if (string.IsNullOrEmpty(_fsVideoPath) || _navigator.Current == null) return;
+
+            // Remote (SMB) fullscreen video: navigate the network list instead of local paths.
+            if (_fsIsNetwork)
+            {
+                NavigateFullscreenVideoNetwork(direction);
+                return;
+            }
 
             var videoFiles = _navigator.Current.Entries
                 .Where(e => !e.IsDirectory && FilePreviewService.IsVideoFile(System.IO.Path.GetExtension(e.Name)))
@@ -389,6 +452,8 @@ namespace XFiles.Controls
             _fsAudioTracks?.Clear();
             _fsSelectedSubtitleIndex = -1;
             _fsSelectedAudioIndex = -1;
+            _fsIsNetwork = false;
+            _fsNetworkPath = null;
             VideoTrackMenuControl.Close();
             VideoFullScreenPanel.Visibility = Visibility.Collapsed;
             Log.Info("CloseVideoFullScreen: stopped, track state cleared");
@@ -445,6 +510,38 @@ namespace XFiles.Controls
             TextEditorOverlayControl.Show(entry.FullPath);
             Log.Dbg("HandleEditAsync: Show() returned, overlay visible={Vis}", TextEditorOverlayControl.IsOpen);
             await System.Threading.Tasks.Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Opens a remote network text file in the editor from a temp cache copy;
+        /// saving uploads the result back over SMB.
+        /// </summary>
+        private async System.Threading.Tasks.Task HandleNetworkTextEditAsync(FileEntry entry)
+        {
+            var current = _navigator.Current;
+            if (current == null) return;
+            string share = current.NetworkShareName ?? entry.NetworkShareName;
+            string path = entry.NetworkPath;
+            if (string.IsNullOrEmpty(share) || string.IsNullOrEmpty(path))
+            {
+                Log.Warn("HandleNetworkTextEdit: no share/path for {Name}", entry.Name);
+                return;
+            }
+
+            long locationId = current.NetworkLocationId;
+            OpProgressDialog.Show("Downloading for edit", entry.Name, "");
+            string cachePath = await CacheRemoteFileAsync(locationId, share, path, entry.Name);
+            OpProgressDialog.Close();
+            if (cachePath == null)
+            {
+                Log.Warn("HandleNetworkTextEdit: cache download failed for {Name}", entry.Name);
+                _ = AlertDialogControl.ShowAsync($"Failed to download \"{entry.Name}\".\n\nSee Log for details.", AlertType.Error);
+                return;
+            }
+
+            TextEditorOverlayControl.NetworkUploadBack = (id, sh, np, local) =>
+                _navigator.WriteNetworkFileAsync(id, sh, np, local);
+            TextEditorOverlayControl.ShowNetwork(cachePath, locationId, share, path);
         }
 
         private async System.Threading.Tasks.Task HandleShareAsync(FileEntry entry)
@@ -910,6 +1007,7 @@ namespace XFiles.Controls
         private bool _fsVideoPlaying = false;
         private double _fsVolume = 0.75;
         private string _fsVideoPath;
+        private TimeSpan _fsPendingPosition;
         private List<SubtitleTrack> _fsSubtitles;
         private List<AudioTrackInfo> _fsAudioTracks;
         private int _fsSelectedSubtitleIndex = -1;
@@ -943,6 +1041,12 @@ namespace XFiles.Controls
         // Media load debounce — avoids loading video/audio on every scroll tick
         private DispatcherTimer _mediaLoadTimer;
         private string _pendingMediaPath;
+        // Network (SMB) inline preview state: set when the inline player is
+        // streaming from a remote share, so LB/RB / auto-advance navigate the
+        // network list instead of the local FullPath list.
+        private long _previewNetworkLocationId;
+        private string _previewNetworkShare;
+        private string _previewNetworkPath;
 
         public void StopAllTimers()
         {
@@ -974,6 +1078,13 @@ namespace XFiles.Controls
 
         private bool _isAudioFullscreen;
         private string _audioFullscreenPath;
+        // Network (SMB) fullscreen state: when set, the fullscreen player is
+        // streaming from a remote share and LB/RB must navigate the network list
+        // instead of the local FullPath list.
+        private bool _fsIsNetwork;
+        private long _fsNetworkLocationId;
+        private string _fsNetworkShare;
+        private string _fsNetworkPath;
         private double _audioVolume = 0.75;
         private AudioFullscreenMode _fsVisualizerMode;
         private DispatcherTimer _fsVisualizerTimer = new DispatcherTimer();
@@ -1004,6 +1115,8 @@ namespace XFiles.Controls
             int gen = ++_fsGeneration;
             bool wasAlreadyFullscreen = _isAudioFullscreen;
             _audioFullscreenPath = filePath;
+            _fsIsNetwork = false;
+            _fsNetworkPath = null;
             _isAudioFullscreen = true;
             _fsAudioEnded = false;
 
@@ -1101,6 +1214,83 @@ namespace XFiles.Controls
             PrefetchNextChiptuneTrack();
         }
 
+        /// <summary>
+        /// Fullscreen audio from a remote (network) stream. Playback starts as soon
+        /// as the first bytes arrive — no full download, no growing-file cache.
+        /// Metadata/album-art enrichment is skipped (no local path for the guesser).
+        /// </summary>
+        public async Task OpenRemoteAudioFullscreenAsync(
+            string title, Windows.Storage.Streams.IRandomAccessStream stream, string mimeType,
+            long locationId = 0, string share = null, string path = null,
+            TimeSpan position = default)
+        {
+            Log.Info("OpenRemoteAudioFullscreen: '{Title}' mime={Mime}", title, mimeType);
+            int gen = ++_fsGeneration;
+            bool wasAlreadyFullscreen = _isAudioFullscreen;
+            _audioFullscreenPath = "(network stream)";
+            _fsIsNetwork = path != null;
+            _fsNetworkLocationId = locationId;
+            _fsNetworkShare = share;
+            _fsNetworkPath = path;
+            _isAudioFullscreen = true;
+            _fsAudioEnded = false;
+
+            MediaPreview.Stop();
+
+            StopFsAudioAnalysis();
+            if (!wasAlreadyFullscreen)
+                _fsVisualizerMode = AudioFullscreenMode.Default;
+            AudioLevelService.Instance.MediaOpened += OnFsAudioOpened;
+            AudioLevelService.Instance.MediaEnded += OnFsAudioEnded;
+            AudioLevelService.Instance.MediaFailed += OnFsAudioFailed;
+
+            FsTitleText.Text = title;
+            FsArtistText.Text = "";
+            FsArtistText.Visibility = Visibility.Collapsed;
+            FsAlbumText.Text = "";
+            FsAlbumText.Visibility = Visibility.Collapsed;
+            FsAlbumArtBorder.Visibility = Visibility.Collapsed;
+            FsDefaultArtPanel.Visibility = Visibility.Visible;
+            _fsHasAlbumArt = false;
+            _fsChiptuneSource = null;
+            _fsChiptuneTrack = 0;
+            _fsChiptuneTrackCount = 1;
+            AudioFullScreenPanel.Visibility = Visibility.Visible;
+            SetFsLoading(true);
+            _fsHideTimer.Stop();
+            FsAudioProgress.Value = 0;
+            FsCurrentTimeText.Text = "0:00";
+            FsTotalTimeText.Text = "0:00";
+#if AUDIO_ANALYSIS
+            FsVuMeter.AttachService(AudioLevelService.Instance);
+#endif
+            FsVuMeter.EnsureInitialized();
+            UpdateMediaPlayerFocusUI();
+            UpdateDisplayRequest();
+            UpdateBgmDucking();
+
+            await AudioLevelService.Instance.PlayRemoteStreamAsync(stream, mimeType);
+
+            if (gen != _fsGeneration)
+            {
+                Log.Dbg("OpenRemoteAudioFullscreen: stale generation, aborting");
+                SetFsLoading(false);
+                return;
+            }
+
+            if (position > TimeSpan.Zero)
+                AudioLevelService.Instance.Seek(position);
+
+            FsPlayPauseIcon.Glyph = "\uE769";
+            FsVolumeText.Text = $"Vol {(int)(_audioVolume * 100)}%";
+
+            if (_fullscreenProgressTimer.IsEnabled == false)
+                _fullscreenProgressTimer.Start();
+
+            if (_fsVisualizerMode != AudioFullscreenMode.Default)
+                ApplyAudioVisualizerMode();
+        }
+
         private async Task LoadAudioFullscreenMetadataAsync(string filePath)
         {
             int gen = _fsGeneration;
@@ -1169,6 +1359,8 @@ namespace XFiles.Controls
             Log.Info("CloseAudioFullscreen");
             ++_fsGeneration; // abort in-flight chiptune decodes
             ++_prefetchGeneration; // abort in-flight next-track prefetches
+            _fsIsNetwork = false;
+            _fsNetworkPath = null;
             StopFsAudioAnalysis();
             FsVisualizerCanvas.Deactivate();
             FsVisualizerCanvas.DetachService();
@@ -1209,6 +1401,10 @@ namespace XFiles.Controls
 
         private bool NavigatePreviewTrack(int direction)
         {
+            // Remote (SMB) inline track: navigate the network list, not local paths.
+            if (_previewNetworkPath != null && _navigator.Current != null)
+                return NavigatePreviewTrackNetwork(direction);
+
             if (string.IsNullOrEmpty(MediaPreview.CurrentFilePath) || _navigator.Current == null)
             {
                 Log.Warn("NavigatePreviewTrack: early exit — filePath={FilePath} current={Current}", MediaPreview.CurrentFilePath ?? "(null)", _navigator.Current != null);
@@ -1290,6 +1486,13 @@ namespace XFiles.Controls
 
         private void NavigatePreviewVideoTrack(int direction)
         {
+            // Remote (SMB) inline video: navigate the network list, not local paths.
+            if (_previewNetworkPath != null && _navigator.Current != null)
+            {
+                NavigatePreviewVideoTrackNetwork(direction);
+                return;
+            }
+
             if (string.IsNullOrEmpty(MediaPreview.CurrentFilePath) || _navigator.Current == null)
             {
                 Log.Warn("NavigatePreviewVideoTrack: early exit — filePath={FilePath} current={Current}", MediaPreview.CurrentFilePath ?? "(null)", _navigator.Current != null);
@@ -1337,9 +1540,351 @@ namespace XFiles.Controls
             MediaPreview.TogglePlayPause();
         }
 
+        // --- Network (SMB) remote navigation parity ---
+
+        /// <summary>LB/RB in the inline player while a remote network track plays.</summary>
+        private bool NavigatePreviewTrackNetwork(int direction)
+        {
+            var current = _navigator.Current;
+            if (current == null || string.IsNullOrEmpty(_previewNetworkPath)) return false;
+
+            var audioFiles = current.Entries
+                .Where(e => !e.IsDirectory && e.IsNetwork &&
+                    (FilePreviewService.IsAudioFile(System.IO.Path.GetExtension(e.Name))
+                     || FilePreviewService.IsChiptuneFile(System.IO.Path.GetExtension(e.Name))))
+                .ToList();
+
+            if (audioFiles.Count == 0)
+            {
+                Log.Warn("NavigatePreviewTrackNetwork: no network audio files in current list");
+                return false;
+            }
+
+            int currentIdx = audioFiles.FindIndex(e =>
+                string.Equals(e.NetworkPath, _previewNetworkPath, StringComparison.OrdinalIgnoreCase));
+            if (currentIdx < 0)
+            {
+                Log.Warn("NavigatePreviewTrackNetwork: current {Path} not in network list — aborting", _previewNetworkPath);
+                return false;
+            }
+
+            int nextIdx = currentIdx + direction;
+            if (nextIdx < 0) nextIdx = audioFiles.Count - 1;
+            if (nextIdx >= audioFiles.Count) nextIdx = 0;
+
+            var nextFile = audioFiles[nextIdx];
+            Log.Info("NavigatePreviewTrackNetwork: {Direction} to {Path}", direction > 0 ? "next" : "prev", nextFile.NetworkPath);
+
+            int mainIdx = current.Entries.IndexOf(nextFile);
+            if (mainIdx >= 0)
+            {
+                _updating = true;
+                CurrentList.SelectedIndex = mainIdx;
+                _updating = false;
+                int totalCount = current.Entries.Count;
+                FooterItemCount.Text = totalCount > 0 ? $"{mainIdx + 1}/{totalCount}" : "";
+            }
+
+            _previewNetworkPath = nextFile.NetworkPath;
+            _ = OpenPreviewNetworkTrackAsync(nextFile);
+            return true;
+        }
+
+        private async Task OpenPreviewNetworkTrackAsync(FileEntry file)
+        {
+            try
+            {
+                string ext = System.IO.Path.GetExtension(file.Name);
+
+                if (RetroAudioPlayer.IsChiptuneFile(ext))
+                {
+                    string tempPath = await CacheRemoteFileAsync(_previewNetworkLocationId, _previewNetworkShare, file.NetworkPath, file.Name);
+                    if (tempPath == null)
+                    {
+                        Log.Warn("OpenPreviewNetworkTrack: chiptune cache failed for {Name}", file.Name);
+                        return;
+                    }
+                    _mediaLoadTimer.Stop();
+                    _pendingMediaPath = null;
+                    MediaPreview.SetNetworkContext(_previewNetworkShare, file.NetworkPath);
+                    MediaPreview.Stop();
+                    MediaPreview.LoadChiptuneTrack(tempPath, 0);
+                    MediaPreview.TogglePlayPause();
+                    return;
+                }
+
+                System.IO.Stream stream = await _navigator.OpenNetworkStreamAsync(
+                    _previewNetworkLocationId, _previewNetworkShare, file.NetworkPath);
+                if (stream == null) return;
+
+                Func<System.IO.Stream> reopen = () =>
+                    Task.Run(() => _navigator.OpenNetworkStreamAsync(
+                        _previewNetworkLocationId, _previewNetworkShare, file.NetworkPath))
+                        .GetAwaiter().GetResult();
+
+                MediaPreview.SetNetworkContext(_previewNetworkShare, file.NetworkPath);
+
+                if (FilePreviewService.IsAudioFile(ext))
+                {
+                    await MediaPreview.LoadRemoteAudio(
+                        new RemoteStream(stream, reopen),
+                        MimeForRemoteFile(ext),
+                        System.IO.Path.GetFileNameWithoutExtension(file.Name));
+                }
+                else
+                {
+                    MediaPreview.LoadRemoteStream(new RemoteStream(stream, reopen), MimeForRemoteFile(ext));
+                    MediaPreview.TogglePlayPause();
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Err("OpenPreviewNetworkTrack: {Ex}", ex);
+            }
+        }
+
+        private void NavigatePreviewVideoTrackNetwork(int direction)
+        {
+            var current = _navigator.Current;
+            if (current == null || string.IsNullOrEmpty(_previewNetworkPath)) return;
+
+            var videoFiles = current.Entries
+                .Where(e => !e.IsDirectory && e.IsNetwork &&
+                    FilePreviewService.IsVideoFile(System.IO.Path.GetExtension(e.Name)))
+                .ToList();
+
+            if (videoFiles.Count == 0)
+            {
+                Log.Warn("NavigatePreviewVideoTrackNetwork: no network video files in current list");
+                return;
+            }
+
+            int currentIdx = videoFiles.FindIndex(e =>
+                string.Equals(e.NetworkPath, _previewNetworkPath, StringComparison.OrdinalIgnoreCase));
+            if (currentIdx < 0)
+            {
+                Log.Warn("NavigatePreviewVideoTrackNetwork: current {Path} not in network list — aborting", _previewNetworkPath);
+                return;
+            }
+
+            int nextIdx = currentIdx + direction;
+            if (nextIdx < 0) nextIdx = videoFiles.Count - 1;
+            if (nextIdx >= videoFiles.Count) nextIdx = 0;
+
+            var nextFile = videoFiles[nextIdx];
+            Log.Info("NavigatePreviewVideoTrackNetwork: {Direction} to {Path}", direction > 0 ? "next" : "prev", nextFile.NetworkPath);
+
+            int mainIdx = current.Entries.IndexOf(nextFile);
+            if (mainIdx >= 0)
+            {
+                _updating = true;
+                CurrentList.SelectedIndex = mainIdx;
+                _updating = false;
+                int totalCount = current.Entries.Count;
+                FooterItemCount.Text = totalCount > 0 ? $"{mainIdx + 1}/{totalCount}" : "";
+            }
+
+            _previewNetworkPath = nextFile.NetworkPath;
+            _ = OpenPreviewVideoNetworkTrackAsync(nextFile);
+        }
+
+        private async Task OpenPreviewVideoNetworkTrackAsync(FileEntry file)
+        {
+            try
+            {
+                System.IO.Stream stream = await _navigator.OpenNetworkStreamAsync(
+                    _previewNetworkLocationId, _previewNetworkShare, file.NetworkPath);
+                if (stream == null) return;
+
+                Func<System.IO.Stream> reopen = () =>
+                    Task.Run(() => _navigator.OpenNetworkStreamAsync(
+                        _previewNetworkLocationId, _previewNetworkShare, file.NetworkPath))
+                        .GetAwaiter().GetResult();
+
+                MediaPreview.LoadRemoteStream(
+                    new RemoteStream(stream, reopen),
+                    MimeForRemoteFile(System.IO.Path.GetExtension(file.Name)));
+                MediaPreview.TogglePlayPause();
+            }
+            catch (Exception ex)
+            {
+                Log.Err("OpenPreviewVideoNetworkTrack: {Ex}", ex);
+            }
+        }
+
+        /// <summary>LB/RB in the fullscreen audio player while a remote track streams.</summary>
+        private void NavigateAudioTrackNetwork(int direction)
+        {
+            var current = _navigator.Current;
+            if (current == null || string.IsNullOrEmpty(_fsNetworkPath)) return;
+
+            int gen = ++_fsGeneration;
+            ++_prefetchGeneration;
+
+            var audioFiles = current.Entries
+                .Where(e => !e.IsDirectory && e.IsNetwork &&
+                    (FilePreviewService.IsAudioFile(System.IO.Path.GetExtension(e.Name))
+                     || FilePreviewService.IsChiptuneFile(System.IO.Path.GetExtension(e.Name))))
+                .ToList();
+
+            if (audioFiles.Count == 0)
+            {
+                Log.Warn("NavigateAudioTrackNetwork: no network audio files in current list");
+                return;
+            }
+
+            int currentIdx = audioFiles.FindIndex(e =>
+                string.Equals(e.NetworkPath, _fsNetworkPath, StringComparison.OrdinalIgnoreCase));
+            if (currentIdx < 0)
+            {
+                Log.Warn("NavigateAudioTrackNetwork: current {Path} not in network list — aborting", _fsNetworkPath);
+                return;
+            }
+
+            int nextIdx = currentIdx + direction;
+            if (nextIdx < 0) nextIdx = audioFiles.Count - 1;
+            if (nextIdx >= audioFiles.Count) nextIdx = 0;
+
+            var nextFile = audioFiles[nextIdx];
+            Log.Info("NavigateAudioTrackNetwork: {Direction} to {Path}", direction > 0 ? "next" : "prev", nextFile.NetworkPath);
+            _fsAudioEnded = false;
+
+            int mainIdx = current.Entries.IndexOf(nextFile);
+            if (mainIdx >= 0)
+            {
+                _updating = true;
+                CurrentList.SelectedIndex = mainIdx;
+                _updating = false;
+            }
+
+            ShowAudioOsd(direction > 0 ? "Next" : "Prev",
+                direction > 0 ? "ms-appx:///Assets/Views/MillerColumnsPage/osd/osd-next-48.png" : "ms-appx:///Assets/Views/MillerColumnsPage/osd/osd-prev-48.png", 1200);
+
+            _ = OpenFullscreenNetworkTrackAsync(gen, nextFile);
+        }
+
+        private async Task OpenFullscreenNetworkTrackAsync(int gen, FileEntry file)
+        {
+            try
+            {
+                string ext = System.IO.Path.GetExtension(file.Name);
+                _fsNetworkPath = file.NetworkPath;
+
+                if (RetroAudioPlayer.IsChiptuneFile(ext))
+                {
+                    // Chiptune needs a local decoded WAV — cache the remote file first.
+                    string tempPath = await CacheRemoteFileAsync(_fsNetworkLocationId, _fsNetworkShare, file.NetworkPath, file.Name);
+                    if (tempPath == null)
+                    {
+                        Log.Warn("OpenFullscreenNetworkTrack: chiptune cache failed for {Name}", file.Name);
+                        return;
+                    }
+                    if (gen != _fsGeneration) return;
+                    OpenAudioFullscreen(tempPath, TimeSpan.Zero, Math.Max(0, file.ChiptuneTrackIndex));
+                    // OpenAudioFullscreen resets the network flag — restore it so
+                    // LB/RB keeps navigating the network list for remote chiptunes.
+                    _fsIsNetwork = true;
+                    _fsNetworkPath = file.NetworkPath;
+                    return;
+                }
+
+                System.IO.Stream stream = await _navigator.OpenNetworkStreamAsync(
+                    _fsNetworkLocationId, _fsNetworkShare, file.NetworkPath);
+                if (stream == null) return;
+                if (gen != _fsGeneration) return;
+
+                Func<System.IO.Stream> reopen = () =>
+                    Task.Run(() => _navigator.OpenNetworkStreamAsync(
+                        _fsNetworkLocationId, _fsNetworkShare, file.NetworkPath))
+                        .GetAwaiter().GetResult();
+
+                await OpenRemoteAudioFullscreenAsync(
+                    System.IO.Path.GetFileNameWithoutExtension(file.Name),
+                    new RemoteStream(stream, reopen),
+                    MimeForRemoteFile(ext),
+                    _fsNetworkLocationId, _fsNetworkShare, file.NetworkPath);
+            }
+            catch (Exception ex)
+            {
+                Log.Err("OpenFullscreenNetworkTrack: {Ex}", ex);
+            }
+        }
+
+        /// <summary>LB/RB in the fullscreen video player while a remote stream plays.</summary>
+        private void NavigateFullscreenVideoNetwork(int direction)
+        {
+            var current = _navigator.Current;
+            if (current == null || string.IsNullOrEmpty(_fsNetworkPath)) return;
+
+            var videoFiles = current.Entries
+                .Where(e => !e.IsDirectory && e.IsNetwork &&
+                    FilePreviewService.IsVideoFile(System.IO.Path.GetExtension(e.Name)))
+                .ToList();
+
+            if (videoFiles.Count == 0) { CloseVideoFullScreen(); return; }
+
+            int currentIdx = videoFiles.FindIndex(e =>
+                string.Equals(e.NetworkPath, _fsNetworkPath, StringComparison.OrdinalIgnoreCase));
+            if (currentIdx < 0)
+            {
+                Log.Warn("NavigateFullscreenVideoNetwork: current {Path} not in network list — aborting", _fsNetworkPath);
+                return;
+            }
+
+            int nextIdx = currentIdx + direction;
+            if (nextIdx < 0) nextIdx = videoFiles.Count - 1;
+            if (nextIdx >= videoFiles.Count) nextIdx = 0;
+
+            var nextFile = videoFiles[nextIdx];
+            Log.Info("NavigateFullscreenVideoNetwork: {Direction} to {Path}", direction > 0 ? "next" : "prev", nextFile.NetworkPath);
+            _fsNetworkPath = nextFile.NetworkPath;
+
+            int mainIdx = current.Entries.IndexOf(nextFile);
+            if (mainIdx >= 0)
+            {
+                _updating = true;
+                CurrentList.SelectedIndex = mainIdx;
+                _updating = false;
+            }
+
+            _ = OpenFullscreenVideoNetworkTrackAsync(nextFile);
+        }
+
+        private async Task OpenFullscreenVideoNetworkTrackAsync(FileEntry file)
+        {
+            try
+            {
+                System.IO.Stream stream = await _navigator.OpenNetworkStreamAsync(
+                    _fsNetworkLocationId, _fsNetworkShare, file.NetworkPath);
+                if (stream == null) return;
+
+                Func<System.IO.Stream> reopen = () =>
+                    Task.Run(() => _navigator.OpenNetworkStreamAsync(
+                        _fsNetworkLocationId, _fsNetworkShare, file.NetworkPath))
+                        .GetAwaiter().GetResult();
+
+                await ShowMediaFullscreenStreamAsync(
+                    new RemoteStream(stream, reopen),
+                    MimeForRemoteFile(System.IO.Path.GetExtension(file.Name)),
+                    System.IO.Path.GetFileNameWithoutExtension(file.Name),
+                    _fsNetworkLocationId, _fsNetworkShare, file.NetworkPath);
+            }
+            catch (Exception ex)
+            {
+                Log.Err("OpenFullscreenVideoNetworkTrack: {Ex}", ex);
+            }
+        }
+
         public void NavigateAudioTrack(int direction)
         {
             if (string.IsNullOrEmpty(_audioFullscreenPath) || _navigator.Current == null) return;
+
+            // Remote (SMB) fullscreen track: navigate the network list instead of local paths.
+            if (_fsIsNetwork)
+            {
+                NavigateAudioTrackNetwork(direction);
+                return;
+            }
 
             int gen = ++_fsGeneration;
             ++_prefetchGeneration; // abort in-flight next-track prefetches
@@ -1648,6 +2193,9 @@ namespace XFiles.Controls
         {
             FsLoadingSpinner.IsActive = value;
             FsLoadingSpinner.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
+            // While a track loads, the seekbar reads indeterminate instead of
+            // freezing on the stale position of the previous track.
+            FsAudioProgress.IsIndeterminate = value;
         }
 
         private async void OnFsAudioOpened(object sender, EventArgs e)

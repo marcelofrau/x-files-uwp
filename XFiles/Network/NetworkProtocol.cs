@@ -7,6 +7,9 @@ namespace XFiles.Network
     /// </summary>
     public enum NetworkProtocol
     {
-        Smb = 0
+        Smb = 0,
+        Ftp = 1,
+        Sftp = 2,
+        Webdav = 3
     }
 }

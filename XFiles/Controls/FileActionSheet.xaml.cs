@@ -30,9 +30,10 @@ namespace XFiles.Controls
         Share,
         AddToFavorites,
         RemoveFromFavorites,
-        Download,
         UploadFile,
-        DiskSpace
+        DiskSpace,
+        RenameLocation,
+        DeleteLocation
     }
 
     public class ActionItem
@@ -67,7 +68,6 @@ namespace XFiles.Controls
         private static readonly string ActionEdit = "ctx-text-120.png";
         private static readonly string ActionShare = "fileactionsheet-share-48.png";
         private static readonly string ActionFavorite = "fileactionsheet-favorite-48.png";
-        private static readonly string ActionDownload = "fileactionsheet-download-48.png";
         private static readonly string ActionUpload = "fileactionsheet-upload-48.png";
         private static readonly string ActionDiskSpace = "fileactionsheet-hdd-48.png";
 
@@ -364,17 +364,6 @@ namespace XFiles.Controls
                     IconPath = IconBase + ActionDiskSpace,
                     LabelBrush = accent
                 });
-
-                if (!isPortal && !isInArchive)
-                {
-                    actions.Add(new ActionItem
-                    {
-                        Action = FileAction.Download,
-                        Label = "Download from URL",
-                        IconPath = IconBase + ActionDownload,
-                        LabelBrush = accent
-                    });
-                }
             }
             else if (isChiptuneTrack)
             {
@@ -466,14 +455,6 @@ namespace XFiles.Controls
                     Action = FileAction.Share,
                     Label = "Share",
                     IconPath = IconBase + ActionShare,
-                    LabelBrush = accent
-                });
-
-                actions.Add(new ActionItem
-                {
-                    Action = FileAction.Download,
-                    Label = "Download from URL",
-                    IconPath = IconBase + ActionDownload,
                     LabelBrush = accent
                 });
 
@@ -666,6 +647,166 @@ namespace XFiles.Controls
                     Label = "Edit",
                     IconPath = IconBase + ActionEdit,
                     LabelBrush = accent
+                });
+            }
+
+            ActionList.ItemsSource = actions;
+            FileNameText.Text = entry.Name;
+
+            FileIconImage.Source = new Windows.UI.Xaml.Media.Imaging.BitmapImage(
+                new Uri(ResolveContextFileIcon(entry)));
+
+            Visibility = Visibility.Visible;
+            Overlay.Visibility = Visibility.Visible;
+
+            ActionList.SelectedIndex = 0;
+            ActionList.Focus(FocusState.Programmatic);
+
+            return _tcs.Task;
+        }
+
+        /// <summary>
+        /// Shows the context menu for a saved network location row (rename / delete).
+        /// </summary>
+        public Task<FileAction?> ShowNetworkLocationActionsAsync(FileEntry entry)
+        {
+            _tcs = new TaskCompletionSource<FileAction?>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            var actions = new List<ActionItem>();
+            var accent = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x93, 0xC4, 0x3C));
+            var red = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0xE7, 0x4C, 0x3C));
+
+            actions.Add(new ActionItem
+            {
+                Action = FileAction.RenameLocation,
+                Label = "Rename",
+                IconPath = IconBase + ActionRename,
+                LabelBrush = accent
+            });
+
+            actions.Add(new ActionItem
+            {
+                Action = FileAction.DeleteLocation,
+                Label = "Delete",
+                IconPath = IconBase + ActionDelete,
+                LabelBrush = red
+            });
+
+            ActionList.ItemsSource = actions;
+            FileNameText.Text = entry.Name;
+
+            FileIconImage.Source = new Windows.UI.Xaml.Media.Imaging.BitmapImage(
+                new Uri(ResolveContextFileIcon(entry)));
+
+            Visibility = Visibility.Visible;
+            Overlay.Visibility = Visibility.Visible;
+
+            ActionList.SelectedIndex = 0;
+            ActionList.Focus(FocusState.Programmatic);
+
+            return _tcs.Task;
+        }
+
+        /// <summary>
+        /// Shows the context menu for a remote network file/directory. Mirrors the
+        /// local file menu (Refresh/Edit/Copy/Paste/Rename/Delete) while the ".."
+        /// row offers Refresh/New Folder/Paste — the empty-folder actions.
+        /// </summary>
+        public Task<FileAction?> ShowNetworkFileActionsAsync(FileEntry entry)
+        {
+            _tcs = new TaskCompletionSource<FileAction?>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            var actions = new List<ActionItem>();
+            var accent = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x93, 0xC4, 0x3C));
+            var dim = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x7A, 0xA8, 0x32));
+            var red = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0xE7, 0x4C, 0x3C));
+
+            bool isDotDot = entry.Name == "..";
+
+            if (isDotDot)
+            {
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.Refresh,
+                    Label = "Refresh",
+                    IconPath = IconBase + ActionRefresh,
+                    LabelBrush = accent
+                });
+
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.CreateFolder,
+                    Label = "New Folder",
+                    IconPath = IconBase + ActionCreateFolder,
+                    LabelBrush = accent
+                });
+
+                if (ClipboardState.HasItems)
+                {
+                    actions.Add(new ActionItem
+                    {
+                        Action = FileAction.Paste,
+                        Label = "Paste",
+                        IconPath = IconBase + ActionPaste,
+                        LabelBrush = accent
+                    });
+                }
+            }
+            else
+            {
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.Refresh,
+                    Label = "Refresh",
+                    IconPath = IconBase + ActionRefresh,
+                    LabelBrush = accent
+                });
+
+                var netExt = System.IO.Path.GetExtension(entry.Name);
+                if (!entry.IsDirectory && FileActionSheet.TextExts.Contains(netExt))
+                {
+                    actions.Add(new ActionItem
+                    {
+                        Action = FileAction.Edit,
+                        Label = "Edit",
+                        IconPath = IconBase + ActionEdit,
+                        LabelBrush = accent
+                    });
+                }
+
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.Copy,
+                    Label = "Copy",
+                    IconPath = IconBase + ActionCopy,
+                    LabelBrush = accent
+                });
+
+                if (ClipboardState.HasItems)
+                {
+                    actions.Add(new ActionItem
+                    {
+                        Action = FileAction.Paste,
+                        Label = "Paste",
+                        IconPath = IconBase + ActionPaste,
+                        LabelBrush = accent
+                    });
+                }
+
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.Rename,
+                    Label = "Rename",
+                    IconPath = IconBase + ActionRename,
+                    LabelBrush = dim
+                });
+
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.Delete,
+                    Label = "Delete",
+                    IconPath = IconBase + ActionDelete,
+                    LabelBrush = red
                 });
             }
 

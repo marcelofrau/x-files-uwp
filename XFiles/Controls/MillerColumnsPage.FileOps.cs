@@ -27,6 +27,7 @@ using XFiles.Audio;
 using XFiles.FileSystem;
 using XFiles.Metadata;
 using XFiles.Navigation;
+using XFiles.Network;
 using XFiles.Services;
 using XFiles.Visualizers;
 
@@ -299,7 +300,12 @@ namespace XFiles.Controls
                     IsPortal = selected.IsPortal,
                     PortalKnownFolder = selected.PortalKnownFolder,
                     PortalPackageFullName = selected.PortalPackageFullName,
-                    PortalPath = selected.PortalPath
+                    PortalPath = selected.PortalPath,
+                    IsNetwork = selected.IsNetwork,
+                    ActionKind = selected.ActionKind,
+                    NetworkLocationId = selected.NetworkLocationId,
+                    NetworkShareName = selected.NetworkShareName,
+                    NetworkPath = selected.NetworkPath
                 };
             }
             else
@@ -323,6 +329,10 @@ namespace XFiles.Controls
             FileAction? action;
             if (inFavorites)
                 action = await FileActionSheetControl.ShowFavoritesActionsAsync(entry);
+            else if (entry.IsNetwork && entry.NetworkShareName == null && !entry.IsVirtual)
+                action = await FileActionSheetControl.ShowNetworkLocationActionsAsync(entry);
+            else if (entry.IsNetwork)
+                action = await FileActionSheetControl.ShowNetworkFileActionsAsync(entry);
             else
                 action = await FileActionSheetControl.ShowAsync(entry);
             UpdateFooterALabelFromSelection();
@@ -334,62 +344,85 @@ namespace XFiles.Controls
 
             Log.Info("ShowFileActionSheetAsync: action={Action}", action);
 
-            switch (action)
+            try
             {
-                case FileAction.Copy:
-                    await HandleCopyAsync(entry);
-                    break;
-                case FileAction.Paste:
-                    await HandlePasteAsync();
-                    break;
-                case FileAction.Move:
-                    await HandleMoveAsync(entry);
-                    break;
-                case FileAction.Rename:
-                    await HandleRenameAsync(entry);
-                    break;
-                case FileAction.Delete:
-                    await HandleDeleteAsync(entry);
-                    break;
-                case FileAction.Extract:
-                    if (entry.IsPortal)
-                        await HandleExtractPortalZipAsync(entry);
-                    else
-                        await HandleExtractAsync(entry);
-                    break;
-                case FileAction.ExtractFile:
-                    await HandleExtractFileAsync(entry);
-                    break;
-                case FileAction.CreateFolder:
-                    await HandleCreateFolderAsync(entry);
-                    break;
-                case FileAction.CreateZip:
-                    if (entry.IsPortal)
-                        await HandleCreatePortalZipAsync(new List<FileEntry> { entry });
-                    else
-                        await HandleCreateZipAsync(entry);
-                    break;
-                case FileAction.Refresh:
-                    OnRefresh();
-                    break;
-                case FileAction.Edit:
-                    await HandleEditAsync(entry);
-                    break;
-                case FileAction.Share:
-                    await HandleShareAsync(entry);
-                    break;
-                case FileAction.AddToFavorites:
-                    await AddFavoriteAsync(entry.Name, entry.FullPath, entry.IsDirectory);
-                    break;
-                case FileAction.RemoveFromFavorites:
-                    await RemoveFavoriteAsync(entry.FullPath);
-                    break;
-                case FileAction.DiskSpace:
-                    await HandleDiskSpaceAsync(entry);
-                    break;
-                case FileAction.Download:
-                    await HandleDownloadAsync(entry);
-                    break;
+                switch (action)
+                {
+                    case FileAction.Copy:
+                        await HandleCopyAsync(entry);
+                        break;
+                    case FileAction.Paste:
+                        await HandlePasteAsync();
+                        break;
+                    case FileAction.Move:
+                        await HandleMoveAsync(entry);
+                        break;
+                    case FileAction.Rename:
+                        await HandleRenameAsync(entry);
+                        break;
+                    case FileAction.Delete:
+                        await HandleDeleteAsync(entry);
+                        break;
+                    case FileAction.Extract:
+                        if (entry.IsPortal)
+                            await HandleExtractPortalZipAsync(entry);
+                        else
+                            await HandleExtractAsync(entry);
+                        break;
+                    case FileAction.ExtractFile:
+                        await HandleExtractFileAsync(entry);
+                        break;
+                    case FileAction.CreateFolder:
+                        await HandleCreateFolderAsync(entry);
+                        break;
+                    case FileAction.CreateZip:
+                        if (entry.IsPortal)
+                            await HandleCreatePortalZipAsync(new List<FileEntry> { entry });
+                        else
+                            await HandleCreateZipAsync(entry);
+                        break;
+                    case FileAction.Refresh:
+                        OnRefresh();
+                        break;
+                    case FileAction.Edit:
+                        if (entry.IsNetwork)
+                            await HandleNetworkTextEditAsync(entry);
+                        else
+                            await HandleEditAsync(entry);
+                        break;
+                    case FileAction.Share:
+                        await HandleShareAsync(entry);
+                        break;
+                    case FileAction.AddToFavorites:
+                        await AddFavoriteAsync(entry.Name, entry.FullPath, entry.IsDirectory);
+                        break;
+                    case FileAction.RemoveFromFavorites:
+                        await RemoveFavoriteAsync(entry.FullPath);
+                        break;
+                    case FileAction.DiskSpace:
+                        await HandleDiskSpaceAsync(entry);
+                        break;
+                    case FileAction.RenameLocation:
+                        await HandleRenameLocationAsync(entry);
+                        break;
+                    case FileAction.DeleteLocation:
+                        await HandleDeleteLocationAsync(entry);
+                        break;
+                }
+            }
+            catch (NetworkOperationException ex)
+            {
+                Log.Warn("ShowFileActionSheetAsync: network operation failed {Reason}: {Message}",
+                    ex.Reason, ex.Message);
+                _ = AlertDialogControl.ShowAsync(
+                    ex.Message + (ex.Reason == NetworkOperationReason.AccessDenied
+                        ? "\n\nAccess denied on the remote server."
+                        : "\n\nCheck the connection and try again."), AlertType.Error);
+            }
+            catch (Exception ex)
+            {
+                Log.Err($"ShowFileActionSheetAsync: operation failed: {ex.Message}", ex);
+                _ = AlertDialogControl.ShowAsync("Operation failed: " + ex.Message, AlertType.Error);
             }
         }
 
@@ -834,11 +867,263 @@ namespace XFiles.Controls
 
         private async Task HandleCopyAsync(FileEntry entry)
         {
+            if (entry.IsNetwork)
+            {
+                Log.Info("HandleCopyAsync: network {File} → clipboard", entry.Name);
+                ClipboardState.Copy(new[] { entry });
+                UpdateClipboardIndicator();
+                return;
+            }
             Log.Info("HandleCopyAsync: {File} → clipboard", entry.FullPath);
             ClipboardState.Copy(new[] { entry });
             UpdateClipboardIndicator();
             await Task.CompletedTask;
         }
+
+        /// <summary>
+        /// Pastes clipboard entries (local or remote) into the current network directory.
+        /// Local→remote uploads; remote→remote streams between servers (or the same server).
+        /// A self-paste into the same directory becomes "Copy of {name}" (mirrors CopyAsync).
+        /// </summary>
+        private async Task HandlePasteToNetworkAsync()
+        {
+            var current = _navigator.Current;
+            if (current == null || !current.IsNetwork) return;
+            if (string.IsNullOrEmpty(current.NetworkShareName))
+            {
+                _ = AlertDialogControl.ShowAsync("Open a shared folder before pasting.", AlertType.Info);
+                return;
+            }
+
+            var config = await _navigator.GetNetworkConfigAsync(current.NetworkLocationId);
+            if (config == null) return;
+
+            var entries = ClipboardState.Entries;
+            if (entries.Count == 0) return;
+
+            string share = current.NetworkShareName;
+            string destDir = current.NetworkPath ?? "";
+
+            int fileCount = 0;
+            long totalBytes = 0;
+            foreach (var e in entries)
+            {
+                if (e.IsNetwork)
+                {
+                    var srcConfig = await _navigator.GetNetworkConfigAsync(e.NetworkLocationId);
+                    if (srcConfig == null) continue;
+                    var (fc, tb) = await NetworkCopyService.ScanRemoteEntriesAsync(
+                        _navigator.NetworkBrowser, srcConfig, e.NetworkShareName, e.NetworkPath,
+                        e.IsDirectory, CancellationToken.None);
+                    fileCount += fc;
+                    totalBytes += tb;
+                }
+                else
+                {
+                    var scan = await FileOperations.ScanEntriesAsync(new[] { e });
+                    fileCount += scan.FileCount;
+                    totalBytes += scan.TotalBytes;
+                }
+            }
+
+            Log.Info("HandlePasteToNetworkAsync: {Count} items → {Share}/{Dest} ({Bytes} bytes)",
+                entries.Count, share, destDir, totalBytes);
+
+            OpProgressDialog.Show("Copying", $"{entries.Count} items", share + "\\" + destDir, 0, fileCount);
+            if (totalBytes > 0)
+                OpProgressDialog.UpdateProgress(new FileOperations.OperationProgress
+                {
+                    TotalBytes = totalBytes,
+                    FileTotal = fileCount
+                });
+
+            int success = 0, failed = 0;
+            long completedBytes = 0;
+            var sw = Stopwatch.StartNew();
+
+            foreach (var entry in entries)
+            {
+                if (OpProgressDialog.CancelToken.IsCancellationRequested)
+                {
+                    Log.Dbg("HandlePasteToNetworkAsync: cancelled");
+                    OpProgressDialog.Cancel();
+                    await Task.Delay(1500);
+                    OpProgressDialog.Close();
+                    UpdateClipboardIndicator();
+                    return;
+                }
+
+                bool sameDir = entry.IsNetwork
+                    && entry.NetworkLocationId == current.NetworkLocationId
+                    && string.Equals(entry.NetworkShareName, share, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(NetworkParentOf(entry.NetworkPath), destDir, StringComparison.OrdinalIgnoreCase);
+                string destName = sameDir ? "Copy of " + entry.Name : null;
+
+                bool ok;
+                long entryBytes = entry.IsDirectory ? 0 : Math.Max(0, entry.SizeBytes);
+                try
+                {
+                    var progress = new Progress<FileOperations.OperationProgress>(p =>
+                    {
+                        var overall = new FileOperations.OperationProgress
+                        {
+                            FileName = p.FileName,
+                            FileIndex = success + failed,
+                            FileTotal = fileCount,
+                            BytesCopied = completedBytes + p.BytesCopied,
+                            TotalBytes = totalBytes
+                        };
+                        OpProgressDialog.UpdateProgress(overall);
+                    });
+
+                    if (entry.IsNetwork)
+                    {
+                        var srcConfig = await _navigator.GetNetworkConfigAsync(entry.NetworkLocationId);
+                        ok = srcConfig != null && await NetworkCopyService.CopyRemoteToRemoteAsync(
+                            _navigator.NetworkBrowser, srcConfig, entry.NetworkShareName, entry.NetworkPath,
+                            _navigator.NetworkBrowser, config, share, destDir,
+                            entry.IsDirectory, entry.Name, progress, OpProgressDialog.CancelToken, destName);
+                    }
+                    else
+                    {
+                        ok = await NetworkCopyService.CopyLocalToRemoteAsync(
+                            _navigator.NetworkBrowser, config, share, destDir,
+                            entry.FullPath, entry.IsDirectory, entry.Name, progress,
+                            OpProgressDialog.CancelToken, destName);
+                    }
+                }
+                catch (NetworkOperationException ex)
+                {
+                    ok = false;
+                    Log.Warn("HandlePasteToNetworkAsync: {File} — {Reason} ({Ex})", entry.Name, ex.Reason, ex.Message);
+                }
+                catch (Exception ex)
+                {
+                    ok = false;
+                    Log.Err($"HandlePasteToNetworkAsync: {entry.Name} failed: {ex.Message}", ex);
+                }
+
+                if (ok) success++; else failed++;
+                completedBytes += entryBytes;
+                OpProgressDialog.TrackCompleted(entry.Name, entryBytes);
+                if (failed > 0)
+                    _ = AlertDialogControl.ShowAsync($"Copy failed: \"{entry.Name}\".{FailureSuffix()}", AlertType.Error);
+            }
+
+            sw.Stop();
+            Log.Info("HandlePasteToNetworkAsync: COMPLETE — {S}/{T} items in {E:0.0}s ({M:0.00} MB/s)",
+                success, entries.Count, sw.Elapsed.TotalSeconds,
+                sw.Elapsed.TotalSeconds > 0 ? completedBytes / 1048576.0 / sw.Elapsed.TotalSeconds : 0);
+
+            OpProgressDialog.Complete();
+            await Task.Delay(400);
+            OpProgressDialog.Close();
+            UpdateClipboardIndicator();
+            await _navigator.RefreshCurrentAsync();
+        }
+
+        /// <summary>Downloads network clipboard entries into a local directory.</summary>
+        private async Task HandlePasteNetworkToLocalAsync(string destDir)
+        {
+            var entries = ClipboardState.Entries.Where(e => e.IsNetwork).ToList();
+            if (entries.Count == 0) return;
+
+            var srcConfigs = new List<NetworkServerConfig>();
+            int fileCount = 0;
+            long totalBytes = 0;
+            foreach (var e in entries)
+            {
+                var cfg = await _navigator.GetNetworkConfigAsync(e.NetworkLocationId);
+                if (cfg == null) continue;
+                srcConfigs.Add(cfg);
+                var (fc, tb) = await NetworkCopyService.ScanRemoteEntriesAsync(
+                    _navigator.NetworkBrowser, cfg, e.NetworkShareName, e.NetworkPath,
+                    e.IsDirectory, CancellationToken.None);
+                fileCount += fc;
+                totalBytes += tb;
+            }
+            if (!await EnsureDiskSpaceAsync(destDir, totalBytes)) return;
+
+            Log.Info("HandlePasteNetworkToLocalAsync: {Count} items → {Dest} ({Bytes} bytes)",
+                entries.Count, destDir, totalBytes);
+
+            OpProgressDialog.Show("Copying", $"{entries.Count} items", destDir, 0, fileCount);
+            if (totalBytes > 0)
+                OpProgressDialog.UpdateProgress(new FileOperations.OperationProgress
+                {
+                    TotalBytes = totalBytes,
+                    FileTotal = fileCount
+                });
+
+            int success = 0, failed = 0;
+            long completedBytes = 0;
+            var sw = Stopwatch.StartNew();
+
+            for (int i = 0; i < entries.Count; i++)
+            {
+                var entry = entries[i];
+                if (OpProgressDialog.CancelToken.IsCancellationRequested)
+                {
+                    Log.Dbg("HandlePasteNetworkToLocalAsync: cancelled");
+                    OpProgressDialog.Cancel();
+                    await Task.Delay(1500);
+                    OpProgressDialog.Close();
+                    UpdateClipboardIndicator();
+                    return;
+                }
+
+                var cfg = srcConfigs[i];
+                bool ok;
+                long entryBytes = entry.IsDirectory ? 0 : Math.Max(0, entry.SizeBytes);
+                try
+                {
+                    var progress = new Progress<FileOperations.OperationProgress>(p =>
+                    {
+                        var overall = new FileOperations.OperationProgress
+                        {
+                            FileName = p.FileName,
+                            FileIndex = success + failed,
+                            FileTotal = fileCount,
+                            BytesCopied = completedBytes + p.BytesCopied,
+                            TotalBytes = totalBytes
+                        };
+                        OpProgressDialog.UpdateProgress(overall);
+                    });
+                    ok = await NetworkCopyService.CopyRemoteToLocalAsync(
+                        _navigator.NetworkBrowser, cfg, entry.NetworkShareName, entry.NetworkPath,
+                        destDir, entry.IsDirectory, progress, OpProgressDialog.CancelToken);
+                }
+                catch (NetworkOperationException ex)
+                {
+                    ok = false;
+                    Log.Warn("HandlePasteNetworkToLocalAsync: {File} — {Reason} ({Ex})", entry.Name, ex.Reason, ex.Message);
+                }
+                catch (Exception ex)
+                {
+                    ok = false;
+                    Log.Err($"HandlePasteNetworkToLocalAsync: {entry.Name} failed: {ex.Message}", ex);
+                }
+
+                if (ok) success++; else failed++;
+                completedBytes += entryBytes;
+                OpProgressDialog.TrackCompleted(entry.Name, entryBytes);
+                if (failed > 0)
+                    _ = AlertDialogControl.ShowAsync($"Copy failed: \"{entry.Name}\".{FailureSuffix()}", AlertType.Error);
+            }
+
+            sw.Stop();
+            Log.Info("HandlePasteNetworkToLocalAsync: COMPLETE — {S}/{T} items in {E:0.0}s ({M:0.00} MB/s)",
+                success, entries.Count, sw.Elapsed.TotalSeconds,
+                sw.Elapsed.TotalSeconds > 0 ? completedBytes / 1048576.0 / sw.Elapsed.TotalSeconds : 0);
+
+            OpProgressDialog.Complete();
+            await Task.Delay(400);
+            OpProgressDialog.Close();
+            UpdateClipboardIndicator();
+            await _navigator.RefreshCurrentAsync();
+        }
+
+        private static string NetworkParentOf(string path) => NetworkPathUtil.Parent(path);
 
         private async Task HandlePasteAsync()
         {
@@ -847,6 +1132,13 @@ namespace XFiles.Controls
             if (!ClipboardState.HasItems) return;
 
             var current = _navigator.Current;
+
+            // Paste into a network column → upload local/remote clipboard entries over SMB.
+            if (current != null && current.IsNetwork)
+            {
+                await HandlePasteToNetworkAsync();
+                return;
+            }
 
             // Paste into a portal column → upload local clipboard entries to the portal.
             if (current != null && current.IsPortal)
@@ -864,6 +1156,13 @@ namespace XFiles.Controls
             }
 
             var entries = ClipboardState.Entries;
+
+            // Paste network clipboard entries into a local directory → download to disk.
+            if (entries.Any(e => e.IsNetwork))
+            {
+                await HandlePasteNetworkToLocalAsync(destDir);
+                return;
+            }
 
             // Paste portal clipboard entries into a local directory → download to disk.
             if (entries.Any(e => e.IsPortal))
@@ -1743,6 +2042,12 @@ namespace XFiles.Controls
                 return;
             }
 
+            if (entry.IsNetwork)
+            {
+                await HandleNetworkRenameAsync(entry, newName);
+                return;
+            }
+
                 var confirmed = await AlertDialogControl.ShowConfirmAsync($"Rename '{entry.Name}' to '{newName}'?");
             if (!confirmed)
             {
@@ -1760,6 +2065,81 @@ namespace XFiles.Controls
             {
                 Log.Warn("HandleRenameAsync: failed");
                 _ = AlertDialogControl.ShowAsync($"Failed to rename \"{entry.Name}\".{FailureSuffix()}", AlertType.Error);
+            }
+        }
+
+        private async Task HandleRenameLocationAsync(FileEntry entry)
+        {
+            Log.Info("HandleRenameLocationAsync: location id={Id}", entry.NetworkLocationId);
+
+            var config = await NetworkServerManager.GetAsync((int)entry.NetworkLocationId);
+            if (config == null)
+            {
+                Log.Warn("HandleRenameLocationAsync: location not found");
+                _ = AlertDialogControl.ShowAsync("Saved location not found.", AlertType.Error);
+                return;
+            }
+
+            UpdateFooterALabel("Select");
+            var result = await NetworkLocationDialogControl.ShowAsync("Edit Network Location", config, isEdit: true);
+            UpdateFooterALabelFromSelection();
+            if (result == null)
+            {
+                Log.Verb("HandleRenameLocationAsync: cancelled");
+                return;
+            }
+
+            await NetworkServerManager.UpdateAsync(config.Id, result.Config,
+                result.PasswordEdited ? result.Password : null);
+            Log.Info("HandleRenameLocationAsync: updated {Url}", NetworkUrl.Compose(result.Config));
+            await _navigator.RefreshCurrentAsync();
+        }
+
+        private async Task HandleDeleteLocationAsync(FileEntry entry)
+        {
+            Log.Info("HandleDeleteLocationAsync: location id={Id}", entry.NetworkLocationId);
+
+            bool confirmed = await AlertDialogControl.ShowConfirmAsync($"Delete network location '{entry.Name}'?");
+            if (!confirmed)
+            {
+                Log.Verb("HandleDeleteLocationAsync: cancelled");
+                return;
+            }
+
+            await NetworkServerManager.RemoveAsync((int)entry.NetworkLocationId);
+            Log.Info("HandleDeleteLocationAsync: removed location");
+            await _navigator.RefreshCurrentAsync();
+        }
+
+        private async Task HandleNetworkRenameAsync(FileEntry entry, string newName)
+        {
+            Log.Info("HandleNetworkRenameAsync: {Name} → {New} (location={Id})",
+                entry.Name, newName, entry.NetworkLocationId);
+            bool confirmed = await AlertDialogControl.ShowConfirmAsync($"Rename '{entry.Name}' to '{newName}'?");
+            if (!confirmed)
+            {
+                Log.Verb("HandleNetworkRenameAsync: confirmation cancelled");
+                return;
+            }
+
+            try
+            {
+                var config = await _navigator.GetNetworkConfigAsync(entry.NetworkLocationId);
+                if (config == null) return;
+                await _navigator.NetworkBrowser.RenameFileAsync(config, entry.NetworkShareName,
+                    entry.NetworkPath, newName, entry.IsDirectory, CancellationToken.None);
+                Log.Info("HandleNetworkRenameAsync: success — refreshing");
+                await _navigator.RefreshCurrentAsync(newName);
+            }
+            catch (NetworkOperationException ex)
+            {
+                Log.Warn($"HandleNetworkRenameAsync: {entry.Name} — {ex.Reason} ({ex.Message})");
+                _ = AlertDialogControl.ShowAsync($"Failed to rename \"{entry.Name}\".\n\n{ex.Message}", AlertType.Error);
+            }
+            catch (Exception ex)
+            {
+                Log.Err("HandleNetworkRenameAsync: failed", ex);
+                _ = AlertDialogControl.ShowAsync($"Failed to rename \"{entry.Name}\".\n\n{ex.Message}", AlertType.Error);
             }
         }
 
@@ -1797,6 +2177,12 @@ namespace XFiles.Controls
                 return;
             }
 
+            if (entry.IsNetwork)
+            {
+                await HandleNetworkDeleteAsync(entry);
+                return;
+            }
+
             // Build file list for confirmation dialog
             var (files, folderCount) = await FileOperations.ListRecursiveAsync(entry.FullPath);
             bool confirmed = await FileOperationConfirmDialogControl.ShowAsync(
@@ -1826,6 +2212,38 @@ namespace XFiles.Controls
             {
                 Log.Warn("HandleDeleteAsync: failed");
                 _ = AlertDialogControl.ShowAsync($"Failed to delete \"{entry.Name}\".{FailureSuffix()}", AlertType.Error);
+            }
+        }
+
+        private async Task HandleNetworkDeleteAsync(FileEntry entry)
+        {
+            Log.Info("HandleNetworkDeleteAsync: {Name} (location={Id})", entry.Name, entry.NetworkLocationId);
+            bool confirmed = await FileOperationConfirmDialogControl.ShowAsync(
+                entry.Name, entry.IsDirectory, null, entry.IsDirectory ? 1 : 0);
+            if (!confirmed)
+            {
+                Log.Verb("HandleNetworkDeleteAsync: confirmation cancelled");
+                return;
+            }
+
+            try
+            {
+                var config = await _navigator.GetNetworkConfigAsync(entry.NetworkLocationId);
+                if (config == null) return;
+                await NetworkCopyService.DeleteRemoteAsync(_navigator.NetworkBrowser, config,
+                    entry.NetworkShareName, entry.NetworkPath, entry.IsDirectory, CancellationToken.None);
+                Log.Info("HandleNetworkDeleteAsync: success — refreshing");
+                await _navigator.RefreshCurrentAsync();
+            }
+            catch (NetworkOperationException ex)
+            {
+                Log.Warn($"HandleNetworkDeleteAsync: {entry.Name} — {ex.Reason} ({ex.Message})");
+                _ = AlertDialogControl.ShowAsync($"Failed to delete \"{entry.Name}\".\n\n{ex.Message}", AlertType.Error);
+            }
+            catch (Exception ex)
+            {
+                Log.Err("HandleNetworkDeleteAsync: failed", ex);
+                _ = AlertDialogControl.ShowAsync($"Failed to delete \"{entry.Name}\".\n\n{ex.Message}", AlertType.Error);
             }
         }
 
@@ -2188,6 +2606,12 @@ namespace XFiles.Controls
                 return;
             }
 
+            if (_navigator.Current?.IsNetwork == true)
+            {
+                await HandleNetworkCreateFolderAsync(folderName);
+                return;
+            }
+
             var fullPath = System.IO.Path.Combine(targetDir, folderName);
             var result = await FileOperations.CreateFolderAsync(fullPath);
             if (result == FileOperations.OperationResult.Success)
@@ -2220,6 +2644,39 @@ namespace XFiles.Controls
             catch (Exception ex)
             {
                 Log.Err("HandlePortalCreateFolderAsync: failed", ex);
+                _ = AlertDialogControl.ShowAsync($"Failed to create folder \"{folderName}\".\n\n{ex.Message}", AlertType.Error);
+            }
+        }
+
+        private async Task HandleNetworkCreateFolderAsync(string folderName)
+        {
+            var current = _navigator.Current;
+            if (string.IsNullOrEmpty(current?.NetworkShareName))
+            {
+                _ = AlertDialogControl.ShowAsync("Open a shared folder before creating one.", AlertType.Info);
+                return;
+            }
+            Log.Info("HandleNetworkCreateFolderAsync: '{Name}' in {Share}/{Path}",
+                folderName, current?.NetworkShareName, current?.NetworkPath);
+            try
+            {
+                var config = await _navigator.GetNetworkConfigAsync(current.NetworkLocationId);
+                if (config == null) return;
+                string basePath = (current.NetworkPath ?? "").TrimEnd('\\');
+                string newPath = string.IsNullOrEmpty(basePath) ? folderName : basePath + "\\" + folderName;
+                await _navigator.NetworkBrowser.CreateDirectoryAsync(config,
+                    current.NetworkShareName, newPath, CancellationToken.None);
+                Log.Info("HandleNetworkCreateFolderAsync: success — refreshing and selecting '{Name}'", folderName);
+                await _navigator.RefreshCurrentAsync(selectName: folderName);
+            }
+            catch (NetworkOperationException ex)
+            {
+                Log.Warn($"HandleNetworkCreateFolderAsync: {folderName} — {ex.Reason} ({ex.Message})");
+                _ = AlertDialogControl.ShowAsync($"Failed to create folder \"{folderName}\".\n\n{ex.Message}", AlertType.Error);
+            }
+            catch (Exception ex)
+            {
+                Log.Err("HandleNetworkCreateFolderAsync: failed", ex);
                 _ = AlertDialogControl.ShowAsync($"Failed to create folder \"{folderName}\".\n\n{ex.Message}", AlertType.Error);
             }
         }
@@ -2382,36 +2839,21 @@ namespace XFiles.Controls
         }
 
         /// <summary>
-        /// Download from URL into the current local folder. Direct links are streamed
-        /// to disk; links that resolve to an HTML page fall through to the WebView
+        /// Download from URL into a user-chosen local folder. The destination is
+        /// picked first (folder picker, always a real local path); B-cancel at the
+        /// picker aborts without prompting for a URL. Direct links are streamed to
+        /// disk; links that resolve to an HTML page fall through to the WebView
         /// overlay for a manual click-through download.
         /// </summary>
-        private async Task HandleDownloadAsync(FileEntry entry)
+        private async Task HandleDownloadFromUrlAsync(FileEntry entry)
         {
-            if (_navigator.Current == null ||
-                _navigator.Current.IsPortal ||
-                _navigator.Current.IsArchive ||
-                _navigator.Current.IsFavorite)
-            {
-                Log.Warn("HandleDownloadAsync: not available in current location");
-                _ = AlertDialogControl.ShowAsync("Download from URL is only available in local folders.", AlertType.Info);
-                return;
-            }
-
-            string destDir = _navigator.Current.Path;
-            if (string.IsNullOrEmpty(destDir))
-            {
-                Log.Warn("HandleDownloadAsync: current path is empty");
-                _ = AlertDialogControl.ShowAsync("Cannot determine the download folder.", AlertType.Error);
-                return;
-            }
-
             UpdateFooterALabel("OK");
             string url = await InputDialogControl.ShowAsync("Download from URL", "");
             UpdateFooterALabelFromSelection();
             if (string.IsNullOrWhiteSpace(url))
             {
-                Log.Verb("HandleDownloadAsync: cancelled");
+                Log.Verb("HandleDownloadFromUrlAsync: URL prompt dismissed");
+                _ = AlertDialogControl.ShowAsync("URL cannot be empty.", AlertType.Warning);
                 return;
             }
 
@@ -2422,7 +2864,22 @@ namespace XFiles.Controls
                 url = "https://" + url;
             }
 
-            Log.Info("HandleDownloadAsync: url={Url} dest={Dest}", url, destDir);
+            UpdateFooterALabel("Select");
+            string destDir = await FolderBrowserDialogControl.ShowAsync(
+                MoveDialogInitialPath(),
+                PickerMode.Folder,
+                null,
+                "Download Here",
+                "ms-appx:///Assets/Views/FileActionSheet/fileactionsheet-download-48.png");
+            UpdateFooterALabelFromSelection();
+
+            if (string.IsNullOrEmpty(destDir))
+            {
+                Log.Verb("HandleDownloadFromUrlAsync: destination cancelled");
+                return;
+            }
+
+            Log.Info("HandleDownloadFromUrlAsync: url={Url} dest={Dest}", url, destDir);
 
             string directUrl = await DownloadService.ResolveAsync(url, CancellationToken.None) ?? url;
 
@@ -2459,13 +2916,13 @@ namespace XFiles.Controls
 
             if (result.Outcome == DownloadService.DownloadOutcome.Canceled)
             {
-                Log.Info("HandleDownloadAsync: cancelled");
+                Log.Info("HandleDownloadFromUrlAsync: cancelled");
                 return;
             }
 
             if (result.Outcome == DownloadService.DownloadOutcome.NeedsBrowser)
             {
-                Log.Info("HandleDownloadAsync: opening browser overlay for {Url}", url);
+                Log.Info("HandleDownloadFromUrlAsync: opening browser overlay for {Url}", url);
                 var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                 Action<string> onDownloaded = null;
                 onDownloaded = path => tcs.TrySetResult(true);
@@ -2487,7 +2944,7 @@ namespace XFiles.Controls
                 return;
             }
 
-            Log.Warn("HandleDownloadAsync: failed — {Error}", result.Error ?? "unknown");
+            Log.Warn("HandleDownloadFromUrlAsync: failed — {Error}", result.Error ?? "unknown");
             _ = AlertDialogControl.ShowAsync($"Download failed.\n\n{result.Error ?? "See the log for details."}", AlertType.Error);
         }
     }

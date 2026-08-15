@@ -26,6 +26,7 @@ using XFiles.Audio;
 using XFiles.FileSystem;
 using XFiles.Metadata;
 using XFiles.Navigation;
+using XFiles.Network;
 using XFiles.Services;
 using XFiles.Visualizers;
 
@@ -322,6 +323,7 @@ namespace XFiles.Controls
                 _ = DrillIntoPortalAfterConnectAsync();
             };
             PortalCredentialsDialogControl.OnClosed = markOverlayClosed;
+            NetworkLocationDialogControl.OnClosed = markOverlayClosed;
             AlertDialogControl.OnClosed = markOverlayClosed;
             FileActionSheetControl.OnClosed = markOverlayClosed;
             StartMenuControl.OnClosed = markOverlayClosed;
@@ -330,6 +332,10 @@ namespace XFiles.Controls
             PdfFullScreen.OnClosed = markOverlayClosed;
             VideoTrackMenuControl.OnClosed = markOverlayClosed;
             OpProgressDialog.OnClosed = markOverlayClosed;
+
+            _navigator.NetworkAddLocationRequested += OnNetworkAddLocationRequested;
+            _navigator.NetworkDownloadUrlRequested += OnNetworkDownloadUrlRequested;
+            _navigator.NetworkError += OnNetworkError;
 
             UpdateClipboardIndicator();
         }
@@ -417,6 +423,41 @@ namespace XFiles.Controls
             // Connected (auto drill-in); on failure it stays open for retry.
             PortalSetupDialogControl.Show("Credentials saved — verifying portal connection…",
                 autoProbeMessage: "Connecting to portal…");
+        }
+
+        private async void OnNetworkAddLocationRequested()
+        {
+            Log.Dbg("MillerColumnsPage: add network location requested");
+            await ShowNetworkLocationAddAsync();
+        }
+
+        private async void OnNetworkDownloadUrlRequested()
+        {
+            Log.Dbg("MillerColumnsPage: download-from-URL requested");
+            await HandleDownloadFromUrlAsync(null);
+        }
+
+        private async void OnNetworkError(NetworkOperationReason reason, string message)
+        {
+            Log.Warn("MillerColumnsPage: network error {Reason}: {Message}", reason, message);
+            _ = AlertDialogControl.ShowAsync(message, AlertType.Error);
+        }
+
+        private async Task ShowNetworkLocationAddAsync()
+        {
+            Log.Info("ShowNetworkLocationAddAsync: opening dialog");
+            UpdateFooterALabel("Select");
+            var result = await NetworkLocationDialogControl.ShowAsync("Add Network Location", null, isEdit: false);
+            UpdateFooterALabelFromSelection();
+            if (result == null)
+            {
+                Log.Verb("ShowNetworkLocationAddAsync: cancelled");
+                return;
+            }
+
+            await NetworkServerManager.AddAsync(result.Config, result.Password);
+            Log.Info("ShowNetworkLocationAddAsync: added {Url}", NetworkUrl.Compose(result.Config));
+            await _navigator.RefreshCurrentAsync();
         }
 
         private async Task ResetPortalCredentialsAsync()

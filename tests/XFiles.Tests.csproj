@@ -15,6 +15,7 @@
     <PackageReference Include="System.Text.Encoding.CodePages" Version="8.0.0" />
     <PackageReference Include="sqlite-net-pcl" Version="1.9.172" />
     <PackageReference Include="SQLitePCLRaw.bundle_green" Version="2.1.10" />
+    <PackageReference Include="SMBLibrary" Version="1.5.7.1" />
   </ItemGroup>
 
   <ItemGroup>
@@ -40,6 +41,13 @@
     <Compile Include="..\XFiles\Network\NetworkServerConfig.cs" Link="Linked\Network\NetworkServerConfig.cs" />
     <Compile Include="..\XFiles\Network\NetworkUrl.cs" Link="Linked\Network\NetworkUrl.cs" />
     <Compile Include="..\XFiles\Network\NetworkServerStore.cs" Link="Linked\Network\NetworkServerStore.cs" />
+    <Compile Include="..\XFiles\Network\NetworkFileEntry.cs" Link="Linked\Network\NetworkFileEntry.cs" />
+    <Compile Include="..\XFiles\Network\NetworkOperationException.cs" Link="Linked\Network\NetworkOperationException.cs" />
+    <Compile Include="..\XFiles\Network\INetworkFileSystemProvider.cs" Link="Linked\Network\INetworkFileSystemProvider.cs" />
+    <Compile Include="..\XFiles\Network\SmbReadStream.cs" Link="Linked\Network\SmbReadStream.cs" />
+    <Compile Include="..\XFiles\Network\SmbWriteStream.cs" Link="Linked\Network\SmbWriteStream.cs" />
+    <Compile Include="..\XFiles\Network\SmbSession.cs" Link="Linked\Network\SmbSession.cs" />
+    <Compile Include="..\XFiles\Network\NetworkPathUtil.cs" Link="Linked\Network\NetworkPathUtil.cs" />
     <Compile Include="..\XFiles\Metadata\TrackMetadata.cs" Link="Linked\Metadata\TrackMetadata.cs" />
     <Compile Include="..\XFiles\Services\PortalCore.cs" Link="Linked\Services\PortalCore.cs" />
     <Compile Include="..\XFiles\Services\PortalModels.cs" Link="Linked\Services\PortalModels.cs" />

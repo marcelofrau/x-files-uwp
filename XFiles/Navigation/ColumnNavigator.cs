@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.UI.Xaml.Media;
 using XFiles.FileSystem;
+using XFiles.Network;
 using XFiles.Services;
 
 namespace XFiles.Navigation
@@ -34,11 +36,33 @@ namespace XFiles.Navigation
         // ignored so they can't queue up and interleave loads.
         private bool _portalBusy;
 
+        // Same guard for network loads (SMB list/connect). SMB round-trips against a
+        // remote server can be slow — queueing drill-ins would interleave sessions.
+        private bool _networkBusy;
+
+        private readonly SmbBrowser _networkBrowser = new SmbBrowser();
+
+        /// <summary>SMB browser facade (vault + logging). Used by page-level copy/rename/delete.</summary>
+        public SmbBrowser NetworkBrowser => _networkBrowser;
+
         /// <summary>
         /// Raised when a portal drill-in is attempted while the portal is not connected.
         /// MillerColumnsPage shows the setup dialog (exemption instructions + QR).
         /// </summary>
         public event Action PortalSetupRequired;
+
+        /// <summary>
+        /// Raised when the user confirms the "＋ Add location" action row.
+        /// MillerColumnsPage shows the NetworkLocationDialog and saves the result.
+        /// </summary>
+        public event Action NetworkAddLocationRequested;
+        public event Action NetworkDownloadUrlRequested;
+
+        /// <summary>
+        /// Raised when a network operation fails (connect, list, open). MillerColumnsPage
+        /// shows the message in the error overlay.
+        /// </summary>
+        public event Action<NetworkOperationReason, string> NetworkError;
 
         /// <summary>
         /// Raised when a portal preview (directory listing or file download via REST) is
@@ -147,33 +171,46 @@ namespace XFiles.Navigation
             col.Entries.Insert(1, portalEntry);
             col.AllEntries?.Insert(1, portalEntry);
 
-            // Separator between the virtual group (Favorites, User Folders) and drives
+            // Inject Network virtual entry (saved locations + add-location flow)
+            var networkEntry = new FileEntry
+            {
+                Name = "Network",
+                FullPath = null,
+                IsDirectory = true,
+                IsDrive = false,
+                IsVirtual = true,
+                IsNetwork = true
+            };
+            col.Entries.Insert(2, networkEntry);
+            col.AllEntries?.Insert(2, networkEntry);
+
+            // Separator between the virtual group (Favorites, User Folders, Network) and drives
             var separator = new FileEntry
             {
                 Name = "",
                 FullPath = null,
                 IsSeparator = true
             };
-            col.Entries.Insert(2, separator);
-            col.AllEntries?.Insert(2, separator);
+            col.Entries.Insert(3, separator);
+            col.AllEntries?.Insert(3, separator);
 
             // Move the AppData entry (LocalFolder) above the separator so it stays
-            // grouped with the virtual folders (Favorites, User Folders)
+            // grouped with the virtual folders (Favorites, User Folders, Network)
             int appDataIdx = col.Entries.FindIndex(e => e.Name == "AppData");
-            if (appDataIdx > 2)
+            if (appDataIdx > 3)
             {
                 var appData = col.Entries[appDataIdx];
                 col.Entries.RemoveAt(appDataIdx);
-                col.Entries.Insert(2, appData);
+                col.Entries.Insert(3, appData);
 
                 if (col.AllEntries != null)
                 {
                     int allIdx = col.AllEntries.FindIndex(e => e.Name == "AppData");
-                    if (allIdx > 2)
+                    if (allIdx > 3)
                     {
                         var allApp = col.AllEntries[allIdx];
                         col.AllEntries.RemoveAt(allIdx);
-                        col.AllEntries.Insert(2, allApp);
+                        col.AllEntries.Insert(3, allApp);
                     }
                 }
             }
@@ -220,6 +257,15 @@ namespace XFiles.Navigation
             if (_current.IsPortal || selected.IsPortal)
             {
                 await DrillIntoPortalAsync(selected);
+                return;
+            }
+
+            // Network entries (Network root, saved locations, remote shares/trees).
+            // Must be checked before the generic IsVirtual branch — the Network root
+            // entry and the action rows are virtual too.
+            if (_current.IsNetwork || selected.IsNetwork)
+            {
+                await DrillIntoNetworkAsync(selected);
                 return;
             }
 
@@ -628,6 +674,363 @@ namespace XFiles.Navigation
             ColumnsChanged?.Invoke();
         }
 
+        // ====================================================================
+        // Network (SMB) navigation
+        // ====================================================================
+
+        /// <summary>
+        /// Drills into a network entry. Handles every level of the network tree:
+        /// Network root (→ locations), saved location (→ shares or configured share),
+        /// share (→ share root), remote directory (→ drill down).
+        /// </summary>
+        private async Task DrillIntoNetworkAsync(FileEntry selected)
+        {
+            if (_networkBusy)
+            {
+                Log.Verb("ColumnNavigator.Network: drill-in ignored — network navigation in progress");
+                return;
+            }
+
+            ++_previewGeneration;
+
+            // ".." — go back one level (same as B).
+            if (selected.Name == "..")
+            {
+                Log.Info("ColumnNavigator.Network: drilling up via '..'");
+                await DrillOutAsync();
+                return;
+            }
+
+            // Action row (＋ Add location) — handled outside the tree walk.
+            if (selected.ActionKind != ActionKind.None)
+            {
+                await DrillIntoNetworkActionAsync(selected);
+                return;
+            }
+
+            // 1. Network root virtual entry (at the drive root) → locations column.
+            if (selected.IsVirtual && !_current.IsNetwork)
+            {
+                Log.Info("ColumnNavigator.Network: entering Network root");
+                var state = new ColumnState
+                {
+                    Path = null,
+                    Label = "Network",
+                    IsNetwork = true,
+                    NetworkLocationId = 0,
+                    NetworkShareName = null,
+                    NetworkPath = null
+                };
+                state.LoadNetworkLocations(await BuildNetworkLocationsAsync());
+                await CommitNetworkColumnAsync(state);
+                return;
+            }
+
+            // 2. Saved location row → shares (no share configured) or straight into the share.
+            if (_current.IsNetwork && _current.NetworkLocationId == 0 && _current.NetworkShareName == null
+                && !selected.IsVirtual)
+            {
+                var config = await GetNetworkConfigAsync(selected.NetworkLocationId);
+                if (config == null) return;
+
+                Log.Info("ColumnNavigator.Network: entering location {Url}", NetworkUrl.Compose(config));
+
+                ColumnState newColumn = string.IsNullOrEmpty(config.Share)
+                    ? new ColumnState
+                    {
+                        Path = null,
+                        Label = NetworkUrl.DisplayName(config),
+                        IsNetwork = true,
+                        NetworkLocationId = config.Id,
+                        NetworkShareName = null,
+                        NetworkPath = null
+                    }
+                    : new ColumnState
+                    {
+                        Path = null,
+                        Label = config.Share,
+                        IsNetwork = true,
+                        NetworkLocationId = config.Id,
+                        NetworkShareName = config.Share,
+                        NetworkPath = ""
+                    };
+
+                if (!await LoadNetworkColumnAsync(newColumn, config, config.Share, "")) return;
+                await CommitNetworkColumnAsync(newColumn);
+                return;
+            }
+
+            // 3. Shares column → selected share root.
+            if (_current.NetworkShareName == null && selected.NetworkShareName != null)
+            {
+                var config = await GetNetworkConfigAsync(_current.NetworkLocationId);
+                if (config == null) return;
+
+                var newColumn = new ColumnState
+                {
+                    Path = null,
+                    Label = selected.NetworkShareName,
+                    IsNetwork = true,
+                    NetworkLocationId = _current.NetworkLocationId,
+                    NetworkShareName = selected.NetworkShareName,
+                    NetworkPath = ""
+                };
+
+                if (!await LoadNetworkColumnAsync(newColumn, config, selected.NetworkShareName, "")) return;
+                await CommitNetworkColumnAsync(newColumn);
+                return;
+            }
+
+            // 4. Remote directory → drill down one level.
+            if (_current.NetworkShareName != null && selected.IsDirectory)
+            {
+                var config = await GetNetworkConfigAsync(_current.NetworkLocationId);
+                if (config == null) return;
+
+                string childPath = CombineNetworkPath(_current.NetworkPath, selected.Name);
+                var newColumn = new ColumnState
+                {
+                    Path = null,
+                    Label = string.IsNullOrEmpty(childPath)
+                        ? _current.NetworkShareName
+                        : _current.NetworkShareName + "\\" + childPath,
+                    IsNetwork = true,
+                    NetworkLocationId = _current.NetworkLocationId,
+                    NetworkShareName = _current.NetworkShareName,
+                    NetworkPath = childPath
+                };
+
+                if (!await LoadNetworkColumnAsync(newColumn, config, _current.NetworkShareName, childPath)) return;
+                await CommitNetworkColumnAsync(newColumn);
+                return;
+            }
+
+            // Remote file — no navigation (preview/play lands in M5).
+            Log.Verb("ColumnNavigator.Network: file '{Name}' — no drill-in (preview comes in a later milestone)", selected.Name);
+        }
+
+        private async Task DrillIntoNetworkActionAsync(FileEntry selected)
+        {
+            switch (selected.ActionKind)
+            {
+                case ActionKind.AddLocation:
+                    Log.Info("ColumnNavigator.Network: add location requested");
+                    NetworkAddLocationRequested?.Invoke();
+                    break;
+                case ActionKind.DownloadUrl:
+                    Log.Info("ColumnNavigator.Network: download-from-URL requested");
+                    NetworkDownloadUrlRequested?.Invoke();
+                    break;
+            }
+            await Task.CompletedTask;
+        }
+
+        /// <summary>Builds the locations column entry list (saved locations + action rows).</summary>
+        private async Task<List<FileEntry>> BuildNetworkLocationsAsync()
+        {
+            var list = new List<FileEntry>();
+
+            // Action rows first: Download from URL, separator, Add location,
+            // separator, then the saved locations underneath.
+            list.Add(new FileEntry
+            {
+                Name = "Download from URL",
+                IsDirectory = true,
+                IsVirtual = true,
+                IsNetwork = true,
+                ActionKind = ActionKind.DownloadUrl
+            });
+
+            list.Add(new FileEntry
+            {
+                Name = "",
+                FullPath = null,
+                IsSeparator = true
+            });
+
+            list.Add(new FileEntry
+            {
+                Name = "Add location",
+                IsDirectory = true,
+                IsVirtual = true,
+                IsNetwork = true,
+                ActionKind = ActionKind.AddLocation
+            });
+
+            list.Add(new FileEntry
+            {
+                Name = "",
+                FullPath = null,
+                IsSeparator = true
+            });
+
+            var configs = await NetworkServerManager.GetAllAsync();
+            foreach (var c in configs)
+            {
+                list.Add(new FileEntry
+                {
+                    Name = NetworkUrl.DisplayName(c),
+                    IsDirectory = true,
+                    IsNetwork = true,
+                    NetworkLocationId = c.Id,
+                    NetworkShareName = null,
+                    NetworkPath = null
+                });
+            }
+
+            return list;
+        }
+
+        /// <summary>Fetches a saved location config; raises the error event when missing.</summary>
+        public async Task<NetworkServerConfig> GetNetworkConfigAsync(long locationId)
+        {
+            var config = await NetworkServerManager.GetAsync((int)locationId);
+            if (config == null)
+            {
+                Log.Warn("ColumnNavigator.Network: location id={Id} not found", locationId);
+                NetworkError?.Invoke(NetworkOperationReason.Unreachable, "Saved location not found.");
+            }
+            return config;
+        }
+
+        /// <summary>Opens a remote file stream for the given saved location. Returns null when the
+        /// location is missing or the read cannot be opened.</summary>
+        public async Task<Stream> OpenNetworkStreamAsync(long locationId, string share, string path)
+        {
+            var config = await GetNetworkConfigAsync(locationId);
+            if (config == null) return null;
+            try
+            {
+                return await _networkBrowser.OpenReadAsync(config, share, path, CancellationToken.None);
+            }
+            catch (NetworkOperationException ex)
+            {
+                Log.Warn("ColumnNavigator.Network: open stream failed {Url}: {Reason} ({Detail})",
+                    NetworkUrl.Compose(config), ex.Reason, ex.Message);
+                NetworkError?.Invoke(ex.Reason, NetworkOperationException.FriendlyMessage(ex.Reason, ex.Message));
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Uploads a local file to a remote path over SMB (text-editor save-back).
+        /// Returns false (logged) on any failure.
+        /// </summary>
+        public async Task<bool> WriteNetworkFileAsync(long locationId, string share, string path, string localPath)
+        {
+            var config = await GetNetworkConfigAsync(locationId);
+            if (config == null) return false;
+            try
+            {
+                await _networkBrowser.WriteFileAsync(config, share, path, localPath, CancellationToken.None);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("ColumnNavigator.WriteNetworkFile: {Reason}", ex.Message);
+                return false;
+            }
+        }
+
+        /// <summary>Loads shares or a directory into the column. Returns false on network failure.</summary>
+        private async Task<bool> LoadNetworkColumnAsync(ColumnState column, NetworkServerConfig config, string share, string path)
+        {
+            LoadingChanged?.Invoke(true);
+            _networkBusy = true;
+            try
+            {
+                if (string.IsNullOrEmpty(share))
+                    await column.LoadNetworkSharesAsync(_networkBrowser, config, CancellationToken.None);
+                else
+                    await column.LoadNetworkDirectoryAsync(_networkBrowser, config, share, path, CancellationToken.None);
+                return true;
+            }
+            catch (NetworkOperationException ex)
+            {
+                Log.Warn("ColumnNavigator.Network: load failed {Url}: {Reason} ({Detail})",
+                    NetworkUrl.Compose(config), ex.Reason, ex.Message);
+                NetworkError?.Invoke(ex.Reason, NetworkOperationException.FriendlyMessage(ex.Reason, ex.Message));
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Log.Err("ColumnNavigator.Network: unexpected load failure {Url}", ex, NetworkUrl.Compose(config));
+                NetworkError?.Invoke(NetworkOperationReason.Unreachable, "Unexpected network error.");
+                return false;
+            }
+            finally
+            {
+                _networkBusy = false;
+                LoadingChanged?.Invoke(false);
+            }
+        }
+
+        /// <summary>Pushes the current column and makes the new one current.</summary>
+        private async Task CommitNetworkColumnAsync(ColumnState newColumn)
+        {
+            _history.Push(new ColumnState
+            {
+                Path = _current.Path,
+                Label = _current.Label,
+                SelectedIndex = _current.SelectedIndex,
+                Entries = _current.Entries,
+                AllEntries = _current.AllEntries,
+                IsNetwork = _current.IsNetwork,
+                NetworkLocationId = _current.NetworkLocationId,
+                NetworkShareName = _current.NetworkShareName,
+                NetworkPath = _current.NetworkPath
+            });
+
+            newColumn.ClearSearch();
+            _current = newColumn;
+            await UpdatePreviewAsync();
+            ColumnsChanged?.Invoke();
+        }
+
+        /// <summary>Reloads the given network column (locations, shares, or directory) in place.</summary>
+        private async Task ReloadNetworkColumnAsync(ColumnState column)
+        {
+            if (_networkBusy)
+            {
+                Log.Verb("ColumnNavigator.Network: reload ignored — network navigation in progress");
+                return;
+            }
+            _networkBusy = true;
+            try
+            {
+                if (column.NetworkLocationId == 0 && column.NetworkShareName == null)
+                {
+                    column.LoadNetworkLocations(await BuildNetworkLocationsAsync());
+                }
+                else
+                {
+                    var config = await NetworkServerManager.GetAsync((int)column.NetworkLocationId);
+                    if (config == null) return;
+                    if (column.NetworkShareName == null)
+                        await column.LoadNetworkSharesAsync(_networkBrowser, config, CancellationToken.None);
+                    else
+                        await column.LoadNetworkDirectoryAsync(_networkBrowser, config, column.NetworkShareName,
+                            column.NetworkPath ?? "", CancellationToken.None);
+                }
+            }
+            catch (NetworkOperationException ex)
+            {
+                Log.Warn("ColumnNavigator.Network: reload failed: {Reason} ({Detail})", ex.Reason, ex.Message);
+                NetworkError?.Invoke(ex.Reason, NetworkOperationException.FriendlyMessage(ex.Reason, ex.Message));
+            }
+            finally
+            {
+                _networkBusy = false;
+            }
+        }
+
+        /// <summary>Joins a remote path segment onto a remote path.</summary>
+        public static string CombineNetworkPath(string path, string name)
+        {
+            if (string.IsNullOrEmpty(path)) return name;
+            return path.TrimEnd('\\') + "\\" + name;
+        }
+
         /// <summary>
         /// Drill out / go back (B/Left button).
         /// Pop history, restore previous state.
@@ -675,6 +1078,13 @@ namespace XFiles.Navigation
                 }
             }
 
+            // If returning to a network column, reload (locations may have changed after
+            // add/rename/delete; remote listings are reloaded for freshness).
+            if (_current.IsNetwork)
+            {
+                await ReloadNetworkColumnAsync(_current);
+            }
+
             // Reload gamelist for the parent directory
             if (_current.IsArchive)
             {
@@ -719,6 +1129,15 @@ namespace XFiles.Navigation
             if (_current.IsPortal)
             {
                 await UpdatePortalPreviewAsync(selected, gen);
+                return;
+            }
+
+            // Network column: locations column shows the how-to guide; share/directory
+            // columns preview their children; remote files show a metadata card (the
+            // real preview/play pipeline lands in a later milestone).
+            if (_current.IsNetwork)
+            {
+                await UpdateNetworkPreviewAsync(selected, gen);
                 return;
             }
 
@@ -886,6 +1305,194 @@ namespace XFiles.Navigation
                         }
                     }
                 }
+            }
+        }
+
+        /// <summary>
+        /// Preview logic for network columns. The locations column shows the how-to
+        /// guide (no preview). Shares/directories list their contents; remote files
+        /// show a metadata card — the real stream preview/play lands in a later
+        /// milestone. No gamelist enrichment on network paths.
+        /// </summary>
+        private async Task UpdateNetworkPreviewAsync(FileEntry selected, long gen)
+        {
+            // Locations column: no folder preview — the UI shows the how-to guide.
+            if (_current.NetworkLocationId == 0 && _current.NetworkShareName == null)
+            {
+                _preview = null;
+                PreviewLoadingChanged?.Invoke(false);
+                return;
+            }
+
+            var config = await NetworkServerManager.GetAsync((int)_current.NetworkLocationId);
+            if (config == null)
+            {
+                _preview = null;
+                PreviewLoadingChanged?.Invoke(false);
+                return;
+            }
+
+            PreviewLoadingChanged?.Invoke(true);
+            try
+            {
+                if (selected.IsDirectory)
+                {
+                    if (selected.Name == "..")
+                    {
+                        _preview = null;
+                        return;
+                    }
+
+                    _preview = new ColumnState
+                    {
+                        Path = null,
+                        Label = selected.Name,
+                        IsNetwork = true,
+                        NetworkLocationId = config.Id,
+                        NetworkShareName = selected.NetworkShareName ?? _current.NetworkShareName,
+                        NetworkPath = selected.NetworkPath
+                    };
+
+                    try
+                    {
+                        if (_preview.NetworkShareName == null)
+                            await _preview.LoadNetworkSharesAsync(_networkBrowser, config, CancellationToken.None);
+                        else
+                            await _preview.LoadNetworkDirectoryAsync(_networkBrowser, config,
+                                _preview.NetworkShareName, _preview.NetworkPath ?? "", CancellationToken.None);
+                    }
+                    catch (NetworkOperationException ex)
+                    {
+                        Log.Warn("ColumnNavigator.Network: preview list failed '{Name}': {Reason}",
+                            selected.Name, ex.Reason);
+                        _preview.IsFilePreview = true;
+                        _preview.PreviewType = FilePreviewType.Error;
+                        _preview.PreviewFileType = "Network";
+                        _preview.PreviewErrorMessage = NetworkOperationException.FriendlyMessage(ex.Reason, ex.Message);
+                    }
+                    if (_previewGeneration != gen) return;
+                }
+                else
+                {
+                    string share = selected.NetworkShareName ?? _current.NetworkShareName;
+                    string path = selected.NetworkPath;
+
+                    if (string.IsNullOrEmpty(share) || string.IsNullOrEmpty(path))
+                    {
+                        _preview = new ColumnState
+                        {
+                            Path = null,
+                            Label = selected.Name,
+                            IsFilePreview = true,
+                            IsNetwork = true,
+                            NetworkLocationId = config.Id,
+                            NetworkShareName = share,
+                            NetworkPath = path,
+                            PreviewFilePath = selected.Name,
+                            PreviewType = FilePreviewType.Unsupported,
+                            PreviewFileType = "Network file",
+                            PreviewFileSize = selected.SizeBytes,
+                            PreviewTextContent = "Remote file — no path context to read it."
+                        };
+                        return;
+                    }
+
+                    FilePreviewResult previewResult;
+
+                    string previewExt = Path.GetExtension(selected.Name ?? "");
+                    if (FilePreviewService.IsAudioFile(previewExt) || FilePreviewService.IsVideoFile(previewExt))
+                    {
+                        // Audio/video stream inline into the preview player — no content
+                        // probe needed (the pane's inline player opens its own stream).
+                        bool previewIsAudio = FilePreviewService.IsAudioFile(previewExt);
+                        _preview = new ColumnState
+                        {
+                            Path = null,
+                            Label = selected.Name,
+                            IsFilePreview = true,
+                            IsNetwork = true,
+                            NetworkLocationId = config.Id,
+                            NetworkShareName = share,
+                            NetworkPath = path,
+                            PreviewFilePath = selected.Name,
+                            PreviewType = previewIsAudio ? FilePreviewType.Audio : FilePreviewType.Video,
+                            PreviewFileType = FilePreviewService.GetFileTypeLabel(previewExt, null),
+                            PreviewFileSize = selected.SizeBytes
+                        };
+                        return;
+                    }
+
+                    try
+                    {
+                        using (var stream = await _networkBrowser.OpenReadAsync(
+                            config, share, path, CancellationToken.None))
+                        {
+                            previewResult = await FilePreviewService.GetPreviewFromNetworkAsync(
+                                stream, selected.Name, selected.SizeBytes);
+                        }
+                    }
+                    catch (NetworkOperationException ex)
+                    {
+                        Log.Warn("ColumnNavigator.Network: preview read failed '{Name}': {Reason} ({Detail})",
+                            selected.Name, ex.Reason, ex.Message);
+                        NetworkError?.Invoke(ex.Reason,
+                            NetworkOperationException.FriendlyMessage(ex.Reason, ex.Message));
+                        _preview = null;
+                        return;
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Err("ColumnNavigator.Network: unexpected preview failure '{Name}'", ex, selected.Name);
+                        NetworkError?.Invoke(NetworkOperationReason.Unreachable,
+                            "Unexpected network error while reading the file.");
+                        _preview = null;
+                        return;
+                    }
+
+                    if (_previewGeneration != gen) return;
+
+                    _preview = new ColumnState
+                    {
+                        Path = null,
+                        Label = selected.Name,
+                        IsFilePreview = true,
+                        IsNetwork = true,
+                        NetworkLocationId = config.Id,
+                        NetworkShareName = share,
+                        NetworkPath = path,
+                        PreviewFilePath = selected.Name,
+                        PreviewType = previewResult.Type,
+                        PreviewTextContent = previewResult.TextContent,
+                        PreviewImageSource = previewResult.ImageSource,
+                        PreviewErrorMessage = previewResult.ErrorMessage,
+                        PreviewFileType = previewResult.FileType,
+                        PreviewFileSize = previewResult.FileSizeBytes,
+                        PreviewIsTruncated = previewResult.IsTruncated,
+                        PreviewPixelWidth = previewResult.PixelWidth,
+                        PreviewPixelHeight = previewResult.PixelHeight,
+                        PreviewPdfPageCount = previewResult.PdfPageCount,
+                        PreviewRomSystem = previewResult.RomSystem,
+                        PreviewRomIconPath = previewResult.RomIconPath
+                    };
+
+                    // PDF keeps a metadata card (rendering is path-based; the
+                    // fullscreen open caches the file locally first).
+                    if (previewResult.Type == FilePreviewType.Pdf)
+                    {
+                        _preview.PreviewType = FilePreviewType.Unsupported;
+                        _preview.PreviewTextContent =
+                            $"Press A to open \"{selected.Name}\" (PDF is cached locally first).";
+                    }
+                    else if (previewResult.Type == FilePreviewType.Unsupported)
+                    {
+                        _preview.PreviewTextContent = "No preview for this file type. Press A for more options.";
+                    }
+                }
+            }
+            finally
+            {
+                if (_previewGeneration == gen)
+                    PreviewLoadingChanged?.Invoke(false);
             }
         }
 
@@ -1212,6 +1819,10 @@ namespace XFiles.Navigation
                         _portalBusy = false;
                     }
                 }
+                else if (_current.IsNetwork)
+                {
+                    await ReloadNetworkColumnAsync(_current);
+                }
                 else
                 {
                     await _current.LoadAsync(_current.Path, token);
@@ -1227,9 +1838,9 @@ namespace XFiles.Navigation
                 LoadingChanged?.Invoke(false);
             }
 
-            // Root column: re-inject virtual entries (Favorites, User Folders) that a
-            // plain drive scan does not include.
-            if (_current.Path == null && !_current.IsArchive && !_current.IsPortal)
+            // Root column: re-inject virtual entries (Favorites, User Folders, Network)
+            // that a plain drive scan does not include.
+            if (_current.Path == null && !_current.IsArchive && !_current.IsPortal && !_current.IsNetwork)
                 InjectRootVirtualEntries(_current);
 
             // Try to preserve selection
@@ -1329,6 +1940,10 @@ namespace XFiles.Navigation
         public bool IsChiptune { get; set; }
         public bool IsFavorite { get; set; }
         public bool IsPortal { get; set; }
+        public bool IsNetwork { get; set; }
+        public long NetworkLocationId { get; set; }
+        public string NetworkShareName { get; set; }
+        public string NetworkPath { get; set; }
         public string PortalKnownFolder { get; set; }
         public string PortalPackageFullName { get; set; }
         public string PortalPath { get; set; }
@@ -1429,6 +2044,83 @@ namespace XFiles.Navigation
                 PortalKnownFolder = knownFolder,
                 PortalPackageFullName = packageFullName ?? "",
                 PortalPath = portalPath
+            });
+            list.AddRange(entries);
+
+            _allEntries = list;
+            AllEntries = _allEntries;
+            Entries = new List<FileEntry>(_allEntries);
+            if (SelectedIndex == 0 && Entries.Count > 0)
+                SelectedIndex = 0;
+        }
+
+        /// <summary>Loads the Network locations column (saved locations + action rows).
+        /// The entry list is built by the caller (ColumnNavigator.BuildNetworkLocationsAsync).</summary>
+        public void LoadNetworkLocations(List<FileEntry> entries)
+        {
+            var list = new List<FileEntry>(entries.Count + 1);
+            list.Add(new FileEntry
+            {
+                Name = "..",
+                FullPath = null,
+                IsDirectory = true,
+                IsVirtual = true,
+                IsNetwork = true
+            });
+            list.AddRange(entries);
+
+            _allEntries = list;
+            AllEntries = _allEntries;
+            Entries = new List<FileEntry>(_allEntries);
+            if (SelectedIndex == 0 && Entries.Count > 0)
+                SelectedIndex = 0;
+        }
+
+        public async Task LoadNetworkSharesAsync(SmbBrowser browser, NetworkServerConfig config,
+            CancellationToken token)
+        {
+            SetNetworkEntries((await browser.ListSharesAsync(config, token))
+                .Select(s => new FileEntry
+                {
+                    Name = s,
+                    IsDirectory = true,
+                    IsNetwork = true,
+                    NetworkLocationId = config.Id,
+                    NetworkShareName = s,
+                    NetworkPath = ""
+                }).ToList());
+        }
+
+        public async Task LoadNetworkDirectoryAsync(SmbBrowser browser, NetworkServerConfig config,
+            string share, string path, CancellationToken token)
+        {
+            SetNetworkEntries((await browser.ListDirectoryAsync(config, share, path, token))
+                .Select(f => new FileEntry
+                {
+                    Name = f.Name,
+                    IsDirectory = f.IsDirectory,
+                    IsNetwork = true,
+                    NetworkLocationId = config.Id,
+                    NetworkShareName = share,
+                    NetworkPath = ColumnNavigator.CombineNetworkPath(path, f.Name),
+                    SizeBytes = f.IsDirectory ? 0 : f.Size,
+                    LastModified = f.LastWriteTime
+                }).ToList());
+        }
+
+        private void SetNetworkEntries(List<FileEntry> entries)
+        {
+            var list = new List<FileEntry>(entries.Count + 1);
+            list.Add(new FileEntry
+            {
+                Name = "..",
+                FullPath = null,
+                IsDirectory = true,
+                IsVirtual = true,
+                IsNetwork = true,
+                NetworkLocationId = NetworkLocationId,
+                NetworkShareName = NetworkShareName,
+                NetworkPath = NetworkPath
             });
             list.AddRange(entries);
 

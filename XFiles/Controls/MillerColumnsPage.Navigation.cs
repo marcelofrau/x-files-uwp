@@ -26,6 +26,7 @@ using XFiles.Audio;
 using XFiles.FileSystem;
 using XFiles.Metadata;
 using XFiles.Navigation;
+using XFiles.Network;
 using XFiles.Services;
 using XFiles.Visualizers;
 
@@ -74,6 +75,11 @@ namespace XFiles.Controls
                 () => PortalCredentialsDialogControl.Visibility == Visibility.Visible,
                 (k, r) => { PortalCredentialsDialogControl.HandleDPad(k); return true; },
                 (k) => { PortalCredentialsDialogControl.HandleButton(k); return true; }));
+
+            _router.Add(new OverlayHandler(77,
+                () => NetworkLocationDialogControl.Visibility == Visibility.Visible,
+                (k, r) => { NetworkLocationDialogControl.HandleDPad(k); return true; },
+                (k) => { NetworkLocationDialogControl.HandleButton(k); return true; }));
 
             _router.Add(new OverlayHandler(78,
                 () => PortalSetupDialogControl.IsVisible,
@@ -412,7 +418,12 @@ namespace XFiles.Controls
             else
             {
                 string ext = System.IO.Path.GetExtension(selected.Name);
-                if (FilePreviewService.IsImageFile(ext) && !FilePreviewService.IsSvgFile(ext))
+                if (selected.IsNetwork)
+                {
+                    Log.Verb("OnConfirm: network file '{Name}' — streaming open", selected.Name);
+                    _ = OpenRemoteFileAsync(selected);
+                }
+                else if (FilePreviewService.IsImageFile(ext) && !FilePreviewService.IsSvgFile(ext))
                 {
                     Log.Verb("OnConfirm: image selected — opening fullscreen");
                     ImageFullScreen.Show(_navigator.Preview?.PreviewImageSource);
@@ -596,6 +607,273 @@ namespace XFiles.Controls
             }
         }
 
+        /// <summary>
+        /// Opens a remote (network) file: fullscreen image/PDF from the cached copy,
+        /// chiptune from a full small download, audio/video as a true stream.
+        /// </summary>
+        private async Task OpenRemoteFileAsync(EntryViewModel selected)
+        {
+            var current = _navigator.Current;
+            if (current == null) return;
+
+            string share = current.NetworkShareName;
+            string path = selected.NetworkPath;
+            string name = selected.Name;
+            if (string.IsNullOrEmpty(share) || string.IsNullOrEmpty(path))
+            {
+                Log.Warn("OpenRemoteFile: no share/path context for {Name}", name);
+                return;
+            }
+
+            string ext = Path.GetExtension(name);
+
+            // Image: the preview pane already decoded it — show fullscreen.
+            if (FilePreviewService.IsImageFile(ext) && !FilePreviewService.IsSvgFile(ext))
+            {
+                var preview = _navigator.Preview;
+                if (preview?.PreviewImageSource != null)
+                {
+                    ImageFullScreen.Show(preview.PreviewImageSource);
+                }
+                else
+                {
+                    Log.Warn("OpenRemoteFile: no decoded image for {Name}", name);
+                    _ = AlertDialogControl.ShowAsync("The image preview could not be decoded.", AlertType.Error);
+                }
+                return;
+            }
+
+            if (FilePreviewService.IsSvgFile(ext))
+            {
+                _ = AlertDialogControl.ShowAsync("SVG preview is shown in the preview pane.", AlertType.Info);
+                return;
+            }
+
+            // PDF: cache locally first — the fullscreen viewer is path-based.
+            if (FilePreviewService.IsPdfFile(ext))
+            {
+                string tempPath = await CacheRemoteFileAsync(current.NetworkLocationId, share, path, name);
+                if (tempPath == null)
+                {
+                    _ = AlertDialogControl.ShowAsync("Failed to download the PDF.", AlertType.Error);
+                    return;
+                }
+                var preview = _navigator.Preview;
+                int pageCount = preview?.PreviewPdfPageCount ?? 0;
+                await PdfFullScreen.ShowAsync(tempPath, pageCount, 0);
+                return;
+            }
+
+            // Chiptune: files are small — cache fully, then the local chiptune path.
+            // A plays inline in the preview pane (same as local), not fullscreen.
+            if (RetroAudioPlayer.IsChiptuneFile(ext))
+            {
+                if (_isMediaPlayerActive || MediaPreview.IsNetworkFileLoaded(share, path))
+                {
+                    Log.Info("OpenRemoteFile: toggling play/pause on loaded remote chiptune '{Name}'", name);
+                    MediaPreview.TogglePlayPause();
+                    UpdateMediaPlayerFocusUI();
+                    return;
+                }
+                string tempPath = await CacheRemoteFileAsync(current.NetworkLocationId, share, path, name);
+                if (tempPath == null)
+                {
+                    _ = AlertDialogControl.ShowAsync("Failed to download the chiptune file.", AlertType.Error);
+                    return;
+                }
+                Log.Info("OpenRemoteFile: playing remote chiptune inline from cache {Temp}", tempPath);
+                _mediaLoadTimer.Stop();
+                _pendingMediaPath = null;
+                MediaPreview.Stop();
+                MediaPreview.LoadChiptuneTrack(tempPath, 0);
+                MediaPreview.SetNetworkContext(share, path);
+                MediaPreview.TogglePlayPause();
+                UpdateMediaPlayerFocusUI();
+                return;
+            }
+
+            // Audio/video: true streaming over the network.
+            if (!FilePreviewService.IsAudioFile(ext) && !FilePreviewService.IsVideoFile(ext))
+            {
+                _ = AlertDialogControl.ShowAsync("This file type can't be opened yet over the network.", AlertType.Info);
+                return;
+            }
+
+            // Mirror the local behavior: if this file is already loaded in the
+            // inline player, A just toggles play/pause — never re-opens the stream.
+            bool alreadyLoaded = MediaPreview.IsNetworkFileLoaded(share, path);
+            if (_isMediaPlayerActive || alreadyLoaded)
+            {
+                Log.Info("OpenRemoteFile: toggling play/pause on loaded remote media '{Name}'", name);
+                MediaPreview.TogglePlayPause();
+                UpdateMediaPlayerFocusUI();
+                return;
+            }
+
+            System.IO.Stream remoteStream = await _navigator.OpenNetworkStreamAsync(
+                current.NetworkLocationId, share, path);
+            if (remoteStream == null)
+            {
+                _ = AlertDialogControl.ShowAsync("Could not open the remote file.", AlertType.Error);
+                return;
+            }
+
+            Func<System.IO.Stream> reopen = () =>
+                Task.Run(() => _navigator.OpenNetworkStreamAsync(current.NetworkLocationId, share, path))
+                    .GetAwaiter().GetResult();
+
+            if (FilePreviewService.IsAudioFile(ext))
+            {
+                // A on remote audio → inline preview player (same as local).
+                Log.Info("OpenRemoteFile: loading remote audio inline '{Name}'", name);
+                _previewNetworkLocationId = current.NetworkLocationId;
+                _previewNetworkShare = share;
+                _previewNetworkPath = path;
+                await MediaPreview.LoadRemoteAudio(
+                    new RemoteStream(remoteStream, reopen),
+                    MimeForRemoteFile(ext),
+                    Path.GetFileNameWithoutExtension(name));
+                MediaPreview.SetNetworkContext(share, path);
+                MediaPreview.TogglePlayPause();
+                UpdateMediaPlayerFocusUI();
+            }
+            else
+            {
+                // A on remote video → inline preview player (same as local).
+                Log.Info("OpenRemoteFile: loading remote video inline '{Name}'", name);
+                _previewNetworkLocationId = current.NetworkLocationId;
+                _previewNetworkShare = share;
+                _previewNetworkPath = path;
+                MediaPreview.LoadRemoteStream(
+                    new RemoteStream(remoteStream, reopen), MimeForRemoteFile(ext));
+                MediaPreview.SetNetworkContext(share, path);
+                MediaPreview.TogglePlayPause();
+                UpdateMediaPlayerFocusUI();
+            }
+        }
+
+        /// <summary>Downloads a remote file in full to a temp cache path.</summary>
+        private async Task<string> CacheRemoteFileAsync(long locationId, string share, string path, string name)
+        {
+            try
+            {
+                System.IO.Stream stream = await _navigator.OpenNetworkStreamAsync(locationId, share, path);
+                if (stream == null) return null;
+                string dir = Path.Combine(ApplicationData.Current.LocalCacheFolder.Path, "NetworkCache");
+                Directory.CreateDirectory(dir);
+                string tempPath = Path.Combine(dir, $"{Guid.NewGuid():N}_{name}");
+                using (stream)
+                using (var fs = File.Create(tempPath))
+                {
+                    await stream.CopyToAsync(fs);
+                }
+                Log.Info("CacheRemoteFile: cached '{Name}' → {Temp}", name, tempPath);
+                return tempPath;
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("CacheRemoteFile: failed for '{Name}'", name, ex);
+                return null;
+            }
+        }
+
+        /// <summary>X on a remote file → fullscreen player over the SMB stream.</summary>
+        private async Task OpenRemoteFullscreenAsync(EntryViewModel selected)
+        {
+            try
+            {
+                var current = _navigator.Current;
+                if (current == null) return;
+
+                string share = current.NetworkShareName;
+                string path = selected.NetworkPath;
+                string name = selected.Name;
+                string ext = System.IO.Path.GetExtension(name);
+                if (string.IsNullOrEmpty(share) || string.IsNullOrEmpty(path))
+                {
+                    Log.Warn("OpenRemoteFullscreen: no share/path context for {Name}", name);
+                    return;
+                }
+
+                if (RetroAudioPlayer.IsChiptuneFile(ext))
+                {
+                    string tempPath = await CacheRemoteFileAsync(current.NetworkLocationId, share, path, name);
+                    if (tempPath == null)
+                    {
+                        _ = AlertDialogControl.ShowAsync("Failed to download the chiptune file.", AlertType.Error);
+                        return;
+                    }
+                    var chipPos = (_isMediaPlayerActive && MediaPreview.IsAudioMode)
+                        ? MediaPreview.CurrentPosition
+                        : TimeSpan.Zero;
+                    OpenAudioFullscreen(tempPath, chipPos, Math.Max(0, selected.ChiptuneTrackIndex));
+                    // OpenAudioFullscreen resets the network flag — restore it so
+                    // LB/RB keeps navigating the network list for remote chiptunes.
+                    _fsIsNetwork = true;
+                    _fsNetworkPath = path;
+                    return;
+                }
+
+                System.IO.Stream stream = await _navigator.OpenNetworkStreamAsync(
+                    current.NetworkLocationId, share, path);
+                if (stream == null)
+                {
+                    _ = AlertDialogControl.ShowAsync("Could not open the remote file.", AlertType.Error);
+                    return;
+                }
+
+                Func<System.IO.Stream> reopen = () =>
+                    Task.Run(() => _navigator.OpenNetworkStreamAsync(current.NetworkLocationId, share, path))
+                        .GetAwaiter().GetResult();
+
+                string title = System.IO.Path.GetFileNameWithoutExtension(name);
+                if (FilePreviewService.IsVideoFile(ext))
+                {
+                    var pos = (_isMediaPlayerActive && !MediaPreview.IsAudioMode)
+                        ? MediaPreview.CurrentPosition
+                        : TimeSpan.Zero;
+                    await ShowMediaFullscreenStreamAsync(
+                        new RemoteStream(stream, reopen), MimeForRemoteFile(ext), title,
+                        current.NetworkLocationId, share, path, position: pos);
+                }
+                else
+                {
+                    var pos = (_isMediaPlayerActive && MediaPreview.IsAudioMode)
+                        ? MediaPreview.CurrentPosition
+                        : TimeSpan.Zero;
+                    await OpenRemoteAudioFullscreenAsync(
+                        title, new RemoteStream(stream, reopen), MimeForRemoteFile(ext),
+                        current.NetworkLocationId, share, path, position: pos);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Err("OpenRemoteFullscreen: {Ex}", ex);
+            }
+        }
+
+        private static string MimeForRemoteFile(string ext)
+        {
+            switch ((ext ?? "").ToLowerInvariant())
+            {
+                case ".mp3": return "audio/mpeg";
+                case ".wav": return "audio/wav";
+                case ".flac": return "audio/flac";
+                case ".ogg": case ".oga": return "audio/ogg";
+                case ".m4a": case ".aac": return "audio/mp4";
+                case ".opus": return "audio/opus";
+                case ".wma": return "audio/x-ms-wma";
+                case ".mp4": case ".m4v": return "video/mp4";
+                case ".mkv": return "video/x-matroska";
+                case ".avi": return "video/x-msvideo";
+                case ".mov": return "video/quicktime";
+                case ".wmv": return "video/x-ms-wmv";
+                case ".webm": return "video/webm";
+                case ".m2ts": case ".ts": return "video/mp2t";
+                default: return "application/octet-stream";
+            }
+        }
+
         private async Task OpenVideoFullscreenAsync(EntryViewModel selected)
         {
             string path = await ResolveOpenPathAsync(selected);
@@ -776,6 +1054,16 @@ namespace XFiles.Controls
             if (selected != null)
             {
                 string ext = System.IO.Path.GetExtension(selected.Name);
+
+                // Remote (SMB): fullscreen over the network stream (mirror of local X).
+                if (selected.IsNetwork &&
+                    (FilePreviewService.IsVideoFile(ext) || FilePreviewService.IsAudioFile(ext) ||
+                     RetroAudioPlayer.IsChiptuneFile(ext)))
+                {
+                    Log.Info("OnRefresh: remote file → fullscreen");
+                    _ = OpenRemoteFullscreenAsync(selected);
+                    return;
+                }
 
                 if (FilePreviewService.IsVideoFile(ext))
                 {

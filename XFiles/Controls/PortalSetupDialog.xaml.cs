@@ -36,6 +36,7 @@ namespace XFiles.Controls
         {
             Log.Info("PortalSetupDialog.Show: status=\"{Status}\"", statusLine ?? "");
             _successTimer.Stop();
+            Canvas.SetZIndex(this, 300);
             Visibility = Visibility.Visible;
             Overlay.Visibility = Visibility.Visible;
             ReprobeResultText.Text = "";
