@@ -94,6 +94,18 @@ body {
   gap: 2px;
 }
 
+.blade-nav-head {
+  margin: 18px 0 6px;
+  font-family: var(--font-title);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-dim);
+}
+
+.blade-nav-head:first-child { margin-top: 0; }
+
 .blade-nav a {
   display: block;
   padding: 7px 12px;

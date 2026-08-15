@@ -19,18 +19,18 @@
         <span class="blade-tag">retro file manager for Xbox</span>
       </div>
       <nav class="blade-nav">
-        {% assign ordered = "Home,SPEC,ARCHITECTURE,FILEBROWSER,ARCHIVES,GAMEPAD,AUDIO-VISUALIZATION,AUDIO-VISUALIZERS,FILETYPE-ICONS,ROM-FORMATS,FILE-SHARING-QR,UI-THEMING,DEPLOY-XBOX,RELEASE,ROADMAP,DECISIONS,LOGGING,PORTAL-APPDATA,SETTINGS-EXPANSION,ASSETS-GUIDE,ATTRIBUTIONS,PHASE2-TESTS,FILE-SHARES,bgm" | split: "," %}
         {% assign page_slug = page.path | remove: '.md' %}
+        <p class="blade-nav-head">User</p>
         <ul>
-        {% for slug in ordered %}
-          {% if slug == "Home" %}
-            <li><a href="{{ '/' | relative_url }}" class="{% if page.url == '/' %}active{% endif %}">Home</a></li>
-          {% elsif slug == "bgm" %}
-            <li><a href="{{ '/bgm/README.html' | relative_url }}" class="{% if page_slug contains 'bgm' %}active{% endif %}">Background Music</a></li>
-          {% else %}
-            <li><a href="{{ slug | append: '.html' | relative_url }}" class="{% if page_slug == slug %}active{% endif %}">{{ slug | replace: '-', ' ' }}</a></li>
-          {% endif %}
-        {% endfor %}
+          <li><a href="{{ '/' | relative_url }}" class="{% if page.url == '/' %}active{% endif %}">🏠 Home</a></li>
+          <li><a href="{{ 'DEPLOY-XBOX.html' | relative_url }}" class="{% if page_slug == 'DEPLOY-XBOX' %}active{% endif %}">🖥️ Deploy to Xbox</a></li>
+          <li><a href="{{ 'GAMEPAD.html' | relative_url }}" class="{% if page_slug == 'GAMEPAD' %}active{% endif %}">🎮 Controls</a></li>
+          <li><a href="{{ '/bgm/README.html' | relative_url }}" class="{% if page_slug contains 'bgm' %}active{% endif %}">🎼 Background Music</a></li>
+          <li><a href="{{ 'FILE-SHARING-QR.html' | relative_url }}" class="{% if page_slug == 'FILE-SHARING-QR' %}active{% endif %}">📱 Share Files</a></li>
+        </ul>
+        <p class="blade-nav-head">Developers</p>
+        <ul>
+          <li><a href="{{ 'DEVELOPERS.html' | relative_url }}" class="{% if page_slug == 'DEVELOPERS' %}active{% endif %}">🔧 Developer Docs</a></li>
         </ul>
       </nav>
       <div class="blade-footer">
