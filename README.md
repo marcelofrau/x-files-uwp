@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/Stack-C%23%20%2F%20UWP%20%2F%20XAML-512BD4?style=flat-square&logo=dotnet" alt="Stack" />
   <img src="https://img.shields.io/badge/License-GPL--3.0-green?style=flat-square" alt="License" />
   <img src="https://img.shields.io/badge/Status-Released-brightgreen?style=flat-square" alt="Status" />
-  <img src="https://img.shields.io/badge/Version-1.2.0-brightgreen?style=flat-square" alt="Version" />
+  <img src="https://img.shields.io/badge/Version-1.5.0.1308-brightgreen?style=flat-square" alt="Version" />
 </p>
 
 <p align="center">
@@ -61,6 +61,7 @@ Move the cursor over any file and instantly see its contents — no need to open
 | 🎨 SVG | Rendered in WebView |
 | 💻 Code (40+ languages) | Syntax highlighting via highlight.js |
 | 🎵 Audio (MP3, FLAC, OGG, WAV) | ID3 metadata + album art + VU meter |
+| 🕹️ Chiptune (SPC, PSF, GBS, NSF, VGM...) | Native playback — console music plays right in the preview |
 | 🎬 Video (MP4, MKV, AVI) | Inline playback with transport controls |
 | 📖 PDF | Page preview + fullscreen viewer |
 | 🎮 ROMs (NES, SNES, GB/GBA, Genesis...) | Header-parsed title + system icon |
@@ -72,12 +73,31 @@ Pause, seek, skip tracks, adjust volume — all from the gamepad. *Winamp vibes 
 
 - 🔊 Real-time VU meter with green → yellow → red gradient
 - 🎨 Fullscreen mode with album art and track metadata
-- ✨ **29 audio visualizers** (Win2D + HLSL shaders), cycle with **Select**,
+- ✨ **31 audio visualizers** (Win2D + HLSL shaders), cycle with **Select**,
   picker via long-press **Select**
 - 🎼 **Metadata guesser** — ID3 tags + filename parsing + MusicBrainz enrichment,
   cached in SQLite
 - 🔀 Auto-advance to next track
 - 🔉 Volume control via analog stick
+
+### 🕹️ Chiptune / Tracker Player
+Play console music and tracker files natively — no conversion needed, all from the couch.
+
+- 🎮 **43+ formats**: console chips (SPC, GBS, NSF, VGM, SID, HES, KSS, AY, SAP, GYM)
+  via game-music-emu, trackers (MOD, XM, S3M, IT + 20 more) via libopenmpt, and
+  PSF/miniPSF + USF/miniUSF (PlayStation & Nintendo 64)
+- ⚡ **Plays while it renders** — first sound in ~1s, full render finishes in the background
+- 📂 Browse multi-subsong archives (e.g. `.rsn` → SPC) and drill into track lists
+- 🎵 Fullscreen player with next/prev, seek, spinner, and VU meter
+- 🔄 Cached WAVs for instant replay on next visit
+
+### 🎶 Background Music
+The X-Files menu itself can play music while you browse.
+
+- 🎵 A bundled track plays by default (Donkey Kong Country 2 — *Stickerbrush Symphony*)
+- ⚙️ Settings: enable/disable, pick your own file, set volume (10–100%)
+- 🎼 Chiptune files auto-convert to WAV on first use
+- 🕰️ Pauses when you play media, resumes with a fade-in after 10s of silence
 
 ### 🎬 Video Player
 Watch videos directly from the file browser with a clean fullscreen experience.
@@ -125,8 +145,17 @@ Share any file or folder as a **QR code** in seconds:
 - 📋 Share app logs the same way for easy bug reporting
 - ✅ Perfect for moving files between Xbox and phone/PC
 
+### 📥 Download from URL
+Download files straight to disk from inside the browser — no PC needed:
+
+- 🔗 Google Drive, OneDrive, Dropbox, gofile links auto-rewrite to direct downloads
+- 🌐 Links that need a browser open the built-in WebView overlay for a manual click-through
+- 📊 Progress bar with cancel; writes to external drives on Xbox
+
 ### ⚙️ Settings & Logs
-- 🎛️ Settings page: log level, metadata cache management
+- 🎛️ Hierarchical settings menu: clear data, log level, background music, hide empty drives
+- 🎚️ BGM controls: enable/disable, pick your own track, volume 10–100%
+- 🫥 **Hide empty/unaccessible drives** (default ON) — system XVDs the container can't read never clutter the drive list
 - 📜 Built-in log viewer with daily rotation (last 10 sessions)
 - 🔍 Start menu with search, favorites, about — everything gamepad-driven
 
@@ -139,7 +168,7 @@ Share any file or folder as a **QR code** in seconds:
 | 🕹️ **D-pad / Left Stick** | Navigate up/down |
 | **D-pad Right / A** | Enter folder · Play file · Toggle play-pause |
 | **D-pad Left / B** | Go back · Close fullscreen |
-| **LB / RB** | Page up/down in browser · Seek 5s in media (hold to repeat) |
+| **LB / RB** | Page up/down in browser · Next/prev track (audio) · Seek 5s (video) |
 | **Y** | Context menu (rename, delete, create ZIP, extract...) |
 | **Y (hold)** | Add/remove favorite |
 | **X** | Refresh current directory |
@@ -256,14 +285,37 @@ See [DEPLOY-XBOX.md](docs/DEPLOY-XBOX.md) for detailed steps.
 | 🎮 Gamepad input | Native `Windows.Gaming.Input.Gamepad` polling with edge detection and repeat |
 | 🎨 Custom theme | Zero Fluent Design chrome — every control uses custom `ControlTemplate` |
 | 🎵 Audio playback | AudioGraph with stream fallback for USB drives + real-time FFT spectrum |
-| ✨ Audio visualizers | 29 Win2D/HLSL visualizers (VU meter, waveform, plasma, starfield...) |
+| 🕹️ Chiptune player | game-music-emu + libopenmpt + aosdk PSF + lazyusf USF — 43+ formats, plays-while-renders |
+| ✨ Audio visualizers | 31 Win2D/HLSL visualizers (VU meter, waveform, plasma, starfield...) |
+| 🎶 Background music | Own AudioGraph; bundled SPC stream-rendered to WAV on first boot |
 | 📦 Archive support | SharpCompress for ZIP/7Z/RAR — browse without extracting |
 | 📝 Syntax highlighting | Inlined highlight.js for 40+ languages (Aco theme) |
 | 🧠 Metadata guesser | ID3 + filename + MusicBrainz/Deezer enrichment, SQLite cache with cover art |
 | 📖 PDF viewer | Windows.Data.Pdf — page thumbnails + fullscreen |
 | 🎮 ROM preview | Header parsing for 35+ extensions, system icons |
 | 🔗 QR sharing | gofile.io upload + ZXing QR generation |
+| 📥 URL downloads | HttpClient + provider rewrites (Drive/OneDrive/Dropbox) + WebView fallback |
 | 📋 Logging | Serilog — every operation, input event, and exception logged with daily rotation |
+
+## 🏗️ Architecture at a glance
+
+```mermaid
+flowchart LR
+    subgraph Input
+        I[Gamepad / Keyboard] --> IR[InputRouter]
+    end
+    IR --> NAV[Navigation<br/>ColumnNavigator]
+    NAV --> FS[FileSystem<br/>DirectoryScanner / ArchiveBrowser]
+    FS --> PV[Preview<br/>FilePreviewService]
+    PV --> AP[Audio Player<br/>AudioLevelService]
+    AP --> RETRO[Chiptune Engine<br/>RetroAudioPlayer]
+    RETRO --> RA[RetroAudio.dll<br/>GME · openmpt · aosdk · lazyusf]
+    AP --> VIZ[Visualizers<br/>Win2D · HLSL]
+    FS --> BGM[Background Music<br/>BackgroundMusicService]
+    BGM --> RETRO
+    PV --> MEDIA[Media<br/>Audio / Video / PDF / ROM / Text]
+    FS --> SRV[Services<br/>Share QR · URL Download · Metadata]
+```
 
 ---
 
@@ -277,7 +329,7 @@ See [DEPLOY-XBOX.md](docs/DEPLOY-XBOX.md) for detailed steps.
 | [FILEBROWSER.md](docs/FILEBROWSER.md) | FileEntry model, DirectoryScanner, sorting |
 | [ARCHIVES.md](docs/ARCHIVES.md) | ZIP/7Z/RAR via SharpCompress |
 | [AUDIO-VISUALIZATION.md](docs/AUDIO-VISUALIZATION.md) | VU meter architecture, AudioGraph, FFT |
-| [AUDIO-VISUALIZERS.md](docs/AUDIO-VISUALIZERS.md) | 29 Win2D visualizers, registry, shader pipeline |
+| [AUDIO-VISUALIZERS.md](docs/AUDIO-VISUALIZERS.md) | 31 Win2D visualizers, registry, shader pipeline |
 | [FILETYPE-ICONS.md](docs/FILETYPE-ICONS.md) | File-type icon mapping |
 | [ROM-FORMATS.md](docs/ROM-FORMATS.md) | ROM header parsing, systems/extensions |
 | [FILE-SHARING-QR.md](docs/FILE-SHARING-QR.md) | QR file sharing via gofile.io |
@@ -286,6 +338,21 @@ See [DEPLOY-XBOX.md](docs/DEPLOY-XBOX.md) for detailed steps.
 | [DECISIONS.md](docs/DECISIONS.md) | ADRs — why XAML, why SharpCompress, etc. |
 | [LOGGING.md](docs/LOGGING.md) | Log levels, debug flags, architecture, conventions |
 | [DEPLOY-XBOX.md](docs/DEPLOY-XBOX.md) | Developer Mode, Device Portal, sideload steps |
+
+### 📖 End-user guides (GitHub Wiki)
+
+Non-technical, gamepad-first tutorials for everyday use:
+
+| Guide | What it covers |
+|-------|----------------|
+| [How to install X-Files](https://github.com/marcelofrau/x-files-uwp/wiki/Installing-X-Files) | Developer Mode, Device Portal, sideload |
+| [Sharing files with your phone](https://github.com/marcelofrau/x-files-uwp/wiki/Sharing-files-with-your-phone) | QR share via gofile.io |
+| [Downloading files from the internet](https://github.com/marcelofrau/x-files-uwp/wiki/Downloading-files) | URL download, Drive/OneDrive/Dropbox links |
+| [Editing text files](https://github.com/marcelofrau/x-files-uwp/wiki/Editing-text-files) | Built-in editor, save, encodings |
+| [Listening to music](https://github.com/marcelofrau/x-files-uwp/wiki/Listening-to-music) | MP3/FLAC + chiptunes, visualizers |
+| [Background music](https://github.com/marcelofrau/x-files-uwp/wiki/Background-music) | BGM toggle, custom track, volume |
+| [Watching videos](https://github.com/marcelofrau/x-files-uwp/wiki/Watching-videos) | Subtitles, audio tracks, fullscreen |
+| [Browsing your files](https://github.com/marcelofrau/x-files-uwp/wiki/Browsing-your-files) | Columns, favorites, search, batch ops |
 
 ---
 

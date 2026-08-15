@@ -7,10 +7,11 @@ File browser for Xbox (UWP), fully operable via gamepad, with Miller column navi
 (zip/7z/rar) without needing to extract first.
 
 > **Status: shipped.** The MVP below was completed (v1.0.0) and the product has since
-> shipped post-MVP features (audio player + 29 visualizers, text editor, PDF viewer,
-> ROM preview, QR sharing, batch operations, favorites, settings, logs). This document
+> shipped post-MVP features (audio player + 31 visualizers, native chiptune player
+> (43+ formats), background music, text editor, PDF viewer, ROM preview, QR sharing,
+> URL download, batch operations, favorites, settings, logs). This document
 > keeps the original MVP scope for reference; current state and backlog live in
-> `ROADMAP.md`. Items marked `[x]` are verified done; the two unchecked items are known
+> `ROADMAP.md`. Items marked `[x]` are verified done; the unchecked items are known
 > gaps — see notes.
 
 ## MVP Scope

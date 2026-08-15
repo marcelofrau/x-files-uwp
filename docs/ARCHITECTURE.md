@@ -9,6 +9,42 @@ ADR-003).
 
 ## Layers
 
+```mermaid
+flowchart TB
+    subgraph Views["XAML Views"]
+        M["MillerColumnsPage"] --> MP["MediaPreviewControl"]
+        M --> TE["TextEditorOverlay"]
+        M --> FS["FileActionSheet / StartMenu / dialogs"]
+    end
+    subgraph Input["Input"]
+        G["GamepadInputService"] --> R["InputRouter"]
+    end
+    subgraph Nav["Navigation"]
+        I["INavigable"] --> C["ColumnNavigator"]
+    end
+    subgraph Fs["FileSystem"]
+        D["DirectoryScanner"] --> O["FileOperations"]
+        D --> A["ArchiveBrowser"]
+        A --> P["FilePreviewService"]
+        P --> T["TextEditorService"]
+    end
+    subgraph Svc["Services & Domains"]
+        AL["AudioLevelService"] --> RP["RetroAudioPlayer"]
+        RP --> RA["RetroAudio.dll"]
+        AL --> VZ["Visualizers"]
+        B["BackgroundMusicService"] --> RP
+        S["Share / URL download / Metadata / PDF"]
+    end
+    Views --> Input
+    Input --> Nav
+    Nav --> Fs
+    Fs --> Svc
+    X["Log.cs · Theming/BladeTheme.xaml"] -.-> Views
+    X -.-> Svc
+```
+
+ASCII equivalent:
+
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │  XAML Views (Controls/MillerColumnsPage, MediaPreviewControl, │  ← binding, templates, visual focus
@@ -34,6 +70,27 @@ dependencies and are unit-tested from a plain net8.0 MSTest project (`tests/`, l
 source — no UWP host needed).
 
 ## Input → Screen Flow
+
+```mermaid
+sequenceDiagram
+    participant GP as Gamepad (Xbox controller)
+    participant SVC as GamepadInputService
+    participant R as InputRouter
+    participant NAV as INavigable / ColumnNavigator
+    participant UI as XAML (ListView)
+    GP->>SVC: GetCurrentReading() (33ms tick)
+    SVC->>SVC: bitmask diff → JustPressed / repeat / long-press
+    SVC->>R: semantic event (VirtualKey)
+    alt overlay active (editor, start menu, fullscreen)
+        R->>R: dispatch to first IInputHandler by Priority
+    else browser focused
+        R->>NAV: OnDPadUp/Down, OnConfirm, OnBack, ...
+        NAV->>NAV: update state (selection, column stack)
+        NAV->>UI: re-render
+    end
+```
+
+ASCII equivalent:
 
 ```
 Windows.Gaming.Input.Gamepad.GetCurrentReading()
@@ -87,6 +144,7 @@ Moving the selection in the `Current` column immediately triggers `FilePreviewSe
 - SVG → rendered in WebView
 - Image → `BitmapImage` thumbnail (async decode)
 - Audio → ID3 metadata + album art + VU meter (AudioGraph)
+- Chiptune (SPC/PSF/USF/GBS/NSF/VGM/MOD...) → native decode + streaming play (`RetroAudioPlayer`)
 - Video → inline `MediaPlayer` with transport controls
 - PDF → page preview via `Windows.Data.Pdf` (`PdfPreviewService`)
 - ROM → header-parsed title + system icon (`RomHeaderParser`)
@@ -104,7 +162,61 @@ custom `ControlTemplate`, the same "not-stock-Windows" look costs a fraction of 
 `PixelShaderEffect` HLSL) — pixel-perfect per-frame rendering is exactly the case ADR-002
 declared out of scope for the file browser UI. The file browser stays 100% XAML; Win2D is
 isolated in `Visualizers/` (`AudioVisualizerBase`, `VisualizerRegistry`,
-`PostProcessPipeline`, 29 visualizers). See `AUDIO-VISUALIZERS.md`.
+`PostProcessPipeline`, 31 visualizers). See `AUDIO-VISUALIZERS.md`.
+
+## Chiptune Pipeline
+
+Chiptune formats (console chips, trackers, PSF/USF) don't play directly in AudioGraph —
+they're decoded to WAV by the native `RetroAudio.dll`, then streamed to the graph.
+
+```mermaid
+flowchart LR
+    F["SPC / PSF / USF / MOD / VGM ..."] --> RA["RetroAudio.dll"]
+    RA --> H["ChiptuneRenderHandle (progress)"]
+    H --> W["WAV (.tmp, grows while rendering)"]
+    W --> AG["AudioGraph (AudioLevelService)"]
+    AG --> OUT["Device output + VU meter/FFT"]
+    AG --> PRE["Prefetch: next track renders in background"]
+    PRE -. cancelled on navigation .-> RA
+```
+
+Key properties (details in `AUDIO-VISUALIZATION.md` / project notes):
+
+- **Plays-while-renders**: the WAV header is pre-patched with the full declared size and
+  pre-allocated; playback starts once ≥8s of audio exist, the renderer keeps filling in
+  the background, then truncates + renames `.tmp` → `.wav` (cached for next visit).
+- **Render dedup**: concurrent renders of the same cache key share one task
+  (`_inflightRenders`), so a fast next-track press reuses the prefetch's in-flight render
+  instead of starting a second one.
+- **Native session lock**: `retroaudio.cpp` holds a process-wide `SRWLOCK` from
+  `RA_Open` to `RA_Free` — only one emulator session is live per process. Without it the
+  aosdk PSF engine reads uninitialized heap polluted by a second concurrent render and
+  mixes in ~-40dB white noise.
+- **Cancellation**: navigating away cancels the orphaned render per chunk, which releases
+  the session lock promptly (~0.1s) — otherwise the next track waits for the abandoned
+  render to finish (up to ~8s).
+
+## Background Music (BGM)
+
+A separate `BackgroundMusicService` owns its own AudioGraph (`AudioFileInputNode`), fully
+independent of the media player's graph — menu music can play while browsing.
+
+```mermaid
+flowchart LR
+    S["Settings: BgmEnabled / BgmVolume"] --> I["InitializeAsync (after chime)"]
+    I --> CHK{"LocalState\BGM folder + file exist?"}
+    CHK -- no --> INS["InstallDefaultAsync: render bundled default-bgm.spc → bgm.wav"]
+    CHK -- yes --> PLAY["PlayFileAsync: 2s wait → fade-in"]
+    INS --> PLAY
+    M["Media starts playing"] --> D["Pause BGM (ducking)"]
+    M2["Media stops"] --> CD["10s cooldown"] --> R["Resume with fade-in"]
+    PLAY --> L["Loop: 2.5s gap then restart (generation-guarded)"]
+```
+
+- Track copied to `LocalState\BGM\` — no HDD spin-up for menu music.
+- First-run streams the bundled SPC straight to `bgm.wav.tmp` and plays once ≥8s rendered.
+- Pause/resume uses generation counters so a pending resume inside the 10s cooldown is
+  cancelled by new media activity.
 
 ## Theme
 
