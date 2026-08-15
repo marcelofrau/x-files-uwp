@@ -31,7 +31,7 @@ it, step by step. No experience needed.
 ### Way 1 — Easiest: XB Homebrew Vault (PC)
 
 1. Download **XB Homebrew Vault** from
-   [github.com/vektorvamp](https://github.com/vektorvamp).
+   [github.com/marcelofrau/xb-homebrew-vault](https://github.com/marcelofrau/xb-homebrew-vault).
 2. Open it and **connect to your Xbox** using the IP + portal credentials.
 3. Go to **Tools** → **"X-Files Enablement"** and press it.
 4. Wait for the green confirmation.

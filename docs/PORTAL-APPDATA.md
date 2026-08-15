@@ -34,7 +34,7 @@ All three ways do the exact same thing: they tell the console
 ### Option A — XB Homebrew Vault (PC, easiest)
 
 1. On your PC, get **XB Homebrew Vault**
-   ([github.com/vektorvamp xbHomebrewVault](https://github.com/vektorvamp)) — a
+   ([github.com/marcelofrau/xb-homebrew-vault](https://github.com/marcelofrau/xb-homebrew-vault)) — a
    free app for managing Xbox developer mode.
 2. Connect Vault to your Xbox (developer-mode IP + portal username/password —
    see [§5 credentials](#5-get-your-values-first)).
