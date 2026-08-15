@@ -13,7 +13,7 @@ namespace XFiles.Metadata
         private const long MaxCacheAgeMs = 90L * 24 * 60 * 60 * 1000;
         private const long MaxCoverArtAgeMs = 180L * 24 * 60 * 60 * 1000;
         private const long MaxLibRetroCacheAgeMs = 30L * 24 * 60 * 60 * 1000;
-        private const int CurrentSchemaVersion = 2;
+        private const int CurrentSchemaVersion = 3;
 
         private static readonly Lazy<Task<SQLiteAsyncConnection>> _dbLazy =
             new Lazy<Task<SQLiteAsyncConnection>>(async () =>
@@ -37,11 +37,16 @@ namespace XFiles.Metadata
                 await db.CreateTableAsync<CoverArtEntry>();
                 await db.CreateTableAsync<AppSettingEntry>();
                 await db.CreateTableAsync<LibRetroThumbnailEntry>();
+                await db.CreateTableAsync<NetworkServerEntry>();
                 Log.Info("MetadataCache: database opened at {Path} schema v{Version}", DbFileName, CurrentSchemaVersion);
                 return db;
             }, LazyThreadSafetyMode.ExecutionAndPublication);
 
-        private static Task<SQLiteAsyncConnection> GetDbAsync() => _dbLazy.Value;
+        /// <summary>
+        /// Shared lazy connection to metadata.db. Used by the metadata cache and
+        /// by NetworkServerManager (same file, single connection instance).
+        /// </summary>
+        public static Task<SQLiteAsyncConnection> GetDbAsync() => _dbLazy.Value;
 
         private static async Task RunMigrationsAsync(SQLiteAsyncConnection db, int fromVersion)
         {
@@ -53,8 +58,12 @@ namespace XFiles.Metadata
             {
                 // v2: LibRetro thumbnail cache (created by CreateTableAsync above)
             }
+            if (fromVersion < 3)
+            {
+                // v3: NetworkServerEntry (created by CreateTableAsync above)
+            }
             // Future migrations:
-            // if (fromVersion < 3) { ... }
+            // if (fromVersion < 4) { ... }
 
             // Update version
             var existing = await db.Table<SchemaVersionEntry>()

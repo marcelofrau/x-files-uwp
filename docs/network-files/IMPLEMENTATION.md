@@ -32,7 +32,7 @@ between-session continuity. Legend: `[ ]` todo · `[x]` done · `[~]` in progres
 - [x] Verified manifest capabilities present (`internetClient`,
       `internetClientServer`, `privateNetworkClientServer`)
 - [x] `TalAloni.SMBLibrary` identified (1.5.x, netstandard2.0, LGPL-3.0)
-- [ ] Register docset in `AGENTS.md` docs table
+- [x] Register docset in `AGENTS.md` docs table
 - [ ] *(optional)* update `docs/FILE-SHARES.md` header to point at this docset
       as its successor
 
@@ -41,28 +41,36 @@ between-session continuity. Legend: `[ ]` todo · `[x]` done · `[~]` in progres
 ---
 
 ## M1 — Data layer
-*Status: `[ ]` not started*
+*Status: `[x]` complete · 2026-08-15*
 
 **Goal**: location config persisted (SQLite table + PasswordVault) with unit
 tests.
 
-- [ ] Add `TalAloni.SMBLibrary` to `XFiles.csproj` (verify restore on desktop)
-- [ ] `XFiles/Network/NetworkProtocol.cs` — enum `{ Smb = 0 }`
-- [ ] `XFiles/Network/NetworkServerConfig.cs` — pure model (Protocol, DisplayName,
+- [x] Add `TalAloni.SMBLibrary` to `XFiles.csproj` (verify restore on desktop)
+- [x] `XFiles/Network/NetworkProtocol.cs` — enum `{ Smb = 0 }`
+- [x] `XFiles/Network/NetworkServerConfig.cs` — pure model (Protocol, DisplayName,
       Host, Port, Username, Share) — no password field
-- [ ] `XFiles/Network/NetworkUrl.cs` — pure helpers: `Compose`, `ParseCanonical`,
+- [x] `XFiles/Network/NetworkUrl.cs` — pure helpers: `Compose`, `ParseCanonical`,
       `VaultResource`, `DefaultPort` (SMB 445)
-- [ ] `NetworkServerEntry` schema class (in `MetadataCacheDb.cs`, matching the
+- [x] `NetworkServerEntry` schema class (in `MetadataCacheDb.cs`, matching the
       existing entry classes)
-- [ ] `MetadataCache`: bump `CurrentSchemaVersion` 2→3; add
+- [x] `MetadataCache`: bump `CurrentSchemaVersion` 2→3; add
       `CreateTableAsync<NetworkServerEntry>()` in `RunMigrationsAsync`
-- [ ] `XFiles/Network/NetworkServerManager.cs` — `GetAllAsync`, `AddAsync`,
+- [x] `XFiles/Network/NetworkServerManager.cs` — `GetAllAsync`, `AddAsync`,
       `UpdateAsync`, `RemoveAsync`, `GetPasswordAsync`, `SetPasswordAsync`
       (PasswordVault, resource = `CanonicalUrl`)
-- [ ] Unit tests in `tests/`: `NetworkUrl` compose/parse matrix (username empty,
-      share empty, host case); `NetworkServerManager` CRUD against in-memory
+- [x] Unit tests in `tests/`: `NetworkUrl` compose/parse matrix (username empty,
+      share empty, host case); `NetworkServerStore` CRUD against in-memory
       SQLite (add/dedup/rename/delete/remove-vault-key)
-- [ ] Verify: `dotnet test tests/XFiles.Tests.csproj` green
+- [x] Verify: `dotnet test tests/XFiles.Tests.csproj` green (224 passed) +
+      full MSBuild Debug/x64 green
+
+**Done note**: store is `NetworkServerStore` (injectable, pure — linkable into
+tests) with the manager as a thin facade over it + PasswordVault. sqlite-net
+1.9.172 pools connections by connection-string (`SQLiteConnectionPool`, static,
+internal) — all `:memory:` share one DB in a process; tests clear the table per
+test. `MetadataCache.GetDbAsync()` is now public so both the cache and the
+network manager share the singleton connection.
 
 ---
 
@@ -192,4 +200,5 @@ tests.
 | Date | Note |
 |---|---|
 | 2026-08-15 | M0 docset written. Design finalized: SMBLibrary socket primary, UNC fallback; SQLite table + PasswordVault; growing-file audio; Download-from-URL relocated. |
+| 2026-08-15 | M1 done. `NetworkServerStore` (pure) + `NetworkServerManager` (facade + PasswordVault); table `NetworkServerEntry` + schema v3; `NetworkUrl` compose/parse; 33 new tests (224 green); build green. Next: M2 (SMB core). |
 | | |

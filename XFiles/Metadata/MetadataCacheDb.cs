@@ -65,4 +65,28 @@ namespace XFiles.Metadata
 
         public long Timestamp { get; set; }
     }
+
+    public class NetworkServerEntry
+    {
+        [PrimaryKey, AutoIncrement]
+        public int Id { get; set; }
+
+        /// <summary>Cast of <see cref="XFiles.Network.NetworkProtocol"/>.</summary>
+        public int Protocol { get; set; }
+
+        public string DisplayName { get; set; }
+
+        public string Host { get; set; }
+
+        /// <summary>0 = protocol default (SMB = 445).</summary>
+        public int Port { get; set; }
+
+        public string Username { get; set; }
+
+        public string Share { get; set; }
+
+        /// <summary>smb://[user@]host[/share] — identity + PasswordVault resource.</summary>
+        [Indexed(Unique = true)]
+        public string CanonicalUrl { get; set; }
+    }
 }

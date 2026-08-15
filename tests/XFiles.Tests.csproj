@@ -13,6 +13,8 @@
     <PackageReference Include="MSTest.TestAdapter" Version="3.2.0" />
     <PackageReference Include="MSTest.TestFramework" Version="3.2.0" />
     <PackageReference Include="System.Text.Encoding.CodePages" Version="8.0.0" />
+    <PackageReference Include="sqlite-net-pcl" Version="1.9.172" />
+    <PackageReference Include="SQLitePCLRaw.bundle_green" Version="2.1.10" />
   </ItemGroup>
 
   <ItemGroup>
@@ -33,6 +35,11 @@
     <Compile Include="..\XFiles\FileSystem\RomCoverProvider.cs" Link="Linked\FileSystem\RomCoverProvider.cs" />
     <Compile Include="..\XFiles\FileSystem\RomHeaderParser.cs" Link="Linked\FileSystem\RomHeaderParser.cs" />
     <Compile Include="..\XFiles\Metadata\FilenameParser.cs" Link="Linked\Metadata\FilenameParser.cs" />
+    <Compile Include="..\XFiles\Metadata\MetadataCacheDb.cs" Link="Linked\Metadata\MetadataCacheDb.cs" />
+    <Compile Include="..\XFiles\Network\NetworkProtocol.cs" Link="Linked\Network\NetworkProtocol.cs" />
+    <Compile Include="..\XFiles\Network\NetworkServerConfig.cs" Link="Linked\Network\NetworkServerConfig.cs" />
+    <Compile Include="..\XFiles\Network\NetworkUrl.cs" Link="Linked\Network\NetworkUrl.cs" />
+    <Compile Include="..\XFiles\Network\NetworkServerStore.cs" Link="Linked\Network\NetworkServerStore.cs" />
     <Compile Include="..\XFiles\Metadata\TrackMetadata.cs" Link="Linked\Metadata\TrackMetadata.cs" />
     <Compile Include="..\XFiles\Services\PortalCore.cs" Link="Linked\Services\PortalCore.cs" />
     <Compile Include="..\XFiles\Services\PortalModels.cs" Link="Linked\Services\PortalModels.cs" />

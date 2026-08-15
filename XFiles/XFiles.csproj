@@ -65,6 +65,8 @@
   <ItemGroup>
     <!-- SharpCompress: zip/7z/rar support. See docs/ARCHIVES.md -->
     <PackageReference Include="SharpCompress" Version="0.34.2" />
+    <!-- SMBLibrary: SMB2 client for network file browsing. See docs/network-files/ -->
+    <PackageReference Include="SMBLibrary" Version="1.5.7.1" />
     <PackageReference Include="Microsoft.NETCore.UniversalWindowsPlatform">
       <Version>6.2.14</Version>
     </PackageReference>
@@ -242,6 +244,11 @@
     <Compile Include="Services\PortalModels.cs" />
     <Compile Include="Services\PortalCore.cs" />
     <Compile Include="Services\PortalCache.cs" />
+    <Compile Include="Network\NetworkProtocol.cs" />
+    <Compile Include="Network\NetworkServerConfig.cs" />
+    <Compile Include="Network\NetworkUrl.cs" />
+    <Compile Include="Network\NetworkServerStore.cs" />
+    <Compile Include="Network\NetworkServerManager.cs" />
     <Compile Include="DevPortalSecrets.g.cs" />
     <Compile Include="Audio\IMemoryBufferAccess.cs" />
     <Compile Include="Audio\AudioLevelService.cs" />
