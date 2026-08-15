@@ -58,13 +58,25 @@ Done — skip to [step 3](#3-tell-x-files-your-credentials).
 
 You can do the same from a phone using the **Termux** app:
 
-```
-ssh <portal-user>@<YOUR-IP>
-checknetisolation loopbackexempt -a -n=XFiles.Xbox_jgz7qwhvc5jpc
-exit
-```
+1. Get the **SSH password**. It's not the portal password — it's a special
+   rotating password that **Dev Home shows on the console** (look for the SSH /
+   SFTP credential on the main Dev Home screen, or in the Device Portal file
+   explorer).
+2. In Termux, run:
 
-Type your password when asked (this is the **portal** password).
+   ```
+   ssh DevToolsUser@<YOUR-IP>
+   ```
+
+   (the username is always `DevToolsUser`, and you type the SSH password above,
+   not the portal one)
+
+3. Once connected, run:
+
+   ```
+   checknetisolation loopbackexempt -a -n=XFiles.Xbox_jgz7qwhvc5jpc
+   exit
+   ```
 
 ---
 
@@ -92,7 +104,7 @@ Type your password when asked (this is the **portal** password).
 |---|---|
 | "User Folders" doesn't appear | Re-run the unlock (step 2) — it must be redone after a console reboot or a new X-Files install |
 | Connection refused | Check the IP is correct and the console is in Developer Mode |
-| Wrong password | The **portal** password is set in Dev Home → **Device Portal**, not your Microsoft account |
+| Wrong password | In Way 1/2 use the **portal** password (Dev Home → Device Portal); in Way 3 use the **SSH** password shown in Dev Home |
 | Nothing changed after unlock | Close X-Files fully and reopen it |
 
 > 🔧 For the full technical explanation, see
