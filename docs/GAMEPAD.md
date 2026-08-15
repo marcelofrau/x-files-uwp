@@ -56,7 +56,7 @@ happen from a single gamepad**. No keyboard, no mouse. Here is every button mapp
 
 # Technical reference
 
-<details open>
+<details open markdown="1">
 <summary><strong>For developers</strong> — how input flows through the app.</summary>
 
 ## Input Source
