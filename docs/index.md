@@ -21,26 +21,87 @@ title: Home
 
 ## What you can do
 
+### 🎮 Browse & manage
+
 <div class="card-grid">
   <a class="card" href="DEPLOY-XBOX.html">
     <h3>🖥️ Get it running</h3>
     <p>Install X-Files on your Xbox via Developer Mode.</p>
   </a>
+  <a class="card" href="https://github.com/marcelofrau/x-files-uwp/wiki/Browsing-your-files">
+    <h3>🗂️ Browse your files</h3>
+    <p>Three-column browser, favorites, search, batch operations, sort.</p>
+  </a>
   <a class="card" href="GAMEPAD.html">
     <h3>🎮 Controls</h3>
     <p>Every button mapped — browse like a pro from the start.</p>
   </a>
-  <a class="card" href="bgm/README.html">
-    <h3>🎼 Background Music</h3>
-    <p>Your music keeps playing while you explore files.</p>
+  <a class="card" href="https://github.com/marcelofrau/x-files-uwp/wiki/Browsing-your-files">
+    <h3>⚙️ File operations</h3>
+    <p>Copy, move, rename, delete, extract archives, create ZIP, new folder.</p>
   </a>
   <a class="card" href="USER-FILES.html">
     <h3>🗂️ Other apps' files</h3>
     <p>See RetroArch saves, memory cards, and configs — 2-minute setup.</p>
   </a>
+</div>
+
+### 🎵 Music & video
+
+<div class="card-grid">
+  <a class="card" href="https://github.com/marcelofrau/x-files-uwp/wiki/Listening-to-music">
+    <h3>🎧 Music player</h3>
+    <p>MP3, FLAC, OGG, WAV with album art, metadata, and 31 visualizers.</p>
+  </a>
+  <a class="card" href="https://github.com/marcelofrau/x-files-uwp/wiki/Listening-to-music">
+    <h3>🕹️ Chiptune player</h3>
+    <p>SPC, PSF, USF, NSF, VGM + 43 more formats — plays while it renders.</p>
+  </a>
+  <a class="card" href="bgm/README.html">
+    <h3>🎼 Background Music</h3>
+    <p>Your music keeps playing while you explore files.</p>
+  </a>
+  <a class="card" href="https://github.com/marcelofrau/x-files-uwp/wiki/Watching-videos">
+    <h3>🎬 Video player</h3>
+    <p>MP4, MKV, AVI with subtitles, audio-track switching, fullscreen.</p>
+  </a>
+</div>
+
+### 📄 Preview & edit
+
+<div class="card-grid">
+  <a class="card" href="https://github.com/marcelofrau/x-files-uwp/wiki/Editing-text-files">
+    <h3>📝 Text editor</h3>
+    <p>Edit text files with syntax highlighting, right from the couch.</p>
+  </a>
+  <a class="card" href="https://github.com/marcelofrau/x-files-uwp/wiki/Browsing-your-files">
+    <h3>🖼️ Image viewer</h3>
+    <p>PNG, JPG, GIF, WebP, SVG previews with a fullscreen viewer and zoom.</p>
+  </a>
+  <a class="card" href="https://github.com/marcelofrau/x-files-uwp/wiki/Browsing-your-files">
+    <h3>📄 PDF viewer</h3>
+    <p>Read PDFs in fullscreen with page navigation.</p>
+  </a>
+  <a class="card" href="https://github.com/marcelofrau/x-files-uwp/wiki/Browsing-your-files">
+    <h3>🎮 ROM preview</h3>
+    <p>See title and system for NES, SNES, GB, Genesis and more.</p>
+  </a>
+</div>
+
+### 📦 Archives & sharing
+
+<div class="card-grid">
+  <a class="card" href="https://github.com/marcelofrau/x-files-uwp/wiki/Browsing-your-files">
+    <h3>📦 Archive explorer</h3>
+    <p>Browse ZIP, 7Z, and RAR contents without extracting.</p>
+  </a>
   <a class="card" href="FILE-SHARING-QR.html">
     <h3>📱 Share files</h3>
     <p>Send any file to your phone with a QR code.</p>
+  </a>
+  <a class="card" href="https://github.com/marcelofrau/x-files-uwp/wiki/Downloading-files">
+    <h3>⬇️ Download from URL</h3>
+    <p>Grab files from Google Drive, OneDrive, Dropbox, or any link.</p>
   </a>
 </div>
 
