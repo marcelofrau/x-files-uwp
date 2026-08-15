@@ -1,8 +1,63 @@
 ---
 layout: default
-title: Gamepad — Mapping and Navigation Contract
+title: Gamepad — Controls
 ---
-# Gamepad — Mapping and Navigation Contract
+# 🎮 Controls
+
+Everything is designed for the couch: **all navigation, playback, and file operations
+happen from a single gamepad**. No keyboard, no mouse. Here is every button mapped.
+
+## File browser
+
+| Button | Action |
+|--------|--------|
+| <img src="assets/gamepad/dpad-up.png" alt="D-pad up" class="btn-icon"> <img src="assets/gamepad/dpad-down.png" alt="D-pad down" class="btn-icon"> <img src="assets/gamepad/stick-l.png" alt="Left stick" class="btn-icon"> | Move selection up / down |
+| <img src="assets/gamepad/dpad-left.png" alt="D-pad left" class="btn-icon"> or <img src="assets/gamepad/b.png" alt="B" class="btn-icon"> | Go up one folder |
+| <img src="assets/gamepad/dpad-right.png" alt="D-pad right" class="btn-icon"> or <img src="assets/gamepad/a.png" alt="A" class="btn-icon"> | Open folder / play file |
+| <img src="assets/gamepad/a.png" alt="A" class="btn-icon"> | Confirm · Play · Toggle play-pause |
+| <img src="assets/gamepad/b.png" alt="B" class="btn-icon"> | Back · Close fullscreen |
+| <img src="assets/gamepad/x.png" alt="X" class="btn-icon"> | Refresh current folder |
+| <img src="assets/gamepad/y.png" alt="Y" class="btn-icon"> | Context menu (rename, delete, ZIP, extract…) |
+| <img src="assets/gamepad/y.png" alt="Y held" class="btn-icon"> hold ~0.5s | Add / remove favorite |
+| <img src="assets/gamepad/lb.png" alt="LB" class="btn-icon"> / <img src="assets/gamepad/rb.png" alt="RB" class="btn-icon"> | Page up / down |
+| <img src="assets/gamepad/view.png" alt="View" class="btn-icon"> short press | Toggle batch mode |
+| <img src="assets/gamepad/menu.png" alt="Menu" class="btn-icon"> | Start menu (settings, logs, favorites, search, about) |
+| <img src="assets/gamepad/stick-r.png" alt="Right stick" class="btn-icon"> | Scroll preview pane |
+
+## Media player (audio / video)
+
+| Button | Action |
+|--------|--------|
+| <img src="assets/gamepad/a.png" alt="A" class="btn-icon"> | Play / pause |
+| <img src="assets/gamepad/lb.png" alt="LB" class="btn-icon"> / <img src="assets/gamepad/rb.png" alt="RB" class="btn-icon"> | Next / previous track (audio) · Seek ±5s (video) |
+| <img src="assets/gamepad/stick-l.png" alt="Left stick" class="btn-icon"> up / down | Volume |
+| <img src="assets/gamepad/dpad-left.png" alt="D-pad left" class="btn-icon"> / <img src="assets/gamepad/dpad-right.png" alt="D-pad right" class="btn-icon"> | Seek (inline audio) |
+| <img src="assets/gamepad/view.png" alt="View" class="btn-icon"> short press | Cycle visualizer |
+| <img src="assets/gamepad/view.png" alt="View held" class="btn-icon"> hold ~0.5s | Visualizer picker |
+| <img src="assets/gamepad/y.png" alt="Y" class="btn-icon"> | Audio / subtitle track menu (video) |
+| <img src="assets/gamepad/lt.png" alt="LT" class="btn-icon"> / <img src="assets/gamepad/rt.png" alt="RT" class="btn-icon"> | Zoom in / out (image · PDF) |
+
+## Text editor
+
+| Button | Action |
+|--------|--------|
+| <img src="assets/gamepad/a.png" alt="A" class="btn-icon"> | Type (opens system keyboard) |
+| <img src="assets/gamepad/b.png" alt="B" class="btn-icon"> | Exit |
+| <img src="assets/gamepad/menu.png" alt="Menu" class="btn-icon"> | Save |
+| <img src="assets/gamepad/lb.png" alt="LB" class="btn-icon"> / <img src="assets/gamepad/rb.png" alt="RB" class="btn-icon"> | Page up / down |
+| <img src="assets/gamepad/stick-l.png" alt="Left stick" class="btn-icon"> | Move cursor |
+
+---
+
+> 🕹️ **Tip:** a fullscreen in-app reference is built in — **Start → Controls Guide** —
+> with the same mappings plus the gamepad illustration.
+
+---
+
+# Technical reference
+
+<details open>
+<summary><strong>For developers</strong> — how input flows through the app.</summary>
 
 ## Input Source
 
@@ -97,7 +152,7 @@ public interface INavigable
 }
 ```
 
-## Button Table
+## Button Table (semantic mapping)
 
 | Physical Button | Semantic Event | X-Files Action |
 |---|---|---|
@@ -126,7 +181,6 @@ Guide**. It shows the gamepad reference image plus a section per screen
 Picker, Media Player). Source: `Controls/ControlsGuideOverlay.xaml(.cs)`. The mappings
 rendered there must stay in sync with this table.
 
-
 ## Navigation Rules
 
 - **Wrap-around**: moving down on the last item returns to the first; moving up on the
@@ -144,3 +198,5 @@ rendered there must stay in sync with this table.
 - **Analog chattering**: deadzones (main 0.5, stick 0.18, scroll 0.15) prevent drift inputs.
 - **Hotplug**: enumerated on startup + `GamepadAdded`/`GamepadRemoved` handled; no phantom
   inputs on connect/disconnect (validated in `docs/PHASE2-TESTS.md`).
+
+</details>
