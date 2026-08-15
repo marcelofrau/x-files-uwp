@@ -320,6 +320,16 @@ body {
 .hero p { color: var(--muted); font-size: 17px; max-width: 640px; }
 
 .hero .pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+
+.hero-img {
+  display: block;
+  width: 100%;
+  max-width: 760px;
+  border-radius: 10px;
+  border: 1px solid var(--header);
+  margin: 0 auto 26px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+}
 .pill {
   background: var(--surface-alt);
   border: 1px solid var(--border);
@@ -369,6 +379,35 @@ body {
   color: var(--muted);
   font-size: 13.5px;
   line-height: 1.5;
+}
+
+/* ═══ Screenshot gallery ═══ */
+.shot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  margin: 20px 0 10px;
+}
+
+.shot-grid a {
+  display: block;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.shot-grid a:hover {
+  border-color: var(--accent-dim);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(147,196,60,0.15);
+}
+
+.shot-grid img {
+  display: block;
+  width: 100%;
+  height: 170px;
+  object-fit: cover;
 }
 
 /* ═══ Scrollbar (WebKit) ═══ */

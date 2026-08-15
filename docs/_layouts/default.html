@@ -10,6 +10,49 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ '/assets/css/xfiles.css' | relative_url }}">
+</head>
+<body>
+  <div class="shell">
+    <aside class="blade">
+      <div class="blade-logo">
+        <a href="{{ '/' | relative_url }}">X-FILES</a>
+        <span class="blade-tag">retro file manager for Xbox</span>
+      </div>
+      <nav class="blade-nav">
+        {% assign ordered = "Home,SPEC,ARCHITECTURE,FILEBROWSER,ARCHIVES,GAMEPAD,AUDIO-VISUALIZATION,AUDIO-VISUALIZERS,FILETYPE-ICONS,ROM-FORMATS,FILE-SHARING-QR,UI-THEMING,DEPLOY-XBOX,RELEASE,ROADMAP,DECISIONS,LOGGING,PORTAL-APPDATA,SETTINGS-EXPANSION,ASSETS-GUIDE,ATTRIBUTIONS,PHASE2-TESTS,FILE-SHARES,bgm" | split: "," %}
+        {% assign page_slug = page.path | remove: '.md' %}
+        <ul>
+        {% for slug in ordered %}
+          {% if slug == "Home" %}
+            <li><a href="{{ '/' | relative_url }}" class="{% if page.url == '/' %}active{% endif %}">Home</a></li>
+          {% elsif slug == "bgm" %}
+            <li><a href="{{ '/bgm/README.html' | relative_url }}" class="{% if page_slug contains 'bgm' %}active{% endif %}">Background Music</a></li>
+          {% else %}
+            <li><a href="{{ slug | append: '.html' | relative_url }}" class="{% if page_slug == slug %}active{% endif %}">{{ slug | replace: '-', ' ' }}</a></li>
+          {% endif %}
+        {% endfor %}
+        </ul>
+      </nav>
+      <div class="blade-footer">
+        <a href="https://github.com/marcelofrau/x-files-uwp">GitHub</a>
+        <a href="https://github.com/marcelofrau/x-files-uwp/releases">Releases</a>
+        <a href="https://github.com/marcelofrau/x-files-uwp/wiki">Wiki</a>
+      </div>
+    </aside>
+    <main class="content">
+      <header class="content-head">
+        <h1>{% if page.title %}{{ page.title }}{% else %}X-Files — Documentation{% endif %}</h1>
+      </header>
+      <article class="markdown-body">
+        {{ content }}
+      </article>
+      <footer class="content-foot">
+        <span>X-Files — gamepad-first file browser for Xbox</span>
+        <span class="content-foot-muted">GPL-3.0 · built for the emulationrevival community</span>
+      </footer>
+    </main>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
   <script>
     // Jekyll renders ```mermaid as <pre><code class="language-mermaid">.
@@ -84,47 +127,5 @@
 
     mermaid.run({ querySelector: '.mermaid' });
   </script>
-</head>
-<body>
-  <div class="shell">
-    <aside class="blade">
-      <div class="blade-logo">
-        <a href="{{ '/' | relative_url }}">X-FILES</a>
-        <span class="blade-tag">retro file manager for Xbox</span>
-      </div>
-      <nav class="blade-nav">
-        {% assign ordered = "Home,SPEC,ARCHITECTURE,FILEBROWSER,ARCHIVES,GAMEPAD,AUDIO-VISUALIZATION,AUDIO-VISUALIZERS,FILETYPE-ICONS,ROM-FORMATS,FILE-SHARING-QR,UI-THEMING,DEPLOY-XBOX,RELEASE,ROADMAP,DECISIONS,LOGGING,PORTAL-APPDATA,SETTINGS-EXPANSION,ASSETS-GUIDE,ATTRIBUTIONS,PHASE2-TESTS,FILE-SHARES,bgm" | split: "," %}
-        {% assign page_slug = page.path | remove: '.md' %}
-        <ul>
-        {% for slug in ordered %}
-          {% if slug == "Home" %}
-            <li><a href="{{ '/' | relative_url }}" class="{% if page.url == '/' %}active{% endif %}">Home</a></li>
-          {% elsif slug == "bgm" %}
-            <li><a href="{{ '/bgm/README.html' | relative_url }}" class="{% if page_slug contains 'bgm' %}active{% endif %}">Background Music</a></li>
-          {% else %}
-            <li><a href="{{ slug | append: '.html' | relative_url }}" class="{% if page_slug == slug %}active{% endif %}">{{ slug | replace: '-', ' ' }}</a></li>
-          {% endif %}
-        {% endfor %}
-        </ul>
-      </nav>
-      <div class="blade-footer">
-        <a href="https://github.com/marcelofrau/x-files-uwp">GitHub</a>
-        <a href="https://github.com/marcelofrau/x-files-uwp/releases">Releases</a>
-        <a href="https://github.com/marcelofrau/x-files-uwp/wiki">Wiki</a>
-      </div>
-    </aside>
-    <main class="content">
-      <header class="content-head">
-        <h1>{% if page.title %}{{ page.title }}{% else %}X-Files — Documentation{% endif %}</h1>
-      </header>
-      <article class="markdown-body">
-        {{ content }}
-      </article>
-      <footer class="content-foot">
-        <span>X-Files — gamepad-first file browser for Xbox</span>
-        <span class="content-foot-muted">GPL-3.0 · built for the emulationrevival community</span>
-      </footer>
-    </main>
-  </div>
 </body>
 </html>
