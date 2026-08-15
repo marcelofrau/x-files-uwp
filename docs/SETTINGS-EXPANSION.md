@@ -1,3 +1,7 @@
+---
+layout: default
+title: Settings Expansion — Feature Plan
+---
 # Settings Expansion — Feature Plan
 
 > **Status: planned / backlog.** Not yet implemented. Settings page currently has

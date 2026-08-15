@@ -1,3 +1,7 @@
+---
+layout: default
+title: Background Music (BGM)
+---
 # Background Music (BGM)
 
 Gamepad-friendly background music for the file browser. A user-chosen track

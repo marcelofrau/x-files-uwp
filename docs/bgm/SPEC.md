@@ -1,3 +1,7 @@
+---
+layout: default
+title: BGM — Functional Specification
+---
 # BGM — Functional Specification
 
 ## Overview

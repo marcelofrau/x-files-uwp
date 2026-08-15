@@ -1,3 +1,7 @@
+---
+layout: default
+title: Architecture Decisions (short ADRs)
+---
 # Architecture Decisions (short ADRs)
 
 Record of decisions made before any line of code, so we don't have to

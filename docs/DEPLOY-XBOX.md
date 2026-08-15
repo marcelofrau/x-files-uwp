@@ -1,3 +1,7 @@
+---
+layout: default
+title: Xbox Deploy
+---
 # Xbox Deploy
 
 ## Prerequisites

@@ -1,3 +1,7 @@
+---
+layout: default
+title: Error Handling Debt
+---
 # Error Handling Debt
 
 ## Acceptable Empty Catches (resource disposal)

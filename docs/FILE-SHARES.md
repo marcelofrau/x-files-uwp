@@ -1,3 +1,7 @@
+---
+layout: default
+title: File Shares (SMB/UNC) — Feasibility Assessment
+---
 # File Shares (SMB/UNC) — Feasibility Assessment
 
 *Status: **Deferred**. Not in MVP scope. Documented for future implementation.*

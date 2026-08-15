@@ -1,3 +1,7 @@
+---
+layout: default
+title: Text Editor — Functional Specification
+---
 # Text Editor — Functional Specification
 
 > **Status: shipped** (v1.2.0). The two-tier model below reflects the implemented

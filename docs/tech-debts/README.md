@@ -1,3 +1,7 @@
+---
+layout: default
+title: Technical Debt Audit
+---
 # Technical Debt Audit
 
 Audit performed: Jul 2025. **Re-audit: Aug 2026** (see "Re-audit Notes" below).

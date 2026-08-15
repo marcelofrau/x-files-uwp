@@ -1,0 +1,16 @@
+title: X-Files
+description: >-
+  Gamepad-first file browser for Xbox. Retro-blade themed documentation for the
+  X-Files UWP app.
+url: "https://marcelofrau.github.io"
+baseurl: "/x-files-uwp"
+markdown: kramdown
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - vendor

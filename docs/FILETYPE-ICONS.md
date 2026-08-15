@@ -1,3 +1,7 @@
+---
+layout: default
+title: File-Type Icon Mappings
+---
 # File-Type Icon Mappings
 
 File explorer icons (listing columns + preview pane) map file extensions to Papirus

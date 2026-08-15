@@ -1,3 +1,7 @@
+---
+layout: default
+title: Text Editor — Edge Cases and Known Limitations
+---
 # Text Editor — Edge Cases and Known Limitations
 
 ## WebView EdgeHTML Limitations

@@ -35,6 +35,11 @@ XFiles/DevPortalSecrets.g.cs
 distribute/
 *.zip
 
+# Jekyll/GitHub Pages build output (docs/ is the Pages source)
+docs/_site/
+Gemfile.lock
+vendor/bundle/
+
 # NuGet
 packages/
 *.nupkg

@@ -1,3 +1,7 @@
+---
+layout: default
+title: Portal AppData Browser — Implementation Checklist
+---
 # Portal AppData Browser — Implementation Checklist
 
 Plan: `PLAN.md`. REST reference: `xb-homebrew-vault/docs/portal-filesystem-api.md`.

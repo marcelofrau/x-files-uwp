@@ -1,3 +1,7 @@
+---
+layout: default
+title: X-Files Portal — Browse Other Apps' Files on Your Xbox
+---
 # X-Files Portal — Browse Other Apps' Files on Your Xbox
 
 > **Short version for everyone:** X-Files can show and edit the files of your

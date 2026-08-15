@@ -1,3 +1,7 @@
+---
+layout: default
+title: UI and Theming — XAML with Custom ControlTemplate
+---
 # UI and Theming — XAML with Custom ControlTemplate
 
 See `DECISIONS.md` (ADR-002) for why XAML instead of Win2D, and ADR-009 for the Win2D

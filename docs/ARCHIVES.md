@@ -1,3 +1,7 @@
+---
+layout: default
+title: Compressed Archives — zip / 7z / rar
+---
 # Compressed Archives — zip / 7z / rar
 
 ## Library

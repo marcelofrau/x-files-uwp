@@ -1,3 +1,7 @@
+---
+layout: default
+title: Miscellaneous Debt
+---
 # Miscellaneous Debt
 
 Findings from the Aug 2026 re-audit that don't fit the other categories.

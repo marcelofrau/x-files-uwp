@@ -1,3 +1,7 @@
+---
+layout: default
+title: Functional Specification — X-Files
+---
 # Functional Specification — X-Files
 
 ## Goal

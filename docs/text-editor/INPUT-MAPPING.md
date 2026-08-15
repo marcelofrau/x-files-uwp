@@ -1,3 +1,7 @@
+---
+layout: default
+title: Text Editor — Input Mapping
+---
 # Text Editor — Input Mapping
 
 ## Mode Overview

@@ -1,3 +1,7 @@
+---
+layout: default
+title: Audio Visualizers — Win2D-Based
+---
 # Audio Visualizers — Win2D-Based
 
 ## Overview

@@ -1,0 +1,130 @@
+---
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% if page.title %}{{ page.title }} · {% endif %}X-Files</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ '/assets/css/xfiles.css' | relative_url }}">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    // Jekyll renders ```mermaid as <pre><code class="language-mermaid">.
+    // Mermaid needs <pre class="mermaid"> — convert before init.
+    document.querySelectorAll('pre > code.language-mermaid').forEach(code => {
+      const pre = code.parentElement;
+      const div = document.createElement('pre');
+      div.className = 'mermaid';
+      div.textContent = code.textContent;
+      pre.replaceWith(div);
+    });
+
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'base',
+      securityLevel: 'loose',
+      flowchart: {
+        curve: 'basis',
+        nodeSpacing: 55,
+        rankSpacing: 70,
+        padding: 16,
+        useMaxWidth: true,
+        htmlLabels: true,
+        diagramPadding: 12,
+      },
+      themeVariables: {
+        background:          '#0D1117',
+        primaryColor:        '#1A1D23',
+        primaryTextColor:    '#F0F0F0',
+        primaryBorderColor:  '#7AA832',
+        lineColor:           '#93C43C',
+        secondaryColor:      '#1E2128',
+        secondaryTextColor:  '#F0F0F0',
+        secondaryBorderColor:'#7AA832',
+        tertiaryColor:       '#252830',
+        tertiaryTextColor:   '#F0F0F0',
+        tertiaryBorderColor: '#2A2D33',
+        edgeLabelBackground: '#1A1D23',
+        clusterBkg:          '#161B22',
+        clusterBorder:       '#2A2D33',
+        titleColor:          '#B0E050',
+        nodeTextColor:       '#F0F0F0',
+        textColor:           '#F0F0F0',
+        fontFamily:          'Oxanium, sans-serif',
+        cScale0:  '#1A1D23', cScale1:  '#1E2128', cScale2:  '#252830',
+        cScale3:  '#161B22', cScale4:  '#20242B', cScale5:  '#1A2417',
+        cScale6:  '#22281A', cScale7:  '#1E2128', cScale8:  '#1A1D23',
+        cScale9:  '#252830', cScale10: '#161B22', cScale11: '#20242B',
+        cScaleLabel0:  '#F0F0F0', cScaleLabel1:  '#F0F0F0', cScaleLabel2:  '#F0F0F0',
+        cScaleLabel3:  '#F0F0F0', cScaleLabel4:  '#F0F0F0', cScaleLabel5:  '#F0F0F0',
+        cScaleLabel6:  '#F0F0F0', cScaleLabel7:  '#F0F0F0', cScaleLabel8:  '#F0F0F0',
+        cScaleLabel9:  '#F0F0F0', cScaleLabel10: '#F0F0F0', cScaleLabel11: '#F0F0F0',
+        sectionBkgColor:        '#161B22',
+        altSectionBkgColor:     '#0D1117',
+        sectionBkgColor2:       '#1A1D23',
+        taskBkgColor:           '#1E2128',
+        taskBorderColor:        '#7AA832',
+        taskTextColor:          '#F0F0F0',
+        taskTextLightColor:     '#F0F0F0',
+        taskTextDarkColor:      '#F0F0F0',
+        taskTextOutsideColor:   '#F0F0F0',
+        activeTaskBkgColor:     '#447F3E',
+        activeTaskBorderColor:  '#B0E050',
+        doneTaskBkgColor:       '#252830',
+        doneTaskBorderColor:    '#93C43C',
+        critBkgColor:           '#3A1A1A',
+        critBorderColor:        '#C0533F',
+        gridColor:              '#2A2D33',
+        todayLineColor:         '#B0E050',
+      }
+    });
+
+    mermaid.run({ querySelector: '.mermaid' });
+  </script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="blade">
+      <div class="blade-logo">
+        <a href="{{ '/' | relative_url }}">X-FILES</a>
+        <span class="blade-tag">retro file manager for Xbox</span>
+      </div>
+      <nav class="blade-nav">
+        {% assign ordered = "Home,SPEC,ARCHITECTURE,FILEBROWSER,ARCHIVES,GAMEPAD,AUDIO-VISUALIZATION,AUDIO-VISUALIZERS,FILETYPE-ICONS,ROM-FORMATS,FILE-SHARING-QR,UI-THEMING,DEPLOY-XBOX,RELEASE,ROADMAP,DECISIONS,LOGGING,PORTAL-APPDATA,SETTINGS-EXPANSION,ASSETS-GUIDE,ATTRIBUTIONS,PHASE2-TESTS,FILE-SHARES,bgm" | split: "," %}
+        {% assign page_slug = page.path | remove: '.md' %}
+        <ul>
+        {% for slug in ordered %}
+          {% if slug == "Home" %}
+            <li><a href="{{ '/' | relative_url }}" class="{% if page.url == '/' %}active{% endif %}">Home</a></li>
+          {% elsif slug == "bgm" %}
+            <li><a href="{{ '/bgm/' | relative_url }}" class="{% if page_slug contains 'bgm' %}active{% endif %}">Background Music</a></li>
+          {% else %}
+            <li><a href="{{ slug | append: '.html' | relative_url }}" class="{% if page_slug == slug %}active{% endif %}">{{ slug | replace: '-', ' ' }}</a></li>
+          {% endif %}
+        {% endfor %}
+        </ul>
+      </nav>
+      <div class="blade-footer">
+        <a href="https://github.com/marcelofrau/x-files-uwp">GitHub</a>
+        <a href="https://github.com/marcelofrau/x-files-uwp/releases">Releases</a>
+        <a href="https://github.com/marcelofrau/x-files-uwp/wiki">Wiki</a>
+      </div>
+    </aside>
+    <main class="content">
+      <header class="content-head">
+        <h1>{% if page.title %}{{ page.title }}{% else %}X-Files — Documentation{% endif %}</h1>
+      </header>
+      <article class="markdown-body">
+        {{ content }}
+      </article>
+      <footer class="content-foot">
+        <span>X-Files — gamepad-first file browser for Xbox</span>
+        <span class="content-foot-muted">GPL-3.0 · built for the emulationrevival community</span>
+      </footer>
+    </main>
+  </div>
+</body>
+</html>

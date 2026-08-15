@@ -78,7 +78,8 @@ PDF, QR share). Cross-cutting: `Metadata/*` (MusicBrainz/Deezer + SQLite cache),
 | `docs/AUDIO-VISUALIZERS.md` | 31 Win2D visualizers, registry, shader pipeline |
 | `docs/FILETYPE-ICONS.md` | File-type icon mapping (Papirus, `-24.png` scheme) |
 | `docs/ROM-FORMATS.md` | ROM header parsing, systems/extensions, cache |
-| `docs/FILE-SHARES.md` | SMB/UNC feasibility (deferred, not implemented) |
+| `docs/FILE-SHARES.md` | SMB/UNC feasibility (superseded by `docs/network-files/`; keep for Xbox unknowns) |
+| `docs/network-files/` | Network access (SMB) — README/PLAN/SPEC/ARCHITECTURE/DECISIONS/IMPLEMENTATION, tracking checklist |
 | `docs/FILE-SHARING-QR.md` | QR file sharing via gofile.io (shipped) |
 | `docs/SETTINGS-EXPANSION.md` | Planned settings expansion (theme selector, deadzones) |
 | `docs/ASSETS-GUIDE.md` | Asset naming, directory structure, icon workflow |

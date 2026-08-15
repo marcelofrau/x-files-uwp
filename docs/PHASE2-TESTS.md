@@ -1,3 +1,7 @@
+---
+layout: default
+title: Phase 2 — Manual Test Procedures
+---
 # Phase 2 — Manual Test Procedures
 
 Gamepad input pipeline validation. Run on Xbox (or desktop with gamepad) using the

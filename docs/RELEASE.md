@@ -1,3 +1,7 @@
+---
+layout: default
+title: Release Process
+---
 # Release Process
 
 ## Overview

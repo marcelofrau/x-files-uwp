@@ -1,3 +1,7 @@
+---
+layout: default
+title: ROM Format Headers
+---
 # ROM Format Headers
 
 Parses ROM file headers to extract game title and system name for the preview

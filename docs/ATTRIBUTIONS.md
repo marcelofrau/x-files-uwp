@@ -1,3 +1,7 @@
+---
+layout: default
+title: Icon Attributions
+---
 # Icon Attributions
 
 ## File-Type Icons (File Explorer)

@@ -1,3 +1,7 @@
+---
+layout: default
+title: Text Editor — Implementation Plan
+---
 # Text Editor — Implementation Plan
 
 Step-by-step execution plan for Phase 12. Each step has a test gate — do not advance

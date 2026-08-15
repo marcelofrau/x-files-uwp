@@ -1,3 +1,7 @@
+---
+layout: default
+title: Architecture — X-Files
+---
 # Architecture — X-Files
 
 ## Overview

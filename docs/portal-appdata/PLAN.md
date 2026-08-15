@@ -1,3 +1,7 @@
+---
+layout: default
+title: Portal AppData Browser — Implementation Plan
+---
 # Portal AppData Browser — Implementation Plan
 
 Status: **in progress** (started 2026-08-03). Track progress in `CHECKLIST.md`.

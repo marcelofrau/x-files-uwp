@@ -1,3 +1,7 @@
+---
+layout: default
+title: Text Editor — Architecture
+---
 # Text Editor — Architecture
 
 ## Component Overview

@@ -1,3 +1,7 @@
+---
+layout: default
+title: Text Editor — Encoding Detection and Handling
+---
 # Text Editor — Encoding Detection and Handling
 
 ## Overview

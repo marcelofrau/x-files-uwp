@@ -1,3 +1,7 @@
+---
+layout: default
+title: Audio Visualization — VU Meter (Spectrum Analyzer)
+---
 # Audio Visualization — VU Meter (Spectrum Analyzer)
 
 ## Overview

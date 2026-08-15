@@ -1,3 +1,7 @@
+---
+layout: default
+title: Architecture Debt
+---
 # Architecture Debt
 
 ## CRITICAL (RESOLVED): MillerColumnsPage God Object

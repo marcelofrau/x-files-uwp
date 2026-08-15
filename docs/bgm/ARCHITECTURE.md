@@ -1,3 +1,7 @@
+---
+layout: default
+title: BGM — Architecture
+---
 # BGM — Architecture
 
 ## Components

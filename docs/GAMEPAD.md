@@ -1,3 +1,7 @@
+---
+layout: default
+title: Gamepad — Mapping and Navigation Contract
+---
 # Gamepad — Mapping and Navigation Contract
 
 ## Input Source

@@ -1,3 +1,7 @@
+---
+layout: default
+title: File Browser — Data Model and Disk Access
+---
 # File Browser — Data Model and Disk Access
 
 Reference patterns validated on real Xbox in `dosbox-pure-uwp` (C++ UWP),

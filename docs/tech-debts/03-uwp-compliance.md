@@ -1,3 +1,7 @@
+---
+layout: default
+title: UWP Compliance Debt
+---
 # UWP Compliance Debt
 
 Platform constraint: Xbox UWP sandbox. `System.IO.File.*` and `System.IO.Directory.*`

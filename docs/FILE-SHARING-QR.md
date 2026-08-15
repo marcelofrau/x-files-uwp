@@ -1,3 +1,7 @@
+---
+layout: default
+title: File Sharing via QR Code — Shipped (gofile.io)
+---
 # File Sharing via QR Code — Shipped (gofile.io)
 
 > **Status: shipped** (v1.2.0). `FileShareService` uploads to **gofile.io** and

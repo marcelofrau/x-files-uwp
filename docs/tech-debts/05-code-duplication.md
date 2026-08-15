@@ -1,3 +1,7 @@
+---
+layout: default
+title: Code Duplication Debt
+---
 # Code Duplication Debt
 
 ## LOW: Highlight.js Font Loading

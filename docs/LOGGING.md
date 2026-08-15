@@ -1,3 +1,7 @@
+---
+layout: default
+title: Logging
+---
 # Logging
 
 Centralized logging via Serilog, wrapped in the `Log` static class (`XFiles/Log.cs`).

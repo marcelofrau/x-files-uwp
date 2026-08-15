@@ -1,3 +1,7 @@
+---
+layout: default
+title: Async Patterns Debt
+---
 # Async Patterns Debt
 
 ## FIXED: Blocking Call on Win2D Draw Thread

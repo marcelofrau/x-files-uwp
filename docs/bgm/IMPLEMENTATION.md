@@ -1,3 +1,7 @@
+---
+layout: default
+title: BGM — Implementation Checklist
+---
 # BGM — Implementation Checklist
 
 Status legend: `[ ]` pending · `[~]` in progress · `[x]` done.
