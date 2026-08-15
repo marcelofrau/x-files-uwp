@@ -67,7 +67,7 @@ title: Home
     <h3>Decisions</h3>
     <p>ADRs — why XAML, why SharpCompress, why SQLite.</p>
   </a>
-  <a class="card" href="bgm/">
+  <a class="card" href="bgm/README.html">
     <h3>Background Music</h3>
     <p>BGM spec, architecture, and implementation checklist.</p>
   </a>

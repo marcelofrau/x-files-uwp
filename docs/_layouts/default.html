@@ -100,7 +100,7 @@
           {% if slug == "Home" %}
             <li><a href="{{ '/' | relative_url }}" class="{% if page.url == '/' %}active{% endif %}">Home</a></li>
           {% elsif slug == "bgm" %}
-            <li><a href="{{ '/bgm/' | relative_url }}" class="{% if page_slug contains 'bgm' %}active{% endif %}">Background Music</a></li>
+            <li><a href="{{ '/bgm/README.html' | relative_url }}" class="{% if page_slug contains 'bgm' %}active{% endif %}">Background Music</a></li>
           {% else %}
             <li><a href="{{ slug | append: '.html' | relative_url }}" class="{% if page_slug == slug %}active{% endif %}">{{ slug | replace: '-', ' ' }}</a></li>
           {% endif %}
