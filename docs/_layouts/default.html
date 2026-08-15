@@ -27,6 +27,7 @@
           <li><a href="{{ 'GAMEPAD.html' | relative_url }}" class="{% if page_slug == 'GAMEPAD' %}active{% endif %}">🎮 Controls</a></li>
           <li><a href="{{ '/bgm/README.html' | relative_url }}" class="{% if page_slug contains 'bgm' %}active{% endif %}">🎼 Background Music</a></li>
           <li><a href="{{ 'FILE-SHARING-QR.html' | relative_url }}" class="{% if page_slug == 'FILE-SHARING-QR' %}active{% endif %}">📱 Share Files</a></li>
+          <li><a href="{{ 'USER-FILES.html' | relative_url }}" class="{% if page_slug == 'USER-FILES' %}active{% endif %}">🗂️ User Files</a></li>
         </ul>
         <p class="blade-nav-head">Developers</p>
         <ul>
@@ -126,6 +127,53 @@
     });
 
     mermaid.run({ querySelector: '.mermaid' });
+  </script>
+
+  <script>
+    // Image lightbox — click any doc image to expand fullscreen.
+    (function () {
+      const overlay = document.createElement('div');
+      overlay.className = 'img-lightbox';
+      overlay.innerHTML =
+        '<div class="img-lightbox-viewport"></div>' +
+        '<span class="img-lightbox-hint">Click anywhere or press Esc to close</span>' +
+        '<button type="button" class="img-lightbox-close" title="Close">&times;</button>';
+      document.body.appendChild(overlay);
+
+      const viewport = overlay.querySelector('.img-lightbox-viewport');
+      const closeBtn = overlay.querySelector('.img-lightbox-close');
+
+      function open(src, alt) {
+        const img = document.createElement('img');
+        img.className = 'img-lightbox-stage';
+        img.src = src;
+        img.alt = alt || '';
+        viewport.replaceChildren(img);
+        overlay.classList.add('open');
+        document.body.style.overflow = 'hidden';
+      }
+
+      function close() {
+        overlay.classList.remove('open');
+        viewport.replaceChildren();
+        document.body.style.overflow = '';
+      }
+
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay || e.target === viewport || e.target === closeBtn) close();
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && overlay.classList.contains('open')) close();
+      });
+
+      document.querySelectorAll('.markdown-body img').forEach((img) => {
+        img.addEventListener('click', (e) => {
+          e.preventDefault();
+          open(img.currentSrc || img.src, img.alt);
+        });
+      });
+    })();
   </script>
 </body>
 </html>

@@ -34,6 +34,10 @@ title: Home
     <h3>🎼 Background Music</h3>
     <p>Your music keeps playing while you explore files.</p>
   </a>
+  <a class="card" href="USER-FILES.html">
+    <h3>🗂️ Other apps' files</h3>
+    <p>See RetroArch saves, memory cards, and configs — 2-minute setup.</p>
+  </a>
   <a class="card" href="FILE-SHARING-QR.html">
     <h3>📱 Share files</h3>
     <p>Send any file to your phone with a QR code.</p>

@@ -219,6 +219,8 @@ body {
 .markdown-body a { color: var(--accent-glow); text-decoration: none; }
 .markdown-body a:hover { text-decoration: underline; }
 
+.markdown-body img { max-width: 100%; height: auto; }
+
 .markdown-body strong { color: var(--fg); }
 
 /* code + pre */
@@ -336,11 +338,12 @@ body {
 .hero-img {
   display: block;
   width: 100%;
-  max-width: 760px;
+  max-width: 560px;
   border-radius: 10px;
   border: 1px solid var(--header);
   margin: 0 auto 26px;
   box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  cursor: zoom-in;
 }
 .pill {
   background: var(--surface-alt);
@@ -420,6 +423,82 @@ body {
   width: 100%;
   height: 170px;
   object-fit: cover;
+  cursor: zoom-in;
+}
+
+/* ═══ Image lightbox ═══ */
+.img-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(10,13,18,0.94);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.18s ease, visibility 0.18s ease;
+}
+
+.img-lightbox.open {
+  opacity: 1;
+  visibility: visible;
+}
+
+.img-lightbox-viewport {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.img-lightbox-stage {
+  max-width: 94vw;
+  max-height: 94vh;
+  border-radius: 8px;
+  box-shadow: 0 20px 80px rgba(0,0,0,0.7);
+  transition: transform 0.15s ease;
+  user-select: none;
+}
+
+.img-lightbox-hint {
+  position: fixed;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 12.5px;
+  color: var(--muted);
+  background: rgba(13,17,23,0.8);
+  border: 1px solid var(--border);
+  padding: 7px 16px;
+  border-radius: 999px;
+  letter-spacing: 0.05em;
+}
+
+.img-lightbox-close {
+  position: fixed;
+  top: 20px;
+  right: 24px;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--fg);
+  font-size: 18px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.img-lightbox-close:hover {
+  border-color: var(--accent);
+  color: var(--accent-glow);
 }
 
 /* ═══ Scrollbar (WebKit) ═══ */
