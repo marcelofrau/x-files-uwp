@@ -14,6 +14,7 @@ namespace XFiles.Controls
     {
         private TaskCompletionSource<NetworkLocationResult> _tcs;
         private NetworkProtocol _protocol = NetworkProtocol.Smb;
+        private int _lastDefaultPort = NetworkUrl.DefaultPort(NetworkProtocol.Smb);
         private bool _isEdit;
         private bool _testing;
         private bool _protocolOpen;
@@ -46,13 +47,15 @@ namespace XFiles.Controls
 
             TitleText.Text = title;
             _isEdit = isEdit;
-            _protocol = prefill?.Protocol ?? NetworkProtocol.Smb;
-            SelectProtocolItem();
 
             NameBox.Text = prefill?.DisplayName ?? "";
             HostBox.Text = prefill?.Host ?? "";
             UserBox.Text = prefill?.Username ?? "";
             ShareBox.Text = prefill?.Share ?? "";
+            UpdateSharePlaceholder();
+            _protocol = prefill?.Protocol ?? NetworkProtocol.Smb;
+            SelectProtocolItem();
+            ApplyDefaultPort(prefill?.Port ?? 0);
             PassBox.Password = "";
             PassHintText.Visibility = isEdit ? Visibility.Visible : Visibility.Collapsed;
             ShowStatus(null, false);
@@ -74,7 +77,7 @@ namespace XFiles.Controls
             var list = new List<Control>();
             switch (_step)
             {
-                case 0: list.Add(NameBox); list.Add(ProtocolCombo); list.Add(HostBox); break;
+                case 0: list.Add(NameBox); list.Add(ProtocolCombo); list.Add(HostBox); list.Add(PortBox); break;
                 case 1: list.Add(UserBox); list.Add(PassBox); break;
                 default: list.Add(ShareBox); break;
             }
@@ -140,6 +143,35 @@ namespace XFiles.Controls
             ProtocolCombo.SelectedIndex = 0;
         }
 
+        /// <summary>Fills the port field: a saved custom port wins, otherwise the
+        /// protocol default (SMB 445, FTP/FTPS 21, SFTP 22).</summary>
+        private void ApplyDefaultPort(int savedPort)
+        {
+            int port = savedPort > 0 ? savedPort : NetworkUrl.DefaultPort(_protocol);
+            _lastDefaultPort = port;
+            PortBox.Text = port.ToString();
+            PortLabel.Visibility = Visibility.Visible;
+        }
+
+        /// <summary>After a protocol switch, refresh the port field unless the
+        /// user typed a custom value.</summary>
+        private void ApplyProtocolDefaultPort()
+        {
+            int current = 0;
+            if (int.TryParse(PortBox.Text, out int parsed))
+                current = parsed;
+            int newDefault = NetworkUrl.DefaultPort(_protocol);
+            if (current == 0 || current == _lastDefaultPort)
+            {
+                _lastDefaultPort = newDefault;
+                PortBox.Text = newDefault.ToString();
+            }
+            else
+            {
+                _lastDefaultPort = newDefault;
+            }
+        }
+
         private void ShowStatus(string text, bool isError)
         {
             if (string.IsNullOrEmpty(text))
@@ -180,7 +212,7 @@ namespace XFiles.Controls
             if (sender is TextBox box)
             {
                 LabelFor(box).Visibility = box.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-                if (box == HostBox || box == UserBox || box == ShareBox)
+                if (box == HostBox || box == UserBox || box == ShareBox || box == PortBox)
                     RefreshUrlPreview();
             }
         }
@@ -194,6 +226,7 @@ namespace XFiles.Controls
         {
             if (control == NameBox) return NameLabel;
             if (control == HostBox) return HostLabel;
+            if (control == PortBox) return PortLabel;
             if (control == UserBox) return UserLabel;
             if (control == PassBox) return PassLabel;
             if (control == ShareBox) return ShareLabel;
@@ -208,14 +241,19 @@ namespace XFiles.Controls
                 UrlPreviewText.Text = "";
                 return;
             }
-            string url = "smb://";
+            string scheme = _protocol.ToString().ToLowerInvariant();
+            string url = scheme + "://";
             string user = UserBox.Text?.Trim() ?? "";
             if (!string.IsNullOrEmpty(user))
                 url += user + "@";
             url += host;
+            int port = 0;
+            if (int.TryParse(PortBox.Text?.Trim(), out port) && port > 0
+                && port != NetworkUrl.DefaultPort(_protocol))
+                url += ":" + port;
             string share = ShareBox.Text?.Trim() ?? "";
             if (!string.IsNullOrEmpty(share))
-                url += "/" + share;
+                url += "/" + share.TrimStart('/');
             UrlPreviewText.Text = url;
         }
 
@@ -319,6 +357,18 @@ namespace XFiles.Controls
             {
                 _protocol = parsed;
             }
+            UpdateSharePlaceholder();
+            ApplyProtocolDefaultPort();
+            RefreshUrlPreview();
+        }
+
+        /// <summary>The Share field means "share" on SMB and "start folder" on
+        /// FTP/FTPS/SFTP (no shares concept — empty lands in home/root).</summary>
+        private void UpdateSharePlaceholder()
+        {
+            ShareBox.PlaceholderText = _protocol == NetworkProtocol.Smb
+                ? "Share / Path (empty lists shares)"
+                : "Start folder (empty = home / root)";
         }
 
         private void OnProtocolDropDownClosed(object sender, object e)
@@ -371,20 +421,9 @@ namespace XFiles.Controls
             ShowStatus("Testing connection…", false);
             try
             {
-                using (var session = new SmbSession(config))
-                {
-                    await session.EnsureConnectedAsync(password, CancellationToken.None);
-                    var shares = await session.ListSharesAsync(CancellationToken.None);
-                    if (!string.IsNullOrEmpty(config.Share))
-                    {
-                        var entries = await session.ListDirectoryAsync(config.Share, "", CancellationToken.None);
-                        ShowStatus($"Connected — share \"{config.Share}\" OK ({entries.Count} items).", false);
-                    }
-                    else
-                    {
-                        ShowStatus($"Connected — {shares.Count} share(s) found.", false);
-                    }
-                }
+                var provider = NetworkProviderFactory.Create(config);
+                string message = await provider.TestConnectionAsync(config, password, CancellationToken.None);
+                ShowStatus(message, false);
             }
             catch (NetworkOperationException ex)
             {
@@ -422,11 +461,15 @@ namespace XFiles.Controls
 
         private NetworkServerConfig BuildConfig()
         {
+            int port = 0;
+            if (!int.TryParse(PortBox.Text?.Trim(), out port) || port <= 0)
+                port = 0;
             return new NetworkServerConfig
             {
                 Protocol = _protocol,
                 DisplayName = string.IsNullOrWhiteSpace(NameBox.Text) ? null : NameBox.Text.Trim(),
                 Host = HostBox.Text.Trim(),
+                Port = port,
                 Username = string.IsNullOrWhiteSpace(UserBox.Text) ? null : UserBox.Text.Trim(),
                 Share = string.IsNullOrWhiteSpace(ShareBox.Text) ? null : ShareBox.Text.Trim()
             };

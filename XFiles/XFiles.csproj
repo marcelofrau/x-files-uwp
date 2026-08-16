@@ -67,6 +67,12 @@
     <PackageReference Include="SharpCompress" Version="0.34.2" />
     <!-- SMBLibrary: SMB2 client for network file browsing. See docs/network-files/ -->
     <PackageReference Include="SMBLibrary" Version="1.5.7.1" />
+    <!-- FluentFTP: FTP/FTPS client (M9). netstandard2.0 — UWP-compatible. See docs/network-files/ -->
+    <PackageReference Include="FluentFTP" Version="54.2.0" />
+    <!-- SSH.NET: SFTP client (M10). netstandard2.0. If the UWP build rejects
+         2026.0.0's .NET 8 deps (BouncyCastle etc.), pin 2020.0.2 (classic
+         UWP-safe build). See ADR-NF-006. -->
+    <PackageReference Include="SSH.NET" Version="2026.0.0" />
     <PackageReference Include="Microsoft.NETCore.UniversalWindowsPlatform">
       <Version>6.2.14</Version>
     </PackageReference>
@@ -131,6 +137,7 @@
     <Compile Include="FileSystem\RomHeaderParser.cs" />
     <Compile Include="FileSystem\GamelistParser.cs" />
     <Compile Include="FileSystem\FileOperations.cs" />
+    <Compile Include="FileSystem\ConflictDecision.cs" />
     <Compile Include="FileSystem\TransferMeter.cs" />
     <Compile Include="FileSystem\DiskSpaceGuard.cs" />
     <Compile Include="Controls\PieGeometry.cs" />
@@ -182,6 +189,9 @@
     <Compile Include="Controls\OverwriteDialog.xaml.cs">
       <DependentUpon>OverwriteDialog.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Controls\FileConflictDialog.xaml.cs">
+      <DependentUpon>FileConflictDialog.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Controls\FileOperationConfirmDialog.xaml.cs">
       <DependentUpon>FileOperationConfirmDialog.xaml</DependentUpon>
     </Compile>
@@ -196,6 +206,9 @@
     </Compile>
     <Compile Include="Controls\NetworkLocationDialog.xaml.cs">
       <DependentUpon>NetworkLocationDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\HostKeyDialog.xaml.cs">
+      <DependentUpon>HostKeyDialog.xaml</DependentUpon>
     </Compile>
     <Compile Include="Controls\PortalSetupDialog.xaml.cs">
       <DependentUpon>PortalSetupDialog.xaml</DependentUpon>
@@ -262,6 +275,14 @@
     <Compile Include="Network\NetworkPathUtil.cs" />
     <Compile Include="Network\NetworkCopyService.cs" />
     <Compile Include="Network\SmbBrowser.cs" />
+    <Compile Include="Network\FtpSession.cs" />
+    <Compile Include="Network\FtpBrowser.cs" />
+    <Compile Include="Network\SftpSession.cs" />
+    <Compile Include="Network\SftpReadStream.cs" />
+    <Compile Include="Network\SftpWriteStream.cs" />
+    <Compile Include="Network\SftpBrowser.cs" />
+    <Compile Include="Network\HostKeyTrustStore.cs" />
+    <Compile Include="Network\NetworkProviderFactory.cs" />
     <Compile Include="DevPortalSecrets.g.cs" />
     <Compile Include="Audio\IMemoryBufferAccess.cs" />
     <Compile Include="Audio\AudioLevelService.cs" />
@@ -362,6 +383,10 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="Controls\FileConflictDialog.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Page Include="Controls\FileOperationConfirmDialog.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
@@ -375,6 +400,10 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Controls\PortalCredentialsDialog.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\HostKeyDialog.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
@@ -522,6 +551,8 @@
     <Content Include="Assets\Views\MainPage\mainpage-network-tip-shared-32.png" />
 <Content Include="Assets\FileTypes\filetype-network-add-location-24.png" />
     <Content Include="Assets\FileTypes\filetype-network-download-24.png" />
+    <Content Include="Assets\FileTypes\filetype-network-globe-24.png" />
+    <Content Include="Assets\FileTypes\filetype-network-server-24.png" />
     <Content Include="Assets\FileTypes\file-archive-128.png" />
     <Content Include="Assets\FileTypes\file-generic-128.png" />
     <Content Include="Assets\FileTypes\filetype-application-iso-128.png" />
@@ -593,7 +624,8 @@
     <Content Include="Assets\Views\FileActionSheet\fileactionsheet-download-48.png" />
     <Content Include="Assets\Views\FileActionSheet\fileactionsheet-upload-48.png" />
 <Content Include="Assets\Views\FileActionSheet\fileactionsheet-hdd-48.png" />
-<Content Include="Assets\Views\DiskUsageDialog\diskusagedialog-hdd-100.png" />
+ <Content Include="Assets\Views\DiskUsageDialog\diskusagedialog-hdd-100.png" />
+    <Content Include="Assets\Views\HostKeyDialog\hostkeydialog-locked-key-100.png" />
     <Content Include="Assets\Views\FileActionSheet\ctx-drive-120.png" />
     <Content Include="Assets\Views\FileActionSheet\ctx-generic-120.png" />
     <Content Include="Assets\Views\FileActionSheet\ctx-archive-120.png" />

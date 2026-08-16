@@ -1,0 +1,4 @@
+# Smoke test upload artifacts — tests write random-named files into seed/ and
+# the writable overlay dir. Never commit them.
+seed/xfiles-smoke-*.txt
+ftp-uploads/

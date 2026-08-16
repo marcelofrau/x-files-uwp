@@ -14,7 +14,7 @@ favorites.
 
 ## Scope
 
-### In scope — this delivery (SMB only)
+### In scope — SMB delivery (shipped)
 
 - A "Network" virtual entry in the root column.
 - Saved **locations** with CRUD (add / rename / delete), persisted in SQLite
@@ -27,16 +27,28 @@ favorites.
   column, with an explicit destination picker.
 - Timeout + cancellation discipline on every network call.
 
+### In scope — FTP/FTPS + SFTP delivery (M8–M12)
+
+- Same saved-location CRUD (protocol already persisted).
+- FTP/FTPS via **FluentFTP** (plain + explicit/implicit TLS).
+- SFTP via **Renci.SshNet** (password auth only, host-key confirmation).
+- Same remote preview/play and write ops (copy/move/rename/delete) as SMB.
+- FTP seek: REST-capable servers get a seekable stream; non-REST servers play
+  sequentially without seek (no whole-file download).
+- SFTP: native seekable streams throughout.
+
 ### Out of scope — this delivery
 
-- FTP/FTPS, WebDAV, SFTP implementations (architecture accommodates them; see
-  below).
+- WebDAV implementation (deferred to a later slice; architecture accommodates
+  it via the same `INetworkFileSystemProvider` contract).
 - NFS and DLNA/UPnP (no roadmap commitment — see Protocol priority).
-- Remote **write** operations (copy/move/rename/delete *to* the remote),
-  archives *hosted* on the remote (deferred to a later slice).
+- Remote **write** operations *to* the remote are DONE as of M5.5 (SMB) and
+  M8–M10 (FTP/FTPS, SFTP); archives *hosted* on a non-seekable remote
+  transport open the file action sheet instead of a virtual folder (M5).
 - Network discovery (WSD/SSDP/mDNS) — manual entry only.
 - `enterpriseAuthentication` capability — only needed if a domain/Kerberos SMB
   auth case appears; not added now.
+- SFTP private-key auth — password only (PasswordVault).
 
 ## Protocol priority
 
@@ -51,6 +63,9 @@ favorites.
 
 Rationale and caveats in `DECISIONS.md`.
 
+**Status (2026-08-16):** SMB shipped (M0–M5.5). FTP/FTPS + SFTP planned as
+M8–M12 (`IMPLEMENTATION.md`).
+
 ## Milestones
 
 | Milestone | Deliverable | Est. effort |
@@ -63,6 +78,11 @@ Rationale and caveats in `DECISIONS.md`.
 | **M5 — Preview/play** | Direct streams (text/image/PDF/ROM/archive), chiptune bytes→render, audio growing-file, video stream | 2–3 d |
 | **M6 — Hardware validation** | Xbox Developer Mode port-445 test, UNC fallback decision, timeout tuning, real NAS test | 1–2 d |
 | **M7 — Release** | `RELEASE-NOTES.md`, version bump via `version.props`, tag (only on request) | — |
+| **M8 — Protocol-layer generalization** | `INetworkFileSystemProvider` write ops, provider factory, nav/`NetworkCopyService`/`FileOps` on the interface, URL/manager/dialog clobbers fixed, separator-aware paths, libs (FluentFTP + SSH.NET), unit tests | 1–2 d |
+| **M9 — FTP/FTPS core** | `FtpSession`/`FtpBrowser` (FluentFTP), seekable `FtpReadStream` via REST with capability probe, `FtpWriteStream`, pool + timeouts | 1–2 d |
+| **M10 — SFTP core** | `SftpSession`/`SftpBrowser` (SSH.NET), native seekable `SftpFileStream`, host-key confirmation dialog, write ops | 1–2 d |
+| **M11 — Nav + UX** | Shares column only for SMB, per-protocol dialog fields, FTPS mode, per-protocol icons | 0.5–1 d |
+| **M12 — Multi-protocol tests + docs** | Real FTP/FTPS/SFTP smoke (desktop), docset updates, Xbox validation | 1 d |
 
 Each milestone has a task checklist in `IMPLEMENTATION.md`.
 
@@ -76,11 +96,18 @@ Each milestone has a task checklist in `IMPLEMENTATION.md`.
 | AudioGraph needs a `StorageFile` | No direct stream audio | Growing-file streaming (chiptune precedent) starts playback in ~1–2 s |
 | Wi-Fi instability on Xbox | Frozen UI / hangs | Timeouts + `CancellationToken` on every socket op; error surfaces as a friendly "connect failed" |
 | Large remote media / seek | Seek stalls beyond downloaded region | v1 = sequential play; full seek after complete (documented in SPEC) |
+| FTP servers without REST | No offset reads → non-seekable stream | Probe `FEAT`/REST at connect; seekable when supported, sequential-play otherwise (no whole-file download) |
+| FTP active/passive + NAT | Passive-mode firewall issues | Passive mode default; M12 smoke decides fallback |
+| SSH.NET UWP compatibility | Modern netstandard2.0 build pulls .NET 8 deps (BouncyCastle/Logging/Asn1) | Try latest; fallback pin 2020.0.2 (known UWP-safe) |
+| SSH host-key MITM | Fingerprint not verified | Confirmation dialog on first connect; persisted accepted keys; mismatch = warning (ADR-NF-011) |
 | Location config wiped | User data loss | Config table excluded from Clear Cache (verified: only cache tables wiped) |
 
 ## Dependencies
 
 - `TalAloni.SMBLibrary` (1.5.x, netstandard2.0, LGPL-3.0) — SMB2 client.
+- `FluentFTP` (54.x, netstandard2.0, MIT) — FTP/FTPS client (M9).
+- `Renci.SshNet` (try latest netstandard2.0; fallback pin 2020.0.2 — UWP-safe
+  build, see ADR-NF-010) — SFTP client (M10).
 - Existing: `sqlite-net-pcl` + `SQLitePCLRaw.bundle_green` (metadata.db),
   `Windows.Security.Credentials.PasswordVault`, `DownloadService`,
   `AudioLevelService` (growing-file support), `FolderBrowserDialog`.

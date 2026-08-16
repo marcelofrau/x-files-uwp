@@ -29,7 +29,6 @@ namespace XFiles.Visualizers
         private IAudioVisualizer _visualizer;
         private Audio.AudioLevelService _service;
         private PostProcessPipeline _pipeline;
-        private IAudioVisualizer _drawCapturedVis;
         private readonly Action<CanvasDrawingSession> _drawSceneAction;
         private float _elapsed;
         private bool _initialized;
@@ -66,7 +65,15 @@ namespace XFiles.Visualizers
 
         private void OnDrawScene(CanvasDrawingSession sceneDs)
         {
-            _drawCapturedVis?.Draw(sceneDs);
+            IAudioVisualizer vis;
+            lock (_lock)
+            {
+                vis = _visualizer;
+            }
+            if (vis != null)
+            {
+                vis.Draw(sceneDs);
+            }
         }
 
         /// <summary>
@@ -195,7 +202,6 @@ namespace XFiles.Visualizers
                 if (_pipeline != null)
                 {
                     vis.ConfigurePipeline(_pipeline);
-                    _drawCapturedVis = vis;
                     _pipeline.Draw(ds, _drawSceneAction, _bassLevel, _beatLevel);
                 }
                 else

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
 using SMBLibrary;
@@ -85,6 +86,20 @@ namespace XFiles.Network
         }
 
         public bool IsConnected => _client != null && _client.IsConnected;
+
+        /// <summary>Negotiated SMB limits for logging/diagnostics. Never throws.</summary>
+        public string NegotiatedInfo()
+        {
+            try
+            {
+                if (_fileStore == null) return "not connected";
+                return $"MaxReadSize={_fileStore.MaxReadSize} MaxWriteSize={_fileStore.MaxWriteSize}";
+            }
+            catch
+            {
+                return "unavailable";
+            }
+        }
 
         public async Task EnsureConnectedAsync(string password, CancellationToken ct)
         {
@@ -225,6 +240,39 @@ namespace XFiles.Network
                     try { _fileStore.CloseFile(handle); } catch { }
                 }
             }, "get file length", ct);
+        }
+
+        /// <summary>
+        /// True if a file (or directory when isDirectory) exists at the path.
+        /// Used for copy/move collision detection before opening a write stream.
+        /// </summary>
+        public async Task<bool> EntryExistsAsync(string share, string path, bool isDirectory, CancellationToken ct)
+        {
+            return await RunAsync(() =>
+            {
+                EnsureTree(share);
+                object handle;
+                FileStatus fileStatus;
+                var createOptions = isDirectory
+                    ? CreateOptions.FILE_DIRECTORY_FILE
+                    : CreateOptions.FILE_NON_DIRECTORY_FILE;
+                NTStatus status = _fileStore.CreateFile(
+                    out handle, out fileStatus, NormalizePath(path),
+                    AccessMask.GENERIC_READ, FileAttributes.Normal,
+                    ShareAccess.Read | ShareAccess.Write | ShareAccess.Delete,
+                    CreateDisposition.FILE_OPEN, createOptions, null);
+                if (status == NTStatus.STATUS_SUCCESS)
+                {
+                    try { _fileStore.CloseFile(handle); } catch { }
+                    return true;
+                }
+                if (status == NTStatus.STATUS_OBJECT_NAME_NOT_FOUND ||
+                    status == NTStatus.STATUS_OBJECT_PATH_NOT_FOUND ||
+                    status == NTStatus.STATUS_NOT_A_DIRECTORY ||
+                    status == NTStatus.STATUS_FILE_IS_A_DIRECTORY)
+                    return false;
+                throw ExceptionFromStatus(status, "check entry exists");
+            }, "check entry exists", ct);
         }
 
         /// <summary>
@@ -547,7 +595,27 @@ namespace XFiles.Network
             {
                 if (_invalid)
                     throw new NetworkOperationException(NetworkOperationReason.Unreachable, "Session was invalidated");
-                var task = Task.Run(op);
+
+                // Run the op inside the task and capture any failure, so the task
+                // itself never faults. An exception thrown inside Task.Run is
+                // reported by the debugger as "not handled in user code" (the async
+                // state machine continuation is external code) and pauses the app
+                // even when the caller catches it further up the chain. Re-throwing
+                // the captured failure below the task keeps every error handled.
+                T result = default;
+                Exception failure = null;
+                var task = Task.Run(() =>
+                {
+                    try
+                    {
+                        result = op();
+                    }
+                    catch (Exception ex)
+                    {
+                        failure = ex;
+                    }
+                });
+
                 var timeout = Task.Delay(timeoutMs);
                 var completed = await Task.WhenAny(task, timeout);
                 if (completed == timeout)
@@ -555,7 +623,11 @@ namespace XFiles.Network
                     Invalidate();
                     throw new NetworkOperationException(NetworkOperationReason.TimedOut, $"SMB operation timed out: {what}");
                 }
-                return await task;
+
+                await task;
+                if (failure != null)
+                    ExceptionDispatchInfo.Capture(failure).Throw();
+                return result;
             }
             catch (NetworkOperationException)
             {

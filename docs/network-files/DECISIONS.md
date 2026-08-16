@@ -96,7 +96,7 @@ budget) as the *default*. Instead:
   render pipeline (no network streaming needed).
 
 ## ADR-NF-006 — Protocol scope: SMB now; FTP/WebDAV/SFTP next; NFS/DLNA skip
-*Accepted (2026-08-15)*
+*Accepted (2026-08-15) — superseded in part by ADR-NF-010 (delivery order)*
 
 Ordering from Gemini's own priority list is right (SMB covers ~90% of home
 NAS). Adjustments: SFTP demoted below FTP/WebDAV for *this* app because
@@ -104,6 +104,9 @@ SSH.NET's UWP-compatible build is an old netstandard1.3 version (pin + .NET
 Native risk), while FluentFTP and WebDav.Client are netstandard2.0/modern.
 NFS skipped (scarce C# support, niche — Gemini agrees); DLNA treated as a
 separate feature, not a filesystem protocol.
+
+*2026-08-16 update:* FTP/FTPS + SFTP are now the active delivery (M8–M12);
+WebDAV is deferred after them. See ADR-NF-010.
 
 ## ADR-NF-007 — Capabilities already present; no manifest change
 *Accepted (2026-08-15)*
@@ -135,13 +138,62 @@ location, download URL) and protocols will add more; a single enum
 growing set of booleans and gives `ColumnNavigator`/`FileActionSheet` one
 dispatch point.
 
+## ADR-NF-010 — Multi-protocol delivery: FTP/FTPS + SFTP via the thin provider contract
+*Accepted (2026-08-16)*
+
+ADR-NF-004 rejected abstracting the *local* filesystem layer; it explicitly
+endorsed the thin `INetworkFileSystemProvider` that only the new network code
+talks to. M8–M12 ship FTP/FTPS (FluentFTP) and SFTP (Renci.SshNet) behind that
+contract:
+
+- The interface gains the write ops (open-write, delete, rename, mkdir, exists)
+  that today live only on `SmbBrowser` — `SmbBrowser` already implements them,
+  so this is interface promotion, not new SMB work.
+- `NetworkProviderFactory.Create(config)` returns the right browser per
+  protocol; `ColumnNavigator`/`NetworkCopyService`/`FileOps` move from the
+  concrete `SmbBrowser` type to the interface.
+- WebDAV is deliberately deferred (a later slice, same contract).
+- NFS/DLNA unchanged (skip / separate idea).
+
+Existing shape differences handled as protocol rules, not abstractions:
+shares column is SMB-only (FTP/SFTP go straight to a directory, `Share`
+means "start folder"), path separators are protocol-aware (`\` vs `/`).
+
+## ADR-NF-011 — SFTP host-key trust: confirmation dialog, persisted acceptances
+*Accepted (2026-08-16)*
+
+First connection to an unknown host shows the server's key fingerprint in a
+dialog (A = accept); accepted host:port fingerprints persist (settings), and a
+changed fingerprint on a later connection raises a warning. Rejected "accept
+always" (MITM) and "TOFU pin" (user picked explicit confirmation).
+
+## ADR-NF-012 — FTP media seek: REST-capable → seekable; no REST → sequential
+*Accepted (2026-08-16)*
+
+FTP data connections are not seekable; offset reads require the server's REST
+command. At connect the browser probes REST support (`FEAT`/`REST STREAM`):
+
+- REST supported → `FtpReadStream` reopens the data connection at the seek
+  offset (seekable, matches the `RemoteStream` contract).
+- No REST → media plays sequentially from the start, seek disabled; no
+  whole-file download and no growing-file fallback (user decision).
+
+## ADR-NF-013 — SFTP auth: password only
+*Accepted (2026-08-16)*
+
+PasswordVault already stores the password. Private-key auth (importing
+`.ppk`/`.pem`, passphrase handling) is deferred — not required by the seedbox
+use case and adds file-storage + UX scope.
+
 ## Deferred / open items
 
-- **Remote write-back** (copy-to-remote, remote rename/delete/move): needs
-  `ISMBFileStore.WriteFile`/`SetFileInformation` plumbing; post-M6.
-- **Remote-hosted archives**: `ArchiveBrowser` is path-based
-  (`CreateFile2FromAppW`); SharpCompress `ArchiveFactory.Open(stream)` is the
-  likely route later.
+- **SFTP private-key auth**: deferred (ADR-NF-013 — password only).
+- **WebDAV**: deferred to a later slice (ADR-NF-010 — same provider contract).
+- **Remote-hosted archives over non-seekable transports**: opened via the
+  file action sheet instead of a virtual folder (M5; SMB and SFTP have
+  seekable streams so their archives drill in normally; FTP non-REST servers
+  fall back to the flyout).
 - **Network discovery** (WSD/SSDP/mDNS): manual entry only.
 - **Xbox port 445 outcome**: unknown until M6 hardware test — the single
-  biggest unknown.
+  biggest unknown. Same risk applies to outbound FTP/SFTP (ports 21/22) on the
+  console.

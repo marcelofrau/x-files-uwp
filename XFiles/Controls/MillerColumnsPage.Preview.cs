@@ -180,6 +180,30 @@ namespace XFiles.Controls
 
                         if (IsRemoteMediaPreview)
                         {
+                            // Remote SMB chiptune: cache fully, then the local
+                            // chiptune path (the streaming pipeline can't decode
+                            // .spc/.gbs/.vgz/.usf/.psf — it would play silence).
+                            if (RetroAudioPlayer.IsChiptuneFile(Path.GetExtension(_navigator.Preview.Label ?? "")))
+                            {
+                                string tempPath = await CacheRemoteFileAsync(
+                                    _navigator.Preview.NetworkLocationId,
+                                    _navigator.Preview.NetworkShareName,
+                                    _navigator.Preview.NetworkPath,
+                                    _navigator.Preview.Label ?? "track");
+                                if (tempPath == null)
+                                {
+                                    _ = AlertDialogControl.ShowAsync("Failed to download the chiptune file.", AlertType.Error);
+                                    break;
+                                }
+                                PreviewStatus.Text = _navigator.Preview.PreviewFileType;
+                                PreviewMediaPanel.Visibility = Visibility.Visible;
+                                MediaPreview.Stop();
+                                MediaPreview.LoadChiptuneTrack(tempPath, 0);
+                                MediaPreview.SetNetworkContext(
+                                    _navigator.Preview.NetworkShareName, _navigator.Preview.NetworkPath);
+                                break;
+                            }
+
                             // Remote SMB audio: stream inline into the AudioGraph player.
                             PreviewStatus.Text = _navigator.Preview.PreviewFileType;
                             PreviewMediaPanel.Visibility = Visibility.Visible;
@@ -429,7 +453,8 @@ namespace XFiles.Controls
             await MediaPreview.LoadRemoteAudio(
                 new RemoteStream(stream, reopen),
                 MimeForRemoteFile(Path.GetExtension(p.Label ?? "")),
-                Path.GetFileNameWithoutExtension(p.Label ?? ""));
+                Path.GetFileNameWithoutExtension(p.Label ?? ""),
+                id3StreamFactory: reopen);
             MediaPreview.SetNetworkContext(p.NetworkShareName, p.NetworkPath);
         }
 
@@ -594,6 +619,7 @@ namespace XFiles.Controls
                 NetworkLocationId = e.NetworkLocationId,
                 NetworkShareName = e.NetworkShareName,
                 NetworkPath = e.NetworkPath,
+                NetworkProtocol = e.NetworkProtocol,
                 IsDotDot = (e.Name == "..")
             }).ToList();
 
@@ -661,6 +687,7 @@ namespace XFiles.Controls
                 NetworkLocationId = e.NetworkLocationId,
                 NetworkShareName = e.NetworkShareName,
                 NetworkPath = e.NetworkPath,
+                NetworkProtocol = e.NetworkProtocol,
                 IsDotDot = (e.Name == "..")
             }).ToList();
 

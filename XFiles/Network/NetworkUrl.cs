@@ -17,8 +17,31 @@ namespace XFiles.Network
             {
                 case NetworkProtocol.Smb:
                     return 445;
+                case NetworkProtocol.Ftp:
+                case NetworkProtocol.Ftps:
+                    return 21;
+                case NetworkProtocol.Sftp:
+                    return 22;
                 default:
                     return 0;
+            }
+        }
+
+        /// <summary>Maps a URL scheme to a protocol (lowercased input). Null on unknown.</summary>
+        public static NetworkProtocol? ProtocolFromScheme(string scheme)
+        {
+            switch ((scheme ?? "").Trim().ToLowerInvariant())
+            {
+                case "smb":
+                    return NetworkProtocol.Smb;
+                case "ftp":
+                    return NetworkProtocol.Ftp;
+                case "ftps":
+                    return NetworkProtocol.Ftps;
+                case "sftp":
+                    return NetworkProtocol.Sftp;
+                default:
+                    return null;
             }
         }
 
@@ -64,12 +87,8 @@ namespace XFiles.Network
             if (schemeSep < 0) return null;
 
             string scheme = url.Substring(0, schemeSep).Trim().ToLowerInvariant();
-            NetworkProtocol protocol;
-            if (scheme == "smb")
-            {
-                protocol = NetworkProtocol.Smb;
-            }
-            else
+            NetworkProtocol? protocol = ProtocolFromScheme(scheme);
+            if (protocol == null)
             {
                 return null;
             }
@@ -101,7 +120,7 @@ namespace XFiles.Network
 
             return new NetworkServerConfig
             {
-                Protocol = protocol,
+                Protocol = protocol.Value,
                 Host = hostPart,
                 Username = username,
                 Share = string.IsNullOrWhiteSpace(share) ? null : share

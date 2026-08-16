@@ -112,7 +112,76 @@ namespace XFiles.Tests
         [TestMethod]
         public void Parse_UnknownScheme_Null()
         {
-            Assert.IsNull(NetworkUrl.Parse("ftp://user@host/share"));
+            Assert.IsNull(NetworkUrl.Parse("webdav://user@host/share"));
+            Assert.IsNull(NetworkUrl.Parse("nfs://host/share"));
+        }
+
+        // --- FTP / FTPS / SFTP ---
+
+        [TestMethod]
+        public void Compose_Ftp_Url()
+        {
+            var c = new NetworkServerConfig { Protocol = NetworkProtocol.Ftp, Host = "ftp.local", Username = "bob", Share = "/music" };
+            Assert.AreEqual("ftp://bob@ftp.local/music", NetworkUrl.Compose(c));
+        }
+
+        [TestMethod]
+        public void Parse_Ftp_RoundTrip()
+        {
+            var c = NetworkUrl.Parse("ftp://bob@ftp.local/music");
+            Assert.IsNotNull(c);
+            Assert.AreEqual(NetworkProtocol.Ftp, c.Protocol);
+            Assert.AreEqual("bob", c.Username);
+            Assert.AreEqual("ftp.local", c.Host);
+            Assert.AreEqual("music", c.Share);
+            Assert.AreEqual("ftp://bob@ftp.local/music", NetworkUrl.Compose(c));
+        }
+
+        [TestMethod]
+        public void Parse_Ftps()
+        {
+            var c = NetworkUrl.Parse("ftps://host/shared");
+            Assert.IsNotNull(c);
+            Assert.AreEqual(NetworkProtocol.Ftps, c.Protocol);
+            Assert.AreEqual("shared", c.Share);
+        }
+
+        [TestMethod]
+        public void Parse_Sftp_NoShare()
+        {
+            var c = NetworkUrl.Parse("sftp://root@nas.example.com");
+            Assert.IsNotNull(c);
+            Assert.AreEqual(NetworkProtocol.Sftp, c.Protocol);
+            Assert.AreEqual("root", c.Username);
+            Assert.AreEqual("nas.example.com", c.Host);
+            Assert.IsNull(c.Share);
+        }
+
+        [TestMethod]
+        public void DefaultPort_FtpFtps_21()
+        {
+            Assert.AreEqual(21, NetworkUrl.DefaultPort(NetworkProtocol.Ftp));
+            Assert.AreEqual(21, NetworkUrl.DefaultPort(NetworkProtocol.Ftps));
+        }
+
+        [TestMethod]
+        public void DefaultPort_Sftp_22()
+        {
+            Assert.AreEqual(22, NetworkUrl.DefaultPort(NetworkProtocol.Sftp));
+        }
+
+        [TestMethod]
+        public void EffectivePort_Ftp_Default21()
+        {
+            var c = new NetworkServerConfig { Protocol = NetworkProtocol.Ftp };
+            Assert.AreEqual(21, c.EffectivePort);
+        }
+
+        [TestMethod]
+        public void EffectivePort_Sftp_Default22()
+        {
+            var c = new NetworkServerConfig { Protocol = NetworkProtocol.Sftp };
+            Assert.AreEqual(22, c.EffectivePort);
         }
 
         [TestMethod]

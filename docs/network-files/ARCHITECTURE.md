@@ -22,12 +22,17 @@ UI (Controls)
 Navigation
  └─ ColumnNavigator                (root "Network" entry, drill-in/out, virtual stack)
 Network (new namespace XFiles.Network)
- ├─ INetworkFileSystemProvider     (protocol-agnostic contract)
+ ├─ INetworkFileSystemProvider     (protocol-agnostic contract, read + write ops)
+ ├─ NetworkProviderFactory          (per-protocol browser resolution)
  ├─ NetworkServerConfig            (pure model + URL composition)
  ├─ NetworkServerManager           (SQLite CRUD + PasswordVault)
  ├─ SmbSession                     (SMB2Client connect/login/treeconnect pool)
  ├─ SmbBrowser                     (shares + directory listing → FileEntry)
- └─ SmbReadStream                  (Stream over ISMBFileStore.ReadFile)
+ ├─ SmbReadStream / SmbWriteStream (Stream over ISMBFileStore read/write)
+ ├─ FtpSession / FtpBrowser        (FluentFTP; pool, list, read/write)  [M9]
+ ├─ FtpReadStream / FtpWriteStream (REST-aware seekable read, upload)   [M9]
+ ├─ SftpSession / SftpBrowser      (SSH.NET; pool, list, read/write)    [M10]
+ └─ HostKeyTrustStore              (persisted accepted SFTP fingerprints) [M10]
 Existing (reused)
  ├─ DirectoryScanner / FileEntry / PortalBrowser / ArchiveBrowser
  ├─ FilePreviewService / TextEditorService
@@ -137,7 +142,10 @@ connection to the same file is undesirable, expose
 
 ### `INetworkFileSystemProvider`
 
-Protocol-agnostic contract; only SMB implements it now (FTP/WebDAV/SFTP later):
+Protocol-agnostic contract; SMB implements it now, FTP/FTPS (M9) and SFTP
+(M10) plug in behind it. Started read-only (M2), extended with the write ops
+that landed on `SmbBrowser` during M5.5 (M8) — callers use the interface, not
+the concrete browser:
 
 ```csharp
 public interface INetworkFileSystemProvider
@@ -151,12 +159,27 @@ public interface INetworkFileSystemProvider
         NetworkServerConfig loc, string share, string remotePath, CancellationToken ct);
     Task<long> GetFileLengthAsync(
         NetworkServerConfig loc, string share, string remotePath, CancellationToken ct);
+    // write ops (M5.5-era SmbBrowser methods, promoted to the interface in M8)
+    Task<bool> EntryExistsAsync(NetworkServerConfig loc, string share, string remotePath, CancellationToken ct);
+    Task<Stream> OpenWriteStreamAsync(NetworkServerConfig loc, string share, string remotePath, CancellationToken ct);
+    Task WriteFileAsync(NetworkServerConfig loc, string share, string remotePath, byte[] data, CancellationToken ct);
+    Task DeleteFileAsync(NetworkServerConfig loc, string share, string remotePath, CancellationToken ct);
+    Task DeleteDirectoryAsync(NetworkServerConfig loc, string share, string remotePath, CancellationToken ct);
+    Task RenameFileAsync(NetworkServerConfig loc, string share, string remotePath, string newName, CancellationToken ct);
+    Task CreateDirectoryAsync(NetworkServerConfig loc, string share, string remotePath, CancellationToken ct);
     void Disconnect(NetworkServerConfig loc);
 }
 ```
 
+- `share` is SMB-shaped: for FTP/SFTP it is empty (`""`) and `remotePath` is
+  absolute from the server root (`/music/track.mp3`). `ListSharesAsync`
+  returns an empty list for FTP/SFTP (no share layer).
+- `NetworkProviderFactory.Create(config)` → the browser for
+  `config.Protocol` (SMB/FTP/SFTP). Callers that hold a browser for the
+  active location resolve it once via the factory.
+
 `NetworkFileEntry` = `{ Name, IsDirectory, Size, LastWriteTime }` (minimal;
-maps to `FileEntry` by `SmbBrowser`).
+maps to `FileEntry` by each browser).
 
 ### `SmbSession` — connection pool
 

@@ -634,15 +634,16 @@ namespace XFiles.FileSystem
             string sourcePath, string destDir,
             IProgress<OperationProgress> progress = null,
             bool sameDir = false, CancellationToken token = default,
-            long fileBytesOffset = 0, long overallTotalBytes = 0)
+            long fileBytesOffset = 0, long overallTotalBytes = 0,
+            Func<string, Task<ConflictDecision>> conflict = null)
         {
             var pathType = CheckPathType(sourcePath);
             if (pathType == "directory")
             {
-                return await CopyDirectoryAsync(sourcePath, destDir, progress, sameDir, token);
+                return await CopyDirectoryAsync(sourcePath, destDir, progress, sameDir, token, conflict);
             }
 
-            return await Task.Run(() =>
+            return await Task.Run(async () =>
             {
                 try
                 {
@@ -650,7 +651,18 @@ namespace XFiles.FileSystem
 
                     string fileName = Path.GetFileName(sourcePath);
                     string destPath = Path.Combine(destDir, fileName);
-                    destPath = sameDir ? GetCopyName(destPath) : GetUniqueFilePath(destPath);
+                    if (sameDir)
+                    {
+                        destPath = GetCopyName(destPath);
+                    }
+                    else if (conflict != null && CheckPathType(destPath) != null)
+                    {
+                        destPath = await ResolveConflictAsync(destPath, conflict, token);
+                    }
+                    else
+                    {
+                        destPath = GetUniqueFilePath(destPath);
+                    }
 
                     long fileSize = GetFileSizePInvoke(sourcePath);
                     Log.Info("FileOperations.Copy: {Source} -> {Dest} ({Size} bytes)", sourcePath, destPath, fileSize);
@@ -671,6 +683,10 @@ namespace XFiles.FileSystem
 
                     return result;
                 }
+                catch (OperationCanceledException)
+                {
+                    return OperationResult.Cancelled;
+                }
                 catch (Exception ex)
                 {
                     Log.Warn("FileOperations.Copy exception", ex);
@@ -684,7 +700,7 @@ namespace XFiles.FileSystem
         /// If sameDir is true, uses "Copy N" naming to avoid overwriting in same directory.
         /// Pre-scans for accurate file count + total bytes before starting.
         /// </summary>
-        public static async Task<OperationResult> CopyDirectoryAsync(string sourceDir, string destDir, IProgress<OperationProgress> progress = null, bool sameDir = false, CancellationToken token = default)
+        public static async Task<OperationResult> CopyDirectoryAsync(string sourceDir, string destDir, IProgress<OperationProgress> progress = null, bool sameDir = false, CancellationToken token = default, Func<string, Task<ConflictDecision>> conflict = null)
         {
             return await Task.Run(async () =>
             {
@@ -692,7 +708,18 @@ namespace XFiles.FileSystem
                 {
                     string dirName = Path.GetFileName(sourceDir.TrimEnd('\\', '/'));
                     string destPath = Path.Combine(destDir, dirName);
-                    destPath = sameDir ? GetCopyName(destPath) : GetUniqueDirectoryPath(destPath);
+                    if (sameDir)
+                    {
+                        destPath = GetCopyName(destPath);
+                    }
+                    else if (conflict != null && CheckPathType(destPath) != null)
+                    {
+                        destPath = await ResolveConflictAsync(destPath, conflict, token);
+                    }
+                    else
+                    {
+                        destPath = GetUniqueDirectoryPath(destPath);
+                    }
 
                     Log.Info("FileOperations.CopyDirectory: {Source} -> {Dest}", sourceDir, destPath);
                     CreateDirectoryFromAppW(destPath, IntPtr.Zero);
@@ -716,7 +743,7 @@ namespace XFiles.FileSystem
                     });
 
                     var result = CopyDirectoryRecursive(sourceDir, destPath, progress, token,
-                        ref completedFiles, scan.FileCount, ref completedBytes, scan.TotalBytes);
+                        ref completedFiles, scan.FileCount, ref completedBytes, scan.TotalBytes, conflict);
 
                     dirSw.Stop();
                     double mbps = dirSw.Elapsed.TotalSeconds > 0
@@ -727,6 +754,10 @@ namespace XFiles.FileSystem
                         dirSw.Elapsed.TotalSeconds, mbps);
 
                     return result;
+                }
+                catch (OperationCanceledException)
+                {
+                    return OperationResult.Cancelled;
                 }
                 catch (Exception ex)
                 {
@@ -739,7 +770,8 @@ namespace XFiles.FileSystem
         private static OperationResult CopyDirectoryRecursive(
             string sourceDir, string destDir,
             IProgress<OperationProgress> progress, CancellationToken token,
-            ref int completedFiles, long totalFiles, ref long completedBytes, long totalBytes)
+            ref int completedFiles, long totalFiles, ref long completedBytes, long totalBytes,
+            Func<string, Task<ConflictDecision>> conflict = null)
         {
             try
             {
@@ -760,12 +792,16 @@ namespace XFiles.FileSystem
                         string destSubDir = destDir + "\\" + findData.cFileName;
                         CreateDirectoryFromAppW(destSubDir, IntPtr.Zero);
                         var result = CopyDirectoryRecursive(fullPath, destSubDir, progress, token,
-                            ref completedFiles, totalFiles, ref completedBytes, totalBytes);
+                            ref completedFiles, totalFiles, ref completedBytes, totalBytes, conflict);
                         if (result != OperationResult.Success) { FindClose(hFind); return result; }
                     }
                     else
                     {
                         string destFile = destDir + "\\" + findData.cFileName;
+                        if (conflict != null && CheckPathType(destFile) != null)
+                        {
+                            destFile = ResolveConflictAsync(destFile, conflict, token).GetAwaiter().GetResult();
+                        }
                         long fileSize = ((long)findData.nFileSizeHigh << 32) | findData.nFileSizeLow;
 
                         var result = CopyFileStreaming(fullPath, destFile, progress, findData.cFileName,
@@ -795,6 +831,10 @@ namespace XFiles.FileSystem
 
                 FindClose(hFind);
             }
+            catch (OperationCanceledException)
+            {
+                return OperationResult.Cancelled;
+            }
             catch (Exception ex)
             {
                 Log.Warn("FileOperations.CopyDirectoryRecursive: {Dir} error", ex, sourceDir);
@@ -807,15 +847,15 @@ namespace XFiles.FileSystem
         /// <summary>
         /// Move file or directory from source to destination directory.
         /// </summary>
-        public static async Task<OperationResult> MoveAsync(string sourcePath, string destDir, IProgress<OperationProgress> progress = null, CancellationToken token = default)
+        public static async Task<OperationResult> MoveAsync(string sourcePath, string destDir, IProgress<OperationProgress> progress = null, CancellationToken token = default, Func<string, Task<ConflictDecision>> conflict = null)
         {
             var pathType = CheckPathType(sourcePath);
             if (pathType == "directory")
             {
-                return await MoveDirectoryAsync(sourcePath, destDir, progress, token);
+                return await MoveDirectoryAsync(sourcePath, destDir, progress, token, conflict);
             }
 
-            return await Task.Run(() =>
+            return await Task.Run(async () =>
             {
                 try
                 {
@@ -823,7 +863,14 @@ namespace XFiles.FileSystem
 
                     string fileName = Path.GetFileName(sourcePath);
                     string destPath = Path.Combine(destDir, fileName);
-                    destPath = GetUniqueFilePath(destPath);
+                    if (conflict != null && CheckPathType(destPath) != null)
+                    {
+                        destPath = await ResolveConflictAsync(destPath, conflict, token);
+                    }
+                    else
+                    {
+                        destPath = GetUniqueFilePath(destPath);
+                    }
 
                     Log.Info("FileOperations.Move: {Source} -> {Dest}", sourcePath, destPath);
 
@@ -874,6 +921,10 @@ namespace XFiles.FileSystem
 
                     return OperationResult.Success;
                 }
+                catch (OperationCanceledException)
+                {
+                    return OperationResult.Cancelled;
+                }
                 catch (Exception ex)
                 {
                     Log.Warn("FileOperations.Move exception", ex);
@@ -885,15 +936,22 @@ namespace XFiles.FileSystem
         /// <summary>
         /// Move directory recursively from source to destination.
         /// </summary>
-        public static async Task<OperationResult> MoveDirectoryAsync(string sourceDir, string destDir, IProgress<OperationProgress> progress = null, CancellationToken token = default)
+        public static async Task<OperationResult> MoveDirectoryAsync(string sourceDir, string destDir, IProgress<OperationProgress> progress = null, CancellationToken token = default, Func<string, Task<ConflictDecision>> conflict = null)
         {
-            return await Task.Run(() =>
+            return await Task.Run(async () =>
             {
                 try
                 {
                     string dirName = Path.GetFileName(sourceDir.TrimEnd('\\', '/'));
                     string destPath = Path.Combine(destDir, dirName);
-                    destPath = GetUniqueDirectoryPath(destPath);
+                    if (conflict != null && CheckPathType(destPath) != null)
+                    {
+                        destPath = await ResolveConflictAsync(destPath, conflict, token);
+                    }
+                    else
+                    {
+                        destPath = GetUniqueDirectoryPath(destPath);
+                    }
 
                     Log.Info("FileOperations.MoveDirectory: {Source} -> {Dest}", sourceDir, destPath);
 
@@ -924,7 +982,7 @@ namespace XFiles.FileSystem
                     Log.Dbg("FileOperations.MoveDirectory: native move failed, using per-file fallback");
                     CreateDirectoryFromAppW(destPath, IntPtr.Zero);
 
-                    var result = MoveDirectoryRecursive(sourceDir, destPath, progress, token);
+                    var result = MoveDirectoryRecursive(sourceDir, destPath, progress, token, conflict);
                     moveSw.Stop();
                     Log.Info("FileOperations.MoveDirectory: {Source} -> {Dest} per-file fallback COMPLETE in {Elapsed:0.0}s (result={Result})",
                         sourceDir, destPath, moveSw.Elapsed.TotalSeconds, result);
@@ -942,6 +1000,10 @@ namespace XFiles.FileSystem
 
                     return result;
                 }
+                catch (OperationCanceledException)
+                {
+                    return OperationResult.Cancelled;
+                }
                 catch (Exception ex)
                 {
                     Log.Warn("FileOperations.MoveDirectory exception", ex);
@@ -950,7 +1012,7 @@ namespace XFiles.FileSystem
             });
         }
 
-        private static OperationResult MoveDirectoryRecursive(string sourceDir, string destDir, IProgress<OperationProgress> progress, CancellationToken token = default)
+        private static OperationResult MoveDirectoryRecursive(string sourceDir, string destDir, IProgress<OperationProgress> progress, CancellationToken token = default, Func<string, Task<ConflictDecision>> conflict = null)
         {
             try
             {
@@ -970,12 +1032,16 @@ namespace XFiles.FileSystem
                     {
                         string destSubDir = destDir + "\\" + findData.cFileName;
                         CreateDirectoryFromAppW(destSubDir, IntPtr.Zero);
-                        var result = MoveDirectoryRecursive(fullPath, destSubDir, progress, token);
+                        var result = MoveDirectoryRecursive(fullPath, destSubDir, progress, token, conflict);
                         if (result != OperationResult.Success) { FindClose(hFind); return result; }
                     }
                     else
                     {
                         string destFile = destDir + "\\" + findData.cFileName;
+                        if (conflict != null && CheckPathType(destFile) != null)
+                        {
+                            destFile = ResolveConflictAsync(destFile, conflict, token).GetAwaiter().GetResult();
+                        }
                         bool ok = MoveFileFromAppW(fullPath, destFile);
                         if (!ok)
                         {
@@ -1008,6 +1074,10 @@ namespace XFiles.FileSystem
                 while (FindNextFileW(hFind, out findData));
 
                 FindClose(hFind);
+            }
+            catch (OperationCanceledException)
+            {
+                return OperationResult.Cancelled;
             }
             catch (Exception ex)
             {
@@ -1581,7 +1651,43 @@ namespace XFiles.FileSystem
             });
         }
 
-        private static string GetUniqueFilePath(string path)
+        /// <summary>
+        /// Asks the user how to resolve a name collision via the conflict callback.
+        /// ReplaceAll → keep the destination path (overwrite); RenameAll → next free "name (N)";
+        /// Cancel (or callback failure) → OperationCanceledException so the op aborts cleanly.
+        /// </summary>
+        private static async Task<string> ResolveConflictAsync(string destPath,
+            Func<string, Task<ConflictDecision>> conflict, CancellationToken token)
+        {
+            ConflictDecision decision;
+            try
+            {
+                decision = await conflict(destPath);
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("FileOperations.ResolveConflict: conflict callback failed — aborting", ex);
+                decision = ConflictDecision.Cancel;
+            }
+
+            switch (decision)
+            {
+                case ConflictDecision.ReplaceAll:
+                    Log.Verb("FileOperations.ResolveConflict: replace {Path}", destPath);
+                    return destPath;
+                case ConflictDecision.RenameAll:
+                    Log.Verb("FileOperations.ResolveConflict: rename {Path}", destPath);
+                    return CheckPathType(destPath) == "directory"
+                        ? GetUniqueDirectoryPath(destPath)
+                        : GetUniqueFilePath(destPath);
+                default:
+                    Log.Dbg("FileOperations.ResolveConflict: cancelled on {Path}", destPath);
+                    token.ThrowIfCancellationRequested();
+                    throw new OperationCanceledException(token);
+            }
+        }
+
+        public static string GetUniqueFilePath(string path)
         {
             if (CheckPathType(path) != "file") return path;
 
@@ -1613,7 +1719,7 @@ namespace XFiles.FileSystem
             return path;
         }
 
-        private static string GetUniqueDirectoryPath(string path)
+        public static string GetUniqueDirectoryPath(string path)
         {
             if (CheckPathType(path) != "directory") return path;
 

@@ -1,3 +1,4 @@
+using System.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using XFiles.Network;
 
@@ -47,6 +48,32 @@ namespace XFiles.Tests
         public void Parent_ReturnsParentDirectory(string path, string expected)
         {
             Assert.AreEqual(expected, NetworkPathUtil.Parent(path));
+        }
+
+        // ---- NameCandidates ----
+
+        [TestMethod]
+        public void NameCandidates_StartsWithNameSpaceOne()
+        {
+            var candidates = NetworkPathUtil.NameCandidates("Music", "song.mp3");
+            Assert.AreEqual("Music\\song (1).mp3", candidates.First());
+        }
+
+        [TestMethod]
+        public void NameCandidates_KeepsMultipleExtensionsIntact()
+        {
+            var candidates = NetworkPathUtil.NameCandidates("dir", "archive.tar.gz").Take(3).ToArray();
+            Assert.AreEqual("dir\\archive.tar (1).gz", candidates[0]);
+            Assert.AreEqual("dir\\archive.tar (2).gz", candidates[1]);
+            Assert.AreEqual("dir\\archive.tar (3).gz", candidates[2]);
+        }
+
+        [TestMethod]
+        public void NameCandidates_NoExtension_AppendsAfterStem()
+        {
+            var candidates = NetworkPathUtil.NameCandidates("", "README").Take(2).ToArray();
+            Assert.AreEqual("README (1)", candidates[0]);
+            Assert.AreEqual("README (2)", candidates[1]);
         }
     }
 }

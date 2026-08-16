@@ -550,6 +550,7 @@ namespace XFiles.Controls
             int completedFiles = 0;
             long completedBytes = 0;
             int success = 0, failed = 0;
+            var conflict = BuildConflictCallback();
 
             foreach (var entry in entries)
             {
@@ -567,7 +568,7 @@ namespace XFiles.Controls
                     });
                 });
 
-                var result = await FileOperations.MoveAsync(entry.FullPath, destDir, progress, OpProgressDialog.CancelToken);
+                var result = await FileOperations.MoveAsync(entry.FullPath, destDir, progress, OpProgressDialog.CancelToken, conflict);
 
                 if (result == FileOperations.OperationResult.Cancelled)
                 {
@@ -913,7 +914,7 @@ namespace XFiles.Controls
                     var srcConfig = await _navigator.GetNetworkConfigAsync(e.NetworkLocationId);
                     if (srcConfig == null) continue;
                     var (fc, tb) = await NetworkCopyService.ScanRemoteEntriesAsync(
-                        _navigator.NetworkBrowser, srcConfig, e.NetworkShareName, e.NetworkPath,
+                        _navigator.BrowserFor(srcConfig.Protocol), srcConfig, e.NetworkShareName, e.NetworkPath,
                         e.IsDirectory, CancellationToken.None);
                     fileCount += fc;
                     totalBytes += tb;
@@ -940,6 +941,7 @@ namespace XFiles.Controls
             int success = 0, failed = 0;
             long completedBytes = 0;
             var sw = Stopwatch.StartNew();
+            var conflict = BuildConflictCallback();
 
             foreach (var entry in entries)
             {
@@ -980,17 +982,28 @@ namespace XFiles.Controls
                     {
                         var srcConfig = await _navigator.GetNetworkConfigAsync(entry.NetworkLocationId);
                         ok = srcConfig != null && await NetworkCopyService.CopyRemoteToRemoteAsync(
-                            _navigator.NetworkBrowser, srcConfig, entry.NetworkShareName, entry.NetworkPath,
-                            _navigator.NetworkBrowser, config, share, destDir,
-                            entry.IsDirectory, entry.Name, progress, OpProgressDialog.CancelToken, destName);
+                            _navigator.BrowserFor(srcConfig.Protocol), srcConfig, entry.NetworkShareName, entry.NetworkPath,
+                            _navigator.BrowserFor(config.Protocol), config, share, destDir,
+                            entry.IsDirectory, entry.Name, progress, OpProgressDialog.CancelToken,
+                            destName, sameDir ? AutoRenameConflict : conflict);
                     }
                     else
                     {
                         ok = await NetworkCopyService.CopyLocalToRemoteAsync(
-                            _navigator.NetworkBrowser, config, share, destDir,
+                            _navigator.BrowserFor(config.Protocol), config, share, destDir,
                             entry.FullPath, entry.IsDirectory, entry.Name, progress,
-                            OpProgressDialog.CancelToken, destName);
+                            OpProgressDialog.CancelToken, destName, sameDir ? AutoRenameConflict : conflict);
                     }
+                }
+                catch (OperationCanceledException)
+                {
+                    Log.Info("HandlePasteToNetworkAsync: cancelled by user");
+                    OpProgressDialog.Cancel();
+                    await Task.Delay(1500);
+                    OpProgressDialog.Close();
+                    UpdateClipboardIndicator();
+                    await _navigator.RefreshCurrentAsync();
+                    return;
                 }
                 catch (NetworkOperationException ex)
                 {
@@ -1037,7 +1050,7 @@ namespace XFiles.Controls
                 if (cfg == null) continue;
                 srcConfigs.Add(cfg);
                 var (fc, tb) = await NetworkCopyService.ScanRemoteEntriesAsync(
-                    _navigator.NetworkBrowser, cfg, e.NetworkShareName, e.NetworkPath,
+                    _navigator.BrowserFor(cfg.Protocol), cfg, e.NetworkShareName, e.NetworkPath,
                     e.IsDirectory, CancellationToken.None);
                 fileCount += fc;
                 totalBytes += tb;
@@ -1058,6 +1071,7 @@ namespace XFiles.Controls
             int success = 0, failed = 0;
             long completedBytes = 0;
             var sw = Stopwatch.StartNew();
+            var conflict = BuildConflictCallback();
 
             for (int i = 0; i < entries.Count; i++)
             {
@@ -1090,8 +1104,17 @@ namespace XFiles.Controls
                         OpProgressDialog.UpdateProgress(overall);
                     });
                     ok = await NetworkCopyService.CopyRemoteToLocalAsync(
-                        _navigator.NetworkBrowser, cfg, entry.NetworkShareName, entry.NetworkPath,
-                        destDir, entry.IsDirectory, progress, OpProgressDialog.CancelToken);
+                        _navigator.BrowserFor(cfg.Protocol), cfg, entry.NetworkShareName, entry.NetworkPath,
+                        destDir, entry.IsDirectory, progress, OpProgressDialog.CancelToken, conflict);
+                }
+                catch (OperationCanceledException)
+                {
+                    Log.Info("HandlePasteNetworkToLocalAsync: cancelled by user");
+                    OpProgressDialog.Cancel();
+                    await Task.Delay(1500);
+                    OpProgressDialog.Close();
+                    UpdateClipboardIndicator();
+                    return;
                 }
                 catch (NetworkOperationException ex)
                 {
@@ -1124,6 +1147,43 @@ namespace XFiles.Controls
         }
 
         private static string NetworkParentOf(string path) => NetworkPathUtil.Parent(path);
+
+        /// <summary>Always-rename conflict resolver for same-directory pastes (no prompt).</summary>
+        private static readonly Func<string, Task<ConflictDecision>> AutoRenameConflict =
+            _ => Task.FromResult(ConflictDecision.RenameAll);
+
+        /// <summary>
+        /// Builds a memoizing conflict callback for copy/move: the first collision shows
+        /// FileConflictDialog on the UI thread (REPLACE ALL / RENAME ALL / CANCEL), and the
+        /// chosen "All" decision is cached for the rest of the operation so the dialog only
+        /// appears once. Cancellation surfaces as OperationCanceledException.
+        /// </summary>
+        private Func<string, Task<ConflictDecision>> BuildConflictCallback()
+        {
+            ConflictDecision? cached = null;
+            return conflictPath =>
+            {
+                if (cached.HasValue) return Task.FromResult(cached.Value);
+                var tcs = new TaskCompletionSource<ConflictDecision>(
+                    TaskCreationOptions.RunContinuationsAsynchronously);
+                _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, async () =>
+                {
+                    try
+                    {
+                        var decision = await FileConflictDialogControl.ShowAsync(conflictPath);
+                        cached = decision;
+                        tcs.TrySetResult(decision);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warn("BuildConflictCallback: dialog error", ex);
+                        cached = ConflictDecision.Cancel;
+                        tcs.TrySetResult(ConflictDecision.Cancel);
+                    }
+                });
+                return tcs.Task;
+            };
+        }
 
         private async Task HandlePasteAsync()
         {
@@ -1197,6 +1257,7 @@ namespace XFiles.Controls
             long completedBytes = 0;
             int success = 0, failed = 0;
             var pasteSw = Stopwatch.StartNew();
+            var conflict = BuildConflictCallback();
 
             foreach (var entry in entries)
             {
@@ -1225,7 +1286,8 @@ namespace XFiles.Controls
                 });
 
                 var result = await FileOperations.CopyAsync(
-                    entry.FullPath, destDir, progress, sameDir, OpProgressDialog.CancelToken);
+                    entry.FullPath, destDir, progress, sameDir, OpProgressDialog.CancelToken,
+                    conflict: sameDir ? null : conflict);
 
                 if (result == FileOperations.OperationResult.Cancelled)
                 {
@@ -1907,7 +1969,8 @@ namespace XFiles.Controls
             OpProgressDialog.Show("Moving", entry.Name, destDir,
                 0, scan.FileCount);
             var moveSw = Stopwatch.StartNew();
-            var result = await FileOperations.MoveAsync(entry.FullPath, destDir, progress, OpProgressDialog.CancelToken);
+            var result = await FileOperations.MoveAsync(entry.FullPath, destDir, progress,
+                OpProgressDialog.CancelToken, BuildConflictCallback());
             moveSw.Stop();
 
             if (result == FileOperations.OperationResult.Cancelled)
@@ -2126,7 +2189,7 @@ namespace XFiles.Controls
             {
                 var config = await _navigator.GetNetworkConfigAsync(entry.NetworkLocationId);
                 if (config == null) return;
-                await _navigator.NetworkBrowser.RenameFileAsync(config, entry.NetworkShareName,
+                await _navigator.BrowserFor(config.Protocol).RenameFileAsync(config, entry.NetworkShareName,
                     entry.NetworkPath, newName, entry.IsDirectory, CancellationToken.None);
                 Log.Info("HandleNetworkRenameAsync: success — refreshing");
                 await _navigator.RefreshCurrentAsync(newName);
@@ -2230,7 +2293,7 @@ namespace XFiles.Controls
             {
                 var config = await _navigator.GetNetworkConfigAsync(entry.NetworkLocationId);
                 if (config == null) return;
-                await NetworkCopyService.DeleteRemoteAsync(_navigator.NetworkBrowser, config,
+                await NetworkCopyService.DeleteRemoteAsync(_navigator.BrowserFor(config.Protocol), config,
                     entry.NetworkShareName, entry.NetworkPath, entry.IsDirectory, CancellationToken.None);
                 Log.Info("HandleNetworkDeleteAsync: success — refreshing");
                 await _navigator.RefreshCurrentAsync();
@@ -2406,6 +2469,14 @@ namespace XFiles.Controls
                 return;
             }
 
+            // Extracting a file from inside a remote (SMB) ZIP: write to temp, then
+            // upload back to the ZIP's parent remote folder — mirrors the portal flow.
+            if (current != null && current.IsArchive && current.IsNetwork)
+            {
+                await HandleExtractFileFromNetworkZipAsync(entry);
+                return;
+            }
+
             var destDir = System.IO.Path.GetDirectoryName(entry.ArchiveRootPath);
             if (string.IsNullOrEmpty(destDir)) return;
 
@@ -2568,6 +2639,124 @@ namespace XFiles.Controls
             }
         }
 
+        private async Task HandleExtractFileFromNetworkZipAsync(FileEntry entry)
+        {
+            var current = _navigator.Current;
+            long locationId = current.NetworkLocationId;
+            string share = current.NetworkShareName;
+            string zipRemotePath = current.NetworkPath ?? "";
+            string fileName = System.IO.Path.GetFileName(entry.ArchiveInternalPath);
+
+            string parentRemoteDir = NetworkPathUtil.Parent(zipRemotePath);
+            string destRemotePath = NetworkPathUtil.Join(parentRemoteDir, fileName);
+
+            Log.Info("HandleExtractFileFromNetworkZipAsync: {Archive}|{Internal} → {Share}\\{Dest}",
+                entry.ArchiveRootPath, entry.ArchiveInternalPath, share, destRemotePath);
+
+            string staging = CreatePortalOpStagingDir();
+            try
+            {
+                var progress = new Progress<FileOperations.OperationProgress>(p =>
+                {
+                    OpProgressDialog.UpdateProgress(p);
+                });
+
+                OpProgressDialog.Show("Extracting", fileName, parentRemoteDir);
+
+                // Read the entry straight from the stream-backed archive cache — no
+                // full ZIP download. Copy it to staging, then upload to the parent
+                // remote folder (mirrors the portal flow).
+                string stagingPath = System.IO.Path.Combine(staging, fileName);
+                using (Stream src = _navigator.ArchiveBrowser.OpenEntryStream(entry.ArchiveRootPath, entry.ArchiveInternalPath))
+                {
+                    if (src == null)
+                    {
+                        OpProgressDialog.Complete();
+                        await Task.Delay(400);
+                        OpProgressDialog.Close();
+                        _ = AlertDialogControl.ShowAsync($"Failed to read \"{fileName}\" from the remote archive.{FailureSuffix()}", AlertType.Error);
+                        return;
+                    }
+
+                    using (var dst = System.IO.File.Create(stagingPath))
+                    {
+                        await src.CopyToAsync(dst);
+                    }
+                }
+
+                if (string.IsNullOrEmpty(parentRemoteDir))
+                {
+                    OpProgressDialog.Complete();
+                    await Task.Delay(400);
+                    OpProgressDialog.Close();
+                    _ = AlertDialogControl.ShowAsync($"Cannot extract \"{fileName}\" — the ZIP is at the share root.{FailureSuffix()}", AlertType.Error);
+                    return;
+                }
+
+                // Overwrite check on the remote destination.
+                var config = await _navigator.GetNetworkConfigAsync(locationId);
+                if (config == null)
+                {
+                    OpProgressDialog.Complete();
+                    await Task.Delay(400);
+                    OpProgressDialog.Close();
+                    return;
+                }
+
+                bool exists = false;
+                try
+                {
+                    exists = await _navigator.BrowserFor(config.Protocol).EntryExistsAsync(
+                        config, share, destRemotePath, false, CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    Log.Warn("HandleExtractFileFromNetworkZipAsync: existence check failed: {Message}", ex.Message);
+                }
+
+                if (exists)
+                {
+                    int decision = await OverwriteDialogControl.ShowAsync(fileName);
+                    if (decision == 0)
+                    {
+                        OpProgressDialog.Complete();
+                        await Task.Delay(400);
+                        OpProgressDialog.Close();
+                        Log.Info("HandleExtractFileFromNetworkZipAsync: skipped — overwrite declined");
+                        return;
+                    }
+                }
+
+                OpProgressDialog.SetPhase("Uploading to server", fileName, parentRemoteDir);
+                bool uploaded = await _navigator.WriteNetworkFileAsync(locationId, share, destRemotePath, stagingPath);
+
+                if (!uploaded)
+                {
+                    OpProgressDialog.Complete();
+                    await Task.Delay(400);
+                    OpProgressDialog.Close();
+                    _ = AlertDialogControl.ShowAsync($"Failed to upload \"{fileName}\" to the server.{FailureSuffix()}", AlertType.Error);
+                    return;
+                }
+
+                OpProgressDialog.Complete();
+                await Task.Delay(400);
+                OpProgressDialog.Close();
+                Log.Info("HandleExtractFileFromNetworkZipAsync: uploaded {File} to {Share}\\{Dest}", fileName, share, destRemotePath);
+            }
+            catch (Exception ex)
+            {
+                Log.Err("HandleExtractFileFromNetworkZipAsync: {Ex}", ex);
+                OpProgressDialog.Close();
+                _ = AlertDialogControl.ShowAsync($"Failed to extract \"{fileName}\" to the server.\n\n{ex.Message}", AlertType.Error);
+            }
+            finally
+            {
+                try { System.IO.Directory.Delete(staging, true); }
+                catch (Exception ex) { Log.Warn("HandleExtractFileFromNetworkZipAsync: cleanup failed: {Message}", ex.Message); }
+            }
+        }
+
         private async Task HandleCreateFolderAsync(FileEntry entry)
         {
             Log.Info("HandleCreateFolderAsync: {File}", entry?.Name ?? "(none)");
@@ -2664,7 +2853,7 @@ namespace XFiles.Controls
                 if (config == null) return;
                 string basePath = (current.NetworkPath ?? "").TrimEnd('\\');
                 string newPath = string.IsNullOrEmpty(basePath) ? folderName : basePath + "\\" + folderName;
-                await _navigator.NetworkBrowser.CreateDirectoryAsync(config,
+                await _navigator.BrowserFor(config.Protocol).CreateDirectoryAsync(config,
                     current.NetworkShareName, newPath, CancellationToken.None);
                 Log.Info("HandleNetworkCreateFolderAsync: success — refreshing and selecting '{Name}'", folderName);
                 await _navigator.RefreshCurrentAsync(selectName: folderName);

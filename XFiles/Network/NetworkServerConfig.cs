@@ -11,7 +11,7 @@ namespace XFiles.Network
         /// <summary>Row id in the NetworkServerEntry table; 0 when not persisted.</summary>
         public int Id { get; set; }
 
-        /// <summary>Protocol used to reach this server (SMB for now).</summary>
+        /// <summary>Protocol used to reach this server (SMB, FTP, FTPS, SFTP).</summary>
         public NetworkProtocol Protocol { get; set; } = NetworkProtocol.Smb;
 
         /// <summary>Optional friendly name shown in the Network column.
@@ -21,13 +21,16 @@ namespace XFiles.Network
         /// <summary>Host name or IP address of the server.</summary>
         public string Host { get; set; }
 
-        /// <summary>Port override; 0 means the protocol default (SMB = 445).</summary>
+        /// <summary>Port override; 0 means the protocol default (SMB = 445,
+        /// FTP/FTPS = 21, SFTP = 22).</summary>
         public int Port { get; set; }
 
         /// <summary>Account used to log in. Empty/guest for anonymous access.</summary>
         public string Username { get; set; }
 
-        /// <summary>Optional share name. Empty = "list shares" when browsing.</summary>
+        /// <summary>SMB: share name; empty = "list shares" when browsing.
+        /// FTP/FTPS/SFTP: optional start folder (absolute path from the server
+        /// root); empty = the server's default location (home/root).</summary>
         public string Share { get; set; }
 
         public int EffectivePort

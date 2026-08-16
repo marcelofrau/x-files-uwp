@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -29,7 +30,31 @@ namespace XFiles.Metadata
 
             var id3Tag = await Task.Run(() => FileSystem.Id3Tag.ReadFromFile(filePath), ct);
             var local = TrackMetadata.FromId3Tag(id3Tag, filePath);
+            return await ResolveCoreAsync(local, filePath, ct, skipOnline);
+        }
 
+        /// <summary>
+        /// Resolve metadata for a remote file that has no local path. The ID3 tag is
+        /// read from the leading bytes of a freshly opened seekable stream (SMB remote
+        /// file) supplied by the factory; the stream is owned and disposed here.
+        /// Filename parsing uses the remote display path; the same Deezer/MusicBrainz
+        /// pipeline and cache apply as for local files.
+        /// </summary>
+        public async Task<MetadataMatch> ResolveStreamAsync(string filePath, Func<Stream> openStream, CancellationToken ct = default, bool skipOnline = false)
+        {
+            Log.Dbg("MetadataGuesser: resolving stream {Path}", filePath);
+
+            var id3Tag = await Task.Run(() =>
+            {
+                using (var s = openStream())
+                    return FileSystem.Id3Tag.ReadFromStream(s);
+            }, ct);
+            var local = TrackMetadata.FromId3Tag(id3Tag, filePath);
+            return await ResolveCoreAsync(local, filePath, ct, skipOnline);
+        }
+
+        private async Task<MetadataMatch> ResolveCoreAsync(TrackMetadata local, string filePath, CancellationToken ct, bool skipOnline)
+        {
             Log.Dbg("MetadataGuesser: local ID3 title={Title} artist={Artist} album={Album} genre={Genre} year={Year} track={Track} art={HasArt}",
                 local.Title, local.Artist, local.Album, local.Genre, local.Year, local.TrackNumber, local.HasAlbumArt);
 

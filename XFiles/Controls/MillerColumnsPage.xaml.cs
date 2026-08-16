@@ -124,6 +124,7 @@ namespace XFiles.Controls
             MediaPreview.PlayerStateChanged += OnMediaPlayerStateChanged;
             MediaPreview.AudioTrackEnded += OnMediaPreviewAudioEnded;
             MediaPreview.VideoTrackEnded += OnMediaPreviewVideoEnded;
+            MediaPreview.SetArchiveBrowser(_navigator.ArchiveBrowser);
 
             VideoTrackMenuControl.SubtitleSelected += OnVideoSubtitleSelected;
             VideoTrackMenuControl.AudioTrackSelected += OnVideoAudioTrackSelected;
@@ -324,6 +325,7 @@ namespace XFiles.Controls
             };
             PortalCredentialsDialogControl.OnClosed = markOverlayClosed;
             NetworkLocationDialogControl.OnClosed = markOverlayClosed;
+            HostKeyDialogControl.OnClosed = markOverlayClosed;
             AlertDialogControl.OnClosed = markOverlayClosed;
             FileActionSheetControl.OnClosed = markOverlayClosed;
             StartMenuControl.OnClosed = markOverlayClosed;
@@ -336,8 +338,45 @@ namespace XFiles.Controls
             _navigator.NetworkAddLocationRequested += OnNetworkAddLocationRequested;
             _navigator.NetworkDownloadUrlRequested += OnNetworkDownloadUrlRequested;
             _navigator.NetworkError += OnNetworkError;
+            _navigator.ArchiveDrillInUnavailable += OnArchiveDrillInUnavailable;
+
+            if (NetworkProviderFactory.Create(NetworkProtocol.Sftp) is SftpBrowser sftp)
+            {
+                sftp.HostKeyConfirmation = ConfirmHostKey;
+                Log.Dbg("MillerColumnsPage: wired SFTP host-key confirmation");
+            }
 
             UpdateClipboardIndicator();
+        }
+
+        /// <summary>
+        /// Bridges the synchronous SFTP host-key resolver (runs on the connect
+        /// background thread) to the gamepad dialog on the UI thread. Blocks
+        /// only the connect thread — safe, since HostKeyReceived fires inside
+        /// SftpSession.EnsureConnectedAsync's Task.Run.
+        /// </summary>
+        private bool ConfirmHostKey(string hostPort, string fingerprint)
+        {
+            Log.Info("MillerColumnsPage: host key {Host} is untrusted — showing dialog", hostPort);
+            bool accepted = false;
+            var done = new ManualResetEventSlim(false);
+            var ignored = Dispatcher.RunAsync(CoreDispatcherPriority.High, async () =>
+            {
+                try
+                {
+                    accepted = await HostKeyDialogControl.ShowAsync(hostPort, fingerprint);
+                }
+                catch (Exception ex)
+                {
+                    Log.Warn("ConfirmHostKey: dialog failed — rejecting key: {Ex}", ex.Message);
+                }
+                finally
+                {
+                    done.Set();
+                }
+            });
+            done.Wait();
+            return accepted;
         }
 
         private async void OnColumnsChanged()
@@ -441,6 +480,12 @@ namespace XFiles.Controls
         {
             Log.Warn("MillerColumnsPage: network error {Reason}: {Message}", reason, message);
             _ = AlertDialogControl.ShowAsync(message, AlertType.Error);
+        }
+
+        private async void OnArchiveDrillInUnavailable(FileEntry entry)
+        {
+            Log.Info("MillerColumnsPage: archive drill-in unavailable over this transport — showing action sheet for {Name}", entry.Name);
+            await ShowFileActionSheetAsync();
         }
 
         private async Task ShowNetworkLocationAddAsync()

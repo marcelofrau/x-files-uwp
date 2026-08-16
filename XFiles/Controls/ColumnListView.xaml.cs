@@ -7,6 +7,7 @@ using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using XFiles.FileSystem;
 using XFiles.Navigation;
+using XFiles.Network;
 
 namespace XFiles.Controls
 {
@@ -60,6 +61,7 @@ namespace XFiles.Controls
         public long NetworkLocationId { get; set; }
         public string NetworkShareName { get; set; }
         public string NetworkPath { get; set; }
+        public NetworkProtocol NetworkProtocol { get; set; } = NetworkProtocol.Smb;
 
         // Chiptune subsong entry (multi-track chiptune drilled into a track list).
         public bool IsChiptune { get; set; }
@@ -150,6 +152,7 @@ namespace XFiles.Controls
             [".zip"]  = "file-archive-24.png",
             [".7z"]   = "file-archive-24.png",
             [".rar"]  = "file-archive-24.png",
+            [".rsn"]  = "file-archive-24.png",
             [".tar"]  = "filetype-application-tar-24.png",
             [".gz"]   = "filetype-application-gzip-24.png",
             [".bz2"]  = "filetype-application-tar-24.png",
@@ -315,9 +318,13 @@ namespace XFiles.Controls
                         ? (ActionKind == ActionKind.DownloadUrl
                             ? "ms-appx:///Assets/FileTypes/filetype-network-download-24.png"
                             : "ms-appx:///Assets/FileTypes/filetype-network-add-location-24.png")
-                        : IsDirectory
-                            ? $"ms-appx:///Assets/FileTypes/folder-{_folderColor}-network-24.png"
-                            : $"ms-appx:///Assets/FileTypes/{GetFileIcon(Name)}")
+                        : NetworkLocationId > 0 && string.IsNullOrEmpty(NetworkShareName)
+                            ? (NetworkProtocol == NetworkProtocol.Smb
+                                ? "ms-appx:///Assets/FileTypes/filetype-network-server-24.png"
+                                : "ms-appx:///Assets/FileTypes/filetype-network-globe-24.png")
+                            : IsDirectory
+                                ? $"ms-appx:///Assets/FileTypes/folder-{_folderColor}-network-24.png"
+                                : $"ms-appx:///Assets/FileTypes/{GetFileIcon(Name)}")
                     : IsVirtual
                         ? $"ms-appx:///Assets/FileTypes/folder-{_folderColor}-favorites-24.png"
                         : IsDrive

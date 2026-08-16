@@ -679,7 +679,7 @@ namespace XFiles.Controls
             actions.Add(new ActionItem
             {
                 Action = FileAction.RenameLocation,
-                Label = "Rename",
+                Label = "Edit",
                 IconPath = IconBase + ActionRename,
                 LabelBrush = accent
             });
@@ -789,6 +789,17 @@ namespace XFiles.Controls
                         Action = FileAction.Paste,
                         Label = "Paste",
                         IconPath = IconBase + ActionPaste,
+                        LabelBrush = accent
+                    });
+                }
+
+                if (entry.IsDirectory)
+                {
+                    actions.Add(new ActionItem
+                    {
+                        Action = FileAction.CreateFolder,
+                        Label = "New Folder",
+                        IconPath = IconBase + ActionCreateFolder,
                         LabelBrush = accent
                     });
                 }

@@ -81,6 +81,11 @@ namespace XFiles.Controls
                 (k, r) => { NetworkLocationDialogControl.HandleDPad(k); return true; },
                 (k) => { NetworkLocationDialogControl.HandleButton(k); return true; }));
 
+            _router.Add(new OverlayHandler(82,
+                () => HostKeyDialogControl.IsDialogVisible,
+                (k, r) => true,
+                (k) => { HostKeyDialogControl.HandleButton(k); return true; }));
+
             _router.Add(new OverlayHandler(78,
                 () => PortalSetupDialogControl.IsVisible,
                 (k, r) => { PortalSetupDialogControl.HandleDPad(k); return true; },
@@ -95,6 +100,11 @@ namespace XFiles.Controls
                 () => OverwriteDialogControl.IsDialogVisible,
                 (k, r) => true,
                 (k) => { OverwriteDialogControl.HandleButton(k); return true; }));
+
+            _router.Add(new OverlayHandler(71,
+                () => FileConflictDialogControl.IsDialogVisible,
+                (k, r) => true,
+                (k) => { FileConflictDialogControl.HandleButton(k); return true; }));
 
             _router.Add(new OverlayHandler(70,
                 () => FileOperationConfirmDialogControl.IsDialogVisible,
@@ -420,8 +430,16 @@ namespace XFiles.Controls
                 string ext = System.IO.Path.GetExtension(selected.Name);
                 if (selected.IsNetwork)
                 {
-                    Log.Verb("OnConfirm: network file '{Name}' — streaming open", selected.Name);
-                    _ = OpenRemoteFileAsync(selected);
+                    if (selected.IsChiptune && selected.ChiptuneTrackIndex < 0)
+                    {
+                        Log.Verb("OnConfirm: network chiptune '{Name}' — probing track count", selected.Name);
+                        _ = OnRemoteChiptuneConfirmAsync(selected);
+                    }
+                    else
+                    {
+                        Log.Verb("OnConfirm: network file '{Name}' — streaming open", selected.Name);
+                        _ = OpenRemoteFileAsync(selected);
+                    }
                 }
                 else if (FilePreviewService.IsImageFile(ext) && !FilePreviewService.IsSvgFile(ext))
                 {
@@ -571,6 +589,53 @@ namespace XFiles.Controls
             }
         }
 
+        /// <summary>
+        /// Remote (network) chiptune confirm — mirrors OnChiptuneFileConfirmAsync.
+        /// Multi-track (GBS/NSFE/RSN...) drills into the track list; single-track plays.
+        /// The remote file must be cached locally before probing the track count.
+        /// </summary>
+        private async Task OnRemoteChiptuneConfirmAsync(EntryViewModel selected)
+        {
+            var current = _navigator.Current;
+            if (current == null) return;
+
+            string share = current.NetworkShareName;
+            string path = selected.NetworkPath;
+            string name = selected.Name;
+            if (string.IsNullOrEmpty(share) || string.IsNullOrEmpty(path))
+            {
+                Log.Warn("OnRemoteChiptuneConfirm: no share/path context for {Name}", name);
+                await OpenRemoteFileAsync(selected);
+                return;
+            }
+
+            string tempPath = await CacheRemoteFileAsync(current.NetworkLocationId, share, path, name);
+            if (tempPath == null)
+            {
+                _ = AlertDialogControl.ShowAsync("Failed to download the chiptune file.", AlertType.Error);
+                return;
+            }
+
+            int trackCount = await MediaPreview.GetChiptuneTrackCountAsync(tempPath);
+            if (trackCount <= 1)
+            {
+                Log.Info("OnConfirm: single-track remote chiptune — playing {Name}", name);
+                _mediaLoadTimer.Stop();
+                _pendingMediaPath = null;
+                MediaPreview.Stop();
+                MediaPreview.LoadChiptuneTrack(tempPath, 0);
+                MediaPreview.SetNetworkContext(share, path);
+                MediaPreview.TogglePlayPause();
+                UpdateMediaPlayerFocusUI();
+            }
+            else
+            {
+                Log.Info("OnConfirm: multi-track remote chiptune ({Count} tracks) — drilling into {Name}", trackCount, name);
+                _slideFromRight = true;
+                await _navigator.DrillInAsync();
+            }
+        }
+
         private async Task PlayVideoAsync(EntryViewModel selected)
         {
             if (selected.SizeBytes == 0)
@@ -692,10 +757,12 @@ namespace XFiles.Controls
                 return;
             }
 
-            // Audio/video: true streaming over the network.
+            // Unknown format: A opens the same action sheet as the Y menu
+            // (mirrors the local else-branch in OnConfirm).
             if (!FilePreviewService.IsAudioFile(ext) && !FilePreviewService.IsVideoFile(ext))
             {
-                _ = AlertDialogControl.ShowAsync("This file type can't be opened yet over the network.", AlertType.Info);
+                Log.Verb("OpenRemoteFile: unknown format '{Name}' — showing FileActionSheet", name);
+                await ShowFileActionSheetAsync();
                 return;
             }
 
@@ -732,7 +799,8 @@ namespace XFiles.Controls
                 await MediaPreview.LoadRemoteAudio(
                     new RemoteStream(remoteStream, reopen),
                     MimeForRemoteFile(ext),
-                    Path.GetFileNameWithoutExtension(name));
+                    Path.GetFileNameWithoutExtension(name),
+                    id3StreamFactory: reopen);
                 MediaPreview.SetNetworkContext(share, path);
                 MediaPreview.TogglePlayPause();
                 UpdateMediaPlayerFocusUI();
@@ -1256,6 +1324,7 @@ namespace XFiles.Controls
             || PortalSetupDialogControl.IsVisible
             || AlertDialogControl.Visibility == Visibility.Visible
             || OverwriteDialogControl.IsDialogVisible
+            || FileConflictDialogControl.IsDialogVisible
             || FileOperationConfirmDialogControl.IsDialogVisible
             || FolderBrowserDialogControl.IsOpen
             || OpProgressDialog.IsOpen

@@ -979,7 +979,7 @@
                                            TextAlignment="Center"
                                            Margin="0,0,0,6" />
 
-                                <TextBlock Text="Connect to a local network share or NAS over SMB and browse it like a local drive."
+                                <TextBlock Text="Connect to a local network share, FTP server, or NAS and browse it like a local drive."
                                            FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                            FontSize="12" Foreground="#AAFFFFFF"
                                            TextWrapping="Wrap"
@@ -1284,7 +1284,9 @@
         <controls:PortalSetupDialog x:Name="PortalSetupDialogControl" />
         <controls:PortalCredentialsDialog x:Name="PortalCredentialsDialogControl" />
         <controls:NetworkLocationDialog x:Name="NetworkLocationDialogControl" />
+        <controls:HostKeyDialog x:Name="HostKeyDialogControl" />
         <controls:OverwriteDialog x:Name="OverwriteDialogControl" />
+        <controls:FileConflictDialog x:Name="FileConflictDialogControl" />
         <controls:FileOperationConfirmDialog x:Name="FileOperationConfirmDialogControl" />
         <controls:FolderBrowserDialog x:Name="FolderBrowserDialogControl" />
         <controls:OperationProgressDialog x:Name="OpProgressDialog" />

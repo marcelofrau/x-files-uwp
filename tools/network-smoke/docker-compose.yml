@@ -1,0 +1,50 @@
+# Self-contained FTP/FTPS + SFTP smoke servers for the network layer.
+# Usage:
+#   docker compose -f tools/network-smoke/docker-compose.yml up -d
+#   docker compose -f tools/network-smoke/docker-compose.yml down
+# Seed data is mounted read-only from ./seed; generate it with make-seed.ps1.
+#
+# FTP  -> ftp://127.0.0.1:2121  (user: smoke / pass: smoke123)  plain + implicit FTPS on 2123
+# SFTP -> ssh://127.0.0.1:2222  (user: smoke / pass: smoke123)  (also the SFTP test server)
+#
+# Env-gated smoke tests in tests/ connect to these when the *_SMOKE_* vars are set
+# (see tests/FtpSmokeTests.cs / SftpSmokeTests.cs).
+
+services:
+  ftp:
+    # vsftpd-based image: supports REST STREAM (seekable FTP) + TLS.
+    image: fauria/vsftpd:latest
+    container_name: xfiles-smoke-ftp
+    ports:
+      - "2121:21"
+      - "2123:990"          # implicit FTPS
+      - "30000-30010:30000-30010"
+    environment:
+      FTP_USER: smoke
+      FTP_PASS: smoke123
+      PASV_ADDRESS: 127.0.0.1
+      PASV_MIN_PORT: 30000
+      PASV_MAX_PORT: 30010
+      REVERSE_LOOKUP_ENABLE: "NO"
+    volumes:
+      # Seed mounted writable so the FTP write-back smoke test can STOR into
+      # the FTP home; the test deletes its own file afterwards.
+      - ./seed:/home/vsftpd/smoke
+    restart: "no"
+
+  sftp:
+    # OpenSSH server exposing the sftp subsystem — doubles as the SSH + SFTP test server.
+    # OpenSSH ChrootDirectory %h REQUIRES the chroot dir (home) owned by root and
+    # not user-writable — do NOT chown /home/smoke (it makes sshd abort every
+    # connection). The write-back smoke test writes into /home/smoke/uploads
+    # (seed mount is :ro). After `up -d` run once:
+    #   docker compose -f tools/network-smoke/docker-compose.yml exec sftp \
+    #     sh -c "mkdir -p /home/smoke/uploads && chown smoke:group_1000 /home/smoke/uploads"
+    image: atmoz/sftp:latest
+    container_name: xfiles-smoke-sftp
+    ports:
+      - "2222:22"
+    command: "smoke:smoke123:1000:1000"
+    volumes:
+      - ./seed:/home/smoke/share:ro
+    restart: "no"

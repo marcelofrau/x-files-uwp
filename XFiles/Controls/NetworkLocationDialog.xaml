@@ -99,30 +99,56 @@
                                   FontFamily="Consolas">
                             <ComboBoxItem Content="Windows Share (SMB)" Tag="Smb" />
                             <ComboBoxItem Content="FTP" Tag="Ftp" />
+                            <ComboBoxItem Content="FTPS" Tag="Ftps" />
                             <ComboBoxItem Content="sFTP" Tag="Sftp" />
-                            <ComboBoxItem Content="WebDAV" Tag="Webdav" />
                         </ComboBox>
                         <Border x:Name="ProtocolLabel" Style="{StaticResource FloatingFieldLabel}">
                             <TextBlock Text="PROTOCOL" Style="{StaticResource FloatingFieldLabelText}" />
                         </Border>
                     </Grid>
 
-                    <Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,10,0,0">
-                        <TextBox x:Name="HostBox"
-                                 Style="{StaticResource DarkTextBoxStyle}"
-                                 FontFamily="Consolas"
-                                 FontSize="14"
-                                 Padding="8,9,8,6"
-                                 MinHeight="34"
-                                 PlaceholderText="IP / Host"
-                                 HorizontalAlignment="Stretch"
-                                 GotFocus="OnTextBoxGotFocus"
-                                 LostFocus="OnTextBoxLostFocus"
-                                 TextChanged="OnTextChanged"
-                                 KeyDown="OnTextFieldKeyDown" />
-                        <Border x:Name="HostLabel" Style="{StaticResource FloatingFieldLabel}">
-                            <TextBlock Text="IP / HOST" Style="{StaticResource FloatingFieldLabelText}" />
-                        </Border>
+                    <Grid Grid.Row="1" Margin="0,10,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="16" />
+                            <ColumnDefinition Width="100" />
+                        </Grid.ColumnDefinitions>
+
+                        <Grid Grid.Column="0">
+                            <TextBox x:Name="HostBox"
+                                     Style="{StaticResource DarkTextBoxStyle}"
+                                     FontFamily="Consolas"
+                                     FontSize="14"
+                                     Padding="8,9,8,6"
+                                     MinHeight="34"
+                                     PlaceholderText="IP / Host"
+                                     HorizontalAlignment="Stretch"
+                                     GotFocus="OnTextBoxGotFocus"
+                                     LostFocus="OnTextBoxLostFocus"
+                                     TextChanged="OnTextChanged"
+                                     KeyDown="OnTextFieldKeyDown" />
+                            <Border x:Name="HostLabel" Style="{StaticResource FloatingFieldLabel}">
+                                <TextBlock Text="IP / HOST" Style="{StaticResource FloatingFieldLabelText}" />
+                            </Border>
+                        </Grid>
+
+                        <Grid Grid.Column="2">
+                            <TextBox x:Name="PortBox"
+                                     Style="{StaticResource DarkTextBoxStyle}"
+                                     FontFamily="Consolas"
+                                     FontSize="14"
+                                     Padding="8,9,8,6"
+                                     MinHeight="34"
+                                     PlaceholderText="Port"
+                                     HorizontalAlignment="Stretch"
+                                     GotFocus="OnTextBoxGotFocus"
+                                     LostFocus="OnTextBoxLostFocus"
+                                     TextChanged="OnTextChanged"
+                                     KeyDown="OnTextFieldKeyDown" />
+                            <Border x:Name="PortLabel" Style="{StaticResource FloatingFieldLabel}">
+                                <TextBlock Text="PORT" Style="{StaticResource FloatingFieldLabelText}" />
+                            </Border>
+                        </Grid>
                     </Grid>
                 </Grid>
 

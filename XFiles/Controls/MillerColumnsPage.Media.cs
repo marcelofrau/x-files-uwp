@@ -1289,23 +1289,47 @@ namespace XFiles.Controls
 
             if (_fsVisualizerMode != AudioFullscreenMode.Default)
                 ApplyAudioVisualizerMode();
+
+            if (!string.IsNullOrEmpty(path) && gen == _fsGeneration)
+            {
+                Func<System.IO.Stream> reopenMeta = () =>
+                    Task.Run(() => _navigator.OpenNetworkStreamAsync(locationId, share, path))
+                        .GetAwaiter().GetResult();
+                _ = LoadAudioFullscreenMetadataAsync(path, reopenMeta, path);
+            }
         }
 
         private async Task LoadAudioFullscreenMetadataAsync(string filePath)
+        {
+            await LoadAudioFullscreenMetadataAsync(filePath, null, null);
+        }
+
+        /// <summary>
+        /// Fullscreen metadata for a remote (network) audio stream. The ID3 tag is
+        /// read from the leading bytes of a freshly opened SMB stream supplied by
+        /// <paramref name="openStream"/>; filename parsing uses the remote display
+        /// path. Stale-check key is the network path (LB/RB bumps _fsGeneration).
+        /// </summary>
+        private async Task LoadAudioFullscreenMetadataAsync(string filePath, Func<System.IO.Stream> openStream, string networkPath)
         {
             int gen = _fsGeneration;
             try
             {
                 Log.Dbg("FsMetadata: starting async load for {Path}", filePath);
                 _fsMetadataGuesser.SetInternetAvailable(true);
-                bool skipOnline = RetroAudioPlayer.IsChiptuneFile(filePath);
-                var match = await _fsMetadataGuesser.ResolveAsync(filePath, skipOnline: skipOnline);
+                bool skipOnline = openStream == null && RetroAudioPlayer.IsChiptuneFile(filePath);
+                var match = openStream != null
+                    ? await _fsMetadataGuesser.ResolveStreamAsync(filePath, openStream)
+                    : await _fsMetadataGuesser.ResolveAsync(filePath, skipOnline: skipOnline);
                 var tag = match?.Metadata;
 
                 Log.Info("FsMetadata: source={Source} score={Score:F2} title='{Title}' artist='{Artist}' album='{Album}' art={HasArt}",
                     match?.Source, match?.Confidence, tag?.Title, tag?.Artist, tag?.Album, tag?.HasAlbumArt);
 
-                if (gen != _fsGeneration || _audioFullscreenPath != filePath)
+                bool stale = networkPath != null
+                    ? gen != _fsGeneration || _fsNetworkPath != networkPath
+                    : gen != _fsGeneration || _audioFullscreenPath != filePath;
+                if (stale)
                 {
                     Log.Dbg("FsMetadata: stale result for {Path}, discarding", filePath);
                     return;
@@ -1546,7 +1570,14 @@ namespace XFiles.Controls
         private bool NavigatePreviewTrackNetwork(int direction)
         {
             var current = _navigator.Current;
-            if (current == null || string.IsNullOrEmpty(_previewNetworkPath)) return false;
+            if (current == null) return false;
+
+            // Drilled-in remote chiptune: the current column IS the track list of one
+            // chip (entries = local-cache subsongs). Navigate the tracks, not the files.
+            if (current.IsChiptune)
+                return NavigatePreviewChiptuneTracks(direction);
+
+            if (string.IsNullOrEmpty(_previewNetworkPath)) return false;
 
             var audioFiles = current.Entries
                 .Where(e => !e.IsDirectory && e.IsNetwork &&
@@ -1590,6 +1621,56 @@ namespace XFiles.Controls
             return true;
         }
 
+        /// <summary>LB/RB inside a drilled-in remote chiptune track list: move to the
+        /// next/prev subsong of the SAME cached chip (mirrors the local path).</summary>
+        private bool NavigatePreviewChiptuneTracks(int direction)
+        {
+            var current = _navigator.Current;
+            var tracks = current.Entries.Where(e => e.IsChiptune && e.ChiptuneTrackIndex >= 0).ToList();
+            if (tracks.Count == 0)
+            {
+                Log.Warn("NavigatePreviewChiptuneTracks: no track entries in chiptune column");
+                return false;
+            }
+
+            int currentIdx = tracks.FindIndex(e =>
+                e.ChiptuneTrackIndex == MediaPreview.CurrentChiptuneTrack &&
+                string.Equals(e.ChiptuneSourcePath, MediaPreview.CurrentChiptuneSource,
+                    StringComparison.OrdinalIgnoreCase));
+            if (currentIdx < 0)
+            {
+                var selected = current.SelectedIndex >= 0 && current.SelectedIndex < current.Entries.Count
+                    ? current.Entries[current.SelectedIndex]
+                    : null;
+                currentIdx = selected != null && selected.IsChiptune
+                    ? tracks.IndexOf(selected)
+                    : 0;
+                if (currentIdx < 0) currentIdx = 0;
+            }
+
+            int nextIdx = currentIdx + direction;
+            if (nextIdx < 0) nextIdx = tracks.Count - 1;
+            if (nextIdx >= tracks.Count) nextIdx = 0;
+
+            var nextTrack = tracks[nextIdx];
+            Log.Info("NavigatePreviewChiptuneTracks: {Direction} to {Source} track {Track}",
+                direction > 0 ? "next" : "prev", nextTrack.ChiptuneSourcePath, nextTrack.ChiptuneTrackIndex);
+
+            int mainIdx = current.Entries.IndexOf(nextTrack);
+            if (mainIdx >= 0)
+            {
+                _updating = true;
+                CurrentList.SelectedIndex = mainIdx;
+                _updating = false;
+                int totalCount = current.Entries.Count;
+                FooterItemCount.Text = totalCount > 0 ? $"{mainIdx + 1}/{totalCount}" : "";
+            }
+
+            MediaPreview.LoadChiptuneTrack(nextTrack.ChiptuneSourcePath, nextTrack.ChiptuneTrackIndex);
+            MediaPreview.TogglePlayPause();
+            return true;
+        }
+
         private async Task OpenPreviewNetworkTrackAsync(FileEntry file)
         {
             try
@@ -1629,7 +1710,9 @@ namespace XFiles.Controls
                     await MediaPreview.LoadRemoteAudio(
                         new RemoteStream(stream, reopen),
                         MimeForRemoteFile(ext),
-                        System.IO.Path.GetFileNameWithoutExtension(file.Name));
+                        System.IO.Path.GetFileNameWithoutExtension(file.Name),
+                        autoPlay: true,
+                        id3StreamFactory: reopen);
                 }
                 else
                 {

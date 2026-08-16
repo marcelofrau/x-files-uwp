@@ -16,6 +16,8 @@
     <PackageReference Include="sqlite-net-pcl" Version="1.9.172" />
     <PackageReference Include="SQLitePCLRaw.bundle_green" Version="2.1.10" />
     <PackageReference Include="SMBLibrary" Version="1.5.7.1" />
+    <PackageReference Include="FluentFTP" Version="54.2.0" />
+    <PackageReference Include="SSH.NET" Version="2026.0.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -27,6 +29,7 @@
     <Compile Include="..\XFiles\FileSystem\DiskSpaceGuard.cs" Link="Linked\FileSystem\DiskSpaceGuard.cs" />
     <Compile Include="..\XFiles\FileSystem\TransferMeter.cs" Link="Linked\FileSystem\TransferMeter.cs" />
     <Compile Include="..\XFiles\FileSystem\ClipboardState.cs" Link="Linked\FileSystem\ClipboardState.cs" />
+    <Compile Include="..\XFiles\FileSystem\ConflictDecision.cs" Link="Linked\FileSystem\ConflictDecision.cs" />
     <Compile Include="..\XFiles\FileSystem\Win32FileStream.cs" Link="Linked\FileSystem\Win32FileStream.cs" />
     <Compile Include="..\XFiles\FileSystem\Win32FileWriteStream.cs" Link="Linked\FileSystem\Win32FileWriteStream.cs" />
     <Compile Include="..\XFiles\Controls\PieGeometry.cs" Link="Linked\Controls\PieGeometry.cs" />
@@ -47,6 +50,11 @@
     <Compile Include="..\XFiles\Network\SmbReadStream.cs" Link="Linked\Network\SmbReadStream.cs" />
     <Compile Include="..\XFiles\Network\SmbWriteStream.cs" Link="Linked\Network\SmbWriteStream.cs" />
     <Compile Include="..\XFiles\Network\SmbSession.cs" Link="Linked\Network\SmbSession.cs" />
+    <Compile Include="..\XFiles\Network\FtpSession.cs" Link="Linked\Network\FtpSession.cs" />
+    <Compile Include="..\XFiles\Network\SftpSession.cs" Link="Linked\Network\SftpSession.cs" />
+    <Compile Include="..\XFiles\Network\SftpReadStream.cs" Link="Linked\Network\SftpReadStream.cs" />
+    <Compile Include="..\XFiles\Network\SftpWriteStream.cs" Link="Linked\Network\SftpWriteStream.cs" />
+    <Compile Include="..\XFiles\Network\HostKeyTrustStore.cs" Link="Linked\Network\HostKeyTrustStore.cs" />
     <Compile Include="..\XFiles\Network\NetworkPathUtil.cs" Link="Linked\Network\NetworkPathUtil.cs" />
     <Compile Include="..\XFiles\Metadata\TrackMetadata.cs" Link="Linked\Metadata\TrackMetadata.cs" />
     <Compile Include="..\XFiles\Services\PortalCore.cs" Link="Linked\Services\PortalCore.cs" />

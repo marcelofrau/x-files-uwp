@@ -69,6 +69,69 @@ namespace XFiles.FileSystem
             finally { CloseHandle(hFile); }
         }
 
+        /// <summary>
+        /// Read an ID3 tag from a seekable stream (SMB remote file). Reads only the
+        /// leading bytes — the tag header (10B) first, then the declared tag body.
+        /// The stream is left positioned where reading stopped; callers reopen or
+        /// seek per use.
+        /// </summary>
+        public static Id3Tag ReadFromStream(Stream stream)
+        {
+            if (stream == null || !stream.CanSeek)
+            {
+                Log.Warn("Id3Tag: ReadFromStream requires a seekable stream");
+                return null;
+            }
+            stream.Seek(0, SeekOrigin.Begin);
+            byte[] header = ReadExactly(stream, 10);
+            if (header == null || header.Length < 10)
+            {
+                Log.Warn("Id3Tag: failed to read stream header (bytes={Bytes})", header?.Length);
+                return null;
+            }
+            if (header[0] != 'I' || header[1] != 'D' || header[2] != '3')
+            {
+                Log.Verb("Id3Tag: no ID3v2 header in stream (first bytes: {B0} {B1} {B2})", header[0], header[1], header[2]);
+                return null;
+            }
+
+            int id3Version = header[3]; // 3 = ID3v2.3, 4 = ID3v2.4
+            int tagSize = SynchsafeToInt(header, 6);
+            Log.Info("Id3Tag: ID3v2.{Version} stream, tagSize={Size}, reading {Read} bytes",
+                id3Version, tagSize, tagSize + 10);
+            if (tagSize <= 0 || tagSize > MaxTagSize) return null;
+
+            stream.Seek(0, SeekOrigin.Begin);
+            byte[] tagData = ReadExactly(stream, tagSize + 10);
+            if (tagData == null)
+            {
+                Log.Warn("Id3Tag: ReadExactly returned null for stream");
+                return null;
+            }
+            Log.Dbg("Id3Tag: read {Length} bytes from stream, parsing frames from offset 10", tagData.Length);
+
+            var tag = ParseTag(tagData, tagSize, id3Version);
+            Log.Dbg("Id3Tag: stream title={Title} artist={Artist} album={Album} genre={Genre} year={Year} track={Track} dur={Dur}s art={HasArt}",
+                tag?.Title, tag?.Artist, tag?.Album, tag?.Genre, tag?.Year, tag?.TrackNumber, tag?.DurationSeconds, tag?.AlbumArt != null);
+            return tag;
+        }
+
+        private static byte[] ReadExactly(Stream stream, int count)
+        {
+            byte[] buf = new byte[count];
+            int total = 0;
+            while (total < count)
+            {
+                int n = stream.Read(buf, total, count - total);
+                if (n <= 0) break;
+                total += n;
+            }
+            if (total == count) return buf;
+            byte[] trimmed = new byte[total];
+            Array.Copy(buf, trimmed, total);
+            return trimmed;
+        }
+
         public static Id3Tag ReadFromFile(string filePath)
         {
             byte[] header = ReadFileBytes(filePath, 10);

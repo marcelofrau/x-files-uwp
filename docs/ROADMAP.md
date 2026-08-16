@@ -94,8 +94,9 @@ audio player, Papirus `audio-x-generic` icons. **Done.** See ADR-011.
       `docs/SETTINGS-EXPANSION.md`.
 - [ ] **Settings expansion** — deadzone presets, D-pad speed, editor tab size, settings
       page section grouping. See `docs/SETTINGS-EXPANSION.md`.
-- [ ] **Windows file shares (SMB/UNC)** — feasibility assessed in `docs/FILE-SHARES.md`
-      (deferred, not implemented).
+- [ ] **Windows file shares (SMB/UNC)** — **shipped** (network browsing via
+      SMB, `docs/network-files/`); FTP/FTPS + SFTP implemented (M8–M11),
+      pending Xbox validation + release (M12).
 - [ ] **Hex dump preview** for binary files.
 - [ ] **Deep nested zips** with true streaming (no intermediate `MemoryStream`).
 - [ ] **Password-protected archive support**.

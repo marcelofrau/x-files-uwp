@@ -28,6 +28,7 @@ namespace XFiles.Controls
         private bool _isAudioMode;
         private bool _ownsAudioService;
         private string _currentFilePath;
+        private string _currentMetadataKey;
         private Uri _currentSourceUri;
         private bool _isPlaying;
         private bool _isLoadingPlayback;
@@ -49,7 +50,17 @@ namespace XFiles.Controls
         private bool _hasEnded;
         private MetadataGuesser _metadataGuesser;
         private CancellationTokenSource _metadataCts;
-        private readonly ArchiveBrowser _archiveBrowser = new ArchiveBrowser();
+        private ArchiveBrowser _archiveBrowser = new ArchiveBrowser();
+
+        /// <summary>
+        /// Shares the page's archive browser so remote archives opened directly
+        /// from an SMB stream (network drill-in) resolve in this control too —
+        /// its default instance has an empty cache and would fail to open those.
+        /// </summary>
+        public void SetArchiveBrowser(ArchiveBrowser browser)
+        {
+            if (browser != null) _archiveBrowser = browser;
+        }
 
         // Chiptune subsong state: which track of which source is loaded.
         private string _chiptuneSource;
@@ -146,6 +157,7 @@ namespace XFiles.Controls
             Log.Info("MediaPreviewControl: loading {Path}", filePath);
 
             _currentFilePath = filePath;
+            _currentMetadataKey = filePath;
             string ext = Path.GetExtension(filePath);
             _isAudioMode = FilePreviewService.IsAudioFile(ext) || FilePreviewService.IsChiptuneFile(ext);
             Log.Dbg("MediaPreviewControl: ext={Ext} isAudio={IsAudio}", ext, _isAudioMode);
@@ -201,6 +213,7 @@ namespace XFiles.Controls
             _hasEnded = false;
             ResetProgressUi();
             _currentFilePath = null;
+            _currentMetadataKey = null;
             _isAudioMode = false;
             _chiptuneSource = null;
             Log.Info("MediaPreviewControl: loading remote stream mime={Mime}", mimeType);
@@ -221,7 +234,8 @@ namespace XFiles.Controls
         /// stream on demand; the caller owns the stream until playback begins.
         /// </summary>
         public async Task LoadRemoteAudio(
-            Windows.Storage.Streams.IRandomAccessStream stream, string mimeType, string title)
+            Windows.Storage.Streams.IRandomAccessStream stream, string mimeType, string title, bool autoPlay = false,
+            Func<System.IO.Stream> id3StreamFactory = null)
         {
             if (stream == null) return;
             Stop();
@@ -230,6 +244,7 @@ namespace XFiles.Controls
 
             _isAudioMode = true;
             _currentFilePath = null;
+            _currentMetadataKey = title;
             _currentSourceUri = null;
             _chiptuneSource = null;
             _chiptuneTrack = 0;
@@ -259,7 +274,10 @@ namespace XFiles.Controls
             UpdatePlayPauseIcon();
             Visibility = Visibility.Visible;
 
-            await AudioLevelService.Instance.PlayRemoteStreamAsync(stream, mimeType, autoPlay: false);
+            if (id3StreamFactory != null)
+                _ = LoadMetadataAsync(title, id3StreamFactory);
+
+            await AudioLevelService.Instance.PlayRemoteStreamAsync(stream, mimeType, autoPlay: autoPlay);
         }
 
         /// <summary>
@@ -341,6 +359,7 @@ namespace XFiles.Controls
             Log.Info("MediaPreviewControl: swapping source for {Path}", filePath);
             _loadGeneration++;
             _currentFilePath = filePath;
+            _currentMetadataKey = filePath;
             _hasEnded = false;
             _isPlaying = false;
             ResetProgressUi();
@@ -683,6 +702,7 @@ namespace XFiles.Controls
             _metadataCts?.Cancel();
             _metadataCts = null;
             _currentFilePath = null;
+            _currentMetadataKey = null;
         }
 
         public void Stop()
@@ -714,6 +734,7 @@ namespace XFiles.Controls
 			}
             _currentSourceUri = null;
             _currentFilePath = null;
+            _currentMetadataKey = null;
             _currentNetworkShare = null;
             _currentNetworkPath = null;
             _isPlaying = false;
@@ -835,7 +856,7 @@ namespace XFiles.Controls
             PlayPauseIcon.Glyph = _isPlaying ? "\uE769" : "\uE768";
         }
 
-        private async Task LoadMetadataAsync(string filePath)
+        private async Task LoadMetadataAsync(string filePath, Func<System.IO.Stream> id3StreamFactory = null)
         {
             Log.Dbg("Metadata: starting async load for {Path}", filePath);
             _metadataCts?.Cancel();
@@ -844,12 +865,14 @@ namespace XFiles.Controls
             try
             {
                 _metadataGuesser.SetInternetAvailable(true);
-                var match = await _metadataGuesser.ResolveAsync(filePath, cts.Token);
+                var match = id3StreamFactory != null
+                    ? await _metadataGuesser.ResolveStreamAsync(filePath, id3StreamFactory, cts.Token)
+                    : await _metadataGuesser.ResolveAsync(filePath, cts.Token);
                 var tag = match?.Metadata;
                 Log.Dbg("Metadata: source={Source} score={Score:F2} title={Title} artist={Artist} album={Album}",
                     match?.Source, match?.Confidence, tag?.Title, tag?.Artist, tag?.Album);
 
-                if (cts.IsCancellationRequested || _currentFilePath != filePath)
+                if (cts.IsCancellationRequested || _currentMetadataKey != filePath)
                 {
                     Log.Info("Metadata: stale/cancelled result for {Path}, discarding", filePath);
                     return;

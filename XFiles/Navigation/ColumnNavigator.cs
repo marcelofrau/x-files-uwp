@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Windows.Storage;
 using Windows.UI.Xaml.Media;
 using XFiles.FileSystem;
 using XFiles.Network;
@@ -25,6 +26,13 @@ namespace XFiles.Navigation
         private CancellationTokenSource _previewCts;
         private long _previewGeneration;
         private readonly ArchiveBrowser _archiveBrowser = new ArchiveBrowser();
+
+        /// <summary>
+        /// Shared archive browser. Entries opened from a remote stream (network
+        /// drill-in) are registered in this cache under a virtual key, so any
+        /// consumer that uses this instance can list/preview/play their content.
+        /// </summary>
+        public ArchiveBrowser ArchiveBrowser => _archiveBrowser;
         private readonly PortalBrowser _portalBrowser = new PortalBrowser();
 
         // Gamelist cache: parsed once per directory, cleared on navigation
@@ -40,10 +48,24 @@ namespace XFiles.Navigation
         // remote server can be slow — queueing drill-ins would interleave sessions.
         private bool _networkBusy;
 
-        private readonly SmbBrowser _networkBrowser = new SmbBrowser();
+        private readonly System.Collections.Generic.Dictionary<NetworkProtocol, INetworkFileSystemProvider>
+            _networkBrowsers = new System.Collections.Generic.Dictionary<NetworkProtocol, INetworkFileSystemProvider>();
 
-        /// <summary>SMB browser facade (vault + logging). Used by page-level copy/rename/delete.</summary>
-        public SmbBrowser NetworkBrowser => _networkBrowser;
+        /// <summary>
+        /// Provider facade for the active network protocol (vault + logging).
+        /// Resolved per-protocol via <see cref="NetworkProviderFactory"/>, cached
+        /// by protocol so SMB and FTP providers don't clobber each other. Used by
+        /// page-level copy/rename/delete and by every network navigation path.
+        /// </summary>
+        public INetworkFileSystemProvider BrowserFor(NetworkProtocol protocol)
+        {
+            if (!_networkBrowsers.TryGetValue(protocol, out var browser))
+            {
+                browser = NetworkProviderFactory.Create(protocol);
+                _networkBrowsers[protocol] = browser;
+            }
+            return browser;
+        }
 
         /// <summary>
         /// Raised when a portal drill-in is attempted while the portal is not connected.
@@ -57,6 +79,14 @@ namespace XFiles.Navigation
         /// </summary>
         public event Action NetworkAddLocationRequested;
         public event Action NetworkDownloadUrlRequested;
+
+        /// <summary>
+        /// Raised when a drill-in targets an archive over a transport that cannot
+        /// provide a seekable stream (portal today, FTP in the future). Instead of
+        /// silently downloading the whole file, MillerColumnsPage shows the file
+        /// action sheet (Copy / Paste / ...) so the user decides.
+        /// </summary>
+        public event Action<FileEntry> ArchiveDrillInUnavailable;
 
         /// <summary>
         /// Raised when a network operation fails (connect, list, open). MillerColumnsPage
@@ -262,8 +292,10 @@ namespace XFiles.Navigation
 
             // Network entries (Network root, saved locations, remote shares/trees).
             // Must be checked before the generic IsVirtual branch — the Network root
-            // entry and the action rows are virtual too.
-            if (_current.IsNetwork || selected.IsNetwork)
+            // entry and the action rows are virtual too. A remote ARCHIVE column also
+            // carries IsNetwork (for drill-out context), but its internal entries are
+            // archive paths, not SMB paths — they fall through to the archive branch.
+            if ((_current.IsNetwork && !_current.IsArchive) || selected.IsNetwork)
             {
                 await DrillIntoNetworkAsync(selected);
                 return;
@@ -479,7 +511,11 @@ namespace XFiles.Navigation
                 Path = _current.Path,
                 Label = _current.Label,
                 SelectedIndex = _current.SelectedIndex,
-                Entries = _current.Entries
+                Entries = _current.Entries,
+                IsNetwork = _current.IsNetwork,
+                NetworkLocationId = _current.NetworkLocationId,
+                NetworkShareName = _current.NetworkShareName,
+                NetworkPath = _current.NetworkPath
             });
 
             // Load subdirectory contents from archive
@@ -493,6 +529,10 @@ namespace XFiles.Navigation
                 IsArchive = true,
                 ArchiveRootPath = dirEntry.ArchiveRootPath,
                 ArchiveInternalPath = dirEntry.ArchiveInternalPath,
+                IsNetwork = _current.IsNetwork,
+                NetworkLocationId = _current.NetworkLocationId,
+                NetworkShareName = _current.NetworkShareName,
+                NetworkPath = _current.NetworkPath,
                 PortalKnownFolder = _current.PortalKnownFolder,
                 PortalPackageFullName = _current.PortalPackageFullName,
                 PortalPath = _current.PortalPath
@@ -618,60 +658,17 @@ namespace XFiles.Navigation
         }
 
         /// <summary>
-        /// Drill into a portal zip: ensure it is cached (explicit progress for large files),
-        /// then open the cached copy with the archive browser.
+        /// Drill into a portal zip. The portal transport has no seekable-stream API
+        /// (only a whole-file HTTP download), so drilling in would require silently
+        /// caching the entire archive. Instead we raise ArchiveDrillInUnavailable
+        /// and let the page show the action sheet (Copy / ...) — same generic path a
+        /// future FTP transport will use.
         /// </summary>
         private async Task DrillIntoPortalArchiveAsync(FileEntry archiveEntry)
         {
-            ++_previewGeneration;
-            Log.Info("ColumnNavigator.Portal: drilling into portal archive {Name}", archiveEntry.Name);
-
-            IProgress<double> progress = DownloadProgressFactory?.Invoke(archiveEntry.Name);
-            _portalBusy = true;
-            string cachePath;
-            try
-            {
-                cachePath = await PortalCache.EnsureAsync(PortalBrowser.ToPortalEntry(archiveEntry), progress);
-            }
-            finally
-            {
-                _portalBusy = false;
-            }
-            if (cachePath == null)
-            {
-                Log.Warn("ColumnNavigator.Portal: archive download to cache failed for {Name}", archiveEntry.Name);
-                return;
-            }
-
-            _history.Push(new ColumnState
-            {
-                Path = _current.Path,
-                Label = _current.Label,
-                SelectedIndex = _current.SelectedIndex,
-                Entries = _current.Entries,
-                IsPortal = _current.IsPortal,
-                PortalKnownFolder = _current.PortalKnownFolder,
-                PortalPackageFullName = _current.PortalPackageFullName,
-                PortalPath = _current.PortalPath
-            });
-
-            var entries = _archiveBrowser.ListEntries(cachePath, "");
-            _current = new ColumnState
-            {
-                Path = cachePath,
-                Label = archiveEntry.Name,
-                Entries = entries.ToList(),
-                IsArchive = true,
-                ArchiveRootPath = cachePath,
-                ArchiveInternalPath = "",
-                PortalKnownFolder = archiveEntry.PortalKnownFolder,
-                PortalPackageFullName = archiveEntry.PortalPackageFullName,
-                PortalPath = archiveEntry.PortalPath
-            };
-            _current.ClearSearch();
-
-            await UpdatePreviewAsync();
-            ColumnsChanged?.Invoke();
+            Log.Info("ColumnNavigator.Portal: archive drill-in unavailable for portal (no seekable stream) — showing action sheet for {Name}", archiveEntry.Name);
+            ArchiveDrillInUnavailable?.Invoke(archiveEntry);
+            await Task.CompletedTask;
         }
 
         // ====================================================================
@@ -726,7 +723,8 @@ namespace XFiles.Navigation
                 return;
             }
 
-            // 2. Saved location row → shares (no share configured) or straight into the share.
+            // 2. Saved location row → shares (SMB, no share configured) or straight
+            //    into the share/start folder (SMB with share, or any FTP/SFTP).
             if (_current.IsNetwork && _current.NetworkLocationId == 0 && _current.NetworkShareName == null
                 && !selected.IsVirtual)
             {
@@ -735,7 +733,9 @@ namespace XFiles.Navigation
 
                 Log.Info("ColumnNavigator.Network: entering location {Url}", NetworkUrl.Compose(config));
 
-                ColumnState newColumn = string.IsNullOrEmpty(config.Share)
+                bool wantsShares = config.Protocol == NetworkProtocol.Smb && string.IsNullOrEmpty(config.Share);
+
+                ColumnState newColumn = wantsShares
                     ? new ColumnState
                     {
                         Path = null,
@@ -748,14 +748,16 @@ namespace XFiles.Navigation
                     : new ColumnState
                     {
                         Path = null,
-                        Label = config.Share,
+                        Label = config.Protocol == NetworkProtocol.Smb
+                            ? config.Share
+                            : string.IsNullOrEmpty(config.Share) ? NetworkUrl.DisplayName(config) : config.Share,
                         IsNetwork = true,
                         NetworkLocationId = config.Id,
-                        NetworkShareName = config.Share,
-                        NetworkPath = ""
+                        NetworkShareName = config.Protocol == NetworkProtocol.Smb ? config.Share : "",
+                        NetworkPath = config.Protocol == NetworkProtocol.Smb ? "" : (config.Share ?? "")
                     };
 
-                if (!await LoadNetworkColumnAsync(newColumn, config, config.Share, "")) return;
+                if (!await LoadNetworkColumnAsync(newColumn, config, config.Share, config.Protocol == NetworkProtocol.Smb ? "" : (config.Share ?? ""))) return;
                 await CommitNetworkColumnAsync(newColumn);
                 return;
             }
@@ -787,13 +789,17 @@ namespace XFiles.Navigation
                 var config = await GetNetworkConfigAsync(_current.NetworkLocationId);
                 if (config == null) return;
 
-                string childPath = CombineNetworkPath(_current.NetworkPath, selected.Name);
+                string childPath = CombineNetworkPath(_current.NetworkPath, selected.Name, config.Protocol);
+                char sep = NetworkPathUtil.Separator(config.Protocol);
+                string labelPath = string.IsNullOrEmpty(childPath)
+                    ? _current.NetworkShareName
+                    : string.IsNullOrEmpty(_current.NetworkShareName)
+                        ? childPath
+                        : _current.NetworkShareName + sep + childPath;
                 var newColumn = new ColumnState
                 {
                     Path = null,
-                    Label = string.IsNullOrEmpty(childPath)
-                        ? _current.NetworkShareName
-                        : _current.NetworkShareName + "\\" + childPath,
+                    Label = labelPath,
                     IsNetwork = true,
                     NetworkLocationId = _current.NetworkLocationId,
                     NetworkShareName = _current.NetworkShareName,
@@ -802,6 +808,20 @@ namespace XFiles.Navigation
 
                 if (!await LoadNetworkColumnAsync(newColumn, config, _current.NetworkShareName, childPath)) return;
                 await CommitNetworkColumnAsync(newColumn);
+                return;
+            }
+
+            // 4.5 Remote chiptune (multi-track: GBS/RSN/NSFE/...) — drill into the track list.
+            if (_current.NetworkShareName != null && selected.IsChiptune && selected.ChiptuneTrackIndex < 0)
+            {
+                await DrillIntoNetworkChiptuneAsync(selected);
+                return;
+            }
+
+            // 4.6 Remote archive (.rsn etc.) — cache locally, then browse like a local archive.
+            if (_current.NetworkShareName != null && selected.IsArchive)
+            {
+                await DrillIntoNetworkArchiveAsync(selected);
                 return;
             }
 
@@ -823,6 +843,189 @@ namespace XFiles.Navigation
                     break;
             }
             await Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Drill into a REMOTE multi-track chiptune — cache the file locally, probe its
+        /// subsongs and show them as a virtual track list (mirrors DrillIntoChiptuneAsync).
+        /// </summary>
+        private async Task DrillIntoNetworkChiptuneAsync(FileEntry chipEntry)
+        {
+            if (_networkBusy)
+            {
+                Log.Verb("ColumnNavigator.Network: chiptune drill-in ignored — network navigation in progress");
+                return;
+            }
+            _networkBusy = true;
+            try
+            {
+                ++_previewGeneration;
+                Log.Info("ColumnNavigator.Network: drilling into remote chiptune {Name}", chipEntry.Name);
+
+                // Push current state to history, keeping the network context so a
+                // later drill-out reloads the remote column instead of treating it
+                // as local (which crashes the archive path with a null FullPath).
+                _history.Push(new ColumnState
+                {
+                    Path = _current.Path,
+                    Label = _current.Label,
+                    SelectedIndex = _current.SelectedIndex,
+                    Entries = _current.Entries,
+                    AllEntries = _current.AllEntries,
+                    IsNetwork = _current.IsNetwork,
+                    NetworkLocationId = _current.NetworkLocationId,
+                    NetworkShareName = _current.NetworkShareName,
+                    NetworkPath = _current.NetworkPath
+                });
+
+                string tempPath = await CacheNetworkFileAsync(chipEntry);
+                if (tempPath == null)
+                {
+                    if (_history.Count > 0) _current = _history.Pop();
+                    return;
+                }
+
+                var entries = ChiptuneBrowser.BuildTrackEntries(
+                    tempPath, null, Path.GetExtension(chipEntry.Name));
+
+                if (entries.Count <= 1)
+                {
+                    if (_history.Count > 0) _current = _history.Pop();
+                    Log.Info("ColumnNavigator.Network: single-track remote chiptune ({Count}) — skipping drill-in for {Name}", entries.Count, chipEntry.Name);
+                    return;
+                }
+
+                _current = new ColumnState
+                {
+                    Path = tempPath,
+                    Label = chipEntry.Name,
+                    Entries = entries.ToList(),
+                    IsChiptune = true
+                };
+                _current.ClearSearch();
+
+                await UpdatePreviewAsync();
+                ColumnsChanged?.Invoke();
+            }
+            finally
+            {
+                _networkBusy = false;
+            }
+        }
+
+        /// <summary>
+        /// Drill into a REMOTE archive (.rsn etc.) — cache locally, then browse it like a
+        /// local archive (mirrors DrillIntoArchiveAsync).
+        /// </summary>
+        private async Task DrillIntoNetworkArchiveAsync(FileEntry archiveEntry)
+        {
+            if (_networkBusy)
+            {
+                Log.Verb("ColumnNavigator.Network: archive drill-in ignored — network navigation in progress");
+                return;
+            }
+            _networkBusy = true;
+            try
+            {
+                ++_previewGeneration;
+                Log.Info("ColumnNavigator.Network: drilling into remote archive {Name}", archiveEntry.Name);
+
+                // Push current state to history, keeping the network context so a
+                // later drill-out reloads the remote column instead of treating it
+                // as local (which crashes the archive path with a null FullPath).
+                _history.Push(new ColumnState
+                {
+                    Path = _current.Path,
+                    Label = _current.Label,
+                    SelectedIndex = _current.SelectedIndex,
+                    Entries = _current.Entries,
+                    AllEntries = _current.AllEntries,
+                    IsNetwork = _current.IsNetwork,
+                    NetworkLocationId = _current.NetworkLocationId,
+                    NetworkShareName = _current.NetworkShareName,
+                    NetworkPath = _current.NetworkPath
+                });
+
+                // Try to open the archive directly from the remote stream — ZIP's
+                // central directory is at the end of the file, so SharpCompress
+                // only needs a few seeks, not the whole file (a 300MB zip lists in
+                // ~1-2s instead of downloading 300MB). Falls back to a full local
+                // cache download if the stream can't be opened as an archive.
+                // Key without '|' — ArchiveBrowser's "archive|internal" addressing
+                // splits on the first pipe, so the virtual key must not contain one.
+                string archiveKey = $"net~{archiveEntry.NetworkLocationId}~{archiveEntry.NetworkShareName}~{archiveEntry.NetworkPath}";
+                IReadOnlyList<FileEntry> entries;
+                Stream remoteStream = await OpenNetworkStreamAsync(
+                    archiveEntry.NetworkLocationId, archiveEntry.NetworkShareName, archiveEntry.NetworkPath);
+                if (remoteStream != null &&
+                    _archiveBrowser.TryOpenArchiveFromStream(archiveKey, remoteStream))
+                {
+                    entries = _archiveBrowser.ListEntries(archiveKey, "");
+                }
+                else
+                {
+                    string tempPath = await CacheNetworkFileAsync(archiveEntry);
+                    if (tempPath == null)
+                    {
+                        if (_history.Count > 0) _current = _history.Pop();
+                        return;
+                    }
+                    // Fallback downloaded the whole file — the archive is cached under
+                    // the temp path, so the column must use it as the archive key (the
+                    // virtual key would miss the cache when entries are opened).
+                    archiveKey = tempPath;
+                    entries = _archiveBrowser.ListEntries(tempPath, "");
+                }
+
+                _current = new ColumnState
+                {
+                    Path = archiveKey,
+                    Label = archiveEntry.Name,
+                    Entries = entries.ToList(),
+                    IsArchive = true,
+                    ArchiveRootPath = archiveKey,
+                    ArchiveInternalPath = "",
+                    IsNetwork = true,
+                    NetworkLocationId = archiveEntry.NetworkLocationId,
+                    NetworkShareName = archiveEntry.NetworkShareName,
+                    NetworkPath = archiveEntry.NetworkPath
+                };
+                _current.ClearSearch();
+
+                await UpdatePreviewAsync();
+                ColumnsChanged?.Invoke();
+            }
+            finally
+            {
+                _networkBusy = false;
+            }
+        }
+
+        /// <summary>Downloads a remote file in full to the NetworkCache temp folder.</summary>
+        private async Task<string> CacheNetworkFileAsync(FileEntry entry)
+        {
+            try
+            {
+                using (Stream stream = await OpenNetworkStreamAsync(
+                    entry.NetworkLocationId, entry.NetworkShareName, entry.NetworkPath))
+                {
+                    if (stream == null) return null;
+                    string dir = Path.Combine(ApplicationData.Current.LocalCacheFolder.Path, "NetworkCache");
+                    Directory.CreateDirectory(dir);
+                    string tempPath = Path.Combine(dir, $"{Guid.NewGuid():N}_{entry.Name}");
+                    using (var fs = File.Create(tempPath))
+                    {
+                        await stream.CopyToAsync(fs);
+                    }
+                    Log.Info("ColumnNavigator.CacheNetworkFile: cached '{Name}' → {Temp}", entry.Name, tempPath);
+                    return tempPath;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("ColumnNavigator.CacheNetworkFile: failed for '{Name}'", entry.Name, ex);
+                return null;
+            }
         }
 
         /// <summary>Builds the locations column entry list (saved locations + action rows).</summary>
@@ -874,7 +1077,8 @@ namespace XFiles.Navigation
                     IsNetwork = true,
                     NetworkLocationId = c.Id,
                     NetworkShareName = null,
-                    NetworkPath = null
+                    NetworkPath = null,
+                    NetworkProtocol = c.Protocol
                 });
             }
 
@@ -901,7 +1105,7 @@ namespace XFiles.Navigation
             if (config == null) return null;
             try
             {
-                return await _networkBrowser.OpenReadAsync(config, share, path, CancellationToken.None);
+                return await BrowserFor(config.Protocol).OpenReadAsync(config, share, path, CancellationToken.None);
             }
             catch (NetworkOperationException ex)
             {
@@ -922,7 +1126,7 @@ namespace XFiles.Navigation
             if (config == null) return false;
             try
             {
-                await _networkBrowser.WriteFileAsync(config, share, path, localPath, CancellationToken.None);
+                await BrowserFor(config.Protocol).WriteFileAsync(config, share, path, localPath, CancellationToken.None);
                 return true;
             }
             catch (Exception ex)
@@ -932,17 +1136,18 @@ namespace XFiles.Navigation
             }
         }
 
-        /// <summary>Loads shares or a directory into the column. Returns false on network failure.</summary>
+        /// <summary>Loads shares (SMB) or a directory into the column. Returns false on network failure.</summary>
         private async Task<bool> LoadNetworkColumnAsync(ColumnState column, NetworkServerConfig config, string share, string path)
         {
             LoadingChanged?.Invoke(true);
             _networkBusy = true;
             try
             {
-                if (string.IsNullOrEmpty(share))
-                    await column.LoadNetworkSharesAsync(_networkBrowser, config, CancellationToken.None);
+                bool wantsShares = config.Protocol == NetworkProtocol.Smb && string.IsNullOrEmpty(share);
+                if (wantsShares)
+                    await column.LoadNetworkSharesAsync(BrowserFor(config.Protocol), config, CancellationToken.None);
                 else
-                    await column.LoadNetworkDirectoryAsync(_networkBrowser, config, share, path, CancellationToken.None);
+                    await column.LoadNetworkDirectoryAsync(BrowserFor(config.Protocol), config, share, path, CancellationToken.None);
                 return true;
             }
             catch (NetworkOperationException ex)
@@ -1007,9 +1212,9 @@ namespace XFiles.Navigation
                     var config = await NetworkServerManager.GetAsync((int)column.NetworkLocationId);
                     if (config == null) return;
                     if (column.NetworkShareName == null)
-                        await column.LoadNetworkSharesAsync(_networkBrowser, config, CancellationToken.None);
+                        await column.LoadNetworkSharesAsync(BrowserFor(config.Protocol), config, CancellationToken.None);
                     else
-                        await column.LoadNetworkDirectoryAsync(_networkBrowser, config, column.NetworkShareName,
+                        await column.LoadNetworkDirectoryAsync(BrowserFor(config.Protocol), config, column.NetworkShareName,
                             column.NetworkPath ?? "", CancellationToken.None);
                 }
             }
@@ -1024,11 +1229,17 @@ namespace XFiles.Navigation
             }
         }
 
-        /// <summary>Joins a remote path segment onto a remote path.</summary>
+        /// <summary>Joins a remote path segment onto a remote path (SMB backslash).</summary>
         public static string CombineNetworkPath(string path, string name)
         {
-            if (string.IsNullOrEmpty(path)) return name;
-            return path.TrimEnd('\\') + "\\" + name;
+            return CombineNetworkPath(path, name, NetworkProtocol.Smb);
+        }
+
+        /// <summary>Joins a remote path segment onto a remote path using the
+        /// given protocol's separator (SMB '\', FTP/SFTP '/').</summary>
+        public static string CombineNetworkPath(string path, string name, NetworkProtocol protocol)
+        {
+            return NetworkPathUtil.Join(path, name, protocol);
         }
 
         /// <summary>
@@ -1134,8 +1345,10 @@ namespace XFiles.Navigation
 
             // Network column: locations column shows the how-to guide; share/directory
             // columns preview their children; remote files show a metadata card (the
-            // real preview/play pipeline lands in a later milestone).
-            if (_current.IsNetwork)
+            // real preview/play pipeline lands in a later milestone). A remote ARCHIVE
+            // column (IsArchive) previews its entries through the shared ArchiveBrowser
+            // stream cache instead — the archive internal entries are not SMB paths.
+            if (_current.IsNetwork && !_current.IsArchive)
             {
                 await UpdateNetworkPreviewAsync(selected, gen);
                 return;
@@ -1356,9 +1569,9 @@ namespace XFiles.Navigation
                     try
                     {
                         if (_preview.NetworkShareName == null)
-                            await _preview.LoadNetworkSharesAsync(_networkBrowser, config, CancellationToken.None);
+                            await _preview.LoadNetworkSharesAsync(BrowserFor(config.Protocol), config, CancellationToken.None);
                         else
-                            await _preview.LoadNetworkDirectoryAsync(_networkBrowser, config,
+                            await _preview.LoadNetworkDirectoryAsync(BrowserFor(config.Protocol), config,
                                 _preview.NetworkShareName, _preview.NetworkPath ?? "", CancellationToken.None);
                     }
                     catch (NetworkOperationException ex)
@@ -1377,7 +1590,10 @@ namespace XFiles.Navigation
                     string share = selected.NetworkShareName ?? _current.NetworkShareName;
                     string path = selected.NetworkPath;
 
-                    if (string.IsNullOrEmpty(share) || string.IsNullOrEmpty(path))
+                    bool smb = config.Protocol == NetworkProtocol.Smb;
+                    bool hasPath = !string.IsNullOrEmpty(path) && (smb ? !string.IsNullOrEmpty(share) : true);
+
+                    if (!hasPath)
                     {
                         _preview = new ColumnState
                         {
@@ -1424,7 +1640,7 @@ namespace XFiles.Navigation
 
                     try
                     {
-                        using (var stream = await _networkBrowser.OpenReadAsync(
+                        using (var stream = await BrowserFor(config.Protocol).OpenReadAsync(
                             config, share, path, CancellationToken.None))
                         {
                             previewResult = await FilePreviewService.GetPreviewFromNetworkAsync(
@@ -2076,7 +2292,7 @@ namespace XFiles.Navigation
                 SelectedIndex = 0;
         }
 
-        public async Task LoadNetworkSharesAsync(SmbBrowser browser, NetworkServerConfig config,
+        public async Task LoadNetworkSharesAsync(INetworkFileSystemProvider browser, NetworkServerConfig config,
             CancellationToken token)
         {
             SetNetworkEntries((await browser.ListSharesAsync(config, token))
@@ -2091,7 +2307,7 @@ namespace XFiles.Navigation
                 }).ToList());
         }
 
-        public async Task LoadNetworkDirectoryAsync(SmbBrowser browser, NetworkServerConfig config,
+        public async Task LoadNetworkDirectoryAsync(INetworkFileSystemProvider browser, NetworkServerConfig config,
             string share, string path, CancellationToken token)
         {
             SetNetworkEntries((await browser.ListDirectoryAsync(config, share, path, token))
@@ -2100,9 +2316,11 @@ namespace XFiles.Navigation
                     Name = f.Name,
                     IsDirectory = f.IsDirectory,
                     IsNetwork = true,
+                    IsChiptune = !f.IsDirectory && MusicFormatClassifier.IsChiptune(System.IO.Path.GetExtension(f.Name)),
+                    IsArchive = !f.IsDirectory && ArchiveBrowser.IsArchiveFile(f.Name),
                     NetworkLocationId = config.Id,
                     NetworkShareName = share,
-                    NetworkPath = ColumnNavigator.CombineNetworkPath(path, f.Name),
+                    NetworkPath = ColumnNavigator.CombineNetworkPath(path, f.Name, config.Protocol),
                     SizeBytes = f.IsDirectory ? 0 : f.Size,
                     LastModified = f.LastWriteTime
                 }).ToList());

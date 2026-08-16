@@ -84,6 +84,43 @@ namespace XFiles.Tests
             }
         }
 
+        [TestMethod]
+        public void ReadFromStream_ValidV23Tag_ParsesFrames()
+        {
+            byte[] mp3 = BuildV23Mp3("Stream Title", "Stream Artist", "Stream Album", "7", "90000");
+            using (var stream = new MemoryStream(mp3))
+            {
+                var tag = Id3Tag.ReadFromStream(stream);
+
+                Assert.IsNotNull(tag);
+                Assert.AreEqual("Stream Title", tag.Title);
+                Assert.AreEqual("Stream Artist", tag.Artist);
+                Assert.AreEqual("Stream Album", tag.Album);
+                Assert.AreEqual("7", tag.TrackNumber);
+                Assert.AreEqual(90, tag.DurationSeconds);
+            }
+        }
+
+        [TestMethod]
+        public void ReadFromStream_NonId3Header_ReturnsNull()
+        {
+            using (var stream = new MemoryStream(Encoding.ASCII.GetBytes("RIFF........WAVEfmt ")))
+            {
+                var tag = Id3Tag.ReadFromStream(stream);
+                Assert.IsNull(tag);
+            }
+        }
+
+        [TestMethod]
+        public void ReadFromStream_Unseekable_ReturnsNull()
+        {
+            using (var stream = new NonSeekableStream(Encoding.ASCII.GetBytes("ID3anything")))
+            {
+                var tag = Id3Tag.ReadFromStream(stream);
+                Assert.IsNull(tag);
+            }
+        }
+
         private static byte[] BuildV23Mp3(string title, string artist, string album, string track, string duration)
         {
             var body = new byte[0];
@@ -142,6 +179,12 @@ namespace XFiles.Tests
             Array.Copy(a, 0, result, 0, a.Length);
             Array.Copy(b, 0, result, a.Length, b.Length);
             return result;
+        }
+
+        private sealed class NonSeekableStream : MemoryStream
+        {
+            public NonSeekableStream(byte[] data) : base(data) { }
+            public override bool CanSeek => false;
         }
     }
 }

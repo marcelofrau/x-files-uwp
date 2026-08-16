@@ -1,4 +1,5 @@
 using System;
+using XFiles.Network;
 
 namespace XFiles.FileSystem
 {
@@ -37,6 +38,13 @@ namespace XFiles.FileSystem
 
         /// <summary>Remote path within the share ("" = share root, null = no share bound).</summary>
         public string NetworkPath { get; set; }
+
+        /// <summary>
+        /// Protocol of the saved location row this entry represents (only set on
+        /// network location rows). Used by the column list to pick a per-protocol
+        /// icon (SMB = server, FTP/FTPS/SFTP = globe).
+        /// </summary>
+        public NetworkProtocol NetworkProtocol { get; set; } = NetworkProtocol.Smb;
 
         // Only set when entry lives INSIDE an archive:
         public string ArchiveRootPath { get; set; }

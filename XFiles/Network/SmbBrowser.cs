@@ -15,7 +15,31 @@ namespace XFiles.Network
     /// </summary>
     public class SmbBrowser : INetworkFileSystemProvider
     {
+        private SmbSession _lastNegotiatedSession;
+
         public NetworkProtocol Protocol => NetworkProtocol.Smb;
+
+        public async Task<string> TestConnectionAsync(NetworkServerConfig config, string password, CancellationToken ct)
+        {
+            using (var session = new SmbSession(config))
+            {
+                await session.EnsureConnectedAsync(password, ct);
+                var shares = await session.ListSharesAsync(ct);
+                if (!string.IsNullOrEmpty(config.Share))
+                {
+                    var entries = await session.ListDirectoryAsync(config.Share, "", ct);
+                    return $"Connected — share \"{config.Share}\" OK ({entries.Count} items).";
+                }
+                return $"Connected — {shares.Count} share(s) found.";
+            }
+        }
+
+        private void LogNegotiatedOnce(SmbSession session)
+        {
+            if (ReferenceEquals(session, _lastNegotiatedSession)) return;
+            _lastNegotiatedSession = session;
+            Log.Dbg($"SmbBrowser: session negotiated — {session.NegotiatedInfo()}");
+        }
 
         public async Task<List<string>> ListSharesAsync(NetworkServerConfig config, CancellationToken ct)
         {
@@ -40,6 +64,7 @@ namespace XFiles.Network
         {
             string password = await NetworkServerManager.GetPasswordAsync(config);
             var session = await SmbSessionPool.AcquireAsync(config, password, ct);
+            LogNegotiatedOnce(session);
             Log.Info($"SmbBrowser.ListDirectory: {NetworkUrl.Compose(config)}/{share}/{path}");
             try
             {
@@ -83,6 +108,22 @@ namespace XFiles.Network
             catch (NetworkOperationException ex)
             {
                 Log.Warn($"SmbBrowser.GetFileLength: {ex.Reason} ({ex.Message})");
+                throw;
+            }
+        }
+
+        public async Task<bool> EntryExistsAsync(
+            NetworkServerConfig config, string share, string path, bool isDirectory, CancellationToken ct)
+        {
+            string password = await NetworkServerManager.GetPasswordAsync(config);
+            var session = await SmbSessionPool.AcquireAsync(config, password, ct);
+            try
+            {
+                return await session.EntryExistsAsync(share, path, isDirectory, ct);
+            }
+            catch (NetworkOperationException ex)
+            {
+                Log.Warn($"SmbBrowser.EntryExists: {ex.Reason} ({ex.Message})");
                 throw;
             }
         }

@@ -82,14 +82,12 @@ namespace XFiles.Network
                 if (existing != null)
                 {
                     config = MergeInto(existing, config);
-                    config.Protocol = NetworkProtocol.Smb;
                     await store.UpdateAsync(ToEntry(config, existing.Id));
                     id = existing.Id;
                     Log.Info("NetworkServerManager.Add: updated existing {Url}", canonical);
                 }
                 else
                 {
-                    config.Protocol = NetworkProtocol.Smb;
                     id = await store.InsertAsync(ToEntry(config, 0));
                     Log.Info("NetworkServerManager.Add: inserted {Url} id={Id}", canonical, id);
                 }
@@ -134,7 +132,6 @@ namespace XFiles.Network
                     return;
                 }
 
-                config.Protocol = NetworkProtocol.Smb;
                 await store.UpdateAsync(ToEntry(config, id));
 
                 if (!string.Equals(oldCanonical, newCanonical, StringComparison.Ordinal))

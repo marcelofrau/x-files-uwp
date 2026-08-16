@@ -332,6 +332,49 @@ namespace XFiles.FileSystem
             internalPath = fullPath.Substring(pipeIndex + 1);
         }
 
+        /// <summary>
+        /// Registers an already-open stream as the archive for a virtual key
+        /// (e.g. a remote SMB file). The stream must be seekable; the archive is
+        /// opened lazily and cached under <paramref name="archiveKey"/> so later
+        /// ListEntries/OpenEntryStream calls resolve through the cache. On success
+        /// the caller must NOT dispose the stream — SharpCompress owns it for the
+        /// archive's lifetime. On failure (or cache hit) the stream is disposed here.
+        /// </summary>
+        public bool TryOpenArchiveFromStream(string archiveKey, Stream stream)
+        {
+            if (stream == null) return false;
+            lock (_lock)
+            {
+                if (_archiveCache.ContainsKey(archiveKey))
+                {
+                    // Already open — discard the redundant stream.
+                    try { stream.Dispose(); } catch { }
+                    return true;
+                }
+
+                if (stream.Length == 0)
+                {
+                    Log.Warn("ArchiveBrowser: archive stream is empty, treating as no entries: {Key}", archiveKey);
+                    try { stream.Dispose(); } catch { }
+                    return false;
+                }
+
+                try
+                {
+                    IArchive archive = ArchiveFactory.Open(stream);
+                    _archiveCache[archiveKey] = archive;
+                    Log.Info("ArchiveBrowser: opened archive from stream {Key} ({Size} bytes)", archiveKey, stream.Length);
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    Log.Warn("ArchiveBrowser: failed to open archive from stream {Key}", archiveKey, ex);
+                    try { stream.Dispose(); } catch { }
+                    return false;
+                }
+            }
+        }
+
         public void Dispose()
         {
             lock (_lock)
