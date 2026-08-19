@@ -21,6 +21,7 @@ namespace XFiles.Controls
         private FileTier _fileTier;
         private LineEndingStyle _lineEnding;
         private string _detectedEncodingName;
+        private bool _hasBom;
         private bool _isReadOnly;
         private bool _highlightEnabled;
 
@@ -115,6 +116,7 @@ namespace XFiles.Controls
             _fileTier = result.Tier;
             _lineEnding = result.LineEnding;
             _detectedEncodingName = result.EncodingName;
+            _hasBom = result.HasBom;
             _isReadOnly = result.IsBinary || _fileTier == FileTier.ReadOnly;
             _highlightEnabled = _fileTier == FileTier.FullEdit;
 
@@ -169,7 +171,7 @@ namespace XFiles.Controls
             // Populate sidebar
             FileNameText.Text = _fileName;
             UpdateSidebarStatus(false);
-            EncodingText.Text = _detectedEncodingName ?? "";
+            EncodingText.Text = (_detectedEncodingName ?? "") + (_hasBom ? " (BOM)" : "");
             string le = _lineEnding == LineEndingStyle.CRLF ? "CRLF" :
                         _lineEnding == LineEndingStyle.LF ? "LF" :
                         _lineEnding == LineEndingStyle.CR ? "CR" : "";
@@ -635,7 +637,7 @@ namespace XFiles.Controls
             }
 
             string content = await InvokeJsStr("editor.getText()");
-            bool ok = await TextEditorService.SaveAsync(_filePath, content, _lineEnding);
+            bool ok = await TextEditorService.SaveAsync(_filePath, content, _lineEnding, _hasBom);
 
             if (ok)
             {

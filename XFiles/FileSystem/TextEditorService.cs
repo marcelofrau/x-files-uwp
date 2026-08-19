@@ -19,16 +19,17 @@ namespace XFiles.FileSystem
         CR
     }
 
-    public class TextEditorLoadResult
-    {
-        public string Text { get; set; }
-        public Encoding DetectedEncoding { get; set; }
-        public long FileSize { get; set; }
-        public FileTier Tier { get; set; }
-        public bool IsBinary { get; set; }
-        public LineEndingStyle LineEnding { get; set; }
-        public string EncodingName { get; set; }
-    }
+        public class TextEditorLoadResult
+        {
+            public string Text { get; set; }
+            public Encoding DetectedEncoding { get; set; }
+            public long FileSize { get; set; }
+            public FileTier Tier { get; set; }
+            public bool IsBinary { get; set; }
+            public LineEndingStyle LineEnding { get; set; }
+            public string EncodingName { get; set; }
+            public bool HasBom { get; set; }
+        }
 
     /// <summary>
     /// File I/O + encoding detection for the text editor.
@@ -105,6 +106,7 @@ namespace XFiles.FileSystem
                     string text = encoding.GetString(rawBytes);
 
                     // Strip BOM from text if present
+                    bool hasBom = encoding.GetPreamble().Length > 0;
                     if (text.Length > 0 && text[0] == '\uFEFF')
                     {
                         text = text.Substring(1);
@@ -112,8 +114,8 @@ namespace XFiles.FileSystem
 
                     LineEndingStyle lineEnding = DetectLineEnding(text);
 
-                    Log.Info("TextEditorService.Load: {Path} — {Size} bytes, {Encoding}, tier={Tier}, binary={Binary}, lineEnding={LineEnding}",
-                        filePath, fileSize, encodingName, tier, isBinary, lineEnding);
+                    Log.Info("TextEditorService.Load: {Path} — {Size} bytes, {Encoding}, tier={Tier}, binary={Binary}, lineEnding={LineEnding}, bom={Bom}",
+                        filePath, fileSize, encodingName, tier, isBinary, lineEnding, hasBom);
 
                     return new TextEditorLoadResult
                     {
@@ -123,7 +125,8 @@ namespace XFiles.FileSystem
                         Tier = tier,
                         IsBinary = isBinary,
                         LineEnding = lineEnding,
-                        EncodingName = encodingName
+                        EncodingName = encodingName,
+                        HasBom = hasBom
                     };
                 }
                 catch (Exception ex)
@@ -135,10 +138,10 @@ namespace XFiles.FileSystem
         }
 
         /// <summary>
-        /// Save text content to file. Always writes UTF-8 with BOM.
+        /// Save text content to file. Writes UTF-8, preserving original BOM presence.
         /// Converts line endings back to the detected style.
         /// </summary>
-        public static async Task<bool> SaveAsync(string filePath, string content, LineEndingStyle lineEnding = LineEndingStyle.LF)
+        public static async Task<bool> SaveAsync(string filePath, string content, LineEndingStyle lineEnding = LineEndingStyle.LF, bool writeBom = false)
         {
             return await Task.Run(() =>
             {
@@ -154,17 +157,25 @@ namespace XFiles.FileSystem
                         content = content.Replace("\n", "\r");
                     }
 
-                    // UTF-8 with BOM
-                    byte[] bom = new byte[] { 0xEF, 0xBB, 0xBF };
                     byte[] utf8Bytes = Encoding.UTF8.GetBytes(content);
-                    byte[] output = new byte[bom.Length + utf8Bytes.Length];
-                    Buffer.BlockCopy(bom, 0, output, 0, bom.Length);
-                    Buffer.BlockCopy(utf8Bytes, 0, output, bom.Length, utf8Bytes.Length);
+
+                    byte[] output;
+                    if (writeBom)
+                    {
+                        byte[] bom = new byte[] { 0xEF, 0xBB, 0xBF };
+                        output = new byte[bom.Length + utf8Bytes.Length];
+                        Buffer.BlockCopy(bom, 0, output, 0, bom.Length);
+                        Buffer.BlockCopy(utf8Bytes, 0, output, bom.Length, utf8Bytes.Length);
+                    }
+                    else
+                    {
+                        output = utf8Bytes;
+                    }
 
                     bool ok = WriteFileWin32(filePath, output);
                     if (ok)
                     {
-                        Log.Info("TextEditorService.Save: {Path} — {Bytes} bytes written (UTF-8 BOM)", filePath, output.Length);
+                        Log.Info("TextEditorService.Save: {Path} — {Bytes} bytes written (UTF-8{Bom})", filePath, output.Length, writeBom ? " BOM" : "");
                     }
                     else
                     {

@@ -226,9 +226,9 @@ namespace XFiles.Tests
                 bool saved = await TextEditorService.SaveAsync(path, "", LineEndingStyle.LF);
                 Assert.IsTrue(saved);
 
+                // Empty content without BOM → 0-byte file. LoadAsync returns null for 0-byte.
                 var result = await TextEditorService.LoadAsync(path);
-                Assert.IsNotNull(result);
-                Assert.AreEqual("", result.Text);
+                Assert.IsNull(result);
             }
             finally { if (File.Exists(path)) File.Delete(path); }
         }
@@ -266,6 +266,139 @@ namespace XFiles.Tests
                 Assert.IsNotNull(result);
                 Assert.IsFalse(result.IsBinary); // UTF-8 BOM is recognized
                 Assert.IsTrue(result.Text.StartsWith("hello world"));
+                Assert.IsTrue(result.HasBom);
+            }
+            finally { if (File.Exists(path)) File.Delete(path); }
+        }
+
+        // ── BOM preservation round-trip ──────────────────────────
+
+        [TestMethod]
+        public async Task Save_WithoutBom_ProducesNoBom()
+        {
+            string path = Path.Combine(Path.GetTempPath(), $"xfiles_test_{Guid.NewGuid():N}.txt");
+            try
+            {
+                bool saved = await TextEditorService.SaveAsync(path, "{\"key\":\"value\"}", LineEndingStyle.LF, writeBom: false);
+                Assert.IsTrue(saved);
+
+                byte[] raw = File.ReadAllBytes(path);
+                // No BOM prefix
+                Assert.AreNotEqual(0xEF, raw[0]);
+                Assert.AreNotEqual(0xBB, raw[1]);
+                Assert.AreNotEqual(0xBF, raw[2]);
+
+                var result = await TextEditorService.LoadAsync(path);
+                Assert.IsNotNull(result);
+                Assert.IsFalse(result.HasBom);
+                Assert.AreEqual("{\"key\":\"value\"}", result.Text);
+            }
+            finally { if (File.Exists(path)) File.Delete(path); }
+        }
+
+        [TestMethod]
+        public async Task Save_WithBom_ProducesBom()
+        {
+            string path = Path.Combine(Path.GetTempPath(), $"xfiles_test_{Guid.NewGuid():N}.txt");
+            try
+            {
+                bool saved = await TextEditorService.SaveAsync(path, "hello", LineEndingStyle.LF, writeBom: true);
+                Assert.IsTrue(saved);
+
+                byte[] raw = File.ReadAllBytes(path);
+                Assert.AreEqual(0xEF, raw[0]);
+                Assert.AreEqual(0xBB, raw[1]);
+                Assert.AreEqual(0xBF, raw[2]);
+
+                var result = await TextEditorService.LoadAsync(path);
+                Assert.IsNotNull(result);
+                Assert.IsTrue(result.HasBom);
+                Assert.AreEqual("hello", result.Text);
+            }
+            finally { if (File.Exists(path)) File.Delete(path); }
+        }
+
+        [TestMethod]
+        public async Task RoundTrip_Utf8NoBom_PreservesNoBom()
+        {
+            string path = Path.Combine(Path.GetTempPath(), $"xfiles_test_{Guid.NewGuid():N}.json");
+            try
+            {
+                // Simulate the user's scenario: JSON file without BOM
+                string json = "{\n  \"name\": \"test\",\n  \"enabled\": true\n}";
+                bool saved = await TextEditorService.SaveAsync(path, json, LineEndingStyle.LF, writeBom: false);
+                Assert.IsTrue(saved);
+
+                var loadResult = await TextEditorService.LoadAsync(path);
+                Assert.IsNotNull(loadResult);
+                Assert.IsFalse(loadResult.HasBom);
+                Assert.AreEqual("UTF-8", loadResult.EncodingName);
+
+                // Re-save preserving BOM state (as the overlay now does)
+                bool saved2 = await TextEditorService.SaveAsync(path, loadResult.Text, loadResult.LineEnding, loadResult.HasBom);
+                Assert.IsTrue(saved2);
+
+                // Verify no BOM in final file
+                byte[] raw = File.ReadAllBytes(path);
+                Assert.AreEqual((byte)'{', raw[0]);
+
+                var finalResult = await TextEditorService.LoadAsync(path);
+                Assert.IsNotNull(finalResult);
+                Assert.IsFalse(finalResult.HasBom);
+            }
+            finally { if (File.Exists(path)) File.Delete(path); }
+        }
+
+        [TestMethod]
+        public async Task RoundTrip_Utf8WithBom_PreservesBom()
+        {
+            string path = Path.Combine(Path.GetTempPath(), $"xfiles_test_{Guid.NewGuid():N}.txt");
+            try
+            {
+                // Start with a BOM file
+                byte[] bom = { 0xEF, 0xBB, 0xBF };
+                byte[] content = Encoding.UTF8.GetBytes("line1\nline2\n");
+                byte[] output = new byte[bom.Length + content.Length];
+                Buffer.BlockCopy(bom, 0, output, 0, bom.Length);
+                Buffer.BlockCopy(content, 0, output, bom.Length, content.Length);
+                File.WriteAllBytes(path, output);
+
+                var loadResult = await TextEditorService.LoadAsync(path);
+                Assert.IsNotNull(loadResult);
+                Assert.IsTrue(loadResult.HasBom);
+
+                // Re-save preserving BOM state
+                bool saved = await TextEditorService.SaveAsync(path, loadResult.Text, loadResult.LineEnding, loadResult.HasBom);
+                Assert.IsTrue(saved);
+
+                byte[] raw = File.ReadAllBytes(path);
+                Assert.AreEqual(0xEF, raw[0]);
+                Assert.AreEqual(0xBB, raw[1]);
+                Assert.AreEqual(0xBF, raw[2]);
+
+                var finalResult = await TextEditorService.LoadAsync(path);
+                Assert.IsNotNull(finalResult);
+                Assert.IsTrue(finalResult.HasBom);
+            }
+            finally { if (File.Exists(path)) File.Delete(path); }
+        }
+
+        [TestMethod]
+        public async Task Save_DefaultWriteBom_IsFalse()
+        {
+            string path = Path.Combine(Path.GetTempPath(), $"xfiles_test_{Guid.NewGuid():N}.txt");
+            try
+            {
+                // Default (no writeBom arg) should NOT produce BOM
+                bool saved = await TextEditorService.SaveAsync(path, "test", LineEndingStyle.LF);
+                Assert.IsTrue(saved);
+
+                byte[] raw = File.ReadAllBytes(path);
+                Assert.AreEqual((byte)'t', raw[0]);
+
+                var result = await TextEditorService.LoadAsync(path);
+                Assert.IsNotNull(result);
+                Assert.IsFalse(result.HasBom);
             }
             finally { if (File.Exists(path)) File.Delete(path); }
         }
