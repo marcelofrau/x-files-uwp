@@ -29,6 +29,7 @@ using XFiles.Navigation;
 using XFiles.Network;
 using XFiles.Services;
 using XFiles.Visualizers;
+using FluentFTP;
 
 namespace XFiles.Controls
 {
@@ -306,6 +307,9 @@ namespace XFiles.Controls
                 Log.Dbg("MillerColumnsPage: set as ActiveNavigable");
             }
             Action markOverlayClosed = () => _overlayClosedTick = Environment.TickCount;
+            FtpSession.TraceSink = (host, message) =>
+                Log.Info("FtpSession [{0}]: {1}", host, message);
+            UpdateFtpTraceFilter();
             InputDialogControl.OnClosed = markOverlayClosed;
             PortalSetupDialogControl.OnClosed = markOverlayClosed;
             PortalSetupDialogControl.CredentialsRequested = () =>
@@ -347,6 +351,9 @@ namespace XFiles.Controls
             }
 
             UpdateClipboardIndicator();
+
+            // Load persisted media volume into fullscreen/inline player defaults
+            _ = LoadMediaVolumeAsync();
         }
 
         /// <summary>
@@ -619,6 +626,27 @@ namespace XFiles.Controls
 
 
         public event PropertyChangedEventHandler PropertyChanged;
+
+        /// <summary>
+        /// Synchronizes FluentFTP trace verbosity with the current app log level.
+        /// When the app is at Info, FluentFTP Verbose messages are suppressed.
+        /// When the app is at Verbose, all FluentFTP messages come through.
+        /// </summary>
+        internal static void UpdateFtpTraceFilter()
+        {
+            string level = Log.GetCurrentLevel();
+            FtpVerboseLogger.TraceFilter = severity =>
+            {
+                switch (level)
+                {
+                    case "Verbose":   return true;
+                    case "Information": return severity != FtpTraceLevel.Verbose;
+                    case "Warning":   return severity == FtpTraceLevel.Warn || severity == FtpTraceLevel.Error;
+                    case "Error":     return severity == FtpTraceLevel.Error;
+                    default:          return severity != FtpTraceLevel.Verbose;
+                }
+            };
+        }
     }
 
 }

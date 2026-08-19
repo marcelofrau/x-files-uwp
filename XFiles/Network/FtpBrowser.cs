@@ -10,18 +10,40 @@ namespace XFiles.Network
     /// FTP/FTPS implementation of INetworkFileSystemProvider. FTP has no share
     /// layer: remote paths are absolute from the server root (or relative to
     /// the login working directory when empty), and <paramref name="share"/> is
-    /// ignored. Each operation uses a fresh FtpSession — an FTP login is cheap
-    /// (~100ms) and AsyncFtpClient is not thread-safe, so pooling would buy
-    /// nothing but shared-connection races. Resolves the password from the
-    /// credential vault; all failures surface as NetworkOperationException.
+    /// ignored. Operations are serialized via a SemaphoreSlim to prevent
+    /// parallel EPSV data-connection races (FileZilla 1.12.6 fails with
+    /// "TLS session of data connection not resumed" when two sessions open
+    /// concurrent data ports). Resolves the password from the credential vault;
+    /// all failures surface as NetworkOperationException.
     /// </summary>
     public class FtpBrowser : INetworkFileSystemProvider
     {
+        /// <summary>
+        /// Serializes all FTP operations so that only one FtpSession is active
+        /// at a time. Prevents EPSV data-connection races on servers that cannot
+        /// handle concurrent TLS sessions (e.g. FileZilla Server).
+        /// </summary>
+        private static readonly SemaphoreSlim _operationLock = new SemaphoreSlim(1, 1);
+
         public NetworkProtocol Protocol => NetworkProtocol.Ftp;
+
+        private static async Task<T> SerializeAsync<T>(Func<Task<T>> operation)
+        {
+            await _operationLock.WaitAsync();
+            try { return await operation(); }
+            finally { _operationLock.Release(); }
+        }
+
+        private static async Task SerializeAsync(Func<Task> operation)
+        {
+            await _operationLock.WaitAsync();
+            try { await operation(); }
+            finally { _operationLock.Release(); }
+        }
 
         public async Task<string> TestConnectionAsync(NetworkServerConfig config, string password, CancellationToken ct)
         {
-            using (var session = new FtpSession(config))
+            using (var session = new FtpSession(config, password))
             {
                 await session.EnsureConnectedAsync(password, ct);
                 var entries = await session.ListDirectoryAsync(config.Share ?? "", ct);
@@ -47,200 +69,230 @@ namespace XFiles.Network
         public async Task<List<NetworkFileEntry>> ListDirectoryAsync(
             NetworkServerConfig config, string share, string path, CancellationToken ct)
         {
-            string remote = EffectivePath(share, path);
-            string password = await NetworkServerManager.GetPasswordAsync(config);
-            using (var session = new FtpSession(config))
+            return await SerializeAsync(async () =>
             {
-                Log.Info($"FtpBrowser.ListDirectory: {NetworkUrl.Compose(config)}{remote}");
-                try
+                string remote = EffectivePath(share, path);
+                string password = await NetworkServerManager.GetPasswordAsync(config);
+                using (var session = new FtpSession(config, password))
                 {
-                    var entries = await session.ListDirectoryAsync(remote, ct);
-                    Log.Dbg($"FtpBrowser.ListDirectory: {entries.Count} entries");
-                    return entries;
+                    Log.Info($"FtpBrowser.ListDirectory: {NetworkUrl.Compose(config)}{remote}");
+                    try
+                    {
+                        var entries = await session.ListDirectoryAsync(remote, ct);
+                        Log.Dbg($"FtpBrowser.ListDirectory: {entries.Count} entries");
+                        return entries;
+                    }
+                    catch (NetworkOperationException ex)
+                    {
+                        Log.Warn($"FtpBrowser.ListDirectory: {ex.Reason} ({ex.Message})");
+                        throw;
+                    }
                 }
-                catch (NetworkOperationException ex)
-                {
-                    Log.Warn($"FtpBrowser.ListDirectory: {ex.Reason} ({ex.Message})");
-                    throw;
-                }
-            }
+            });
         }
 
         public async Task<Stream> OpenReadAsync(
             NetworkServerConfig config, string share, string path, CancellationToken ct)
         {
-            string remote = EffectivePath(share, path);
-            string password = await NetworkServerManager.GetPasswordAsync(config);
-            var session = new FtpSession(config);
-            Log.Info($"FtpBrowser.OpenRead: {NetworkUrl.Compose(config)}{remote}");
-            try
+            return await SerializeAsync(async () =>
             {
-                return await session.OpenReadAsync(remote, ct);
-            }
-            catch (NetworkOperationException ex)
-            {
-                session.Dispose();
-                Log.Warn($"FtpBrowser.OpenRead: {ex.Reason} ({ex.Message})");
-                throw;
-            }
+                string remote = EffectivePath(share, path);
+                string password = await NetworkServerManager.GetPasswordAsync(config);
+                var session = new FtpSession(config, password);
+                Log.Info($"FtpBrowser.OpenRead: {NetworkUrl.Compose(config)}{remote}");
+                try
+                {
+                    return await session.OpenReadAsync(remote, ct);
+                }
+                catch (NetworkOperationException ex)
+                {
+                    session.Dispose();
+                    Log.Warn($"FtpBrowser.OpenRead: {ex.Reason} ({ex.Message})");
+                    throw;
+                }
+            });
         }
 
         public async Task<long> GetFileLengthAsync(
             NetworkServerConfig config, string share, string path, CancellationToken ct)
         {
-            string remote = EffectivePath(share, path);
-            string password = await NetworkServerManager.GetPasswordAsync(config);
-            using (var session = new FtpSession(config))
+            return await SerializeAsync(async () =>
             {
-                try
+                string remote = EffectivePath(share, path);
+                string password = await NetworkServerManager.GetPasswordAsync(config);
+                using (var session = new FtpSession(config, password))
                 {
-                    return await session.GetFileLengthAsync(remote, ct);
+                    try
+                    {
+                        return await session.GetFileLengthAsync(remote, ct);
+                    }
+                    catch (NetworkOperationException ex)
+                    {
+                        Log.Warn($"FtpBrowser.GetFileLength: {ex.Reason} ({ex.Message})");
+                        throw;
+                    }
                 }
-                catch (NetworkOperationException ex)
-                {
-                    Log.Warn($"FtpBrowser.GetFileLength: {ex.Reason} ({ex.Message})");
-                    throw;
-                }
-            }
+            });
         }
 
         public async Task<bool> EntryExistsAsync(
             NetworkServerConfig config, string share, string path, bool isDirectory, CancellationToken ct)
         {
-            string remote = EffectivePath(share, path);
-            string password = await NetworkServerManager.GetPasswordAsync(config);
-            using (var session = new FtpSession(config))
+            return await SerializeAsync(async () =>
             {
-                try
+                string remote = EffectivePath(share, path);
+                string password = await NetworkServerManager.GetPasswordAsync(config);
+                using (var session = new FtpSession(config, password))
                 {
-                    return await session.EntryExistsAsync(remote, isDirectory, ct);
+                    try
+                    {
+                        return await session.EntryExistsAsync(remote, isDirectory, ct);
+                    }
+                    catch (NetworkOperationException ex)
+                    {
+                        Log.Warn($"FtpBrowser.EntryExists: {ex.Reason} ({ex.Message})");
+                        throw;
+                    }
                 }
-                catch (NetworkOperationException ex)
-                {
-                    Log.Warn($"FtpBrowser.EntryExists: {ex.Reason} ({ex.Message})");
-                    throw;
-                }
-            }
+            });
         }
 
         public async Task WriteFileAsync(
             NetworkServerConfig config, string share, string path, string localPath, CancellationToken ct)
         {
-            string remote = EffectivePath(share, path);
-            string password = await NetworkServerManager.GetPasswordAsync(config);
-            using (var session = new FtpSession(config))
+            await SerializeAsync(async () =>
             {
-                Log.Info($"FtpBrowser.WriteFile: {localPath} → {remote}");
-                try
+                string remote = EffectivePath(share, path);
+                string password = await NetworkServerManager.GetPasswordAsync(config);
+                using (var session = new FtpSession(config, password))
                 {
-                    await session.WriteFileAsync(remote, localPath, ct);
-                    Log.Info($"FtpBrowser.WriteFile: uploaded");
+                    Log.Info($"FtpBrowser.WriteFile: {localPath} → {remote}");
+                    try
+                    {
+                        await session.WriteFileAsync(remote, localPath, ct);
+                        Log.Info($"FtpBrowser.WriteFile: uploaded");
+                    }
+                    catch (NetworkOperationException ex)
+                    {
+                        Log.Warn($"FtpBrowser.WriteFile: {ex.Reason} ({ex.Message})");
+                        throw;
+                    }
                 }
-                catch (NetworkOperationException ex)
-                {
-                    Log.Warn($"FtpBrowser.WriteFile: {ex.Reason} ({ex.Message})");
-                    throw;
-                }
-            }
+            });
         }
 
         public async Task<Stream> OpenWriteStreamAsync(
             NetworkServerConfig config, string share, string path, CancellationToken ct)
         {
-            string remote = EffectivePath(share, path);
-            string password = await NetworkServerManager.GetPasswordAsync(config);
-            var session = new FtpSession(config);
-            Log.Info($"FtpBrowser.OpenWriteStream: {remote}");
-            try
+            return await SerializeAsync(async () =>
             {
-                return await session.OpenWriteStreamAsync(remote, ct);
-            }
-            catch (NetworkOperationException ex)
-            {
-                session.Dispose();
-                Log.Warn($"FtpBrowser.OpenWriteStream: {ex.Reason} ({ex.Message})");
-                throw;
-            }
+                string remote = EffectivePath(share, path);
+                string password = await NetworkServerManager.GetPasswordAsync(config);
+                var session = new FtpSession(config, password);
+                Log.Info($"FtpBrowser.OpenWriteStream: {remote}");
+                try
+                {
+                    return await session.OpenWriteStreamAsync(remote, ct);
+                }
+                catch (NetworkOperationException ex)
+                {
+                    session.Dispose();
+                    Log.Warn($"FtpBrowser.OpenWriteStream: {ex.Reason} ({ex.Message})");
+                    throw;
+                }
+            });
         }
 
         public async Task DeleteFileAsync(
             NetworkServerConfig config, string share, string path, CancellationToken ct)
         {
-            string remote = EffectivePath(share, path);
-            string password = await NetworkServerManager.GetPasswordAsync(config);
-            using (var session = new FtpSession(config))
+            await SerializeAsync(async () =>
             {
-                Log.Info($"FtpBrowser.DeleteFile: {remote}");
-                try
+                string remote = EffectivePath(share, path);
+                string password = await NetworkServerManager.GetPasswordAsync(config);
+                using (var session = new FtpSession(config, password))
                 {
-                    await session.DeleteFileAsync(remote, ct);
+                    Log.Info($"FtpBrowser.DeleteFile: {remote}");
+                    try
+                    {
+                        await session.DeleteFileAsync(remote, ct);
+                    }
+                    catch (NetworkOperationException ex)
+                    {
+                        Log.Warn($"FtpBrowser.DeleteFile: {ex.Reason} ({ex.Message})");
+                        throw;
+                    }
                 }
-                catch (NetworkOperationException ex)
-                {
-                    Log.Warn($"FtpBrowser.DeleteFile: {ex.Reason} ({ex.Message})");
-                    throw;
-                }
-            }
+            });
         }
 
         public async Task DeleteDirectoryAsync(
             NetworkServerConfig config, string share, string path, CancellationToken ct)
         {
-            string remote = EffectivePath(share, path);
-            string password = await NetworkServerManager.GetPasswordAsync(config);
-            using (var session = new FtpSession(config))
+            await SerializeAsync(async () =>
             {
-                Log.Info($"FtpBrowser.DeleteDirectory: {remote}");
-                try
+                string remote = EffectivePath(share, path);
+                string password = await NetworkServerManager.GetPasswordAsync(config);
+                using (var session = new FtpSession(config, password))
                 {
-                    await session.DeleteDirectoryAsync(remote, ct);
+                    Log.Info($"FtpBrowser.DeleteDirectory: {remote}");
+                    try
+                    {
+                        await session.DeleteDirectoryAsync(remote, ct);
+                    }
+                    catch (NetworkOperationException ex)
+                    {
+                        Log.Warn($"FtpBrowser.DeleteDirectory: {ex.Reason} ({ex.Message})");
+                        throw;
+                    }
                 }
-                catch (NetworkOperationException ex)
-                {
-                    Log.Warn($"FtpBrowser.DeleteDirectory: {ex.Reason} ({ex.Message})");
-                    throw;
-                }
-            }
+            });
         }
 
         public async Task RenameFileAsync(
             NetworkServerConfig config, string share, string path, string newName, bool isDirectory, CancellationToken ct)
         {
-            string remote = EffectivePath(share, path);
-            string password = await NetworkServerManager.GetPasswordAsync(config);
-            using (var session = new FtpSession(config))
+            await SerializeAsync(async () =>
             {
-                Log.Info($"FtpBrowser.RenameFile: {remote} → {newName}");
-                try
+                string remote = EffectivePath(share, path);
+                string password = await NetworkServerManager.GetPasswordAsync(config);
+                using (var session = new FtpSession(config, password))
                 {
-                    await session.RenameFileAsync(remote, newName, ct);
+                    Log.Info($"FtpBrowser.RenameFile: {remote} → {newName}");
+                    try
+                    {
+                        await session.RenameFileAsync(remote, newName, ct);
+                    }
+                    catch (NetworkOperationException ex)
+                    {
+                        Log.Warn($"FtpBrowser.RenameFile: {ex.Reason} ({ex.Message})");
+                        throw;
+                    }
                 }
-                catch (NetworkOperationException ex)
-                {
-                    Log.Warn($"FtpBrowser.RenameFile: {ex.Reason} ({ex.Message})");
-                    throw;
-                }
-            }
+            });
         }
 
         public async Task CreateDirectoryAsync(
             NetworkServerConfig config, string share, string path, CancellationToken ct)
         {
-            string remote = EffectivePath(share, path);
-            string password = await NetworkServerManager.GetPasswordAsync(config);
-            using (var session = new FtpSession(config))
+            await SerializeAsync(async () =>
             {
-                Log.Info($"FtpBrowser.CreateDirectory: {remote}");
-                try
+                string remote = EffectivePath(share, path);
+                string password = await NetworkServerManager.GetPasswordAsync(config);
+                using (var session = new FtpSession(config, password))
                 {
-                    await session.CreateDirectoryAsync(remote, ct);
+                    Log.Info($"FtpBrowser.CreateDirectory: {remote}");
+                    try
+                    {
+                        await session.CreateDirectoryAsync(remote, ct);
+                    }
+                    catch (NetworkOperationException ex)
+                    {
+                        Log.Warn($"FtpBrowser.CreateDirectory: {ex.Reason} ({ex.Message})");
+                        throw;
+                    }
                 }
-                catch (NetworkOperationException ex)
-                {
-                    Log.Warn($"FtpBrowser.CreateDirectory: {ex.Reason} ({ex.Message})");
-                    throw;
-                }
-            }
+            });
         }
 
         /// <summary>Sessions are per-operation; there is nothing to pool-release.</summary>

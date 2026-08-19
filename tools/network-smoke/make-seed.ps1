@@ -1,4 +1,4 @@
-# Generates seed media for the network-smoke docker containers.
+# Generates seed media for the network-smoke docker containers (FTP, SFTP, WebDAV).
 # Run from the repo root: pwsh tools/network-smoke/make-seed.ps1
 $ErrorActionPreference = "Stop"
 

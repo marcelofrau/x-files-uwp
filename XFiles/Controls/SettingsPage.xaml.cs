@@ -66,12 +66,24 @@ namespace XFiles.Controls
             int bgmVol = await XFilesSettings.GetBgmVolumeAsync();
             bool hideDrives = await XFilesSettings.GetHideEmptyDrivesAsync();
 
+            int logFileCount = 0;
+            try
+            {
+                string logsDir = Log.GetLogsDirectory();
+                if (System.IO.Directory.Exists(logsDir))
+                {
+                    logFileCount = System.IO.Directory.GetFiles(logsDir, "xfiles-*.log").Length
+                                 + System.IO.Directory.GetFiles(logsDir, "xfiles-*.log.gz").Length;
+                }
+            }
+            catch { }
+
             return new List<SettingsMenuItem>
             {
                 new SettingsMenuItem
                 {
                     Label = "Clear Data",
-                    Description = "Cache and portal credentials",
+                    Description = "Cache, portal credentials, and log files",
                     IconPath = IconBase + "startmenu-close-48.png",
                     Action = "menu-clear-data",
                     Children = new List<SettingsMenuItem>
@@ -89,6 +101,15 @@ namespace XFiles.Controls
                             Description = portalDesc,
                             IconPath = "ms-appx:///Assets/Views/SettingsPage/settingspage-clear-credentials-48.png",
                             Action = "clear-portal-creds"
+                        },
+                        new SettingsMenuItem
+                        {
+                            Label = "Clear Logs",
+                            Description = logFileCount > 0
+                                ? $"Delete {logFileCount} archived log file(s)"
+                                : "No archived log files",
+                            IconPath = IconBase + "startmenu-close-48.png",
+                            Action = "clear-logs"
                         }
                     }
                 },
@@ -127,6 +148,13 @@ namespace XFiles.Controls
                             Description = $"Current: {bgmVol}%",
                             IconPath = "ms-appx:///Assets/Views/SettingsPage/settingspage-volume-48.png",
                             Action = "bgm-volume"
+                        },
+                        new SettingsMenuItem
+                        {
+                            Label = "Media Volume",
+                            Description = $"Current: {await XFilesSettings.GetMediaVolumeAsync()}%",
+                            IconPath = "ms-appx:///Assets/Views/SettingsPage/settingspage-volume-48.png",
+                            Action = "media-volume"
                         }
                     }
                 },
@@ -329,6 +357,7 @@ namespace XFiles.Controls
 
                 await XFilesSettings.SetLogLevelAsync(newLevel);
                 Log.SetLogLevel(newLevel);
+                Controls.MillerColumnsPage.UpdateFtpTraceFilter();
                 Log.Info("SettingsPage: log level changed to {Level}", newLevel);
 
                 await RenderAsync(item.Action);
@@ -350,6 +379,27 @@ namespace XFiles.Controls
                     catch (Exception ex)
                     {
                         Log.Warn("SettingsPage: clear portal credentials failed", ex);
+                    }
+                }
+
+                Overlay.Visibility = Visibility.Visible;
+                await RenderAsync(item.Action);
+            }
+            else if (item.Action == "clear-logs")
+            {
+                Overlay.Visibility = Visibility.Collapsed;
+                bool confirmed = await AlertDialogControl.ShowConfirmAsync(
+                    "Delete all archived session log files?");
+
+                if (confirmed)
+                {
+                    try
+                    {
+                        Log.ClearAllLogs();
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warn("SettingsPage: clear logs failed", ex);
                     }
                 }
 
@@ -391,6 +441,14 @@ namespace XFiles.Controls
                 int next = MusicFormatClassifier.NextVolumeLevel(current);
                 await BackgroundMusicService.Instance.SetVolumeAsync(
                     MusicFormatClassifier.PercentToGain(next));
+                await RenderAsync(item.Action);
+            }
+            else if (item.Action == "media-volume")
+            {
+                int current = await XFilesSettings.GetMediaVolumeAsync();
+                int next = MusicFormatClassifier.NextVolumeLevel(current);
+                // SetVolume persists to settings + applies to active AudioGraph
+                Audio.AudioLevelService.Instance?.SetVolume(next / 100.0);
                 await RenderAsync(item.Action);
             }
             else if (item.Action == "hide-drives")

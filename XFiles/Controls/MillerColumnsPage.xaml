@@ -650,7 +650,7 @@
                     Visibility="Collapsed">
                     <ProgressRing IsActive="True" Width="32" Height="32"
                                   Foreground="{StaticResource XFilesAccentBrush}" />
-                    <TextBlock Text="Loading portal preview…"
+                    <TextBlock Text="Loading preview…"
                                Foreground="{StaticResource XFilesTextMutedBrush}"
                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                FontSize="12"
@@ -1036,7 +1036,8 @@
                                            FontSize="13" Foreground="{StaticResource XFilesAccentBrush}"
                                            Margin="0,0,0,16" />
 
-                                <Image Source="ms-appx:///Assets/Views/MainPage/mainpage-network-server-128.png"
+                                <Image x:Name="NetworkServerIcon"
+                                       Source="ms-appx:///Assets/Views/MainPage/mainpage-network-server-128.png"
                                        Width="88" Height="88"
                                        HorizontalAlignment="Center"
                                        Margin="0,4,0,16" />
@@ -1056,7 +1057,7 @@
                                                    Width="86"
                                                    FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                                    FontSize="11" Foreground="{StaticResource XFilesTextDimBrush}" />
-                                        <TextBlock Text="Windows Share (SMB)"
+                                        <TextBlock x:Name="NetworkServerProtocol" Text="Windows Share (SMB)"
                                                    FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                                    FontSize="11" Foreground="#CCFFFFFF" />
                                     </StackPanel>
@@ -1066,6 +1067,15 @@
                                                    FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                                    FontSize="11" Foreground="{StaticResource XFilesTextDimBrush}" />
                                         <TextBlock x:Name="NetworkServerHost"
+                                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                                   FontSize="11" Foreground="#CCFFFFFF" />
+                                    </StackPanel>
+                                    <StackPanel x:Name="NetworkServerPortRow" Orientation="Horizontal" Margin="0,0,0,7" Visibility="Collapsed">
+                                        <TextBlock Text="Port"
+                                                   Width="86"
+                                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                                   FontSize="11" Foreground="{StaticResource XFilesTextDimBrush}" />
+                                        <TextBlock x:Name="NetworkServerPort"
                                                    FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                                    FontSize="11" Foreground="#CCFFFFFF" />
                                     </StackPanel>

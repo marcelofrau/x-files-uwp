@@ -381,6 +381,14 @@ namespace XFiles.Audio
             }
             _deviceOutputNode = deviceResult.DeviceOutputNode;
 
+            // Apply persisted media volume
+            try
+            {
+                int vol = await Settings.XFilesSettings.GetMediaVolumeAsync();
+                _deviceOutputNode.OutgoingGain = vol / 100.0;
+            }
+            catch { }
+
             if (createDeviceOutput)
             {
                 Log.Info("AudioLevelService: playback mode (device output connected)");
@@ -1070,6 +1078,9 @@ namespace XFiles.Audio
             {
                 if (_deviceOutputNode != null)
                     _deviceOutputNode.OutgoingGain = gain;
+
+                // Persist for next session
+                _ = Settings.XFilesSettings.SetMediaVolumeAsync((int)(gain * 100));
             }
             catch (Exception ex)
             {

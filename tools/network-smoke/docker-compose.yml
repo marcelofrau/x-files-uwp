@@ -4,8 +4,9 @@
 #   docker compose -f tools/network-smoke/docker-compose.yml down
 # Seed data is mounted read-only from ./seed; generate it with make-seed.ps1.
 #
-# FTP  -> ftp://127.0.0.1:2121  (user: smoke / pass: smoke123)  plain + implicit FTPS on 2123
-# SFTP -> ssh://127.0.0.1:2222  (user: smoke / pass: smoke123)  (also the SFTP test server)
+# FTP  -> ftp://10.0.0.20:2121  (user: smoke / pass: smoke123)  plain + implicit FTPS on 2123
+# SFTP -> ssh://10.0.0.20:2222   (user: smoke / pass: smoke123)  (also the SFTP test server)
+# WebDAV -> http://10.0.0.20:8081 (user: user / pass: pass)     Digest auth
 #
 # Env-gated smoke tests in tests/ connect to these when the *_SMOKE_* vars are set
 # (see tests/FtpSmokeTests.cs / SftpSmokeTests.cs).
@@ -15,21 +16,37 @@ services:
     # vsftpd-based image: supports REST STREAM (seekable FTP) + TLS.
     image: fauria/vsftpd:latest
     container_name: xfiles-smoke-ftp
+    # Copy the TLS-enabled conf into place, then run the image's normal entrypoint
+    # (which appends the runtime env vars and starts vsftpd).
+    entrypoint: [ "/bin/bash", "-c", "cp /certs/vsftpd.conf /etc/vsftpd/vsftpd.conf && /usr/sbin/run-vsftpd.sh" ]
     ports:
       - "2121:21"
-      - "2123:990"          # implicit FTPS
+      - "2123:990" # implicit FTPS
       - "30000-30010:30000-30010"
     environment:
       FTP_USER: smoke
       FTP_PASS: smoke123
-      PASV_ADDRESS: 127.0.0.1
+      # Must be the host's LAN IP when testing from another device (Xbox).
+      # PASV replies announce this address; 127.0.0.1 makes remote clients
+      # try to connect to themselves. Set to ${SMOKE_PASV_ADDRESS:-10.0.0.20}.
+      PASV_ADDRESS: ${SMOKE_PASV_ADDRESS:-10.0.0.20}
       PASV_MIN_PORT: 30000
       PASV_MAX_PORT: 30010
       REVERSE_LOOKUP_ENABLE: "NO"
+      # TLS: self-signed cert (see certs/). Enables explicit FTPS on 21 and
+      # implicit FTPS on 990 (mapped to host 2121/2123). ValidateAnyCertificate
+      # accepts the self-signed cert client-side.
+      TLS_CERT: /certs/vsftpd.crt
+      TLS_KEY: /certs/vsftpd.key
     volumes:
       # Seed mounted writable so the FTP write-back smoke test can STOR into
       # the FTP home; the test deletes its own file afterwards.
       - ./seed:/home/vsftpd/smoke
+      # vsftpd.conf with TLS enabled (certs/vsftpd.conf) replaces the image
+      # default; the wrapper entrypoint copies it then the image entrypoint
+      # appends the runtime env vars on top.
+      - ./certs/vsftpd.conf:/certs/vsftpd.conf:ro
+      - ./certs:/certs:ro
     restart: "no"
 
   sftp:
@@ -48,3 +65,17 @@ services:
     volumes:
       - ./seed:/home/smoke/share:ro
     restart: "no"
+
+#  webdav:
+#    # nginx-based WebDAV server with Digest authentication.
+#    image: delfer/alpine-nginx-webdav:latest
+#    container_name: xfiles-smoke-webdav
+#    ports:
+#      - "8081:80"
+#    environment:
+#      WEBDAV_USERNAME: user
+#      WEBDAV_PASSWORD: pass
+#      AUTH_TYPE: Digest
+#    volumes:
+#      - ./seed:/var/www/html:ro
+#    restart: "no"

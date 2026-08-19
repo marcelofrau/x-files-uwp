@@ -188,7 +188,11 @@ namespace XFiles.Controls
             }
             else
             {
-                _currentSourceUri = new Uri(filePath);
+                if (!Uri.TryCreate(filePath, UriKind.Absolute, out _currentSourceUri))
+                {
+                    Log.Warn("MediaPreviewControl: skipping non-absolute path '{Path}'", filePath);
+                    return;
+                }
                 var source = MediaSource.CreateFromUri(_currentSourceUri);
                 _currentPlaybackItem = new MediaPlaybackItem(source);
                 Player.Source = _currentPlaybackItem;
@@ -1233,13 +1237,14 @@ namespace XFiles.Controls
             var clamped = Math.Max(0.0, Math.Min(1.0, volume));
             if (_isAudioMode)
             {
-                // AudioGraph volume control via device output node not directly exposed
-                // Volume is controlled by system audio
+                AudioLevelService.Instance?.SetVolume(clamped);
             }
             else
             {
                 Player.Volume = clamped;
             }
+            // Persist for next session
+            _ = Settings.XFilesSettings.SetMediaVolumeAsync((int)(clamped * 100));
         }
 
         public async Task OpenFullscreen()

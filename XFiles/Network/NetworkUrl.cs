@@ -136,13 +136,18 @@ namespace XFiles.Network
             return Compose(config);
         }
 
-        /// <summary>Display name: friendly name when set, else the canonical URL.</summary>
+        /// <summary>Display name: friendly name when set, else the canonical URL with port if non-default.</summary>
         public static string DisplayName(NetworkServerConfig config)
         {
             if (config == null) return null;
             string friendly = (config.DisplayName ?? "").Trim();
             if (friendly.Length > 0) return friendly;
-            return Compose(config);
+            string url = Compose(config);
+            if (url == null) return null;
+            int port = config.Port > 0 ? config.Port : DefaultPort(config.Protocol);
+            if (port > 0 && port != DefaultPort(config.Protocol))
+                url += ":" + port;
+            return url;
         }
 
         /// <summary>

@@ -62,3 +62,6 @@ bugs-ideias.txt
 
 # magic-context plugin local state (never committed)
 .cortexkit/
+
+# Network smoke test seed (large media files, local-only)
+tools/network-smoke/seed/

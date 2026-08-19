@@ -269,6 +269,76 @@
     <SolidColorBrush x:Key="ComboBoxHeaderForegroundFocused" Color="#B0D8A0" />
     <SolidColorBrush x:Key="ComboBoxHeaderForegroundDisabled" Color="#8B8D91" />
 
+    <Style x:Key="DarkComboBoxItemStyle" TargetType="ComboBoxItem">
+        <Setter Property="Background" Value="{StaticResource ComboBoxItemBackground}" />
+        <Setter Property="Foreground" Value="{StaticResource ComboBoxItemForeground}" />
+        <Setter Property="BorderBrush" Value="{StaticResource ComboBoxItemBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="8,6" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBoxItem">
+                    <Border x:Name="Root"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            Padding="{TemplateBinding Padding}">
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Normal">
+                                    <VisualState.Setters>
+                                        <Setter Target="Root.Background" Value="{StaticResource ComboBoxItemBackground}" />
+                                        <Setter Target="Root.BorderBrush" Value="{StaticResource ComboBoxItemBorderBrush}" />
+                                        <Setter Target="ItemContent.Foreground" Value="{StaticResource ComboBoxItemForeground}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="PointerOver">
+                                    <VisualState.Setters>
+                                        <Setter Target="Root.Background" Value="{StaticResource ComboBoxItemBackgroundPointerOver}" />
+                                        <Setter Target="Root.BorderBrush" Value="{StaticResource ComboBoxItemBorderBrushPointerOver}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Pressed">
+                                    <VisualState.Setters>
+                                        <Setter Target="Root.Background" Value="{StaticResource ComboBoxItemBackgroundPressed}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Disabled">
+                                    <VisualState.Setters>
+                                        <Setter Target="Root.Background" Value="{StaticResource ComboBoxItemBackgroundDisabled}" />
+                                        <Setter Target="ItemContent.Foreground" Value="{StaticResource ComboBoxItemForegroundDisabled}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                            </VisualStateGroup>
+                            <VisualStateGroup x:Name="SelectionStates">
+                                <VisualState x:Name="Unselected">
+                                    <VisualState.Setters>
+                                        <Setter Target="Root.Background" Value="{StaticResource ComboBoxItemBackground}" />
+                                        <Setter Target="Root.BorderBrush" Value="{StaticResource ComboBoxItemBorderBrush}" />
+                                        <Setter Target="ItemContent.Foreground" Value="{StaticResource ComboBoxItemForeground}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Selected">
+                                    <VisualState.Setters>
+                                        <Setter Target="Root.Background" Value="{StaticResource ComboBoxItemBackgroundSelected}" />
+                                        <Setter Target="Root.BorderBrush" Value="{StaticResource ComboBoxItemBorderBrushSelected}" />
+                                        <Setter Target="ItemContent.Foreground" Value="{StaticResource ComboBoxItemForegroundSelected}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                        <ContentPresenter x:Name="ItemContent"
+                                          Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="Center" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style x:Key="DarkComboBoxStyle" TargetType="ComboBox">
         <Setter Property="Background" Value="{StaticResource XFilesInputBgBrush}" />
         <Setter Property="Foreground" Value="{StaticResource XFilesForegroundBrush}" />
@@ -278,6 +348,7 @@
         <Setter Property="FontSize" Value="14" />
         <Setter Property="Padding" Value="8,6" />
         <Setter Property="MinHeight" Value="34" />
+        <Setter Property="ItemContainerStyle" Value="{StaticResource DarkComboBoxItemStyle}" />
     </Style>
 
     <!-- ═══ Progress bar (operation dialog) ═══ -->

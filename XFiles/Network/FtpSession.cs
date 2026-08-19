@@ -25,13 +25,23 @@ namespace XFiles.Network
     {
         public const int OperationTimeoutMs = 15000;
 
+        /// <summary>
+        /// Optional sink for FluentFTP protocol traces (host, message). Wired by
+        /// the app to forward to the central log; stays null in the desktop tests.
+        /// </summary>
+        public static Action<string, string> TraceSink;
+
         private readonly NetworkServerConfig _config;
+        private readonly string _password;
         private AsyncFtpClient _client;
         private bool _supportsRest;
 
-        public FtpSession(NetworkServerConfig config)
+        public FtpSession(NetworkServerConfig config) : this(config, null) { }
+
+        public FtpSession(NetworkServerConfig config, string password)
         {
             _config = config ?? throw new ArgumentNullException(nameof(config));
+            _password = password;
         }
 
         /// <summary>True when the server advertises the REST command (seekable reads).</summary>
@@ -55,65 +65,187 @@ namespace XFiles.Network
                 ? "xfiles@local"
                 : (password ?? "");
 
-            var client = new AsyncFtpClient(_config.Host, user, pass, _config.EffectivePort);
-            client.Config.ConnectTimeout = OperationTimeoutMs;
-            if (_config.Protocol == NetworkProtocol.Ftps)
-            {
+            bool isFtps = _config.Protocol == NetworkProtocol.Ftps;
+            FtpEncryptionMode? mode = isFtps
                 // Port 990 is the conventional implicit-FTPS port (RFC 4217):
                 // TLS starts on the very first byte. Any other port is explicit
                 // FTPS (AUTH TLS on the plaintext control connection). The user
                 // picks the mode by entering the port in the location dialog.
-                client.Config.EncryptionMode = _config.EffectivePort == 990
-                    ? FtpEncryptionMode.Implicit
-                    : FtpEncryptionMode.Explicit;
-                // The smoke server uses a self-signed cert; a certificate trust
-                // dialog (mirroring SFTP host-key trust, M10) is future work.
+                ? (_config.EffectivePort == 990 ? FtpEncryptionMode.Implicit : FtpEncryptionMode.Explicit)
+                : (FtpEncryptionMode?)null;
+
+            AsyncFtpClient client;
+            try
+            {
+                client = await ConnectOnceAsync(user, pass, mode, ct).ConfigureAwait(false);
+            }
+            catch (NetworkOperationException ex) when (ShouldAutoUpgradeToFtps(ex))
+            {
+                // The server rejected a plaintext login and demands TLS
+                // (FileZilla "503 Use AUTH first", vsftpd "530 ... must use
+                // encryption"). Retry automatically with explicit FTPS instead
+                // of failing the operation.
+                TraceSink?.Invoke(_config.Host, "Plain FTP rejected — server demands TLS. Retrying with explicit FTPS.");
+                client = await ConnectOnceAsync(user, pass, FtpEncryptionMode.Explicit, ct).ConfigureAwait(false);
+            }
+
+            _supportsRest = client.HasFeature(FtpCapability.REST);
+            _client = client;
+        }
+
+        private async Task<AsyncFtpClient> ConnectOnceAsync(
+            string user, string pass, FtpEncryptionMode? mode, CancellationToken ct)
+        {
+            var client = new AsyncFtpClient(_config.Host, user, pass, _config.EffectivePort, null, new FtpVerboseLogger(_config.Host));
+            client.Config.ConnectTimeout = OperationTimeoutMs;
+            client.Config.ReadTimeout = OperationTimeoutMs;
+            client.Config.DataConnectionConnectTimeout = OperationTimeoutMs;
+            client.Config.DataConnectionReadTimeout = OperationTimeoutMs;
+            // Force IPv4 — Xbox UWP may resolve AAAA records but fail to
+            // connect via IPv6, causing a silent hang until timeout.
+            client.Config.InternetProtocolVersions = FtpIpVersion.IPv4;
+            if (mode.HasValue)
+            {
+                client.Config.EncryptionMode = mode.Value;
                 client.Config.ValidateAnyCertificate = true;
             }
 
+            // Pre-connect DNS resolution logging
+            string[] dnsIps = new string[0];
             try
             {
-                await client.Connect(ct).ConfigureAwait(false);
-                _supportsRest = client.HasFeature(FtpCapability.REST);
+                var addresses = await System.Net.Dns.GetHostAddressesAsync(_config.Host);
+                dnsIps = Array.ConvertAll(addresses, a => a.ToString());
+                TraceSink?.Invoke(_config.Host, string.Format(
+                    "DNS resolved {0} → [{1}] (count={2}, af={3})",
+                    _config.Host, string.Join(", ", dnsIps), dnsIps.Length,
+                    addresses.Length > 0 ? addresses[0].AddressFamily.ToString() : "none"));
+            }
+            catch (Exception dnsEx)
+            {
+                TraceSink?.Invoke(_config.Host, string.Format(
+                    "DNS FAILED for {0}: {1}", _config.Host, dnsEx.Message));
+            }
+
+            // Instrumentation: log everything before connect
+            TraceSink?.Invoke(_config.Host, string.Format(
+                "CONNECT ATTEMPT host={0} port={1} user={2} passLen={3} mode={4} timeout={5}ms encrypt={6} sslProtocols={7} ipVersions={8} dns=[{9}]",
+                _config.Host, _config.EffectivePort, user, pass.Length,
+                mode?.ToString() ?? "null",
+                client.Config.ConnectTimeout,
+                client.Config.EncryptionMode,
+                client.Config.SslProtocols,
+                client.Config.InternetProtocolVersions,
+                string.Join(", ", dnsIps)));
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            try
+            {
+                // FluentFTP (.NET Standard 2.0) doesn't use ConfigureAwait(false)
+                // internally. On UWP, its SslStream.AuthenticateAsClientAsync
+                // captures the DispatcherSynchronizationContext and deadlocks
+                // (UI thread blocked → TLS handshake can't pump → hang). Task.Run
+                // forces the entire FluentFTP call onto a thread pool thread.
+                TraceSink?.Invoke(_config.Host, string.Format("CONNECTING via Task.Run... (elapsed {0}ms)", sw.ElapsedMilliseconds));
+                await Task.Run(() => client.Connect(ct), ct).ConfigureAwait(false);
+                sw.Stop();
+                TraceSink?.Invoke(_config.Host, string.Format(
+                    "CONNECTED OK elapsed={0}ms isAuthenticated={1} isEncrypted={2} capabilities={3}",
+                    sw.ElapsedMilliseconds, client.IsAuthenticated, client.IsEncrypted,
+                    client.HasFeature(FtpCapability.REST) ? "REST" : "no-REST"));
+                return client;
             }
             catch (OperationCanceledException)
             {
+                sw.Stop();
+                TraceSink?.Invoke(_config.Host, string.Format("CONNECT CANCELLED elapsed={0}ms", sw.ElapsedMilliseconds));
                 client.Dispose();
                 throw new NetworkOperationException(
                     NetworkOperationReason.Cancelled, "FTP connect cancelled");
             }
-            catch (FtpAuthenticationException)
+            catch (FtpAuthenticationException ex)
             {
+                sw.Stop();
+                TraceSink?.Invoke(_config.Host, string.Format("CONNECT AUTH FAILED elapsed={0}ms: {1}", sw.ElapsedMilliseconds, ex.Message));
                 client.Dispose();
                 throw new NetworkOperationException(
-                    NetworkOperationReason.AuthFailed, "FTP login failed — check user and password");
+                    NetworkOperationReason.AuthFailed, "FTP login failed — check user and password", ex);
             }
             catch (FtpCommandException ex)
             {
+                sw.Stop();
+                TraceSink?.Invoke(_config.Host, string.Format("CONNECT CMD FAILED elapsed={0}ms code={1}: {2}", sw.ElapsedMilliseconds, ex.CompletionCode, ex.Message));
                 client.Dispose();
+                string message = ex.Message ?? "";
+                if (message.IndexOf("AUTH first", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    throw new NetworkOperationException(
+                        NetworkOperationReason.AccessDenied,
+                        "This FTP server requires a secure connection. Use FTPS as the protocol (port 21 explicit or 990 implicit) and try again.",
+                        ex);
+                }
                 throw new NetworkOperationException(
                     MapStatusCode(ex.CompletionCode), ex.Message, ex);
             }
             catch (SocketException ex)
             {
+                sw.Stop();
+                TraceSink?.Invoke(_config.Host, string.Format("CONNECT SOCKET FAILED elapsed={0}ms: SocketError={1} nativeError={2}: {3}",
+                    sw.ElapsedMilliseconds, ex.SocketErrorCode, ex.NativeErrorCode, ex.Message));
                 client.Dispose();
                 throw new NetworkOperationException(
                     NetworkOperationReason.Unreachable, ex.Message, ex);
             }
             catch (TimeoutException ex)
             {
+                sw.Stop();
+                TraceSink?.Invoke(_config.Host, string.Format("CONNECT TIMEOUT elapsed={0}ms: {1}", sw.ElapsedMilliseconds, ex.Message));
                 client.Dispose();
                 throw new NetworkOperationException(
                     NetworkOperationReason.TimedOut, ex.Message, ex);
             }
+            catch (ObjectDisposedException ex)
+            {
+                sw.Stop();
+                TraceSink?.Invoke(_config.Host, string.Format("CONNECT DISPOSED elapsed={0}ms: {1}\n  inner={2}\n  stackTrace={3}",
+                    sw.ElapsedMilliseconds, ex.Message,
+                    ex.InnerException?.Message ?? "(none)",
+                    ex.StackTrace ?? "(none)"));
+                client.Dispose();
+                throw new NetworkOperationException(
+                    NetworkOperationReason.Unreachable,
+                    mode == FtpEncryptionMode.Implicit
+                        ? "FTPS connection failed — the server did not complete the secure handshake. Check that the server supports FTPS and the port (990 = implicit, otherwise explicit)."
+                        : mode == FtpEncryptionMode.Explicit
+                            ? "FTPS connection failed — the server did not complete the secure handshake. Check that the server supports FTPS and the port (990 = implicit, otherwise explicit)."
+                            : "The FTP server rejected the connection (it may require a secure FTPS connection). Try FTPS as the protocol.",
+                    ex);
+            }
             catch (Exception ex)
             {
+                sw.Stop();
+                TraceSink?.Invoke(_config.Host, string.Format("CONNECT UNEXPECTED elapsed={0}ms type={1}: {2}",
+                    sw.ElapsedMilliseconds, ex.GetType().Name, ex.Message));
                 client.Dispose();
                 throw new NetworkOperationException(
                     NetworkOperationReason.Unreachable, ex.Message, ex);
             }
+        }
 
-            _client = client;
+        /// <summary>
+        /// True when a plain-FTP connect failed because the server demands TLS
+        /// ("503 Use AUTH first", "530 ... must use encryption") or FluentFTP
+        /// collapsed that rejection into an ObjectDisposedException (FileZilla).
+        /// The raw detail is preserved as the inner exception for detection.
+        /// </summary>
+        private bool ShouldAutoUpgradeToFtps(NetworkOperationException ex)
+        {
+            if (_config.Protocol == NetworkProtocol.Ftps) return false;
+            if (ex.InnerException is ObjectDisposedException) return true;
+            string detail = ex.InnerException?.Message ?? ex.Message ?? "";
+            return detail.IndexOf("encryption", StringComparison.OrdinalIgnoreCase) >= 0
+                || detail.IndexOf("AUTH first", StringComparison.OrdinalIgnoreCase) >= 0
+                || detail.IndexOf("must use", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static NetworkOperationReason MapStatusCode(string completionCode)
@@ -178,7 +310,14 @@ namespace XFiles.Network
             if (ex is OperationCanceledException)
                 return NetworkOperationReason.Cancelled;
             if (ex is FtpCommandException fe)
+            {
+                // "550 Permission denied" is an access failure, not a missing
+                // entry — the numeric code alone can't tell them apart.
+                if (fe.Message.IndexOf("Permission", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    fe.Message.IndexOf("denied", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return NetworkOperationReason.AccessDenied;
                 return MapStatusCode(fe.CompletionCode);
+            }
             if (ex is SocketException)
                 return NetworkOperationReason.Unreachable;
             if (ex is TimeoutException)
@@ -350,7 +489,7 @@ namespace XFiles.Network
 
         private async Task<AsyncFtpClient> EnsureAsync(CancellationToken ct)
         {
-            await EnsureConnectedAsync(null, ct).ConfigureAwait(false);
+            await EnsureConnectedAsync(_password, ct).ConfigureAwait(false);
             return _client;
         }
 
@@ -557,6 +696,51 @@ namespace XFiles.Network
                 _session.Dispose();
             }
             base.Dispose(disposing);
+        }
+    }
+
+    /// <summary>
+    /// Forwards FluentFTP protocol traces to the central log.
+    /// Uses an injected sink so this file stays free of Log/UWP dependencies
+    /// (it links into the net8.0 desktop tests).
+    /// </summary>
+    internal sealed class FtpVerboseLogger : IFtpLogger
+    {
+        private readonly string _host;
+
+        /// <summary>
+        /// Maps a FluentFTP trace level to a boolean — return true to forward,
+        /// false to suppress. The app wires this to the current app log level
+        /// so FluentFTP verbosity tracks the app setting.
+        /// Null means forward everything (safe default).
+        /// </summary>
+        public static Func<FtpTraceLevel, bool> TraceFilter { get; set; }
+
+        public FtpVerboseLogger(string host)
+        {
+            _host = host;
+        }
+
+        public void Log(FtpLogEntry entry)
+        {
+            if (TraceFilter != null && !TraceFilter(entry.Severity))
+                return;
+
+            string level;
+            switch (entry.Severity)
+            {
+                case FtpTraceLevel.Error:   level = "ERR"; break;
+                case FtpTraceLevel.Warn:    level = "WRN"; break;
+                case FtpTraceLevel.Info:    level = "INF"; break;
+                case FtpTraceLevel.Verbose: level = "VRB"; break;
+                default:                    level = "???"; break;
+            }
+
+            string msg = entry.Message;
+            if (!string.IsNullOrEmpty(msg) && msg.IndexOf("pass=", StringComparison.OrdinalIgnoreCase) >= 0)
+                msg = System.Text.RegularExpressions.Regex.Replace(msg, @"pass=\S+", "pass=***", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            FtpSession.TraceSink?.Invoke(_host, string.Format("[FTP {0}] {1}", level, msg));
         }
     }
 }

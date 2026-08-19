@@ -53,8 +53,30 @@ namespace XFiles.Network
                 case NetworkOperationReason.Cancelled:
                     return "Operation cancelled.";
                 default:
-                    return "Could not reach the server — " + (detail ?? "unknown error");
+                    return "Could not reach the server" + Hint(detail) + ".";
             }
+        }
+
+        /// <summary>
+        /// Turns a raw exception detail into a short user-facing hint. Internal
+        /// .NET noise (type names, object names, stack text) is dropped; only
+        /// the first meaningful line is kept.
+        /// </summary>
+        private static string Hint(string detail)
+        {
+            if (string.IsNullOrWhiteSpace(detail)) return "";
+            string line = detail;
+            int newline = line.IndexOfAny(new[] { '\r', '\n' });
+            if (newline >= 0) line = line.Substring(0, newline);
+            line = line.Trim();
+
+            if (line.Length == 0 || line.Length > 140) return "";
+            if (line.Contains("Cannot access a disposed object")) return "";
+            if (line.Contains("Object name:")) return "";
+            if (line.StartsWith("at ", StringComparison.Ordinal)) return "";
+            if (line.Contains(" ---> ")) return "";
+            if (line.Contains("XFiles.") || line.Contains("System.")) return "";
+            return " — " + line;
         }
     }
 }

@@ -52,6 +52,18 @@ namespace XFiles.Settings
         public static async Task SetLogLevelAsync(string level)
             => await SetStringAsync("LogLevel", level);
 
+        // Settings schema version — bumped by App startup migration to avoid
+        // re-running upgrade steps (e.g. compressing old logs, resetting defaults).
+        private const int CurrentSettingsVersion = 1;
+
+        public static async Task<int> GetSettingsVersionAsync()
+            => await GetIntAsync("SettingsVersion", 0);
+
+        public static async Task SetSettingsVersionAsync(int version)
+            => await SetIntAsync("SettingsVersion", version);
+
+        public static int GetCurrentSettingsVersion() => CurrentSettingsVersion;
+
         // Portal credentials (Device Portal). Stored in SQLite like every other
         // setting — the console has no build-time .env.
         public static async Task<string> GetPortalUserAsync()
@@ -90,6 +102,12 @@ namespace XFiles.Settings
 
         public static async Task SetBgmVolumeAsync(int value)
             => await SetIntAsync("BgmVolume", value);
+
+        public static async Task<int> GetMediaVolumeAsync()
+            => await GetIntAsync("MediaVolume", 75);
+
+        public static async Task SetMediaVolumeAsync(int value)
+            => await SetIntAsync("MediaVolume", value);
 
         // Hide empty/inaccessible drives (root/drive scan). Cached statically so
         // the sync DirectoryScanner can read it without touching SQLite; the cache

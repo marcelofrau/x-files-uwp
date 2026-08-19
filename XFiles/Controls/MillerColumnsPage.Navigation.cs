@@ -602,9 +602,9 @@ namespace XFiles.Controls
             string share = current.NetworkShareName;
             string path = selected.NetworkPath;
             string name = selected.Name;
-            if (string.IsNullOrEmpty(share) || string.IsNullOrEmpty(path))
+            if (string.IsNullOrEmpty(path))
             {
-                Log.Warn("OnRemoteChiptuneConfirm: no share/path context for {Name}", name);
+                Log.Warn("OnRemoteChiptuneConfirm: no path context for {Name}", name);
                 await OpenRemoteFileAsync(selected);
                 return;
             }
@@ -684,9 +684,9 @@ namespace XFiles.Controls
             string share = current.NetworkShareName;
             string path = selected.NetworkPath;
             string name = selected.Name;
-            if (string.IsNullOrEmpty(share) || string.IsNullOrEmpty(path))
+            if (string.IsNullOrEmpty(path))
             {
-                Log.Warn("OpenRemoteFile: no share/path context for {Name}", name);
+                Log.Warn("OpenRemoteFile: no path context for {Name}", name);
                 return;
             }
 
@@ -857,9 +857,9 @@ namespace XFiles.Controls
                 string path = selected.NetworkPath;
                 string name = selected.Name;
                 string ext = System.IO.Path.GetExtension(name);
-                if (string.IsNullOrEmpty(share) || string.IsNullOrEmpty(path))
+                if (string.IsNullOrEmpty(path))
                 {
-                    Log.Warn("OpenRemoteFullscreen: no share/path context for {Name}", name);
+                    Log.Warn("OpenRemoteFullscreen: no path context for {Name}", name);
                     return;
                 }
 
@@ -1192,6 +1192,7 @@ namespace XFiles.Controls
             if (IsAnyOverlayVisible) return;
             if (StartMenuControl.IsOpen) { StartMenuControl.ForwardDPad(Windows.System.VirtualKey.GamepadA); return; }
             if (FileActionSheetControl.IsOpen) return;
+            if (_router.RouteButton(VirtualKey.GamepadMenu)) return;
             if (IsAnyFullscreen) return;
             if (_isMediaPlayerActive) return;
             _ = ShowStartMenuAsync();

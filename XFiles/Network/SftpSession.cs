@@ -117,8 +117,17 @@ namespace XFiles.Network
                 e.CanTrust = HostKeyResolver?.Invoke(hostKeyKey, e.FingerPrintSHA256) ?? false;
             };
 
-            await Task.Run(() => _client.Connect(), ct);
-            _connected = true;
+            try
+            {
+                await Task.Run(() => _client.Connect(), ct);
+                _connected = true;
+            }
+            catch (Exception ex)
+            {
+                try { _client.Disconnect(); } catch { }
+                _client = null;
+                throw ExceptionFrom(ex, "connect");
+            }
         }
 
         public async Task<List<NetworkFileEntry>> ListDirectoryAsync(string remotePath, CancellationToken ct)
@@ -354,11 +363,13 @@ namespace XFiles.Network
         private NetworkOperationException ExceptionFrom(Exception ex, string opName)
         {
             var reason = NetworkOperationReason.Unreachable;
-            if (ex is SshConnectionException) reason = NetworkOperationReason.Unreachable;
+            if (ex is SshConnectionException || ex is System.Net.Sockets.SocketException)
+                reason = NetworkOperationReason.Unreachable;
             else if (ex is SshAuthenticationException) reason = NetworkOperationReason.AuthFailed;
             else if (ex is SftpPathNotFoundException || ex is FileNotFoundException)
                 reason = NetworkOperationReason.NotFound;
             else if (ex is SftpPermissionDeniedException) reason = NetworkOperationReason.AccessDenied;
+            else if (ex is TimeoutException) reason = NetworkOperationReason.TimedOut;
             return new NetworkOperationException(reason, $"SFTP {opName}: {ex.Message}", ex);
         }
 

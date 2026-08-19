@@ -20,6 +20,7 @@ using Windows.UI.Xaml.Data;
 using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Media.Animation;
+using Windows.UI.Xaml.Media.Imaging;
 using Windows.System;
 using Windows.System.Display;
 using XFiles.Audio;
@@ -417,7 +418,6 @@ namespace XFiles.Controls
         private bool IsRemoteMediaPreview =>
             _navigator?.Preview != null &&
             _navigator.Preview.IsNetwork &&
-            !string.IsNullOrEmpty(_navigator.Preview.NetworkShareName) &&
             !string.IsNullOrEmpty(_navigator.Preview.NetworkPath);
 
         private async Task PlayRemoteVideoInlineAsync()
@@ -532,12 +532,37 @@ namespace XFiles.Controls
                     NetworkServerHost.Text = config.Host;
                     NetworkServerUser.Text = string.IsNullOrEmpty(config.Username) ? "(guest)" : config.Username;
                     NetworkServerShare.Text = string.IsNullOrEmpty(config.Share) ? "(all shares)" : config.Share;
+                    NetworkServerProtocol.Text = ProtocolLabel(config.Protocol);
+                    NetworkServerIcon.Source = new Windows.UI.Xaml.Media.Imaging.BitmapImage(
+                        new Uri($"ms-appx:///Assets/Views/MainPage/mainpage-network-{config.Protocol.ToString().ToLowerInvariant()}-128.png"));
+                    int port = config.Port > 0 ? config.Port : NetworkUrl.DefaultPort(config.Protocol);
+                    if (port > 0 && port != NetworkUrl.DefaultPort(config.Protocol))
+                    {
+                        NetworkServerPortRow.Visibility = Visibility.Visible;
+                        NetworkServerPort.Text = port.ToString();
+                    }
+                    else
+                    {
+                        NetworkServerPortRow.Visibility = Visibility.Collapsed;
+                    }
                     NetworkServerPanel.Visibility = Visibility.Visible;
                     return;
                 }
             }
 
             NetworkOverviewPanel.Visibility = Visibility.Visible;
+        }
+
+        private static string ProtocolLabel(NetworkProtocol protocol)
+        {
+            switch (protocol)
+            {
+                case NetworkProtocol.Smb: return "SMB (Windows Share)";
+                case NetworkProtocol.Ftp: return "FTP";
+                case NetworkProtocol.Ftps: return "FTPS";
+                case NetworkProtocol.Sftp: return "SFTP";
+                default: return protocol.ToString();
+            }
         }
 
         private async Task<string> BuildHighlightHtmlAsync(string code, string extension)

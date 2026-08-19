@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Runtime.InteropServices;
 using Serilog;
@@ -39,7 +40,7 @@ namespace XFiles
         private static Logger _logger;
         private static LoggingLevelSwitch _levelSwitch;
         private static string _currentLogFile;
-        private const int MaxArchivedSessions = 10;
+        private const int MaxArchivedSessions = 5;
         private const string ActiveLogFile = "xfiles.log";
 
         public static Logger Logger => _logger;
@@ -80,6 +81,7 @@ namespace XFiles
                     string archiveName = $"xfiles-{DateTime.Now:yyyyMMdd-HHmmss}-prev.log";
                     string archivePath = Path.Combine(logsDir, archiveName);
                     File.Move(activeFile, archivePath);
+                    CompressLogFile(archivePath);
                 }
 
                 string legacyFile = Path.Combine(logsDir, "xfiles-.log");
@@ -88,6 +90,37 @@ namespace XFiles
                     string archiveName = $"xfiles-{DateTime.Now:yyyyMMdd-HHmmss}-legacy.log";
                     string archivePath = Path.Combine(logsDir, archiveName);
                     File.Move(legacyFile, archivePath);
+                    CompressLogFile(archivePath);
+                }
+            }
+            catch { }
+        }
+
+        private static void CompressLogFile(string logPath)
+        {
+            try
+            {
+                string gzPath = logPath + ".gz";
+                using (var inFile = File.OpenRead(logPath))
+                using (var outFile = File.Create(gzPath))
+                using (var gz = new GZipStream(outFile, CompressionLevel.Optimal))
+                {
+                    inFile.CopyTo(gz);
+                }
+                File.Delete(logPath);
+            }
+            catch { }
+        }
+
+        public static void CompressExistingLogs()
+        {
+            try
+            {
+                string logsDir = GetLogsDirectory();
+                if (!Directory.Exists(logsDir)) return;
+                foreach (var f in Directory.GetFiles(logsDir, "xfiles-*.log"))
+                {
+                    CompressLogFile(f);
                 }
             }
             catch { }
@@ -98,6 +131,7 @@ namespace XFiles
             try
             {
                 var files = Directory.GetFiles(logsDir, "xfiles-*.log")
+                    .Concat(Directory.GetFiles(logsDir, "xfiles-*.log.gz"))
                     .OrderByDescending(f => new FileInfo(f).LastWriteTime)
                     .Skip(MaxArchivedSessions)
                     .ToArray();
@@ -216,6 +250,64 @@ namespace XFiles
             }
         }
 
+        private static string ReadFileGzWin32(string path)
+        {
+            IntPtr hFile = CreateFileFromAppW(path, GENERIC_READ,
+                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                IntPtr.Zero, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, IntPtr.Zero);
+            if (hFile == INVALID_HANDLE_VALUE)
+                return $"[Could not open: {Marshal.GetLastWin32Error()}]";
+
+            try
+            {
+                if (!GetFileSizeEx(hFile, out long fileSize))
+                    return "[Could not get file size]";
+
+                int size = (int)Math.Min(fileSize, 4 * 1024 * 1024);
+                if (size <= 0) return string.Empty;
+
+                byte[] buf = new byte[size];
+                uint totalRead = 0;
+                while (totalRead < size)
+                {
+                    uint chunk = (uint)(size - totalRead);
+                    if (!ReadFile(hFile, buf, chunk, out uint bytesRead, IntPtr.Zero) || bytesRead == 0)
+                        break;
+                    totalRead += bytesRead;
+                }
+
+                using (var ms = new MemoryStream(buf, 0, (int)totalRead))
+                using (var gz = new GZipStream(ms, CompressionMode.Decompress))
+                using (var reader = new StreamReader(gz, System.Text.Encoding.UTF8))
+                {
+                    return reader.ReadToEnd();
+                }
+            }
+            finally
+            {
+                CloseHandle(hFile);
+            }
+        }
+
+        public static void ClearAllLogs()
+        {
+            try
+            {
+                string logsDir = GetLogsDirectory();
+                if (!Directory.Exists(logsDir)) return;
+                foreach (var f in Directory.GetFiles(logsDir, "xfiles-*.log"))
+                {
+                    try { File.Delete(f); } catch { }
+                }
+                foreach (var f in Directory.GetFiles(logsDir, "xfiles-*.log.gz"))
+                {
+                    try { File.Delete(f); } catch { }
+                }
+                Log.Info("ClearAllLogs: deleted archived log files");
+            }
+            catch { }
+        }
+
         public static string GetAllLogContent()
         {
             string logPath = GetCurrentLogPath();
@@ -235,6 +327,7 @@ namespace XFiles
             string logsDir = GetLogsDirectory();
             if (!Directory.Exists(logsDir)) return "No logs directory found.";
             var files = Directory.GetFiles(logsDir, "xfiles*.log")
+                .Concat(Directory.GetFiles(logsDir, "xfiles*.log.gz"))
                 .OrderByDescending(f => new FileInfo(f).LastWriteTime)
                 .ToArray();
             if (files.Length == 0) return "No log files found.";
@@ -247,7 +340,10 @@ namespace XFiles
                 sb.AppendLine($"=== {name} ===");
                 try
                 {
-                    sb.AppendLine(ReadFileWin32(file));
+                    if (name.EndsWith(".gz", StringComparison.OrdinalIgnoreCase))
+                        sb.AppendLine(ReadFileGzWin32(file));
+                    else
+                        sb.AppendLine(ReadFileWin32(file));
                 }
                 catch (Exception ex)
                 {

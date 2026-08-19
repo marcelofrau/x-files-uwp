@@ -52,10 +52,11 @@ Log.Verb/Dbg/Info/Warn/Err
   that renders it is currently **disabled** (`App.xaml.cs:110`, commented out) —
   the in-app log viewer (`LogsPage`, Start → Logs) reads archived session files
   instead.
-- **File sink**: Rolling, one file per app session, keeps the last **10** archived
-  sessions (`MaxArchivedSessions = 10`), stored in
-  `ApplicationData.Current.LocalFolder/logs/`. `GetAllSessionsContent()` aggregates
-  them for the log viewer / sharing (truncated to `MaxShareBytes`).
+- **File sink**: Rolling, one file per app session, keeps the last **5** archived
+  sessions (`MaxArchivedSessions = 5`), stored in
+  `ApplicationData.Current.LocalFolder/logs/`. Archived sessions are gzip-compressed
+  (`.log.gz`) to save storage. `GetAllSessionsContent()` reads both `.log` and
+  `.log.gz` files for the log viewer / sharing (truncated to `MaxShareBytes`).
 - **Output format**: `[Timestamp Level] Message`
 - **Caller info**: Embedded in message templates (e.g. `Log.Info("DirectoryScanner.Scan: ...")`). No auto-detection — caller prefix is part of the log message string.
 
@@ -67,3 +68,27 @@ Log.Verb/Dbg/Info/Warn/Err
 4. Prefix log messages with class/method name: `Log.Dbg("MetadataGuesser.Detect: ...")`.
 5. Operation logs (open, close, edit, copy, move, paste, play, stop) use `Log.Info()`.
 6. Default level is Information.
+
+## Log Management
+
+- **Rotation**: On each `Init()`, the previous session's `xfiles.log` is renamed to
+  `xfiles-{timestamp}-prev.log` and immediately gzip-compressed to `.log.gz`.
+- **Cleanup**: The last 5 archived sessions are kept; older files (`.log` and `.log.gz`)
+  are deleted on startup.
+- **Compression**: All archived logs are gzip-compressed. The one-time migration
+  (`CompressExistingLogs()`) compresses any pre-existing uncompressed archives from
+  older versions.
+- **Clear Logs**: Available in Settings → Clear Data → Clear Logs. Deletes all
+  `xfiles-*.log` and `xfiles-*.log.gz` files (not the active log).
+
+## Settings Migration
+
+Settings schema versioning (`SettingsVersion` in SQLite) tracks one-time upgrade
+steps:
+
+| Version | Changes |
+|---|---|
+| 0 → 1 | Force log level to Info; compress existing uncompressed log archives |
+
+Migration runs in `App.OnLaunched()` after `Log.Init()`. Each step bumps the version
+so it only runs once.

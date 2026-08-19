@@ -85,11 +85,39 @@ namespace XFiles
             {
                 string level = await Settings.XFilesSettings.GetLogLevelAsync();
                 Log.SetLogLevel(level);
+                Controls.MillerColumnsPage.UpdateFtpTraceFilter();
                 Log.Info("App: log level loaded from settings: {Level}", level);
             }
             catch (Exception ex)
             {
                 Log.Warn("App: failed to load log level, using default Info", ex);
+            }
+
+            // Settings migration — runs once per schema bump
+            try
+            {
+                int savedVersion = await Settings.XFilesSettings.GetSettingsVersionAsync();
+                int currentVersion = Settings.XFilesSettings.GetCurrentSettingsVersion();
+                if (savedVersion < currentVersion)
+                {
+                    Log.Info("App: migrating settings from v{Old} to v{New}", savedVersion, currentVersion);
+
+                    if (savedVersion < 1)
+                    {
+                        // v1: force log level to Info, compress old uncompressed logs
+                        await Settings.XFilesSettings.SetLogLevelAsync("Info");
+                        Log.SetLogLevel("Info");
+                        Controls.MillerColumnsPage.UpdateFtpTraceFilter();
+                        Log.CompressExistingLogs();
+                    }
+
+                    await Settings.XFilesSettings.SetSettingsVersionAsync(currentVersion);
+                    Log.Info("App: settings migration complete");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("App: settings migration failed", ex);
             }
 
             // Seed the sync drive-hide setting cache (read by the scanner).

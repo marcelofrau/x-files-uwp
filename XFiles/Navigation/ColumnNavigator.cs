@@ -1266,11 +1266,27 @@ namespace XFiles.Navigation
             if (_current.IsFavorite)
             {
                 var favs = await FavoritesManager.GetAllAsync();
-                _current.Entries = favs.Select(f => new FileEntry
+                _current.Entries = favs.Select(f =>
                 {
-                    Name = f.Name,
-                    FullPath = f.Path,
-                    IsDirectory = f.IsDirectory
+                    long size = 0;
+                    DateTimeOffset? lastMod = null;
+                    if (!f.IsDirectory)
+                    {
+                        try
+                        {
+                            var fi = new FileInfo(f.Path);
+                            if (fi.Exists) { size = fi.Length; lastMod = fi.LastWriteTimeUtc; }
+                        }
+                        catch { }
+                    }
+                    return new FileEntry
+                    {
+                        Name = f.Name,
+                        FullPath = f.Path,
+                        IsDirectory = f.IsDirectory,
+                        SizeBytes = size,
+                        LastModified = lastMod
+                    };
                 }).ToList();
                 _current.IsFilePreview = false;
             }
@@ -2109,11 +2125,27 @@ namespace XFiles.Navigation
             });
 
             var favs = await FavoritesManager.GetAllAsync();
-            var entries = favs.Select(f => new FileEntry
+            var entries = favs.Select(f =>
             {
-                Name = f.Name,
-                FullPath = f.Path,
-                IsDirectory = f.IsDirectory
+                long size = 0;
+                DateTimeOffset? lastMod = null;
+                if (!f.IsDirectory)
+                {
+                    try
+                    {
+                        var fi = new FileInfo(f.Path);
+                        if (fi.Exists) { size = fi.Length; lastMod = fi.LastWriteTimeUtc; }
+                    }
+                    catch { }
+                }
+                return new FileEntry
+                {
+                    Name = f.Name,
+                    FullPath = f.Path,
+                    IsDirectory = f.IsDirectory,
+                    SizeBytes = size,
+                    LastModified = lastMod
+                };
             }).ToList();
 
             _current = new ColumnState
@@ -2319,7 +2351,7 @@ namespace XFiles.Navigation
                     IsChiptune = !f.IsDirectory && MusicFormatClassifier.IsChiptune(System.IO.Path.GetExtension(f.Name)),
                     IsArchive = !f.IsDirectory && ArchiveBrowser.IsArchiveFile(f.Name),
                     NetworkLocationId = config.Id,
-                    NetworkShareName = share,
+                    NetworkShareName = share ?? "",
                     NetworkPath = ColumnNavigator.CombineNetworkPath(path, f.Name, config.Protocol),
                     SizeBytes = f.IsDirectory ? 0 : f.Size,
                     LastModified = f.LastWriteTime

@@ -318,10 +318,8 @@ namespace XFiles.Controls
                         ? (ActionKind == ActionKind.DownloadUrl
                             ? "ms-appx:///Assets/FileTypes/filetype-network-download-24.png"
                             : "ms-appx:///Assets/FileTypes/filetype-network-add-location-24.png")
-                        : NetworkLocationId > 0 && string.IsNullOrEmpty(NetworkShareName)
-                            ? (NetworkProtocol == NetworkProtocol.Smb
-                                ? "ms-appx:///Assets/FileTypes/filetype-network-server-24.png"
-                                : "ms-appx:///Assets/FileTypes/filetype-network-globe-24.png")
+                        : NetworkLocationId > 0 && NetworkShareName == null
+                            ? $"ms-appx:///Assets/Views/MainPage/mainpage-network-icon-{NetworkProtocol.ToString().ToLowerInvariant()}-32.png"
                             : IsDirectory
                                 ? $"ms-appx:///Assets/FileTypes/folder-{_folderColor}-network-24.png"
                                 : $"ms-appx:///Assets/FileTypes/{GetFileIcon(Name)}")

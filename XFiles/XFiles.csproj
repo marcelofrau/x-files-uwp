@@ -546,6 +546,16 @@
     <Content Include="Assets\Views\MainPage\mainpage-network-add-128.png" />
     <Content Include="Assets\Views\MainPage\mainpage-network-download-128.png" />
     <Content Include="Assets\Views\MainPage\mainpage-network-server-128.png" />
+    <Content Include="Assets\Views\MainPage\mainpage-network-ftp-128.png" />
+    <Content Include="Assets\Views\MainPage\mainpage-network-ftps-128.png" />
+    <Content Include="Assets\Views\MainPage\mainpage-network-sftp-128.png" />
+    <Content Include="Assets\Views\MainPage\mainpage-network-smb-128.png" />
+    <Content Include="Assets\Views\MainPage\mainpage-network-webdav-128.png" />
+    <Content Include="Assets\Views\MainPage\mainpage-network-icon-ftp-32.png" />
+    <Content Include="Assets\Views\MainPage\mainpage-network-icon-ftps-32.png" />
+    <Content Include="Assets\Views\MainPage\mainpage-network-icon-sftp-32.png" />
+    <Content Include="Assets\Views\MainPage\mainpage-network-icon-smb-32.png" />
+    <Content Include="Assets\Views\MainPage\mainpage-network-icon-webdav-32.png" />
     <Content Include="Assets\Views\MainPage\mainpage-network-tip-download-32.png" />
     <Content Include="Assets\Views\MainPage\mainpage-network-tip-server-32.png" />
     <Content Include="Assets\Views\MainPage\mainpage-network-tip-shared-32.png" />

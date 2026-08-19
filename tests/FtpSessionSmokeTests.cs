@@ -17,6 +17,7 @@ namespace XFiles.Tests
     ///   X_FILES_FTP_USER   (optional, default anonymous)
     ///   X_FILES_FTP_PASS   (optional)
     ///   X_FILES_FTP_START  (optional start folder, default root)
+    ///   X_FILES_FTP_PROTO  (optional: ftp|ftps, default ftp)
     /// Exercises the M9 surface: connect, list, read first bytes, and (when a
     /// writable start folder is given) write-readback-delete.
     /// </summary>
@@ -29,9 +30,12 @@ namespace XFiles.Tests
             int port = int.TryParse(Environment.GetEnvironmentVariable("X_FILES_FTP_PORT"), out int p)
                 ? p : 21;
             string user = Environment.GetEnvironmentVariable("X_FILES_FTP_USER");
+            string proto = Environment.GetEnvironmentVariable("X_FILES_FTP_PROTO") ?? "ftp";
             return new NetworkServerConfig
             {
-                Protocol = NetworkProtocol.Ftp,
+                Protocol = string.Equals(proto, "ftps", StringComparison.OrdinalIgnoreCase)
+                    ? NetworkProtocol.Ftps
+                    : NetworkProtocol.Ftp,
                 Host = host,
                 Port = port,
                 Username = user,
@@ -88,7 +92,8 @@ namespace XFiles.Tests
             }
 
             string pass = Environment.GetEnvironmentVariable("X_FILES_FTP_PASS") ?? string.Empty;
-            var config = Config("");
+            string start = Environment.GetEnvironmentVariable("X_FILES_FTP_START") ?? "";
+            var config = Config(start);
 
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
             using (var session = new FtpSession(config))
@@ -96,11 +101,12 @@ namespace XFiles.Tests
                 await session.EnsureConnectedAsync(pass, cts.Token);
                 Assert.IsTrue(session.SupportsRest, "Server should advertise REST for this test.");
 
-                var entries = await session.ListDirectoryAsync("", cts.Token);
+                var entries = await session.ListDirectoryAsync(start, cts.Token);
                 var file = entries.FirstOrDefault(e => !e.IsDirectory && e.Size > 0);
                 Assert.IsNotNull(file, "No seed file to seek on.");
 
-                using var stream = await session.OpenReadAsync(file.Name, cts.Token);
+                string remotePath = string.IsNullOrEmpty(start) ? file.Name : start.TrimEnd('/') + "/" + file.Name;
+                using var stream = await session.OpenReadAsync(remotePath, cts.Token);
                 long mid = stream.Length / 2;
                 stream.Seek(mid, SeekOrigin.Begin);
                 Assert.AreEqual(mid, stream.Position);
@@ -131,8 +137,10 @@ namespace XFiles.Tests
             }
 
             string pass = Environment.GetEnvironmentVariable("X_FILES_FTP_PASS") ?? string.Empty;
-            var config = Config("");
+            string start = Environment.GetEnvironmentVariable("X_FILES_FTP_START") ?? "";
+            var config = Config(start);
             string remoteName = "xfiles-smoke-" + Guid.NewGuid().ToString("N").Substring(0, 8) + ".txt";
+            string remotePath = string.IsNullOrEmpty(start) ? remoteName : start.TrimEnd('/') + "/" + remoteName;
 
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
             string tmp = Path.Combine(Path.GetTempPath(), remoteName);
@@ -143,16 +151,16 @@ namespace XFiles.Tests
                 using (var session = new FtpSession(config))
                 {
                     await session.EnsureConnectedAsync(pass, cts.Token);
-                    await session.WriteFileAsync(remoteName, tmp, cts.Token);
+                    await session.WriteFileAsync(remotePath, tmp, cts.Token);
                 }
 
                 using (var session = new FtpSession(config))
                 {
                     await session.EnsureConnectedAsync(pass, cts.Token);
-                    Assert.IsTrue(await session.EntryExistsAsync(remoteName, false, cts.Token),
+                    Assert.IsTrue(await session.EntryExistsAsync(remotePath, false, cts.Token),
                         $"Remote file {remoteName} not visible after upload.");
 
-                    using var stream = await session.OpenReadAsync(remoteName, cts.Token);
+                    using var stream = await session.OpenReadAsync(remotePath, cts.Token);
                     using var reader = new StreamReader(stream);
                     string back = reader.ReadToEnd();
                     Assert.AreEqual(File.ReadAllText(tmp), back, "Round-tripped content mismatch.");
@@ -161,8 +169,8 @@ namespace XFiles.Tests
                 using (var session = new FtpSession(config))
                 {
                     await session.EnsureConnectedAsync(pass, cts.Token);
-                    await session.DeleteFileAsync(remoteName, cts.Token);
-                    Assert.IsFalse(await session.EntryExistsAsync(remoteName, false, cts.Token),
+                    await session.DeleteFileAsync(remotePath, cts.Token);
+                    Assert.IsFalse(await session.EntryExistsAsync(remotePath, false, cts.Token),
                         $"Remote file {remoteName} still present after delete.");
                 }
             }

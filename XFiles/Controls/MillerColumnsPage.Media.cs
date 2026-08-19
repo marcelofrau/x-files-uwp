@@ -996,11 +996,13 @@ namespace XFiles.Controls
                 FsVideoPlayer.Volume = _fsVolume;
                 FSVolumeText.Text = $"Vol {(int)(_fsVolume * 100)}%";
                 ShowFsOsd($"Vol {(int)(_fsVolume * 100)}%", null, 1200);
+                _ = Settings.XFilesSettings.SetMediaVolumeAsync((int)(_fsVolume * 100));
             }
             else if (_isMediaPlayerActive)
             {
                 _fsVolume = Math.Max(0.0, Math.Min(1.0, _fsVolume + delta));
                 MediaPreview.SetVolume(_fsVolume);
+                _ = Settings.XFilesSettings.SetMediaVolumeAsync((int)(_fsVolume * 100));
             }
         }
 
@@ -1020,6 +1022,21 @@ namespace XFiles.Controls
         private double _seekCooldown;
         private double _ltHoldMs;
         private double _rtHoldMs;
+
+        /// <summary>
+        /// Load persisted media volume into _fsVolume/_audioVolume.
+        /// Called from OnLoaded (fire-and-forget).
+        /// </summary>
+        internal async Task LoadMediaVolumeAsync()
+        {
+            try
+            {
+                int vol = await Settings.XFilesSettings.GetMediaVolumeAsync();
+                _fsVolume = vol / 100.0;
+                _audioVolume = vol / 100.0;
+            }
+            catch { }
+        }
         private bool _ltWasDown;
         private bool _rtWasDown;
 
