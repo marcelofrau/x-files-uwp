@@ -22,22 +22,26 @@ High-volume hot paths are guarded by preprocessor flags. **Most are OFF by defau
 Enable by appending to `DefineConstants` in `XFiles.csproj` (Debug config):
 
 ```xml
-<DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_UWP;XRAY_ENABLED;GAMEPAD_POLL_DEBUG</DefineConstants>
+<DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_UWP;AUDIO_ANALYSIS;FTP_CONNECT_DEBUG;BATCH_DEBUG</DefineConstants>
 ```
 
-| Flag | File | What it guards |
-|---|---|---|
-| `GAMEPAD_POLL_DEBUG` | `GamepadInputService.cs` | Raw stick/button state per tick, DPAD state, DPAD repeat events |
-| `VUMETER_DEBUG` | `VuMeterBar.xaml.cs` | Per-tick audio sample levels |
-| `AUDIO_LEVEL_DEBUG` | `AudioLevelService.cs` | Per-quantum audio processing data |
-| `POINTER_DEBUG` | `TextEditorOverlay.xaml.cs` | Pointer/mouse coordinates per move |
-| `EDITOR_JS_DEBUG` | `TextEditorOverlay.xaml.cs` | JS log lines pulled from editor |
-| `ID3_PARSE_DEBUG` | `Id3Tag.cs` | Per-frame ID3 tag parsing |
+| Flag | File | What it guards | Default |
+|---|---|---|---|
+| `AUDIO_ANALYSIS` | `AudioLevelService.cs` | FFT processing + VU meter | ON |
+| `FTP_CONNECT_DEBUG` | `FtpSession.cs` | Connect diagnostics (DNS, timing, capability probe) | ON (dev) |
+| `BATCH_DEBUG` | `MillerColumnsPage.FileOps.cs` | Batch operation Verb logs (cancels, no items) | ON (dev) |
+| `GAMEPAD_POLL_DEBUG` | `GamepadInputService.cs` | Raw stick/button state per tick, DPAD state, DPAD repeat events | OFF |
+| `GAMEPAD_INPUT_DEBUG` | `GamepadInputService.cs` | Button dispatch traces (input routing, Y long-press) | OFF |
+| `VUMETER_DEBUG` | `VuMeterBar.xaml.cs` | Per-tick audio sample levels | OFF |
+| `AUDIO_LEVEL_DEBUG` | `AudioLevelService.cs` | Per-quantum audio processing data, GC region logs | OFF |
+| `POINTER_DEBUG` | `TextEditorOverlay.xaml.cs` | Pointer/mouse coordinates per move | OFF |
+| `EDITOR_JS_DEBUG` | `TextEditorOverlay.xaml.cs` | JS log lines pulled from editor | OFF |
+| `EDITOR_INPUT_DEBUG` | `TextEditorOverlay.xaml.cs` | Gamepad input tracing in text editor | OFF |
+| `ID3_PARSE_DEBUG` | `Id3Tag.cs` | Per-frame ID3 tag parsing | OFF |
+| `DEBUG_EDITOR_INPUT` | `TextEditorOverlay.xaml.cs` | Full gamepad input tracing (legacy, prefer `EDITOR_INPUT_DEBUG`) | OFF |
 
-> **Known tech-debt:** the Debug config currently ships with `VUMETER_DEBUG` and
-> `AUDIO_LEVEL_DEBUG` **enabled** in `XFiles.csproj` (they were left on during
-> visualizer work). They should be compiled out for performance debugging; see
-> `docs/tech-debts/`.
+> **Dev flags** (`FTP_CONNECT_DEBUG`, `BATCH_DEBUG`) are ON during active
+> development and will be compiled out before release.
 
 When disabled, these log calls are **compiled out entirely** — zero runtime cost.
 
@@ -64,10 +68,13 @@ Log.Verb/Dbg/Info/Warn/Err
 
 1. Never swallow exceptions — always `Log.Warn()` or `Log.Err()` them.
 2. Log directory scans, input events, navigation, file operations, app lifecycle.
-3. Use structured logging templates: `Log.Info("Loading {Path}", path)` — never string interpolation.
+3. Use structured logging templates: `Log.Info("Loading {Path}", path)` — never string interpolation `$"..."`.
 4. Prefix log messages with class/method name: `Log.Dbg("MetadataGuesser.Detect: ...")`.
 5. Operation logs (open, close, edit, copy, move, paste, play, stop) use `Log.Info()`.
 6. Default level is Information.
+7. FTP/SFTP/SMB operation errors that are control flow (NotFound, AccessDenied on probe) use `Log.Dbg()`, not `Log.Warn()`. Only unexpected failures use `Warn`.
+8. `FtpSession.TraceSink` routes FluentFTP protocol traces to `Log.Dbg` (success) or `Log.Warn` (error). The sink sanitizes passwords from FluentFTP messages automatically.
+9. `FtpSession.TraceFilter` scales FluentFTP verbosity with the app level: at Info, only Warn+ traces pass through; at Verbose, all traces pass.
 
 ## Log Management
 

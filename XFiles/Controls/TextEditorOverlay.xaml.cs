@@ -289,7 +289,9 @@ namespace XFiles.Controls
             if (!IsOpen || _isUnsavedDialogOpen) return;
 
             var key = e.VirtualKey;
+#if EDITOR_INPUT_DEBUG
             Log.Verb("EditorKeyDown: key={Key} readOnly={RO}", key, _isReadOnly);
+#endif
 
             switch (key)
             {
@@ -326,12 +328,16 @@ namespace XFiles.Controls
                     e.Handled = true;
                     break;
                 case VirtualKey.GamepadMenu:
+#if EDITOR_INPUT_DEBUG
                     Log.Verb("EditorKeyDown: Start → save");
+#endif
                     HandleSave();
                     e.Handled = true;
                     break;
                 default:
+#if EDITOR_INPUT_DEBUG
                     Log.Verb("EditorKeyDown: unhandled key={Key}", key);
+#endif
                     break;
             }
         }
@@ -372,8 +378,20 @@ namespace XFiles.Controls
             switch (key)
             {
                 case VirtualKey.GamepadB:
-                    if (_isKeyboardVisible) { Log.Verb("HandleButton: B → hide keyboard"); HideVirtualKeyboard(); }
-                    else { Log.Verb("HandleButton: B → AttemptCloseAsync"); _ = AttemptCloseAsync(); }
+                    if (_isKeyboardVisible)
+                    {
+#if EDITOR_INPUT_DEBUG
+                        Log.Verb("HandleButton: B → hide keyboard");
+#endif
+                        HideVirtualKeyboard();
+                    }
+                    else
+                    {
+#if EDITOR_INPUT_DEBUG
+                        Log.Verb("HandleButton: B → AttemptCloseAsync");
+#endif
+                        _ = AttemptCloseAsync();
+                    }
                     break;
                 case VirtualKey.GamepadX:
 #if DEBUG_EDITOR_INPUT
@@ -396,19 +414,27 @@ namespace XFiles.Controls
                     }
                     break;
                 case VirtualKey.GamepadY:
+#if EDITOR_INPUT_DEBUG
                     Log.Verb("HandleButton: Y → newline");
+#endif
                     if (!_isReadOnly) { InvokeJs("editor.insertNewline()"); PullJsLogs("newline"); }
                     break;
                 case VirtualKey.GamepadA:
+#if EDITOR_INPUT_DEBUG
                     Log.Verb("HandleButton: A → show virtual keyboard");
+#endif
                     if (!_isReadOnly) { ShowVirtualKeyboard(); }
                     break;
                 case VirtualKey.GamepadMenu:
+#if EDITOR_INPUT_DEBUG
                     Log.Verb("HandleButton: Start → save");
+#endif
                     HandleSave();
                     break;
                 default:
+#if EDITOR_INPUT_DEBUG
                     Log.Verb("HandleButton: unhandled key {Key}", key);
+#endif
                     break;
             }
         }
@@ -602,7 +628,9 @@ namespace XFiles.Controls
             bool dirty = await InvokeJsBool("editor.isDirty()");
             if (!dirty)
             {
+#if EDITOR_INPUT_DEBUG
                 Log.Verb("TextEditorOverlay: no changes to save");
+#endif
                 return;
             }
 

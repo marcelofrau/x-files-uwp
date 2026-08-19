@@ -26,10 +26,23 @@ namespace XFiles.Network
         public const int OperationTimeoutMs = 15000;
 
         /// <summary>
-        /// Optional sink for FluentFTP protocol traces (host, message). Wired by
-        /// the app to forward to the central log; stays null in the desktop tests.
+        /// Optional sink for FluentFTP protocol traces (host, message, isError).
+        /// Wired by the app to forward to the central log; stays null in the
+        /// desktop tests. isError=false → diagnostic (Dbg); true → warning.
         /// </summary>
-        public static Action<string, string> TraceSink;
+        public static Action<string, string, bool> TraceSink;
+
+        private static string SanitizePassword(string msg)
+        {
+            if (msg == null) return msg;
+            int idx = msg.IndexOf("pass='", StringComparison.Ordinal);
+            if (idx < 0) return msg;
+            int start = idx + 6;
+            int end = msg.IndexOf('\'', start);
+            if (end < 0) return msg;
+            int len = end - start;
+            return msg.Substring(0, start) + "***" + msg.Substring(end);
+        }
 
         private readonly NetworkServerConfig _config;
         private readonly string _password;
@@ -85,7 +98,7 @@ namespace XFiles.Network
                 // (FileZilla "503 Use AUTH first", vsftpd "530 ... must use
                 // encryption"). Retry automatically with explicit FTPS instead
                 // of failing the operation.
-                TraceSink?.Invoke(_config.Host, "Plain FTP rejected — server demands TLS. Retrying with explicit FTPS.");
+                TraceSink?.Invoke(_config.Host, "Plain FTP rejected — server demands TLS. Retrying with explicit FTPS.", true);
                 client = await ConnectOnceAsync(user, pass, FtpEncryptionMode.Explicit, ct).ConfigureAwait(false);
             }
 
@@ -116,27 +129,33 @@ namespace XFiles.Network
             {
                 var addresses = await System.Net.Dns.GetHostAddressesAsync(_config.Host);
                 dnsIps = Array.ConvertAll(addresses, a => a.ToString());
+#if FTP_CONNECT_DEBUG
                 TraceSink?.Invoke(_config.Host, string.Format(
                     "DNS resolved {0} → [{1}] (count={2}, af={3})",
                     _config.Host, string.Join(", ", dnsIps), dnsIps.Length,
-                    addresses.Length > 0 ? addresses[0].AddressFamily.ToString() : "none"));
+                    addresses.Length > 0 ? addresses[0].AddressFamily.ToString() : "none"), false);
+#endif
             }
             catch (Exception dnsEx)
             {
                 TraceSink?.Invoke(_config.Host, string.Format(
-                    "DNS FAILED for {0}: {1}", _config.Host, dnsEx.Message));
+                    "DNS FAILED for {0}: {1}", _config.Host, dnsEx.Message), true);
             }
 
-            // Instrumentation: log everything before connect
+            // Connect attempt summary (always visible)
             TraceSink?.Invoke(_config.Host, string.Format(
-                "CONNECT ATTEMPT host={0} port={1} user={2} passLen={3} mode={4} timeout={5}ms encrypt={6} sslProtocols={7} ipVersions={8} dns=[{9}]",
+                "CONNECT ATTEMPT host={0} port={1} user={2} passLen={3} mode={4}",
                 _config.Host, _config.EffectivePort, user, pass.Length,
-                mode?.ToString() ?? "null",
+                mode?.ToString() ?? "null"), false);
+#if FTP_CONNECT_DEBUG
+            TraceSink?.Invoke(_config.Host, string.Format(
+                "CONNECT CONFIG timeout={0}ms encrypt={1} sslProtocols={2} ipVersions={3} dns=[{4}]",
                 client.Config.ConnectTimeout,
                 client.Config.EncryptionMode,
                 client.Config.SslProtocols,
                 client.Config.InternetProtocolVersions,
-                string.Join(", ", dnsIps)));
+                string.Join(", ", dnsIps)), false);
+#endif
 
             var sw = System.Diagnostics.Stopwatch.StartNew();
             try
@@ -146,19 +165,22 @@ namespace XFiles.Network
                 // captures the DispatcherSynchronizationContext and deadlocks
                 // (UI thread blocked → TLS handshake can't pump → hang). Task.Run
                 // forces the entire FluentFTP call onto a thread pool thread.
-                TraceSink?.Invoke(_config.Host, string.Format("CONNECTING via Task.Run... (elapsed {0}ms)", sw.ElapsedMilliseconds));
                 await Task.Run(() => client.Connect(ct), ct).ConfigureAwait(false);
                 sw.Stop();
                 TraceSink?.Invoke(_config.Host, string.Format(
-                    "CONNECTED OK elapsed={0}ms isAuthenticated={1} isEncrypted={2} capabilities={3}",
-                    sw.ElapsedMilliseconds, client.IsAuthenticated, client.IsEncrypted,
-                    client.HasFeature(FtpCapability.REST) ? "REST" : "no-REST"));
+                    "CONNECTED OK elapsed={0}ms isAuthenticated={1} isEncrypted={2}",
+                    sw.ElapsedMilliseconds, client.IsAuthenticated, client.IsEncrypted), false);
+#if FTP_CONNECT_DEBUG
+                TraceSink?.Invoke(_config.Host, string.Format(
+                    "CONNECT CAPABILITIES capabilities={0}",
+                    client.HasFeature(FtpCapability.REST) ? "REST" : "no-REST"), false);
+#endif
                 return client;
             }
             catch (OperationCanceledException)
             {
                 sw.Stop();
-                TraceSink?.Invoke(_config.Host, string.Format("CONNECT CANCELLED elapsed={0}ms", sw.ElapsedMilliseconds));
+                TraceSink?.Invoke(_config.Host, string.Format("CONNECT CANCELLED elapsed={0}ms", sw.ElapsedMilliseconds), true);
                 client.Dispose();
                 throw new NetworkOperationException(
                     NetworkOperationReason.Cancelled, "FTP connect cancelled");
@@ -166,7 +188,7 @@ namespace XFiles.Network
             catch (FtpAuthenticationException ex)
             {
                 sw.Stop();
-                TraceSink?.Invoke(_config.Host, string.Format("CONNECT AUTH FAILED elapsed={0}ms: {1}", sw.ElapsedMilliseconds, ex.Message));
+                TraceSink?.Invoke(_config.Host, string.Format("CONNECT AUTH FAILED elapsed={0}ms: {1}", sw.ElapsedMilliseconds, ex.Message), true);
                 client.Dispose();
                 throw new NetworkOperationException(
                     NetworkOperationReason.AuthFailed, "FTP login failed — check user and password", ex);
@@ -174,7 +196,7 @@ namespace XFiles.Network
             catch (FtpCommandException ex)
             {
                 sw.Stop();
-                TraceSink?.Invoke(_config.Host, string.Format("CONNECT CMD FAILED elapsed={0}ms code={1}: {2}", sw.ElapsedMilliseconds, ex.CompletionCode, ex.Message));
+                TraceSink?.Invoke(_config.Host, string.Format("CONNECT CMD FAILED elapsed={0}ms code={1}: {2}", sw.ElapsedMilliseconds, ex.CompletionCode, ex.Message), true);
                 client.Dispose();
                 string message = ex.Message ?? "";
                 if (message.IndexOf("AUTH first", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -191,7 +213,7 @@ namespace XFiles.Network
             {
                 sw.Stop();
                 TraceSink?.Invoke(_config.Host, string.Format("CONNECT SOCKET FAILED elapsed={0}ms: SocketError={1} nativeError={2}: {3}",
-                    sw.ElapsedMilliseconds, ex.SocketErrorCode, ex.NativeErrorCode, ex.Message));
+                    sw.ElapsedMilliseconds, ex.SocketErrorCode, ex.NativeErrorCode, ex.Message), true);
                 client.Dispose();
                 throw new NetworkOperationException(
                     NetworkOperationReason.Unreachable, ex.Message, ex);
@@ -199,7 +221,7 @@ namespace XFiles.Network
             catch (TimeoutException ex)
             {
                 sw.Stop();
-                TraceSink?.Invoke(_config.Host, string.Format("CONNECT TIMEOUT elapsed={0}ms: {1}", sw.ElapsedMilliseconds, ex.Message));
+                TraceSink?.Invoke(_config.Host, string.Format("CONNECT TIMEOUT elapsed={0}ms: {1}", sw.ElapsedMilliseconds, ex.Message), true);
                 client.Dispose();
                 throw new NetworkOperationException(
                     NetworkOperationReason.TimedOut, ex.Message, ex);
@@ -210,7 +232,7 @@ namespace XFiles.Network
                 TraceSink?.Invoke(_config.Host, string.Format("CONNECT DISPOSED elapsed={0}ms: {1}\n  inner={2}\n  stackTrace={3}",
                     sw.ElapsedMilliseconds, ex.Message,
                     ex.InnerException?.Message ?? "(none)",
-                    ex.StackTrace ?? "(none)"));
+                    ex.StackTrace ?? "(none)"), true);
                 client.Dispose();
                 throw new NetworkOperationException(
                     NetworkOperationReason.Unreachable,
@@ -225,7 +247,7 @@ namespace XFiles.Network
             {
                 sw.Stop();
                 TraceSink?.Invoke(_config.Host, string.Format("CONNECT UNEXPECTED elapsed={0}ms type={1}: {2}",
-                    sw.ElapsedMilliseconds, ex.GetType().Name, ex.Message));
+                    sw.ElapsedMilliseconds, ex.GetType().Name, ex.Message), true);
                 client.Dispose();
                 throw new NetworkOperationException(
                     NetworkOperationReason.Unreachable, ex.Message, ex);
@@ -740,7 +762,8 @@ namespace XFiles.Network
             if (!string.IsNullOrEmpty(msg) && msg.IndexOf("pass=", StringComparison.OrdinalIgnoreCase) >= 0)
                 msg = System.Text.RegularExpressions.Regex.Replace(msg, @"pass=\S+", "pass=***", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
-            FtpSession.TraceSink?.Invoke(_host, string.Format("[FTP {0}] {1}", level, msg));
+            bool isError = entry.Severity == FtpTraceLevel.Error || entry.Severity == FtpTraceLevel.Warn;
+            FtpSession.TraceSink?.Invoke(_host, string.Format("[FTP {0}] {1}", level, msg), isError);
         }
     }
 }

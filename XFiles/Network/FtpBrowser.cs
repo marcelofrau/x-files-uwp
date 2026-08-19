@@ -75,16 +75,16 @@ namespace XFiles.Network
                 string password = await NetworkServerManager.GetPasswordAsync(config);
                 using (var session = new FtpSession(config, password))
                 {
-                    Log.Info($"FtpBrowser.ListDirectory: {NetworkUrl.Compose(config)}{remote}");
+                    Log.Info("FtpBrowser.ListDirectory: {Url}{Remote}", NetworkUrl.Compose(config), remote);
                     try
                     {
                         var entries = await session.ListDirectoryAsync(remote, ct);
-                        Log.Dbg($"FtpBrowser.ListDirectory: {entries.Count} entries");
+                        Log.Dbg("FtpBrowser.ListDirectory: {Count} entries", entries.Count);
                         return entries;
                     }
                     catch (NetworkOperationException ex)
                     {
-                        Log.Warn($"FtpBrowser.ListDirectory: {ex.Reason} ({ex.Message})");
+                        Log.Dbg("FtpBrowser.ListDirectory: {Reason} ({Message})", ex.Reason, ex.Message);
                         throw;
                     }
                 }
@@ -99,7 +99,7 @@ namespace XFiles.Network
                 string remote = EffectivePath(share, path);
                 string password = await NetworkServerManager.GetPasswordAsync(config);
                 var session = new FtpSession(config, password);
-                Log.Info($"FtpBrowser.OpenRead: {NetworkUrl.Compose(config)}{remote}");
+                Log.Info("FtpBrowser.OpenRead: {Url}{Remote}", NetworkUrl.Compose(config), remote);
                 try
                 {
                     return await session.OpenReadAsync(remote, ct);
@@ -107,7 +107,7 @@ namespace XFiles.Network
                 catch (NetworkOperationException ex)
                 {
                     session.Dispose();
-                    Log.Warn($"FtpBrowser.OpenRead: {ex.Reason} ({ex.Message})");
+                    Log.Dbg("FtpBrowser.OpenRead: {Reason} ({Message})", ex.Reason, ex.Message);
                     throw;
                 }
             });
@@ -128,7 +128,7 @@ namespace XFiles.Network
                     }
                     catch (NetworkOperationException ex)
                     {
-                        Log.Warn($"FtpBrowser.GetFileLength: {ex.Reason} ({ex.Message})");
+                        Log.Dbg("FtpBrowser.GetFileLength: {Reason} ({Message})", ex.Reason, ex.Message);
                         throw;
                     }
                 }
@@ -150,7 +150,7 @@ namespace XFiles.Network
                     }
                     catch (NetworkOperationException ex)
                     {
-                        Log.Warn($"FtpBrowser.EntryExists: {ex.Reason} ({ex.Message})");
+                        Log.Dbg("FtpBrowser.EntryExists: {Reason} ({Message})", ex.Reason, ex.Message);
                         throw;
                     }
                 }
@@ -166,15 +166,15 @@ namespace XFiles.Network
                 string password = await NetworkServerManager.GetPasswordAsync(config);
                 using (var session = new FtpSession(config, password))
                 {
-                    Log.Info($"FtpBrowser.WriteFile: {localPath} → {remote}");
+                    Log.Info("FtpBrowser.WriteFile: {LocalPath} → {Remote}", localPath, remote);
                     try
                     {
                         await session.WriteFileAsync(remote, localPath, ct);
-                        Log.Info($"FtpBrowser.WriteFile: uploaded");
+                        Log.Info("FtpBrowser.WriteFile: uploaded");
                     }
                     catch (NetworkOperationException ex)
                     {
-                        Log.Warn($"FtpBrowser.WriteFile: {ex.Reason} ({ex.Message})");
+                        Log.Dbg("FtpBrowser.WriteFile: {Reason} ({Message})", ex.Reason, ex.Message);
                         throw;
                     }
                 }
@@ -189,7 +189,7 @@ namespace XFiles.Network
                 string remote = EffectivePath(share, path);
                 string password = await NetworkServerManager.GetPasswordAsync(config);
                 var session = new FtpSession(config, password);
-                Log.Info($"FtpBrowser.OpenWriteStream: {remote}");
+                Log.Info("FtpBrowser.OpenWriteStream: {Remote}", remote);
                 try
                 {
                     return await session.OpenWriteStreamAsync(remote, ct);
@@ -197,7 +197,7 @@ namespace XFiles.Network
                 catch (NetworkOperationException ex)
                 {
                     session.Dispose();
-                    Log.Warn($"FtpBrowser.OpenWriteStream: {ex.Reason} ({ex.Message})");
+                    Log.Dbg("FtpBrowser.OpenWriteStream: {Reason} ({Message})", ex.Reason, ex.Message);
                     throw;
                 }
             });
@@ -212,14 +212,14 @@ namespace XFiles.Network
                 string password = await NetworkServerManager.GetPasswordAsync(config);
                 using (var session = new FtpSession(config, password))
                 {
-                    Log.Info($"FtpBrowser.DeleteFile: {remote}");
+                    Log.Info("FtpBrowser.DeleteFile: {Remote}", remote);
                     try
                     {
                         await session.DeleteFileAsync(remote, ct);
                     }
                     catch (NetworkOperationException ex)
                     {
-                        Log.Warn($"FtpBrowser.DeleteFile: {ex.Reason} ({ex.Message})");
+                        Log.Dbg("FtpBrowser.DeleteFile: {Reason} ({Message})", ex.Reason, ex.Message);
                         throw;
                     }
                 }
@@ -235,14 +235,14 @@ namespace XFiles.Network
                 string password = await NetworkServerManager.GetPasswordAsync(config);
                 using (var session = new FtpSession(config, password))
                 {
-                    Log.Info($"FtpBrowser.DeleteDirectory: {remote}");
+                    Log.Info("FtpBrowser.DeleteDirectory: {Remote}", remote);
                     try
                     {
                         await session.DeleteDirectoryAsync(remote, ct);
                     }
                     catch (NetworkOperationException ex)
                     {
-                        Log.Warn($"FtpBrowser.DeleteDirectory: {ex.Reason} ({ex.Message})");
+                        Log.Dbg("FtpBrowser.DeleteDirectory: {Reason} ({Message})", ex.Reason, ex.Message);
                         throw;
                     }
                 }
@@ -258,14 +258,14 @@ namespace XFiles.Network
                 string password = await NetworkServerManager.GetPasswordAsync(config);
                 using (var session = new FtpSession(config, password))
                 {
-                    Log.Info($"FtpBrowser.RenameFile: {remote} → {newName}");
+                    Log.Info("FtpBrowser.RenameFile: {Remote} → {NewName}", remote, newName);
                     try
                     {
                         await session.RenameFileAsync(remote, newName, ct);
                     }
                     catch (NetworkOperationException ex)
                     {
-                        Log.Warn($"FtpBrowser.RenameFile: {ex.Reason} ({ex.Message})");
+                        Log.Dbg("FtpBrowser.RenameFile: {Reason} ({Message})", ex.Reason, ex.Message);
                         throw;
                     }
                 }
@@ -281,14 +281,14 @@ namespace XFiles.Network
                 string password = await NetworkServerManager.GetPasswordAsync(config);
                 using (var session = new FtpSession(config, password))
                 {
-                    Log.Info($"FtpBrowser.CreateDirectory: {remote}");
+                    Log.Info("FtpBrowser.CreateDirectory: {Remote}", remote);
                     try
                     {
                         await session.CreateDirectoryAsync(remote, ct);
                     }
                     catch (NetworkOperationException ex)
                     {
-                        Log.Warn($"FtpBrowser.CreateDirectory: {ex.Reason} ({ex.Message})");
+                        Log.Dbg("FtpBrowser.CreateDirectory: {Reason} ({Message})", ex.Reason, ex.Message);
                         throw;
                     }
                 }
@@ -298,7 +298,7 @@ namespace XFiles.Network
         /// <summary>Sessions are per-operation; there is nothing to pool-release.</summary>
         public void Disconnect(NetworkServerConfig config)
         {
-            Log.Dbg($"FtpBrowser.Disconnect: {NetworkUrl.Compose(config)} (no pooled sessions)");
+            Log.Dbg("FtpBrowser.Disconnect: {Url} (no pooled sessions)", NetworkUrl.Compose(config));
         }
     }
 }

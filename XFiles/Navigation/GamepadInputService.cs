@@ -285,14 +285,18 @@ namespace XFiles.Navigation
             }
             if ((dpadJustPressed & GamepadButtons.DPadLeft) != 0)
             {
+#if GAMEPAD_INPUT_DEBUG
                 Log.Verb("DPAD: initial press Left");
+#endif
                 nav.OnDPadLeft();
                 _dpadRepeatCooldown = DpadInitialDelay;
                 _dpadNavigatedThisTick = true;
             }
             if ((dpadJustPressed & GamepadButtons.DPadRight) != 0)
             {
+#if GAMEPAD_INPUT_DEBUG
                 Log.Verb("DPAD: initial press Right");
+#endif
                 nav.OnDPadRight();
                 _dpadRepeatCooldown = DpadInitialDelay;
                 _dpadNavigatedThisTick = true;
@@ -377,7 +381,9 @@ namespace XFiles.Navigation
                 _yHeldMs += elapsedMs;
                 if (_yHeldMs >= YLongPressMs && !_yLongPressHandled)
                 {
+#if GAMEPAD_INPUT_DEBUG
                     Log.Verb("Button: Y long-press triggered");
+#endif
                     nav.OnContextMenuLongPress();
                     _yLongPressHandled = true;
                 }
@@ -386,7 +392,9 @@ namespace XFiles.Navigation
             {
                 if (_yHeld && !_yLongPressHandled)
                 {
+#if GAMEPAD_INPUT_DEBUG
                     Log.Verb("Button: Y short press (Context)");
+#endif
                     nav.OnContextMenu();
                 }
                 _yHeld = false;

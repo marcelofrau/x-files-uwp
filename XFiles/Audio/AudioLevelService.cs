@@ -443,8 +443,10 @@ namespace XFiles.Audio
                 {
                     long netAlloc = GC.GetAllocatedBytesForCurrentThread() - allocBefore;
                     int tid = Environment.CurrentManagedThreadId;
+#if AUDIO_LEVEL_DEBUG
                     Log.Verb("AudioLevelService[TID={Tid}]: NoGCRegion started, size={Size}MB setupAlloc={Setup}KB totalMem={Total}KB",
                         tid, NoGcRegionSize / (1024 * 1024), netAlloc / 1024, GC.GetTotalMemory(false) / 1024);
+#endif
                 }
                 _graph.Start();
                 _isGraphRunning = true;
@@ -518,8 +520,10 @@ namespace XFiles.Audio
                 {
                     long netAlloc = GC.GetAllocatedBytesForCurrentThread() - allocBefore;
                     int tid = Environment.CurrentManagedThreadId;
+#if AUDIO_LEVEL_DEBUG
                     Log.Verb("AudioLevelService[TID={Tid}]: NoGCRegion started, size={Size}MB setupAlloc={Setup}KB totalMem={Total}KB",
                         tid, NoGcRegionSize / (1024 * 1024), netAlloc / 1024, GC.GetTotalMemory(false) / 1024);
+#endif
                 }
                 _graph.Start();
                 _isGraphRunning = true;
@@ -572,8 +576,10 @@ namespace XFiles.Audio
                 {
                     long netAlloc = GC.GetAllocatedBytesForCurrentThread() - allocBefore;
                     int tid = Environment.CurrentManagedThreadId;
-                    Log.Verb("AudioLevelService[TID={Tid}]: NoGCRegion restarted (Resume) size={Size}MB setupAlloc={Setup}KB totalMem={Total}KB",
+#if AUDIO_LEVEL_DEBUG
+                    Log.Verb("AudioLevelService[TID={Tid}]: NoGCRegion started, size={Size}MB setupAlloc={Setup}KB totalMem={Total}KB",
                         tid, NoGcRegionSize / (1024 * 1024), netAlloc / 1024, GC.GetTotalMemory(false) / 1024);
+#endif
                 }
                 if (_remoteStreamNode && _mediaSourceNode != null)
                 {
@@ -823,8 +829,10 @@ namespace XFiles.Audio
                 {
                     long netAlloc = GC.GetAllocatedBytesForCurrentThread() - allocBefore;
                     int tid = Environment.CurrentManagedThreadId;
-                    Log.Verb("AudioLevelService[TID={Tid}]: NoGCRegion restarted (SwapSource) size={Size}MB setupAlloc={Setup}KB totalMem={Total}KB",
+#if AUDIO_LEVEL_DEBUG
+                    Log.Verb("AudioLevelService[TID={Tid}]: NoGCRegion started, size={Size}MB setupAlloc={Setup}KB totalMem={Total}KB",
                         tid, NoGcRegionSize / (1024 * 1024), netAlloc / 1024, GC.GetTotalMemory(false) / 1024);
+#endif
                 }
                 _graph.Start();
                 _isGraphRunning = true;
@@ -1255,8 +1263,10 @@ namespace XFiles.Audio
                 try { GC.EndNoGCRegion(); } catch { }
                 long totalFreed = memBefore - GC.GetTotalMemory(true);
                 int tid = Environment.CurrentManagedThreadId;
+#if AUDIO_LEVEL_DEBUG
                 Log.Verb("AudioLevelService[TID={Tid}]: NoGCRegion ended, totalMem={Total}KB estimatedFreed={Freed}KB",
                     tid, GC.GetTotalMemory(false) / 1024, Math.Max(0, totalFreed) / 1024);
+#endif
             }
         }
 

@@ -34,7 +34,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
     <DebugSymbols>true</DebugSymbols>
     <OutputPath>bin\x64\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_UWP;AUDIO_ANALYSIS</DefineConstants>
+    <DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_UWP;AUDIO_ANALYSIS;FTP_CONNECT_DEBUG;BATCH_DEBUG</DefineConstants>
     <!-- Debug flags: uncomment in DefineConstants above to enable
          AUDIO_ANALYSIS    — FFT processing + VU meter (comment out to test stutter without analysis overhead)
          INPUT_LATENCY_DEBUG — input-latency diagnostic probes (SELECTION/SELECTION-DONE, INPUT-LAT, RENDER-LAG, D-pad release, PREVIEW timing)
@@ -46,6 +46,8 @@
          EDITOR_JS_DEBUG    — TextEditorOverlay JS log lines pulled from editor
          ID3_PARSE_DEBUG    — Id3Tag per-frame parsing details
          DEBUG_EDITOR_INPUT — full gamepad input tracing while testing the text editor virtual keyboard
+         FTP_CONNECT_DEBUG  — FtpSession connect diagnostics (DNS, timing, capability probe) — ON during dev
+         BATCH_DEBUG        — FileOps batch operation Verb logs (cancels, no items) — ON during dev
     -->
     <NoWarn>;2008</NoWarn>
     <!-- <DebugType>full</DebugType> -->

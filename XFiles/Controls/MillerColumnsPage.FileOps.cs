@@ -107,8 +107,10 @@ namespace XFiles.Controls
                 _batchSelectedPaths.Add(key);
                 selected.IsSelected = true;
             }
+#if BATCH_DEBUG
             Log.Verb("BatchMode: toggled {Name} (selected={Sel}, total={Total})",
                 selected.Name, selected.IsSelected, _batchSelectedPaths.Count);
+#endif
 
             // Move cursor down to help bulk selection
             if (CurrentList.SelectedIndex < CurrentList.Items.Count - 1)
@@ -338,7 +340,9 @@ namespace XFiles.Controls
             UpdateFooterALabelFromSelection();
             if (action == null)
             {
+                #if BATCH_DEBUG
                 Log.Verb("ShowFileActionSheetAsync: cancelled");
+                #endif
                 return;
             }
 
@@ -430,7 +434,9 @@ namespace XFiles.Controls
         {
             if (_batchSelectedPaths.Count == 0)
             {
+                #if BATCH_DEBUG
                 Log.Verb("ShowFileActionSheetBatchAsync: no items selected");
+                #endif
                 return;
             }
 
@@ -441,7 +447,9 @@ namespace XFiles.Controls
             UpdateFooterALabelFromSelection();
             if (action == null)
             {
+                #if BATCH_DEBUG
                 Log.Verb("ShowFileActionSheetBatchAsync: cancelled");
+                #endif
                 return;
             }
 
@@ -493,7 +501,9 @@ namespace XFiles.Controls
 
             if (string.IsNullOrEmpty(destDir))
             {
+                #if BATCH_DEBUG
                 Log.Verb("HandleBatchMoveAsync: cancelled at folder browser");
+                #endif
                 return;
             }
 
@@ -519,7 +529,9 @@ namespace XFiles.Controls
 
             if (!confirmed)
             {
+                #if BATCH_DEBUG
                 Log.Verb("HandleBatchMoveAsync: confirmation cancelled");
+                #endif
                 return;
             }
 
@@ -540,7 +552,9 @@ namespace XFiles.Controls
             bool sameVolume = sourcePaths.All(p => IsSameVolume(p, destDir));
             if (!sameVolume && !await EnsureDiskSpaceAsync(destDir, scan.TotalBytes))
             {
+                #if BATCH_DEBUG
                 Log.Verb("HandleBatchMoveAsync: cancelled — insufficient free space");
+                #endif
                 return;
             }
 
@@ -624,7 +638,9 @@ namespace XFiles.Controls
             }
             if (required > 0 && !await EnsureDiskSpaceAsync(destDir, required))
             {
+                #if BATCH_DEBUG
                 Log.Verb("ExecuteBatchMovePortalAsync: cancelled — insufficient free space");
+                #endif
                 return;
             }
 
@@ -710,7 +726,9 @@ namespace XFiles.Controls
                 $"{entries.Count} items", true, allFiles, folderCount);
             if (!confirmed)
             {
+                #if BATCH_DEBUG
                 Log.Verb("HandleBatchDeleteAsync: confirmation cancelled");
+                #endif
                 return;
             }
 
@@ -764,7 +782,9 @@ namespace XFiles.Controls
             var zipName = await InputDialogControl.ShowAsync("Create ZIP", defaultName);
             if (string.IsNullOrEmpty(zipName))
             {
+                #if BATCH_DEBUG
                 Log.Verb("HandleBatchCreateZipAsync: cancelled");
+                #endif
                 return;
             }
 
@@ -776,7 +796,9 @@ namespace XFiles.Controls
             var scanZip = await FileOperations.ScanEntriesAsync(entries);
             if (!await EnsureDiskSpaceAsync(currentPath, scanZip.TotalBytes))
             {
+                #if BATCH_DEBUG
                 Log.Verb("HandleBatchCreateZipAsync: cancelled — insufficient free space");
+                #endif
                 return;
             }
 
@@ -1240,7 +1262,9 @@ namespace XFiles.Controls
 
             if (!await EnsureDiskSpaceAsync(destDir, scan.TotalBytes))
             {
+                #if BATCH_DEBUG
                 Log.Verb("HandlePasteAsync: cancelled — insufficient free space");
+                #endif
                 return;
             }
 
@@ -1466,7 +1490,9 @@ namespace XFiles.Controls
             var zipName = await InputDialogControl.ShowAsync("Create ZIP", defaultName);
             if (string.IsNullOrEmpty(zipName))
             {
+                #if BATCH_DEBUG
                 Log.Verb("HandleCreatePortalZipAsync: cancelled");
+                #endif
                 return;
             }
 
@@ -1480,7 +1506,9 @@ namespace XFiles.Controls
                 .Sum(e => e.SizeBytes);
             if (!await EnsureDiskSpaceAsync(Windows.Storage.ApplicationData.Current.TemporaryFolder.Path, knownBytes))
             {
+                #if BATCH_DEBUG
                 Log.Verb("HandleCreatePortalZipAsync: cancelled — insufficient temp space");
+                #endif
                 return;
             }
 
@@ -1671,7 +1699,9 @@ namespace XFiles.Controls
                     var choice = await FileActionSheetControl.ShowExtractChoiceAsync(archiveName);
                     if (choice == null)
                     {
+                        #if BATCH_DEBUG
                         Log.Verb("HandleExtractPortalZipAsync: choice cancelled");
+                        #endif
                         return;
                     }
                     extractToFolder = choice == FileAction.ExtractToFolder;
@@ -1840,7 +1870,9 @@ namespace XFiles.Controls
                 .Sum(e => Math.Max(0, e.SizeBytes));
             if (required > 0 && !await EnsureDiskSpaceAsync(destDir, required))
             {
+                #if BATCH_DEBUG
                 Log.Verb("HandlePastePortalToLocalAsync: cancelled — insufficient free space");
+                #endif
                 return;
             }
 
@@ -1923,7 +1955,9 @@ namespace XFiles.Controls
 
             if (string.IsNullOrEmpty(destDir))
             {
+                #if BATCH_DEBUG
                 Log.Verb("HandleMoveAsync: cancelled at folder browser");
+                #endif
                 return;
             }
 
@@ -1946,7 +1980,9 @@ namespace XFiles.Controls
 
             if (!confirmed)
             {
+                #if BATCH_DEBUG
                 Log.Verb("HandleMoveAsync: confirmation cancelled");
+                #endif
                 return;
             }
 
@@ -1957,7 +1993,9 @@ namespace XFiles.Controls
             if (!IsSameVolume(entry.FullPath, destDir) &&
                 !await EnsureDiskSpaceAsync(destDir, scan.TotalBytes))
             {
+                #if BATCH_DEBUG
                 Log.Verb("HandleMoveAsync: cancelled — insufficient free space");
+                #endif
                 return;
             }
 
@@ -2012,7 +2050,9 @@ namespace XFiles.Controls
 
             if (string.IsNullOrEmpty(destDir))
             {
+                #if BATCH_DEBUG
                 Log.Verb("HandlePortalMoveAsync: cancelled at folder browser");
+                #endif
                 return;
             }
 
@@ -2024,7 +2064,9 @@ namespace XFiles.Controls
 
             if (!confirmed)
             {
+                #if BATCH_DEBUG
                 Log.Verb("HandlePortalMoveAsync: confirmation cancelled");
+                #endif
                 return;
             }
 
@@ -2034,7 +2076,9 @@ namespace XFiles.Controls
                 long required = Math.Max(0, entry.SizeBytes);
                 if (required > 0 && !await EnsureDiskSpaceAsync(destDir, required))
                 {
+                    #if BATCH_DEBUG
                     Log.Verb("HandlePortalMoveAsync: cancelled — insufficient free space");
+                    #endif
                     return;
                 }
             }
@@ -2073,7 +2117,9 @@ namespace XFiles.Controls
             var newName = await InputDialogControl.ShowAsync("Rename", entry.Name);
             if (string.IsNullOrEmpty(newName) || newName == entry.Name)
             {
+                #if BATCH_DEBUG
                 Log.Verb("HandleRenameAsync: cancelled or unchanged");
+                #endif
                 return;
             }
 
@@ -2114,7 +2160,9 @@ namespace XFiles.Controls
                 var confirmed = await AlertDialogControl.ShowConfirmAsync($"Rename '{entry.Name}' to '{newName}'?");
             if (!confirmed)
             {
+                #if BATCH_DEBUG
                 Log.Verb("HandleRenameAsync: confirmation cancelled");
+                #endif
                 return;
             }
 
@@ -2148,7 +2196,9 @@ namespace XFiles.Controls
             UpdateFooterALabelFromSelection();
             if (result == null)
             {
+                #if BATCH_DEBUG
                 Log.Verb("HandleRenameLocationAsync: cancelled");
+                #endif
                 return;
             }
 
@@ -2165,7 +2215,9 @@ namespace XFiles.Controls
             bool confirmed = await AlertDialogControl.ShowConfirmAsync($"Delete network location '{entry.Name}'?");
             if (!confirmed)
             {
+                #if BATCH_DEBUG
                 Log.Verb("HandleDeleteLocationAsync: cancelled");
+                #endif
                 return;
             }
 
@@ -2181,7 +2233,9 @@ namespace XFiles.Controls
             bool confirmed = await AlertDialogControl.ShowConfirmAsync($"Rename '{entry.Name}' to '{newName}'?");
             if (!confirmed)
             {
+                #if BATCH_DEBUG
                 Log.Verb("HandleNetworkRenameAsync: confirmation cancelled");
+                #endif
                 return;
             }
 
@@ -2212,7 +2266,9 @@ namespace XFiles.Controls
             bool confirmed = await AlertDialogControl.ShowConfirmAsync($"Rename '{entry.Name}' to '{newName}'?");
             if (!confirmed)
             {
+                #if BATCH_DEBUG
                 Log.Verb("HandlePortalRenameAsync: confirmation cancelled");
+                #endif
                 return;
             }
 
@@ -2252,7 +2308,9 @@ namespace XFiles.Controls
                 entry.Name, entry.IsDirectory, files, folderCount);
             if (!confirmed)
             {
+                #if BATCH_DEBUG
                 Log.Verb("HandleDeleteAsync: confirmation cancelled");
+                #endif
                 return;
             }
 
@@ -2285,7 +2343,9 @@ namespace XFiles.Controls
                 entry.Name, entry.IsDirectory, null, entry.IsDirectory ? 1 : 0);
             if (!confirmed)
             {
+                #if BATCH_DEBUG
                 Log.Verb("HandleNetworkDeleteAsync: confirmation cancelled");
+                #endif
                 return;
             }
 
@@ -2317,7 +2377,9 @@ namespace XFiles.Controls
                 entry.Name, entry.IsDirectory, null, entry.IsDirectory ? 1 : 0);
             if (!confirmed)
             {
+                #if BATCH_DEBUG
                 Log.Verb("HandlePortalDeleteAsync: confirmation cancelled");
+                #endif
                 return;
             }
 
@@ -2358,7 +2420,9 @@ namespace XFiles.Controls
                 var choice = await FileActionSheetControl.ShowExtractChoiceAsync(archiveName);
                 if (choice == null)
                 {
+                    #if BATCH_DEBUG
                     Log.Verb("HandleExtractAsync: choice cancelled");
+                    #endif
                     return;
                 }
 
@@ -2413,7 +2477,9 @@ namespace XFiles.Controls
             long required = await FileOperations.GetArchiveUncompressedSizeAsync(entry.FullPath);
             if (!await EnsureDiskSpaceAsync(destDir, required))
             {
+                #if BATCH_DEBUG
                 Log.Verb("HandleExtractAsync: cancelled — insufficient free space");
+                #endif
                 return;
             }
 
@@ -2506,7 +2572,9 @@ namespace XFiles.Controls
                 entry.ArchiveRootPath, entry.ArchiveInternalPath);
             if (!await EnsureDiskSpaceAsync(destDir, required))
             {
+                #if BATCH_DEBUG
                 Log.Verb("HandleExtractFileAsync: cancelled — insufficient free space");
+                #endif
                 return;
             }
 
@@ -2785,7 +2853,9 @@ namespace XFiles.Controls
             var folderName = await InputDialogControl.ShowAsync("New Folder", defaultName);
             if (string.IsNullOrEmpty(folderName))
             {
+                #if BATCH_DEBUG
                 Log.Verb("HandleCreateFolderAsync: name cancelled");
+                #endif
                 return;
             }
 
@@ -2876,7 +2946,9 @@ namespace XFiles.Controls
             var zipName = await InputDialogControl.ShowAsync("Create ZIP", entry.Name + ".zip");
             if (string.IsNullOrEmpty(zipName))
             {
+                #if BATCH_DEBUG
                 Log.Verb("HandleCreateZipAsync: cancelled");
+                #endif
                 return;
             }
 
@@ -2888,7 +2960,9 @@ namespace XFiles.Controls
             var scanZip = await FileOperations.ScanEntriesAsync(new List<FileEntry> { entry });
             if (!await EnsureDiskSpaceAsync(currentPath, scanZip.TotalBytes))
             {
+                #if BATCH_DEBUG
                 Log.Verb("HandleCreateZipAsync: cancelled — insufficient free space");
+                #endif
                 return;
             }
 
@@ -2940,7 +3014,9 @@ namespace XFiles.Controls
 
             UpdateFooterALabel("Close");
             DiskUsageDialogControl.Show(volumes.ToArray());
+            #if BATCH_DEBUG
             Log.Verb("HandleDiskSpaceAsync: modal Show called");
+            #endif
             await Task.Delay(1);
         }
 
@@ -2948,8 +3024,10 @@ namespace XFiles.Controls
         {
             var volumes = new List<DiskVolumeInfo>();
             var current = _navigator.Current;
+#if BATCH_DEBUG
             Log.Verb("ResolveCurrentFolderVolumes: current={Path} isPortal={IsPortal} knownFolder={Known}",
                 current?.Path ?? "<null>", current?.IsPortal ?? false, current?.PortalKnownFolder ?? "<none>");
+#endif
             if (current == null)
             {
                 Log.Warn("ResolveCurrentFolderVolumes: no current column");
@@ -2972,10 +3050,11 @@ namespace XFiles.Controls
             {
                 volumes.Add(new DiskVolumeInfo(current.Path, null));
             }
-
+#if BATCH_DEBUG
             Log.Verb("ResolveCurrentFolderVolumes: resolved {Count} volume(s) — {Volumes}",
                 volumes.Count,
                 volumes.Count == 0 ? "<none>" : string.Join(", ", volumes.Select(v => v.Label == null ? v.Root : $"{v.Root} ({v.Label})")));
+#endif
             return volumes.Where(v => !string.IsNullOrEmpty(v.Root)).ToList();
         }
 
@@ -2987,9 +3066,10 @@ namespace XFiles.Controls
                 Log.Warn("ResolveDiskSpaceVolumes: entry is null");
                 return volumes;
             }
-
+#if BATCH_DEBUG
             Log.Verb("ResolveDiskSpaceVolumes: name={Name} path={Path} isRootContainer={IsRoot} isDrive={IsDrive} isPortal={IsPortal}",
                 entry.Name, entry.FullPath ?? "<null>", entry.IsRootContainer, entry.IsDrive, entry.IsPortal);
+#endif
 
             if (entry.IsRootContainer)
             {
@@ -3020,10 +3100,11 @@ namespace XFiles.Controls
             {
                 volumes.Add(new DiskVolumeInfo(entry.FullPath, null));
             }
-
+#if BATCH_DEBUG
             Log.Verb("ResolveDiskSpaceVolumes: resolved {Count} volume(s) — {Volumes}",
                 volumes.Count,
                 volumes.Count == 0 ? "<none>" : string.Join(", ", volumes.Select(v => v.Label == null ? v.Root : $"{v.Root} ({v.Label})")));
+#endif
             return volumes.Where(v => !string.IsNullOrEmpty(v.Root)).ToList();
         }
 
@@ -3041,7 +3122,9 @@ namespace XFiles.Controls
             UpdateFooterALabelFromSelection();
             if (string.IsNullOrWhiteSpace(url))
             {
+                #if BATCH_DEBUG
                 Log.Verb("HandleDownloadFromUrlAsync: URL prompt dismissed");
+                #endif
                 _ = AlertDialogControl.ShowAsync("URL cannot be empty.", AlertType.Warning);
                 return;
             }
@@ -3064,7 +3147,9 @@ namespace XFiles.Controls
 
             if (string.IsNullOrEmpty(destDir))
             {
+                #if BATCH_DEBUG
                 Log.Verb("HandleDownloadFromUrlAsync: destination cancelled");
+                #endif
                 return;
             }
 

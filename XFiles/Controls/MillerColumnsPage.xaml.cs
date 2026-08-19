@@ -307,8 +307,11 @@ namespace XFiles.Controls
                 Log.Dbg("MillerColumnsPage: set as ActiveNavigable");
             }
             Action markOverlayClosed = () => _overlayClosedTick = Environment.TickCount;
-            FtpSession.TraceSink = (host, message) =>
-                Log.Info("FtpSession [{0}]: {1}", host, message);
+            FtpSession.TraceSink = (host, message, isError) =>
+            {
+                if (isError) Log.Warn("FtpSession [{0}]: {1}", host, message);
+                else Log.Dbg("FtpSession [{0}]: {1}", host, message);
+            };
             UpdateFtpTraceFilter();
             InputDialogControl.OnClosed = markOverlayClosed;
             PortalSetupDialogControl.OnClosed = markOverlayClosed;
@@ -639,11 +642,11 @@ namespace XFiles.Controls
             {
                 switch (level)
                 {
-                    case "Verbose":   return true;
-                    case "Information": return severity != FtpTraceLevel.Verbose;
-                    case "Warning":   return severity == FtpTraceLevel.Warn || severity == FtpTraceLevel.Error;
-                    case "Error":     return severity == FtpTraceLevel.Error;
-                    default:          return severity != FtpTraceLevel.Verbose;
+                    case "Verbose":     return true;
+                    case "Information": return severity == FtpTraceLevel.Warn || severity == FtpTraceLevel.Error;
+                    case "Warning":     return severity == FtpTraceLevel.Warn || severity == FtpTraceLevel.Error;
+                    case "Error":       return severity == FtpTraceLevel.Error;
+                    default:            return severity == FtpTraceLevel.Warn || severity == FtpTraceLevel.Error;
                 }
             };
         }
