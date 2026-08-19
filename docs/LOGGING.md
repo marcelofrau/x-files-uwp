@@ -22,13 +22,14 @@ High-volume hot paths are guarded by preprocessor flags. **Most are OFF by defau
 Enable by appending to `DefineConstants` in `XFiles.csproj` (Debug config):
 
 ```xml
-<DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_UWP;AUDIO_ANALYSIS;FTP_CONNECT_DEBUG;BATCH_DEBUG</DefineConstants>
+<DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_UWP;AUDIO_ANALYSIS;FTP_CONNECT_DEBUG;SFTP_CONNECT_DEBUG;BATCH_DEBUG</DefineConstants>
 ```
 
 | Flag | File | What it guards | Default |
 |---|---|---|---|
 | `AUDIO_ANALYSIS` | `AudioLevelService.cs` | FFT processing + VU meter | ON |
 | `FTP_CONNECT_DEBUG` | `FtpSession.cs` | Connect diagnostics (DNS, timing, capability probe) | ON (dev) |
+| `SFTP_CONNECT_DEBUG` | `SftpSession.cs` | Connect diagnostics (timing, host key verification) | ON (dev) |
 | `BATCH_DEBUG` | `MillerColumnsPage.FileOps.cs` | Batch operation Verb logs (cancels, no items) | ON (dev) |
 | `GAMEPAD_POLL_DEBUG` | `GamepadInputService.cs` | Raw stick/button state per tick, DPAD state, DPAD repeat events | OFF |
 | `GAMEPAD_INPUT_DEBUG` | `GamepadInputService.cs` | Button dispatch traces (input routing, Y long-press) | OFF |
@@ -40,7 +41,7 @@ Enable by appending to `DefineConstants` in `XFiles.csproj` (Debug config):
 | `ID3_PARSE_DEBUG` | `Id3Tag.cs` | Per-frame ID3 tag parsing | OFF |
 | `DEBUG_EDITOR_INPUT` | `TextEditorOverlay.xaml.cs` | Full gamepad input tracing (legacy, prefer `EDITOR_INPUT_DEBUG`) | OFF |
 
-> **Dev flags** (`FTP_CONNECT_DEBUG`, `BATCH_DEBUG`) are ON during active
+> **Dev flags** (`FTP_CONNECT_DEBUG`, `SFTP_CONNECT_DEBUG`, `BATCH_DEBUG`) are ON during active
 > development and will be compiled out before release.
 
 When disabled, these log calls are **compiled out entirely** — zero runtime cost.

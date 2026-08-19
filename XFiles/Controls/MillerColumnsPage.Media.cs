@@ -522,7 +522,7 @@ namespace XFiles.Controls
             if (current == null) return;
             string share = current.NetworkShareName ?? entry.NetworkShareName;
             string path = entry.NetworkPath;
-            if (string.IsNullOrEmpty(share) || string.IsNullOrEmpty(path))
+            if (share == null || string.IsNullOrEmpty(path))
             {
                 Log.Warn("HandleNetworkTextEdit: no share/path for {Name}", entry.Name);
                 return;

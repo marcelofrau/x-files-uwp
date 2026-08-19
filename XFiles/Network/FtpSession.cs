@@ -625,8 +625,18 @@ namespace XFiles.Network
         private void EnsureData()
         {
             if (_data != null) return;
-            _data = _client.OpenRead(_path, FtpDataType.Binary, _position, _length, _ct)
-                .GetAwaiter().GetResult();
+            try
+            {
+                _data = _client.OpenRead(_path, FtpDataType.Binary, _position, _length, _ct)
+                    .GetAwaiter().GetResult();
+            }
+            catch (FtpCommandException ex) when (ex.CompletionCode == "425")
+            {
+                Log.Warn("FtpReadStream: 425 on data connection, retrying once ({Path}@{Position})", _path, _position);
+                ReleaseData();
+                _data = _client.OpenRead(_path, FtpDataType.Binary, _position, _length, _ct)
+                    .GetAwaiter().GetResult();
+            }
         }
 
         private void ReleaseData()

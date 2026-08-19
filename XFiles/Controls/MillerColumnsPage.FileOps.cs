@@ -707,12 +707,12 @@ namespace XFiles.Controls
         {
             Log.Info("HandleBatchDeleteAsync: {Count} items", entries.Count);
 
-            // Build combined file list (portal entries have no local paths to enumerate)
+            // Build combined file list (portal/network entries have no local paths to enumerate)
             var allFiles = new List<string>();
             int folderCount = 0;
             foreach (var entry in entries)
             {
-                if (entry.IsPortal)
+                if (entry.IsPortal || entry.IsNetwork)
                 {
                     if (entry.IsDirectory) folderCount++;
                     continue;
@@ -746,6 +746,29 @@ namespace XFiles.Controls
                     catch (Exception ex)
                     {
                         Log.Warn("HandleBatchDeleteAsync: portal item {Name} delete failed: {Message}", entry.Name, ex.Message);
+                        failed++;
+                    }
+                    continue;
+                }
+
+                if (entry.IsNetwork)
+                {
+                    try
+                    {
+                        var config = await _navigator.GetNetworkConfigAsync(entry.NetworkLocationId);
+                        if (config != null)
+                        {
+                            await NetworkCopyService.DeleteRemoteAsync(
+                                _navigator.BrowserFor(config.Protocol), config,
+                                entry.NetworkShareName, entry.NetworkPath,
+                                entry.IsDirectory, CancellationToken.None);
+                            Log.Info("HandleBatchDeleteAsync: network item {Name} deleted", entry.Name);
+                            success++;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warn("HandleBatchDeleteAsync: network item {Name} delete failed: {Message}", entry.Name, ex.Message);
                         failed++;
                     }
                     continue;
@@ -1405,7 +1428,7 @@ namespace XFiles.Controls
                 int failed = 0;
                 foreach (var entry in entries)
                 {
-                    if (!entry.IsPortal && string.IsNullOrEmpty(entry.FullPath)) continue;
+                    if (!entry.IsPortal && !entry.IsNetwork && string.IsNullOrEmpty(entry.FullPath)) continue;
 
                     if (OpProgressDialog.CancelToken.IsCancellationRequested)
                     {
@@ -1430,6 +1453,29 @@ namespace XFiles.Controls
                             await XFiles.FileSystem.PortalBrowser.CopyPortalToPortalAsync(
                                 XFiles.FileSystem.PortalBrowser.ToPortalEntry(entry),
                                 knownFolder, packageFullName, portalPath, staging, progress, OpProgressDialog.CancelToken);
+                        }
+                        else if (entry.IsNetwork)
+                        {
+                            if (staging == null) staging = CreatePortalOpStagingDir();
+                            string stagingPath = System.IO.Path.Combine(staging, entry.Name);
+                            var config = await _navigator.GetNetworkConfigAsync(entry.NetworkLocationId);
+                            if (config != null)
+                            {
+                                using (var stream = await _navigator.BrowserFor(config.Protocol)
+                                    .OpenReadAsync(config, entry.NetworkShareName, entry.NetworkPath,
+                                        OpProgressDialog.CancelToken))
+                                {
+                                    using (var fs = new System.IO.FileStream(stagingPath,
+                                        System.IO.FileMode.Create, System.IO.FileAccess.Write,
+                                        System.IO.FileShare.None, 81920, true))
+                                    {
+                                        await stream.CopyToAsync(fs, 81920, OpProgressDialog.CancelToken);
+                                    }
+                                }
+                                await XFiles.FileSystem.PortalBrowser.UploadLocalToPortalAsync(
+                                    stagingPath, knownFolder, packageFullName, portalPath,
+                                    progress, OpProgressDialog.CancelToken);
+                            }
                         }
                         else
                         {

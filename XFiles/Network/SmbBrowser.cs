@@ -38,23 +38,23 @@ namespace XFiles.Network
         {
             if (ReferenceEquals(session, _lastNegotiatedSession)) return;
             _lastNegotiatedSession = session;
-            Log.Dbg($"SmbBrowser: session negotiated — {session.NegotiatedInfo()}");
+            Log.Dbg("SmbBrowser: session negotiated — {Info}", session.NegotiatedInfo());
         }
 
         public async Task<List<string>> ListSharesAsync(NetworkServerConfig config, CancellationToken ct)
         {
             string password = await NetworkServerManager.GetPasswordAsync(config);
             var session = await SmbSessionPool.AcquireAsync(config, password, ct);
-            Log.Info($"SmbBrowser.ListShares: {NetworkUrl.Compose(config)}");
+            Log.Info("SmbBrowser.ListShares: {Url}", NetworkUrl.Compose(config));
             try
             {
                 var shares = await session.ListSharesAsync(ct);
-                Log.Dbg($"SmbBrowser.ListShares: {shares.Count} shares");
+                Log.Dbg("SmbBrowser.ListShares: {Count} shares", shares.Count);
                 return shares;
             }
             catch (NetworkOperationException ex)
             {
-                Log.Warn($"SmbBrowser.ListShares: {ex.Reason} ({ex.Message})");
+                Log.Dbg("SmbBrowser.ListShares: {Reason} ({Message})", ex.Reason, ex.Message);
                 throw;
             }
         }
@@ -65,16 +65,16 @@ namespace XFiles.Network
             string password = await NetworkServerManager.GetPasswordAsync(config);
             var session = await SmbSessionPool.AcquireAsync(config, password, ct);
             LogNegotiatedOnce(session);
-            Log.Info($"SmbBrowser.ListDirectory: {NetworkUrl.Compose(config)}/{share}/{path}");
+            Log.Info("SmbBrowser.ListDirectory: {Url}/{Share}/{Path}", NetworkUrl.Compose(config), share, path);
             try
             {
                 var entries = await session.ListDirectoryAsync(share, path, ct);
-                Log.Dbg($"SmbBrowser.ListDirectory: {entries.Count} entries");
+                Log.Dbg("SmbBrowser.ListDirectory: {Count} entries", entries.Count);
                 return entries;
             }
             catch (NetworkOperationException ex)
             {
-                Log.Warn($"SmbBrowser.ListDirectory: {ex.Reason} ({ex.Message})");
+                Log.Dbg("SmbBrowser.ListDirectory: {Reason} ({Message})", ex.Reason, ex.Message);
                 throw;
             }
         }
@@ -84,14 +84,14 @@ namespace XFiles.Network
         {
             string password = await NetworkServerManager.GetPasswordAsync(config);
             var session = await SmbSessionPool.AcquireAsync(config, password, ct);
-            Log.Info($"SmbBrowser.OpenRead: {NetworkUrl.Compose(config)}/{share}/{path}");
+            Log.Info("SmbBrowser.OpenRead: {Url}/{Share}/{Path}", NetworkUrl.Compose(config), share, path);
             try
             {
                 return await session.OpenReadAsync(share, path, ct);
             }
             catch (NetworkOperationException ex)
             {
-                Log.Warn($"SmbBrowser.OpenRead: {ex.Reason} ({ex.Message})");
+                Log.Dbg("SmbBrowser.OpenRead: {Reason} ({Message})", ex.Reason, ex.Message);
                 throw;
             }
         }
@@ -107,7 +107,7 @@ namespace XFiles.Network
             }
             catch (NetworkOperationException ex)
             {
-                Log.Warn($"SmbBrowser.GetFileLength: {ex.Reason} ({ex.Message})");
+                Log.Dbg("SmbBrowser.GetFileLength: {Reason} ({Message})", ex.Reason, ex.Message);
                 throw;
             }
         }
@@ -123,7 +123,7 @@ namespace XFiles.Network
             }
             catch (NetworkOperationException ex)
             {
-                Log.Warn($"SmbBrowser.EntryExists: {ex.Reason} ({ex.Message})");
+                Log.Dbg("SmbBrowser.EntryExists: {Reason} ({Message})", ex.Reason, ex.Message);
                 throw;
             }
         }
@@ -139,15 +139,15 @@ namespace XFiles.Network
             byte[] data = File.ReadAllBytes(localPath);
             string password = await NetworkServerManager.GetPasswordAsync(config);
             var session = await SmbSessionPool.AcquireAsync(config, password, ct);
-            Log.Info($"SmbBrowser.WriteFile: {data.Length} bytes → {share}/{path}");
+            Log.Info("SmbBrowser.WriteFile: {Length} bytes → {Share}/{Path}", data.Length, share, path);
             try
             {
                 await session.WriteFileAsync(share, path, data, ct);
-                Log.Info($"SmbBrowser.WriteFile: uploaded {data.Length} bytes");
+                Log.Info("SmbBrowser.WriteFile: uploaded {Length} bytes", data.Length);
             }
             catch (NetworkOperationException ex)
             {
-                Log.Warn($"SmbBrowser.WriteFile: {ex.Reason} ({ex.Message})");
+                Log.Dbg("SmbBrowser.WriteFile: {Reason} ({Message})", ex.Reason, ex.Message);
                 throw;
             }
         }
@@ -161,14 +161,14 @@ namespace XFiles.Network
         {
             string password = await NetworkServerManager.GetPasswordAsync(config);
             var session = await SmbSessionPool.AcquireAsync(config, password, ct);
-            Log.Info($"SmbBrowser.OpenWriteStream: {share}/{path}");
+            Log.Info("SmbBrowser.OpenWriteStream: {Share}/{Path}", share, path);
             try
             {
                 return await session.OpenWriteStreamAsync(share, path, ct);
             }
             catch (NetworkOperationException ex)
             {
-                Log.Warn($"SmbBrowser.OpenWriteStream: {ex.Reason} ({ex.Message})");
+                Log.Dbg("SmbBrowser.OpenWriteStream: {Reason} ({Message})", ex.Reason, ex.Message);
                 throw;
             }
         }
@@ -179,14 +179,14 @@ namespace XFiles.Network
         {
             string password = await NetworkServerManager.GetPasswordAsync(config);
             var session = await SmbSessionPool.AcquireAsync(config, password, ct);
-            Log.Info($"SmbBrowser.DeleteFile: {share}/{path}");
+            Log.Info("SmbBrowser.DeleteFile: {Share}/{Path}", share, path);
             try
             {
                 await session.DeleteFileAsync(share, path, ct);
             }
             catch (NetworkOperationException ex)
             {
-                Log.Warn($"SmbBrowser.DeleteFile: {ex.Reason} ({ex.Message})");
+                Log.Dbg("SmbBrowser.DeleteFile: {Reason} ({Message})", ex.Reason, ex.Message);
                 throw;
             }
         }
@@ -197,14 +197,14 @@ namespace XFiles.Network
         {
             string password = await NetworkServerManager.GetPasswordAsync(config);
             var session = await SmbSessionPool.AcquireAsync(config, password, ct);
-            Log.Info($"SmbBrowser.DeleteDirectory: {share}/{path}");
+            Log.Info("SmbBrowser.DeleteDirectory: {Share}/{Path}", share, path);
             try
             {
                 await session.DeleteDirectoryAsync(share, path, ct);
             }
             catch (NetworkOperationException ex)
             {
-                Log.Warn($"SmbBrowser.DeleteDirectory: {ex.Reason} ({ex.Message})");
+                Log.Dbg("SmbBrowser.DeleteDirectory: {Reason} ({Message})", ex.Reason, ex.Message);
                 throw;
             }
         }
@@ -215,14 +215,14 @@ namespace XFiles.Network
         {
             string password = await NetworkServerManager.GetPasswordAsync(config);
             var session = await SmbSessionPool.AcquireAsync(config, password, ct);
-            Log.Info($"SmbBrowser.RenameFile: {share}/{path} → {newName}");
+            Log.Info("SmbBrowser.RenameFile: {Share}/{Path} → {NewName}", share, path, newName);
             try
             {
                 await session.RenameFileAsync(share, path, newName, isDirectory, ct);
             }
             catch (NetworkOperationException ex)
             {
-                Log.Warn($"SmbBrowser.RenameFile: {ex.Reason} ({ex.Message})");
+                Log.Dbg("SmbBrowser.RenameFile: {Reason} ({Message})", ex.Reason, ex.Message);
                 throw;
             }
         }
@@ -233,14 +233,14 @@ namespace XFiles.Network
         {
             string password = await NetworkServerManager.GetPasswordAsync(config);
             var session = await SmbSessionPool.AcquireAsync(config, password, ct);
-            Log.Info($"SmbBrowser.CreateDirectory: {share}/{path}");
+            Log.Info("SmbBrowser.CreateDirectory: {Share}/{Path}", share, path);
             try
             {
                 await session.CreateDirectoryAsync(share, path, ct);
             }
             catch (NetworkOperationException ex)
             {
-                Log.Warn($"SmbBrowser.CreateDirectory: {ex.Reason} ({ex.Message})");
+                Log.Dbg("SmbBrowser.CreateDirectory: {Reason} ({Message})", ex.Reason, ex.Message);
                 throw;
             }
         }
@@ -250,7 +250,7 @@ namespace XFiles.Network
             string key = NetworkUrl.Compose(config);
             if (key == null) return;
             SmbSessionPool.Remove(key);
-            Log.Dbg($"SmbBrowser.Disconnect: {key}");
+            Log.Dbg("SmbBrowser.Disconnect: {Key}", key);
         }
     }
 }

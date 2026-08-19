@@ -223,9 +223,18 @@ namespace XFiles.Controls
             Log.Info("MediaPreviewControl: loading remote stream mime={Mime}", mimeType);
 
             _currentSourceUri = null;
-            var source = MediaSource.CreateFromStream(stream, mimeType);
-            _currentPlaybackItem = new MediaPlaybackItem(source);
-            Player.Source = _currentPlaybackItem;
+            try
+            {
+                var source = MediaSource.CreateFromStream(stream, mimeType);
+                _currentPlaybackItem = new MediaPlaybackItem(source);
+                Player.Source = _currentPlaybackItem;
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("MediaPreviewControl.LoadRemoteStream: failed to create MediaSource: {Error}", ex.Message);
+                SetLoadingState(false);
+                return;
+            }
 
             _isPlaying = false;
             UpdatePlayPauseIcon();
@@ -999,7 +1008,7 @@ namespace XFiles.Controls
                     Log.Dbg("MediaPreview: old track failed while a new load is pending — ignoring");
                     return;
                 }
-                Log.Info("AudioLevelService media failed — cleaning up");
+                Log.Warn("AudioLevelService media failed — cleaning up");
                 AudioLevelService.Instance.Stop();
 #if AUDIO_ANALYSIS
                 VuMeter.DetachService();
@@ -1092,12 +1101,15 @@ namespace XFiles.Controls
 
         private async void OnMediaPlayerFailed(Windows.Media.Playback.MediaPlayer sender, Windows.Media.Playback.MediaPlayerFailedEventArgs args)
         {
+            var error = args.Error;
+            var hresult = args.ExtendedErrorCode;
             await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
             {
-                Log.Info("Media preview failed: {Error} {HResult}", args.Error.ToString(), args.ExtendedErrorCode);
+                Log.Warn("Media preview failed: {Error} {HResult}", error.ToString(), hresult);
                 _isPlaying = false;
                 _progressTimer.Stop();
                 UpdatePlayPauseIcon();
+                SetLoadingState(false);
             });
         }
 

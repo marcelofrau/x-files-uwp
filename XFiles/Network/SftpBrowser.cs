@@ -53,7 +53,7 @@ namespace XFiles.Network
                     _trustStore.Accept(hostPort, fingerprint);
                     return true;
                 }
-                Log.Warn($"SftpBrowser: host key for {hostPort} rejected");
+                Log.Warn("SftpBrowser: host key for {HostPort} rejected", hostPort);
                 return false;
             };
         }
@@ -70,7 +70,7 @@ namespace XFiles.Network
             }
             catch (NetworkOperationException ex)
             {
-                Log.Warn($"SftpBrowser.TestConnection: {ex.Reason} ({ex.Message})");
+                Log.Dbg("SftpBrowser.TestConnection: {Reason} ({Message})", ex.Reason, ex.Message);
                 throw;
             }
         }
@@ -93,16 +93,16 @@ namespace XFiles.Network
             string password = await NetworkServerManager.GetPasswordAsync(config);
             var session = await SftpSessionPool.AcquireAsync(config, password, ConfigureHostKey, ct);
             ConfigureHostKey(session);
-            Log.Info($"SftpBrowser.ListDirectory: {NetworkUrl.Compose(config)}{remote}");
+            Log.Info("SftpBrowser.ListDirectory: {Url}{Remote}", NetworkUrl.Compose(config), remote);
             try
             {
                 var entries = await session.ListDirectoryAsync(remote, ct);
-                Log.Dbg($"SftpBrowser.ListDirectory: {entries.Count} entries");
+                Log.Dbg("SftpBrowser.ListDirectory: {Count} entries", entries.Count);
                 return entries;
             }
             catch (NetworkOperationException ex)
             {
-                Log.Warn($"SftpBrowser.ListDirectory: {ex.Reason} ({ex.Message})");
+                Log.Dbg("SftpBrowser.ListDirectory: {Reason} ({Message})", ex.Reason, ex.Message);
                 throw;
             }
         }
@@ -114,14 +114,14 @@ namespace XFiles.Network
             string password = await NetworkServerManager.GetPasswordAsync(config);
             var session = await SftpSessionPool.AcquireAsync(config, password, ConfigureHostKey, ct);
             ConfigureHostKey(session);
-            Log.Info($"SftpBrowser.OpenRead: {NetworkUrl.Compose(config)}{remote}");
+            Log.Info("SftpBrowser.OpenRead: {Url}{Remote}", NetworkUrl.Compose(config), remote);
             try
             {
                 return await session.OpenReadAsync(remote, ct);
             }
             catch (NetworkOperationException ex)
             {
-                Log.Warn($"SftpBrowser.OpenRead: {ex.Reason} ({ex.Message})");
+                Log.Dbg("SftpBrowser.OpenRead: {Reason} ({Message})", ex.Reason, ex.Message);
                 throw;
             }
         }
@@ -139,7 +139,7 @@ namespace XFiles.Network
             }
             catch (NetworkOperationException ex)
             {
-                Log.Warn($"SftpBrowser.GetFileLength: {ex.Reason} ({ex.Message})");
+                Log.Dbg("SftpBrowser.GetFileLength: {Reason} ({Message})", ex.Reason, ex.Message);
                 throw;
             }
         }
@@ -157,7 +157,7 @@ namespace XFiles.Network
             }
             catch (NetworkOperationException ex)
             {
-                Log.Warn($"SftpBrowser.EntryExists: {ex.Reason} ({ex.Message})");
+                Log.Dbg("SftpBrowser.EntryExists: {Reason} ({Message})", ex.Reason, ex.Message);
                 throw;
             }
         }
@@ -169,15 +169,15 @@ namespace XFiles.Network
             string password = await NetworkServerManager.GetPasswordAsync(config);
             var session = await SftpSessionPool.AcquireAsync(config, password, ConfigureHostKey, ct);
             ConfigureHostKey(session);
-            Log.Info($"SftpBrowser.WriteFile: {localPath} → {remote}");
+            Log.Info("SftpBrowser.WriteFile: {LocalPath} → {Remote}", localPath, remote);
             try
             {
                 await session.WriteFileAsync(remote, localPath, ct);
-                Log.Info($"SftpBrowser.WriteFile: uploaded");
+                Log.Info("SftpBrowser.WriteFile: uploaded");
             }
             catch (NetworkOperationException ex)
             {
-                Log.Warn($"SftpBrowser.WriteFile: {ex.Reason} ({ex.Message})");
+                Log.Dbg("SftpBrowser.WriteFile: {Reason} ({Message})", ex.Reason, ex.Message);
                 throw;
             }
         }
@@ -189,14 +189,14 @@ namespace XFiles.Network
             string password = await NetworkServerManager.GetPasswordAsync(config);
             var session = await SftpSessionPool.AcquireAsync(config, password, ConfigureHostKey, ct);
             ConfigureHostKey(session);
-            Log.Info($"SftpBrowser.OpenWriteStream: {remote}");
+            Log.Info("SftpBrowser.OpenWriteStream: {Remote}", remote);
             try
             {
                 return await session.OpenWriteStreamAsync(remote, ct);
             }
             catch (NetworkOperationException ex)
             {
-                Log.Warn($"SftpBrowser.OpenWriteStream: {ex.Reason} ({ex.Message})");
+                Log.Dbg("SftpBrowser.OpenWriteStream: {Reason} ({Message})", ex.Reason, ex.Message);
                 throw;
             }
         }
@@ -208,14 +208,14 @@ namespace XFiles.Network
             string password = await NetworkServerManager.GetPasswordAsync(config);
             var session = await SftpSessionPool.AcquireAsync(config, password, ConfigureHostKey, ct);
             ConfigureHostKey(session);
-            Log.Info($"SftpBrowser.DeleteFile: {remote}");
+            Log.Info("SftpBrowser.DeleteFile: {Remote}", remote);
             try
             {
                 await session.DeleteFileAsync(remote, ct);
             }
             catch (NetworkOperationException ex)
             {
-                Log.Warn($"SftpBrowser.DeleteFile: {ex.Reason} ({ex.Message})");
+                Log.Dbg("SftpBrowser.DeleteFile: {Reason} ({Message})", ex.Reason, ex.Message);
                 throw;
             }
         }
@@ -227,14 +227,14 @@ namespace XFiles.Network
             string password = await NetworkServerManager.GetPasswordAsync(config);
             var session = await SftpSessionPool.AcquireAsync(config, password, ConfigureHostKey, ct);
             ConfigureHostKey(session);
-            Log.Info($"SftpBrowser.DeleteDirectory: {remote}");
+            Log.Info("SftpBrowser.DeleteDirectory: {Remote}", remote);
             try
             {
                 await session.DeleteDirectoryAsync(remote, ct);
             }
             catch (NetworkOperationException ex)
             {
-                Log.Warn($"SftpBrowser.DeleteDirectory: {ex.Reason} ({ex.Message})");
+                Log.Dbg("SftpBrowser.DeleteDirectory: {Reason} ({Message})", ex.Reason, ex.Message);
                 throw;
             }
         }
@@ -246,14 +246,14 @@ namespace XFiles.Network
             string password = await NetworkServerManager.GetPasswordAsync(config);
             var session = await SftpSessionPool.AcquireAsync(config, password, ConfigureHostKey, ct);
             ConfigureHostKey(session);
-            Log.Info($"SftpBrowser.RenameFile: {remote} → {newName}");
+            Log.Info("SftpBrowser.RenameFile: {Remote} → {NewName}", remote, newName);
             try
             {
                 await session.RenameFileAsync(remote, newName, isDirectory, ct);
             }
             catch (NetworkOperationException ex)
             {
-                Log.Warn($"SftpBrowser.RenameFile: {ex.Reason} ({ex.Message})");
+                Log.Dbg("SftpBrowser.RenameFile: {Reason} ({Message})", ex.Reason, ex.Message);
                 throw;
             }
         }
@@ -265,14 +265,14 @@ namespace XFiles.Network
             string password = await NetworkServerManager.GetPasswordAsync(config);
             var session = await SftpSessionPool.AcquireAsync(config, password, ConfigureHostKey, ct);
             ConfigureHostKey(session);
-            Log.Info($"SftpBrowser.CreateDirectory: {remote}");
+            Log.Info("SftpBrowser.CreateDirectory: {Remote}", remote);
             try
             {
                 await session.CreateDirectoryAsync(remote, ct);
             }
             catch (NetworkOperationException ex)
             {
-                Log.Warn($"SftpBrowser.CreateDirectory: {ex.Reason} ({ex.Message})");
+                Log.Dbg("SftpBrowser.CreateDirectory: {Reason} ({Message})", ex.Reason, ex.Message);
                 throw;
             }
         }
@@ -284,7 +284,7 @@ namespace XFiles.Network
             if (key != null)
             {
                 SftpSessionPool.Remove(key);
-                Log.Dbg($"SftpBrowser.Disconnect: {key}");
+                Log.Dbg("SftpBrowser.Disconnect: {Key}", key);
             }
         }
     }

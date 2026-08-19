@@ -105,6 +105,12 @@ namespace XFiles.Network
             if (_connected && _client != null && _client.IsConnected)
                 return;
 
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+#if SFTP_CONNECT_DEBUG
+            Log.Info("SftpSession.Connect: {Host}:{Port} user={User}",
+                _config.Host, _config.EffectivePort, _config.Username ?? "");
+#endif
+
             _client = new SftpClient(
                 _config.Host,
                 _config.EffectivePort,
@@ -114,16 +120,26 @@ namespace XFiles.Network
             var hostKeyKey = $"{_config.Host}:{_config.EffectivePort}";
             _client.HostKeyReceived += (s, e) =>
             {
-                e.CanTrust = HostKeyResolver?.Invoke(hostKeyKey, e.FingerPrintSHA256) ?? false;
+                bool trusted = HostKeyResolver?.Invoke(hostKeyKey, e.FingerPrintSHA256) ?? false;
+#if SFTP_CONNECT_DEBUG
+                Log.Info("SftpSession: host key {Fingerprint} trusted={Trusted}", e.FingerPrintSHA256, trusted);
+#endif
+                e.CanTrust = trusted;
             };
 
             try
             {
                 await Task.Run(() => _client.Connect(), ct);
                 _connected = true;
+#if SFTP_CONNECT_DEBUG
+                Log.Info("SftpSession.Connect: OK elapsed={Elapsed}ms", sw.ElapsedMilliseconds);
+#endif
             }
             catch (Exception ex)
             {
+                sw.Stop();
+                Log.Warn("SftpSession.Connect: FAILED elapsed={Elapsed} {Error}: {Message}",
+                    sw.ElapsedMilliseconds, ex.GetType().Name, ex.Message);
                 try { _client.Disconnect(); } catch { }
                 _client = null;
                 throw ExceptionFrom(ex, "connect");
@@ -331,14 +347,21 @@ namespace XFiles.Network
                     throw new NetworkOperationException(NetworkOperationReason.Unreachable,
                         "SFTP session is no longer connected");
 
+                var sw = System.Diagnostics.Stopwatch.StartNew();
                 var task = Task.Run(op, ct);
                 var done = await Task.WhenAny(task, Task.Delay(timeoutMs, ct)).ConfigureAwait(false);
                 if (done != task)
                 {
+                    sw.Stop();
+                    Log.Warn("SftpSession: {Op} timed out after {Elapsed}ms (timeout={Timeout}ms)",
+                        opName, sw.ElapsedMilliseconds, timeoutMs);
                     Invalidate();
                     throw new NetworkOperationException(NetworkOperationReason.TimedOut,
                         $"SFTP operation timed out: {opName}");
                 }
+                sw.Stop();
+                if (sw.ElapsedMilliseconds > 2000)
+                    Log.Info("SftpSession: {Op} slow {Elapsed}ms", opName, sw.ElapsedMilliseconds);
                 return await task.ConfigureAwait(false);
             }
             catch (NetworkOperationException)
@@ -352,6 +375,7 @@ namespace XFiles.Network
             }
             catch (Exception ex)
             {
+                Log.Warn("SftpSession: {Op} failed: {Error}: {Message}", opName, ex.GetType().Name, ex.Message);
                 throw ExceptionFrom(ex, opName);
             }
             finally
@@ -395,6 +419,7 @@ namespace XFiles.Network
         {
             _invalid = true;
             string key = NetworkUrl.Compose(_config);
+            Log.Warn("SftpSession: invalidated {Key}", key);
             if (key != null)
                 SftpSessionPool.Remove(key);
             Disconnect();
@@ -403,7 +428,13 @@ namespace XFiles.Network
         /// <summary>Closes the client connection and releases resources.</summary>
         public void Disconnect()
         {
-            try { _client?.Disconnect(); } catch { }
+            try
+            {
+                if (_connected)
+                    Log.Dbg("SftpSession.Disconnect: {Host}:{Port}", _config.Host, _config.EffectivePort);
+                _client?.Disconnect();
+            }
+            catch { }
             _client = null;
             _connected = false;
         }

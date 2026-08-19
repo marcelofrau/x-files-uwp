@@ -833,9 +833,16 @@ namespace XFiles.Controls
                 using (stream)
                 using (var fs = File.Create(tempPath))
                 {
-                    await stream.CopyToAsync(fs);
+                    long totalBytes = 0;
+                    byte[] buffer = new byte[81920];
+                    int read;
+                    while ((read = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                    {
+                        await fs.WriteAsync(buffer, 0, read);
+                        totalBytes += read;
+                    }
                 }
-                Log.Info("CacheRemoteFile: cached '{Name}' → {Temp}", name, tempPath);
+                Log.Info("CacheRemoteFile: cached '{Name}' ({Bytes} bytes) → {Temp}", name, new System.IO.FileInfo(tempPath).Length, tempPath);
                 return tempPath;
             }
             catch (Exception ex)
