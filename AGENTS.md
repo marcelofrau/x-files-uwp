@@ -18,7 +18,7 @@ All documentation, code, comments, and commit messages MUST be in English.
 for the planned MVP plus post-MVP features (audio player, 31 visualizers, text editor,
 QR file sharing, batch operations, ROM preview, PDF viewer, settings, log viewer).
 Docs in `docs/` reflect the shipped state. See `docs/ROADMAP.md` for the remaining backlog.
-Unit tests live in `tests/` (xUnit, linked-source, net8.0 — run on desktop, not UWP).
+Unit tests live in `tests/` (MSTest, linked-source, net8.0 — run on desktop, not UWP).
 
 ## Critical Rules
 - **NEVER commit or push** without explicit user request. Stage changes only. Wait for
@@ -124,7 +124,7 @@ PDF, QR share). Cross-cutting: `Metadata/*` (MusicBrainz/Deezer + SQLite cache),
 ```powershell
 & "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe" "XFiles.sln" /p:Configuration=Debug /p:Platform=x64
 ```
-Unit tests (desktop, xUnit):
+Unit tests (desktop, MSTest):
 ```powershell
 dotnet test tests/XFiles.Tests.csproj
 ```

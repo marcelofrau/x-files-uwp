@@ -57,6 +57,8 @@
     <Compile Include="..\XFiles\Network\HostKeyTrustStore.cs" Link="Linked\Network\HostKeyTrustStore.cs" />
     <Compile Include="..\XFiles\Network\NetworkPathUtil.cs" Link="Linked\Network\NetworkPathUtil.cs" />
     <Compile Include="..\XFiles\Metadata\TrackMetadata.cs" Link="Linked\Metadata\TrackMetadata.cs" />
+    <Compile Include="..\XFiles\Metadata\MetadataMatch.cs" Link="Linked\Metadata\MetadataMatch.cs" />
+    <Compile Include="..\XFiles\FileSystem\TextEditorService.cs" Link="Linked\FileSystem\TextEditorService.cs" />
     <Compile Include="..\XFiles\Services\PortalCore.cs" Link="Linked\Services\PortalCore.cs" />
     <Compile Include="..\XFiles\Services\PortalModels.cs" Link="Linked\Services\PortalModels.cs" />
     <Compile Include="..\XFiles\FileSystem\MusicFormatClassifier.cs" Link="Linked\FileSystem\MusicFormatClassifier.cs" />
