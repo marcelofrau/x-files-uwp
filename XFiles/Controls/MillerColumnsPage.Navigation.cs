@@ -808,6 +808,17 @@ namespace XFiles.Controls
             else
             {
                 // A on remote video → inline preview player (same as local).
+                if (IsFtpProtocol(selected.NetworkProtocol))
+                {
+                    Log.Info("OpenRemoteFile: FTP video not supported '{Name}' proto={Proto}", name, selected.NetworkProtocol);
+                    _ = AlertDialogControl.ShowAsync(
+                        "FTP video playback is not supported.\n\n" +
+                        "X-Files can't stream video over FTP because the protocol requires " +
+                        "re-opening a data connection for every seek, which makes playback impractical.\n\n" +
+                        "To watch this video, copy it to a local folder first (Y → Copy, navigate to local folder, Y → Paste).",
+                        AlertType.Info);
+                    return;
+                }
                 Log.Info("OpenRemoteFile: loading remote video inline '{Name}'", name);
                 _previewNetworkLocationId = current.NetworkLocationId;
                 _previewNetworkShare = share;
@@ -870,6 +881,18 @@ namespace XFiles.Controls
                     return;
                 }
 
+                if (FilePreviewService.IsVideoFile(ext) && IsFtpProtocol(selected.NetworkProtocol))
+                {
+                    Log.Info("OpenRemoteFullscreen: FTP video not supported '{Name}' proto={Proto}", name, selected.NetworkProtocol);
+                    _ = AlertDialogControl.ShowAsync(
+                        "FTP video playback is not supported.\n\n" +
+                        "X-Files can't stream video over FTP because the protocol requires " +
+                        "re-opening a data connection for every seek, which makes playback impractical.\n\n" +
+                        "To watch this video, copy it to a local folder first (Y → Copy, navigate to local folder, Y → Paste).",
+                        AlertType.Info);
+                    return;
+                }
+
                 if (RetroAudioPlayer.IsChiptuneFile(ext))
                 {
                     string tempPath = await CacheRemoteFileAsync(current.NetworkLocationId, share, path, name);
@@ -926,6 +949,14 @@ namespace XFiles.Controls
                 Log.Err("OpenRemoteFullscreen: {Ex}", ex);
             }
         }
+
+        /// <summary>
+        /// FTP/FTPS video playback is unsupported: the media engine needs random
+        /// access (seeking) and FTP re-opens a data connection per seek, which is
+        /// too slow. SMB/SFTP streams fine.
+        /// </summary>
+        private static bool IsFtpProtocol(NetworkProtocol protocol) =>
+            protocol == NetworkProtocol.Ftp || protocol == NetworkProtocol.Ftps;
 
         private static string MimeForRemoteFile(string ext)
         {

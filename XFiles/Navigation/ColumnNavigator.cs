@@ -743,7 +743,8 @@ namespace XFiles.Navigation
                         IsNetwork = true,
                         NetworkLocationId = config.Id,
                         NetworkShareName = null,
-                        NetworkPath = null
+                        NetworkPath = null,
+                        NetworkProtocol = config.Protocol
                     }
                     : new ColumnState
                     {
@@ -754,7 +755,8 @@ namespace XFiles.Navigation
                         IsNetwork = true,
                         NetworkLocationId = config.Id,
                         NetworkShareName = config.Protocol == NetworkProtocol.Smb ? config.Share : "",
-                        NetworkPath = config.Protocol == NetworkProtocol.Smb ? "" : (config.Share ?? "")
+                        NetworkPath = config.Protocol == NetworkProtocol.Smb ? "" : (config.Share ?? ""),
+                        NetworkProtocol = config.Protocol
                     };
 
                 if (!await LoadNetworkColumnAsync(newColumn, config, config.Share, config.Protocol == NetworkProtocol.Smb ? "" : (config.Share ?? ""))) return;
@@ -775,7 +777,8 @@ namespace XFiles.Navigation
                     IsNetwork = true,
                     NetworkLocationId = _current.NetworkLocationId,
                     NetworkShareName = selected.NetworkShareName,
-                    NetworkPath = ""
+                    NetworkPath = "",
+                    NetworkProtocol = config.Protocol
                 };
 
                 if (!await LoadNetworkColumnAsync(newColumn, config, selected.NetworkShareName, "")) return;
@@ -803,7 +806,8 @@ namespace XFiles.Navigation
                     IsNetwork = true,
                     NetworkLocationId = _current.NetworkLocationId,
                     NetworkShareName = _current.NetworkShareName,
-                    NetworkPath = childPath
+                    NetworkPath = childPath,
+                    NetworkProtocol = config.Protocol
                 };
 
                 if (!await LoadNetworkColumnAsync(newColumn, config, _current.NetworkShareName, childPath)) return;
@@ -1579,7 +1583,8 @@ namespace XFiles.Navigation
                         IsNetwork = true,
                         NetworkLocationId = config.Id,
                         NetworkShareName = selected.NetworkShareName ?? _current.NetworkShareName,
-                        NetworkPath = selected.NetworkPath
+                        NetworkPath = selected.NetworkPath,
+                        NetworkProtocol = config.Protocol
                     };
 
                     try
@@ -1620,6 +1625,7 @@ namespace XFiles.Navigation
                             NetworkLocationId = config.Id,
                             NetworkShareName = share,
                             NetworkPath = path,
+                            NetworkProtocol = config.Protocol,
                             PreviewFilePath = selected.Name,
                             PreviewType = FilePreviewType.Unsupported,
                             PreviewFileType = "Network file",
@@ -1646,6 +1652,7 @@ namespace XFiles.Navigation
                             NetworkLocationId = config.Id,
                             NetworkShareName = share,
                             NetworkPath = path,
+                            NetworkProtocol = config.Protocol,
                             PreviewFilePath = selected.Name,
                             PreviewType = previewIsAudio ? FilePreviewType.Audio : FilePreviewType.Video,
                             PreviewFileType = FilePreviewService.GetFileTypeLabel(previewExt, null),
@@ -1692,6 +1699,7 @@ namespace XFiles.Navigation
                         NetworkLocationId = config.Id,
                         NetworkShareName = share,
                         NetworkPath = path,
+                        NetworkProtocol = config.Protocol,
                         PreviewFilePath = selected.Name,
                         PreviewType = previewResult.Type,
                         PreviewTextContent = previewResult.TextContent,
@@ -2192,6 +2200,7 @@ namespace XFiles.Navigation
         public long NetworkLocationId { get; set; }
         public string NetworkShareName { get; set; }
         public string NetworkPath { get; set; }
+        public NetworkProtocol NetworkProtocol { get; set; } = NetworkProtocol.Smb;
         public string PortalKnownFolder { get; set; }
         public string PortalPackageFullName { get; set; }
         public string PortalPath { get; set; }
@@ -2335,7 +2344,8 @@ namespace XFiles.Navigation
                     IsNetwork = true,
                     NetworkLocationId = config.Id,
                     NetworkShareName = s,
-                    NetworkPath = ""
+                    NetworkPath = "",
+                    NetworkProtocol = config.Protocol
                 }).ToList());
         }
 
@@ -2354,7 +2364,8 @@ namespace XFiles.Navigation
                     NetworkShareName = share ?? "",
                     NetworkPath = ColumnNavigator.CombineNetworkPath(path, f.Name, config.Protocol),
                     SizeBytes = f.IsDirectory ? 0 : f.Size,
-                    LastModified = f.LastWriteTime
+                    LastModified = f.LastWriteTime,
+                    NetworkProtocol = config.Protocol
                 }).ToList());
         }
 

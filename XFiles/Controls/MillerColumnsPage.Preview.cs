@@ -239,7 +239,22 @@ namespace XFiles.Controls
 
                         if (IsRemoteMediaPreview)
                         {
-                            // Remote SMB video: stream inline into the pane's player.
+                            if (IsFtpProtocol(_navigator.Preview.NetworkProtocol))
+                            {
+                                // FTP video: show friendly message — FTP seek model can't support playback.
+                                PreviewStatus.Text = _navigator.Preview.PreviewFileType;
+                                PreviewMediaPanel.Visibility = Visibility.Visible;
+                                MediaPreview.Stop();
+                                MediaPreview.ShowPlaceholder(videoPath);
+                                _ = AlertDialogControl.ShowAsync(
+                                    "FTP video playback is not supported.\n\n" +
+                                    "X-Files can't stream video over FTP because the protocol requires " +
+                                    "re-opening a data connection for every seek, which makes playback impractical.\n\n" +
+                                    "To watch this video, copy it to a local folder first (Y → Copy, navigate to local folder, Y → Paste).",
+                                    AlertType.Info);
+                                break;
+                            }
+                            // Remote SMB/SFTP video: stream inline into the pane's player.
                             PreviewStatus.Text = _navigator.Preview.PreviewFileType;
                             PreviewMediaPanel.Visibility = Visibility.Visible;
                             await PlayRemoteVideoInlineAsync();
