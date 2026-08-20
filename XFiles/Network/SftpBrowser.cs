@@ -93,7 +93,7 @@ namespace XFiles.Network
             string password = await NetworkServerManager.GetPasswordAsync(config);
             var session = await SftpSessionPool.AcquireAsync(config, password, ConfigureHostKey, ct);
             ConfigureHostKey(session);
-            Log.Info("SftpBrowser.ListDirectory: {Url}{Remote}", NetworkUrl.Compose(config), remote);
+            Log.Info("SftpBrowser.ListDirectory: {Url}/{Remote}", NetworkUrl.Compose(config), remote);
             try
             {
                 var entries = await session.ListDirectoryAsync(remote, ct);
@@ -114,7 +114,7 @@ namespace XFiles.Network
             string password = await NetworkServerManager.GetPasswordAsync(config);
             var session = await SftpSessionPool.AcquireAsync(config, password, ConfigureHostKey, ct);
             ConfigureHostKey(session);
-            Log.Info("SftpBrowser.OpenRead: {Url}{Remote}", NetworkUrl.Compose(config), remote);
+            Log.Info("SftpBrowser.OpenRead: {Url}/{Remote}", NetworkUrl.Compose(config), remote);
             try
             {
                 return await session.OpenReadAsync(remote, ct);

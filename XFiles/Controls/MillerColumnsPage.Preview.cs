@@ -244,17 +244,19 @@ namespace XFiles.Controls
                                 // FTP video: show as unsupported format with explanation.
                                 MediaPreview.Stop();
 
-                                string iconFile = EntryViewModel.GetLargeFileIcon(videoPath);
+                                string proto = _navigator.Preview.NetworkProtocol.ToString().ToLowerInvariant();
                                 PreviewUnsupportedIcon.Source = new Windows.UI.Xaml.Media.Imaging.BitmapImage(
-                                    new Uri($"ms-appx:///Assets/FileTypes/{iconFile}"));
+                                    new Uri($"ms-appx:///Assets/Views/MainPage/mainpage-network-{proto}-128.png"));
                                 PreviewUnsupportedFileName.Text = _navigator.Preview.Label ?? System.IO.Path.GetFileName(videoPath);
                                 PreviewUnsupportedType.Text = _navigator.Preview.PreviewFileType ?? "";
                                 PreviewUnsupportedSize.Text = Formatting.FormatSize(_navigator.Preview.PreviewFileSize);
                                 PreviewUnsupportedComment.Text =
-                                    "FTP/FTPS video playback is not supported — " +
-                                    "the protocol requires re-opening a data connection for every seek.\n" +
-                                    "Copy to a local folder to watch (Y → Copy → Paste).";
+                                    "FTP/FTPS video playback is not supported.";
                                 PreviewUnsupportedComment.Visibility = Visibility.Visible;
+                                PreviewUnsupportedHintIcon.Source = new Windows.UI.Xaml.Media.Imaging.BitmapImage(
+                                    new Uri("ms-appx:///Assets/GamepadButtons/abxy/y.png"));
+                                PreviewUnsupportedHintText.Text = "Copy to local folder to watch";
+                                PreviewUnsupportedHint.Visibility = Visibility.Visible;
                                 PreviewStatus.Text = "";
                                 PreviewUnsupportedPanel.Visibility = Visibility.Visible;
                                 break;
@@ -513,6 +515,7 @@ namespace XFiles.Controls
             PreviewErrorPanel.Visibility = Visibility.Collapsed;
             PreviewUnsupportedPanel.Visibility = Visibility.Collapsed;
             PreviewUnsupportedComment.Visibility = Visibility.Collapsed;
+            PreviewUnsupportedHint.Visibility = Visibility.Collapsed;
             PreviewArchiveMediaPanel.Visibility = Visibility.Collapsed;
             FavoritesGuidePanel.Visibility = Visibility.Collapsed;
             NetworkGuidePanel.Visibility = Visibility.Collapsed;

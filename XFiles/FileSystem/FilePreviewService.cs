@@ -1,15 +1,18 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using Windows.ApplicationModel.Core;
+using Windows.Data.Pdf;
 using Windows.Graphics.Imaging;
 using Windows.Storage.Streams;
 using Windows.UI.Core;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Media.Imaging;
+using SharpCompress.Archives;
 using XFiles.FileSystem;
 
 namespace XFiles.FileSystem
@@ -286,6 +289,13 @@ namespace XFiles.FileSystem
             return !string.IsNullOrEmpty(extension) && PdfExtensions.Contains(extension);
         }
 
+        public static bool IsArchiveFile(string extension)
+        {
+            return string.Equals(extension, ".zip", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(extension, ".7z", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(extension, ".rar", StringComparison.OrdinalIgnoreCase);
+        }
+
         public static async Task<FilePreviewResult> GetPreviewAsync(string filePath)
         {
             var result = new FilePreviewResult { FileType = "" };
@@ -401,7 +411,7 @@ namespace XFiles.FileSystem
                 }
                 else if (IsPdfFile(ext))
                 {
-                    result.Type = FilePreviewType.Pdf;
+                    await LoadPdfPreviewFromStream(stream, result);
                 }
                 else if (IsTextFile(ext))
                 {
@@ -418,6 +428,10 @@ namespace XFiles.FileSystem
                 else if (RomHeaderParser.IsRomFile(ext))
                 {
                     await LoadRomPreviewFromStream(stream, result, ext);
+                }
+                else if (IsArchiveFile(ext))
+                {
+                    await LoadArchivePreviewFromStream(stream, fileName, result);
                 }
             }
             catch (Exception ex)
@@ -619,6 +633,139 @@ namespace XFiles.FileSystem
             }
 
             result.IsTruncated = false;
+        }
+
+        /// <summary>
+        /// Renders the first page of a PDF from a network stream as a bitmap.
+        /// Copies the stream to an InMemoryRandomAccessStream for PdfDocument
+        /// which requires IRandomAccessStream. Limited to ~50 MB stream size.
+        /// </summary>
+        private static async Task LoadPdfPreviewFromStream(Stream stream, FilePreviewResult result)
+        {
+            const long MaxPdfBytes = 50 * 1024 * 1024;
+            result.Type = FilePreviewType.Pdf;
+
+            using (var ims = new InMemoryRandomAccessStream())
+            {
+                using (var writer = new DataWriter(ims.GetOutputStreamAt(0)))
+                {
+                    var buf = new byte[8192];
+                    long totalRead = 0;
+                    int read;
+                    while ((read = await stream.ReadAsync(buf, 0, buf.Length)) > 0)
+                    {
+                        totalRead += read;
+                        if (totalRead > MaxPdfBytes)
+                        {
+                            result.Type = FilePreviewType.Unsupported;
+                            result.TextContent = "PDF too large for inline preview. Press A to open.";
+                            return;
+                        }
+                        if (read == buf.Length)
+                            writer.WriteBytes(buf);
+                        else
+                        {
+                            var chunk = new byte[read];
+                            Array.Copy(buf, chunk, read);
+                            writer.WriteBytes(chunk);
+                        }
+                    }
+                    await writer.StoreAsync();
+                    await writer.FlushAsync();
+                }
+
+                ims.Seek(0);
+                var pdfDoc = await Windows.Data.Pdf.PdfDocument.LoadFromStreamAsync(ims);
+
+                if (pdfDoc.PageCount == 0)
+                {
+                    result.TextContent = "PDF has no pages.";
+                    return;
+                }
+
+                result.PdfPageCount = (int)pdfDoc.PageCount;
+
+                var page = pdfDoc.GetPage(0);
+                using (var pageStream = new InMemoryRandomAccessStream())
+                {
+                    await page.RenderToStreamAsync(pageStream);
+                    pageStream.Seek(0);
+
+                    var decoder = await BitmapDecoder.CreateAsync(pageStream);
+                    var sb = await decoder.GetSoftwareBitmapAsync(
+                        BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
+
+                    var dispatcher = CoreApplication.MainView.CoreWindow?.Dispatcher;
+                    if (dispatcher != null)
+                    {
+                        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                        await dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
+                        {
+                            try
+                            {
+                                var wb = new WriteableBitmap(
+                                    (int)decoder.PixelWidth, (int)decoder.PixelHeight);
+                                sb.CopyToBuffer(wb.PixelBuffer);
+                                result.ImageSource = wb;
+                                result.PixelWidth = (int)page.Size.Width;
+                                result.PixelHeight = (int)page.Size.Height;
+                                tcs.SetResult(true);
+                            }
+                            catch (Exception ex)
+                            {
+                                Log.Warn("FilePreviewService: PDF bitmap render failed", ex);
+                                tcs.SetResult(false);
+                            }
+                        });
+                        await tcs.Task;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Lists archive contents (file names + sizes) as text for preview.
+        /// Supports zip, 7z, rar via SharpCompress. Limited to 500 entries.
+        /// </summary>
+        private static async Task LoadArchivePreviewFromStream(Stream stream, string fileName, FilePreviewResult result)
+        {
+            result.Type = FilePreviewType.Text;
+            try
+            {
+                using (var archive = SharpCompress.Archives.ArchiveFactory.Open(stream))
+                {
+                    var entries = archive.Entries
+                        .Where(e => !e.IsDirectory)
+                        .Take(500)
+                        .ToList();
+
+                    var sb = new StringBuilder();
+                    sb.AppendLine($"Contents of {fileName}");
+                    sb.AppendLine($"{entries.Count} file(s)");
+                    sb.AppendLine(new string('─', 40));
+
+                    long totalSize = 0;
+                    foreach (var entry in entries)
+                    {
+                        totalSize += entry.Size;
+                        string size = FormatSize(entry.Size);
+                        sb.AppendLine($"  {entry.Key,-36} {size.PadLeft(10)}");
+                    }
+
+                    sb.AppendLine(new string('─', 40));
+                    sb.AppendLine($"Total: {FormatSize(totalSize)}");
+
+                    result.TextContent = sb.ToString();
+                    result.FileSizeBytes = totalSize;
+                    result.IsTruncated = entries.Count >= 500;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("FilePreviewService: archive preview failed for '{Name}'", ex, fileName);
+                result.Type = FilePreviewType.Unsupported;
+                result.TextContent = $"Cannot list archive contents: {ex.Message}";
+            }
         }
 
         private static bool GetFileSizeWin32(string filePath, out long size)

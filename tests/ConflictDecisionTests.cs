@@ -11,7 +11,10 @@ namespace XFiles.Tests
         {
             Assert.AreNotEqual(ConflictDecision.ReplaceAll, ConflictDecision.RenameAll);
             Assert.AreNotEqual(ConflictDecision.ReplaceAll, ConflictDecision.Cancel);
+            Assert.AreNotEqual(ConflictDecision.ReplaceAll, ConflictDecision.Resume);
             Assert.AreNotEqual(ConflictDecision.RenameAll, ConflictDecision.Cancel);
+            Assert.AreNotEqual(ConflictDecision.RenameAll, ConflictDecision.Resume);
+            Assert.AreNotEqual(ConflictDecision.Resume, ConflictDecision.Cancel);
         }
     }
 }

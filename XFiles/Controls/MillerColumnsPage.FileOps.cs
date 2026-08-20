@@ -418,10 +418,10 @@ namespace XFiles.Controls
             {
                 Log.Warn("ShowFileActionSheetAsync: network operation failed {Reason}: {Message}",
                     ex.Reason, ex.Message);
-                _ = AlertDialogControl.ShowAsync(
-                    ex.Message + (ex.Reason == NetworkOperationReason.AccessDenied
-                        ? "\n\nAccess denied on the remote server."
-                        : "\n\nCheck the connection and try again."), AlertType.Error);
+                var hint = ex.Reason == NetworkOperationReason.AccessDenied
+                    ? "\n\n" + NetworkOperationException.FriendlyMessage(ex.Reason)
+                    : "\n\nCheck the connection and try again.";
+                _ = AlertDialogControl.ShowAsync(ex.Message + hint, AlertType.Error);
             }
             catch (Exception ex)
             {
@@ -935,7 +935,7 @@ namespace XFiles.Controls
         {
             var current = _navigator.Current;
             if (current == null || !current.IsNetwork) return;
-            if (string.IsNullOrEmpty(current.NetworkShareName))
+            if (current.NetworkProtocol == NetworkProtocol.Smb && string.IsNullOrEmpty(current.NetworkShareName))
             {
                 _ = AlertDialogControl.ShowAsync("Open a shared folder before pasting.", AlertType.Info);
                 return;
@@ -987,6 +987,7 @@ namespace XFiles.Controls
             long completedBytes = 0;
             var sw = Stopwatch.StartNew();
             var conflict = BuildConflictCallback();
+            NetworkOperationException lastNetworkError = null;
 
             foreach (var entry in entries)
             {
@@ -1054,6 +1055,7 @@ namespace XFiles.Controls
                 {
                     ok = false;
                     Log.Warn("HandlePasteToNetworkAsync: {File} — {Reason} ({Ex})", entry.Name, ex.Reason, ex.Message);
+                    lastNetworkError = ex;
                 }
                 catch (Exception ex)
                 {
@@ -1065,7 +1067,12 @@ namespace XFiles.Controls
                 completedBytes += entryBytes;
                 OpProgressDialog.TrackCompleted(entry.Name, entryBytes);
                 if (failed > 0)
-                    _ = AlertDialogControl.ShowAsync($"Copy failed: \"{entry.Name}\".{FailureSuffix()}", AlertType.Error);
+                {
+                    var hint = lastNetworkError?.Reason == NetworkOperationReason.AccessDenied
+                        ? "\n\n" + NetworkOperationException.FriendlyMessage(lastNetworkError.Reason)
+                        : "";
+                    _ = AlertDialogControl.ShowAsync($"Cannot copy \"{entry.Name}\"{hint}\n\n{FailureSuffix()}", AlertType.Error);
+                }
             }
 
             sw.Stop();
@@ -1117,6 +1124,7 @@ namespace XFiles.Controls
             long completedBytes = 0;
             var sw = Stopwatch.StartNew();
             var conflict = BuildConflictCallback();
+            NetworkOperationException lastNetworkError = null;
 
             for (int i = 0; i < entries.Count; i++)
             {
@@ -1134,8 +1142,44 @@ namespace XFiles.Controls
                 var cfg = srcConfigs[i];
                 bool ok;
                 long entryBytes = entry.IsDirectory ? 0 : Math.Max(0, entry.SizeBytes);
+                long resumeFrom = 0;
                 try
                 {
+                    // Detect partial file from a previous failed copy attempt.
+                    if (!entry.IsDirectory)
+                    {
+                        string destPath = Path.Combine(destDir, Path.GetFileName(entry.NetworkPath.Replace('/', '\\')));
+                        if (File.Exists(destPath))
+                        {
+                            long existingSize = 0;
+                            try { existingSize = new FileInfo(destPath).Length; } catch { }
+                            if (existingSize > 0 && existingSize < entry.SizeBytes)
+                            {
+                                OpProgressDialog.Close();
+                                var decision = await ShowPartialCopyDialogAsync(
+                                    Path.GetFileName(entry.NetworkPath.Replace('/', '\\')),
+                                    existingSize, entry.SizeBytes);
+                                if (decision == ConflictDecision.Cancel)
+                                {
+                                    UpdateClipboardIndicator();
+                                    return;
+                                }
+                                if (decision == ConflictDecision.Resume)
+                                {
+                                    resumeFrom = existingSize;
+                                }
+                                // ReplaceAll → start fresh, resumeFrom stays 0
+                                OpProgressDialog.Show("Copying", $"{entries.Count} items", destDir, 0, fileCount);
+                                if (totalBytes > 0)
+                                    OpProgressDialog.UpdateProgress(new FileOperations.OperationProgress
+                                    {
+                                        TotalBytes = totalBytes,
+                                        FileTotal = fileCount
+                                    });
+                            }
+                        }
+                    }
+
                     var progress = new Progress<FileOperations.OperationProgress>(p =>
                     {
                         var overall = new FileOperations.OperationProgress
@@ -1150,7 +1194,7 @@ namespace XFiles.Controls
                     });
                     ok = await NetworkCopyService.CopyRemoteToLocalAsync(
                         _navigator.BrowserFor(cfg.Protocol), cfg, entry.NetworkShareName, entry.NetworkPath,
-                        destDir, entry.IsDirectory, progress, OpProgressDialog.CancelToken, conflict);
+                        destDir, entry.IsDirectory, progress, OpProgressDialog.CancelToken, conflict, resumeFrom);
                 }
                 catch (OperationCanceledException)
                 {
@@ -1165,6 +1209,7 @@ namespace XFiles.Controls
                 {
                     ok = false;
                     Log.Warn("HandlePasteNetworkToLocalAsync: {File} — {Reason} ({Ex})", entry.Name, ex.Reason, ex.Message);
+                    lastNetworkError = ex;
                 }
                 catch (Exception ex)
                 {
@@ -1176,7 +1221,12 @@ namespace XFiles.Controls
                 completedBytes += entryBytes;
                 OpProgressDialog.TrackCompleted(entry.Name, entryBytes);
                 if (failed > 0)
-                    _ = AlertDialogControl.ShowAsync($"Copy failed: \"{entry.Name}\".{FailureSuffix()}", AlertType.Error);
+                {
+                    var hint = lastNetworkError?.Reason == NetworkOperationReason.AccessDenied
+                        ? "\n\n" + NetworkOperationException.FriendlyMessage(lastNetworkError.Reason)
+                        : "";
+                    _ = AlertDialogControl.ShowAsync($"Cannot copy \"{entry.Name}\"{hint}\n\n{FailureSuffix()}", AlertType.Error);
+                }
             }
 
             sw.Stop();
@@ -1230,6 +1280,30 @@ namespace XFiles.Controls
             };
         }
 
+        /// <summary>
+        /// Shows the partial-file dialog (RESUME / OVERWRITE / CANCEL) on the UI thread.
+        /// Called when a re-paste detects a partially-copied file from a previous attempt.
+        /// </summary>
+        private Task<ConflictDecision> ShowPartialCopyDialogAsync(string name, long existingBytes, long totalBytes)
+        {
+            var tcs = new TaskCompletionSource<ConflictDecision>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, async () =>
+            {
+                try
+                {
+                    var decision = await FileConflictDialogControl.ShowPartialAsync(name, existingBytes, totalBytes);
+                    tcs.TrySetResult(decision);
+                }
+                catch (Exception ex)
+                {
+                    Log.Warn("ShowPartialCopyDialogAsync: dialog error", ex);
+                    tcs.TrySetResult(ConflictDecision.Cancel);
+                }
+            });
+            return tcs.Task;
+        }
+
         private async Task HandlePasteAsync()
         {
             try
@@ -1257,6 +1331,15 @@ namespace XFiles.Controls
             {
                 Log.Warn("HandlePasteAsync: no current directory");
                 await Task.CompletedTask;
+                return;
+            }
+
+            // Pre-flight: check destination directory write permission
+            var writeError = FileOperations.CheckWritable(destDir, true);
+            if (writeError != null)
+            {
+                Log.Warn("HandlePasteAsync: dest not writable — {Reason}", writeError);
+                _ = AlertDialogControl.ShowAsync($"Cannot paste here\n\n{writeError}", AlertType.Error);
                 return;
             }
 
@@ -2203,7 +2286,16 @@ namespace XFiles.Controls
                 return;
             }
 
-                var confirmed = await AlertDialogControl.ShowConfirmAsync($"Rename '{entry.Name}' to '{newName}'?");
+            // Pre-flight: check write permission before prompting
+            var writeError = FileOperations.CheckWritable(entry.FullPath, entry.IsDirectory);
+            if (writeError != null)
+            {
+                Log.Warn("HandleRenameAsync: not writable — {Reason}", writeError);
+                _ = AlertDialogControl.ShowAsync($"Cannot rename \"{entry.Name}\"\n\n{writeError}", AlertType.Error);
+                return;
+            }
+
+            var confirmed = await AlertDialogControl.ShowConfirmAsync($"Rename '{entry.Name}' to '{newName}'?");
             if (!confirmed)
             {
                 #if BATCH_DEBUG
@@ -2297,7 +2389,10 @@ namespace XFiles.Controls
             catch (NetworkOperationException ex)
             {
                 Log.Warn($"HandleNetworkRenameAsync: {entry.Name} — {ex.Reason} ({ex.Message})");
-                _ = AlertDialogControl.ShowAsync($"Failed to rename \"{entry.Name}\".\n\n{ex.Message}", AlertType.Error);
+                var hint = ex.Reason == NetworkOperationReason.AccessDenied
+                    ? "\n\n" + NetworkOperationException.FriendlyMessage(ex.Reason)
+                    : "";
+                _ = AlertDialogControl.ShowAsync($"Cannot rename \"{entry.Name}\"\n\n{ex.Message}{hint}", AlertType.Error);
             }
             catch (Exception ex)
             {
@@ -2346,6 +2441,19 @@ namespace XFiles.Controls
             {
                 await HandleNetworkDeleteAsync(entry);
                 return;
+            }
+
+            // Pre-flight: check parent directory write permission before prompting
+            var parentDir = Path.GetDirectoryName(entry.FullPath);
+            if (!string.IsNullOrEmpty(parentDir))
+            {
+                var writeError = FileOperations.CheckWritable(parentDir, true);
+                if (writeError != null)
+                {
+                    Log.Warn("HandleDeleteAsync: not writable — {Reason}", writeError);
+                    _ = AlertDialogControl.ShowAsync($"Cannot delete \"{entry.Name}\"\n\n{writeError}", AlertType.Error);
+                    return;
+                }
             }
 
             // Build file list for confirmation dialog
@@ -2407,7 +2515,10 @@ namespace XFiles.Controls
             catch (NetworkOperationException ex)
             {
                 Log.Warn($"HandleNetworkDeleteAsync: {entry.Name} — {ex.Reason} ({ex.Message})");
-                _ = AlertDialogControl.ShowAsync($"Failed to delete \"{entry.Name}\".\n\n{ex.Message}", AlertType.Error);
+                var hint = ex.Reason == NetworkOperationReason.AccessDenied
+                    ? "\n\n" + NetworkOperationException.FriendlyMessage(ex.Reason)
+                    : "";
+                _ = AlertDialogControl.ShowAsync($"Cannot delete \"{entry.Name}\"\n\n{ex.Message}{hint}", AlertType.Error);
             }
             catch (Exception ex)
             {
@@ -2917,6 +3028,15 @@ namespace XFiles.Controls
                 return;
             }
 
+            // Pre-flight: check parent directory write permission
+            var writeError = FileOperations.CheckWritable(targetDir, true);
+            if (writeError != null)
+            {
+                Log.Warn("HandleCreateFolderAsync: not writable — {Reason}", writeError);
+                _ = AlertDialogControl.ShowAsync($"Cannot create folder \"{folderName}\"\n\n{writeError}", AlertType.Error);
+                return;
+            }
+
             var fullPath = System.IO.Path.Combine(targetDir, folderName);
             var result = await FileOperations.CreateFolderAsync(fullPath);
             if (result == FileOperations.OperationResult.Success)
@@ -2977,7 +3097,10 @@ namespace XFiles.Controls
             catch (NetworkOperationException ex)
             {
                 Log.Warn($"HandleNetworkCreateFolderAsync: {folderName} — {ex.Reason} ({ex.Message})");
-                _ = AlertDialogControl.ShowAsync($"Failed to create folder \"{folderName}\".\n\n{ex.Message}", AlertType.Error);
+                var hint = ex.Reason == NetworkOperationReason.AccessDenied
+                    ? "\n\n" + NetworkOperationException.FriendlyMessage(ex.Reason)
+                    : "";
+                _ = AlertDialogControl.ShowAsync($"Cannot create folder \"{folderName}\"\n\n{ex.Message}{hint}", AlertType.Error);
             }
             catch (Exception ex)
             {

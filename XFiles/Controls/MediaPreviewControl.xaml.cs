@@ -39,6 +39,7 @@ namespace XFiles.Controls
         // Network (SMB) context of the currently loaded remote media, if any.
         private string _currentNetworkShare;
         private string _currentNetworkPath;
+        private IDisposable _currentRemoteStream;
 
         private void SetLoadingState(bool value)
         {
@@ -220,6 +221,7 @@ namespace XFiles.Controls
             _currentMetadataKey = null;
             _isAudioMode = false;
             _chiptuneSource = null;
+            _currentRemoteStream = stream as IDisposable;
             Log.Info("MediaPreviewControl: loading remote stream mime={Mime}", mimeType);
 
             _currentSourceUri = null;
@@ -254,6 +256,7 @@ namespace XFiles.Controls
             Stop();
             ResetProgressUi();
             Log.Dbg("MediaPreviewControl.LoadRemoteAudio: enter mime={Mime}", mimeType);
+            _currentRemoteStream = stream as IDisposable;
 
             _isAudioMode = true;
             _currentFilePath = null;
@@ -745,6 +748,7 @@ namespace XFiles.Controls
 				Player.Pause();
 				Player.Source = null;
 			}
+			DisposeCurrentRemoteStream();
             _currentSourceUri = null;
             _currentFilePath = null;
             _currentMetadataKey = null;
@@ -756,6 +760,15 @@ namespace XFiles.Controls
             ClearMetadata();
             Visibility = Visibility.Collapsed;
             PlayerStateChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void DisposeCurrentRemoteStream()
+        {
+            if (_currentRemoteStream != null)
+            {
+                try { _currentRemoteStream.Dispose(); } catch { }
+                _currentRemoteStream = null;
+            }
         }
 
         public event EventHandler PlayerStateChanged;

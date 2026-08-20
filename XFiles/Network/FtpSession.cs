@@ -49,6 +49,13 @@ namespace XFiles.Network
         private AsyncFtpClient _client;
         private bool _supportsRest;
 
+        /// <summary>
+        /// True when auto-detect upgraded from plain FTP to FTPS (server
+        /// rejected plaintext with 503/530). FtpBrowser uses this to persist
+        /// the upgrade so subsequent connects skip the plain attempt.
+        /// </summary>
+        public bool WasAutoUpgradedToFtps { get; private set; }
+
         public FtpSession(NetworkServerConfig config) : this(config, null) { }
 
         public FtpSession(NetworkServerConfig config, string password)
@@ -98,6 +105,7 @@ namespace XFiles.Network
                 // (FileZilla "503 Use AUTH first", vsftpd "530 ... must use
                 // encryption"). Retry automatically with explicit FTPS instead
                 // of failing the operation.
+                WasAutoUpgradedToFtps = true;
                 TraceSink?.Invoke(_config.Host, "Plain FTP rejected — server demands TLS. Retrying with explicit FTPS.", true);
                 client = await ConnectOnceAsync(user, pass, FtpEncryptionMode.Explicit, ct).ConfigureAwait(false);
             }

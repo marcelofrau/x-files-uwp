@@ -48,7 +48,7 @@
                                     <Image Source="{Binding IconPath}"
                                            Width="40" Height="40"
                                            VerticalAlignment="Center" />
-                                    <StackPanel VerticalAlignment="Center" Margin="16,0,0,0">
+                                    <StackPanel VerticalAlignment="Center" Margin="16,0,0,0" Width="320">
                                         <TextBlock Text="{Binding Label}"
                                                    FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                                    FontSize="20" />
@@ -57,6 +57,13 @@
                                                    FontSize="12"
                                                    Foreground="#666666"
                                                    Margin="0,2,0,0" />
+                                        <ProgressBar x:Name="VolumeBar"
+                                                     Minimum="0" Maximum="100"
+                                                     Value="{Binding VolumePercent}"
+                                                     Visibility="{Binding VolumeVisibility}"
+                                                     Height="6" Margin="0,6,0,0"
+                                                     Foreground="#B0D8A0"
+                                                     Background="#333640" />
                                     </StackPanel>
                                 </StackPanel>
                             </DataTemplate>

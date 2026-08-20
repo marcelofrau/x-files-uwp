@@ -44,6 +44,14 @@ namespace XFiles.Network
         }
 
         /// <summary>
+        /// Sends an HTTP request using this session's client. Used by
+        /// <see cref="WebDavWriteStream"/> for PUT operations that need
+        /// the session's credentials and certificate handling.
+        /// </summary>
+        internal Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+            => _client.SendAsync(request, ct);
+
+        /// <summary>
         /// Effective path for FTP/SFTP/WebDAV (no share layer — share is the start folder).
         /// </summary>
         public static string EffectivePath(string share, string path)
@@ -310,15 +318,13 @@ namespace XFiles.Network
         // ─────────────────────── OpenWriteStream ───────────────────────
 
         /// <summary>
-        /// Opens a remote path for writing via PUT. Returns a MemoryStream
-        /// that is uploaded on dispose. Suitable for small-to-medium files
-        /// (text editor save-back). For large files, use WriteFileAsync directly.
+        /// Opens a remote path for writing via PUT. Returns a <see cref="WebDavWriteStream"/>
+        /// that buffers data in memory and uploads on dispose. Used by the remote→remote
+        /// copy path where no local file path exists for <see cref="WriteFileAsync"/>.
         /// </summary>
-        public async Task<Stream> OpenWriteStreamAsync(string path, CancellationToken ct)
+        public Stream OpenWriteStreamAsync(string path)
         {
-            // Return a MemoryStream; the caller writes to it, then we upload on close.
-            // This is a simplified approach — real streaming upload would need a custom stream.
-            return new MemoryStream();
+            return new WebDavWriteStream(this, Url(path));
         }
 
         /// <summary>

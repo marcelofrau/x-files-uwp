@@ -124,7 +124,7 @@ namespace XFiles.Navigation
             var labels = new List<string>();
             foreach (var state in _history)
             {
-                if (!string.IsNullOrEmpty(state.Label) && state.Label != "(Drives)")
+                if (!string.IsNullOrEmpty(state.Label) && state.Label != "(Drives)" && state.Label != "Network")
                     labels.Add(state.Label.TrimEnd('\\'));
             }
             labels.Reverse();
@@ -1715,15 +1715,7 @@ namespace XFiles.Navigation
                         PreviewRomIconPath = previewResult.RomIconPath
                     };
 
-                    // PDF keeps a metadata card (rendering is path-based; the
-                    // fullscreen open caches the file locally first).
-                    if (previewResult.Type == FilePreviewType.Pdf)
-                    {
-                        _preview.PreviewType = FilePreviewType.Unsupported;
-                        _preview.PreviewTextContent =
-                            $"Press A to open \"{selected.Name}\" (PDF is cached locally first).";
-                    }
-                    else if (previewResult.Type == FilePreviewType.Unsupported)
+                    if (previewResult.Type == FilePreviewType.Unsupported)
                     {
                         _preview.PreviewTextContent = "No preview for this file type. Press A for more options.";
                     }

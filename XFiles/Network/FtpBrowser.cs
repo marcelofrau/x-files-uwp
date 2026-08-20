@@ -41,11 +41,32 @@ namespace XFiles.Network
             finally { _operationLock.Release(); }
         }
 
+        /// <summary>
+        /// After a successful connect, if auto-detect upgraded FTP→FTPS,
+        /// persist the protocol so subsequent connects skip the plain attempt.
+        /// </summary>
+        private static async Task PersistAutoUpgradeAsync(FtpSession session, NetworkServerConfig config, string password)
+        {
+            if (!session.WasAutoUpgradedToFtps || config.Protocol == NetworkProtocol.Ftps)
+                return;
+            Log.Info("FtpBrowser: auto-upgraded {Host} from FTP to FTPS, persisting", config.Host);
+            config.Protocol = NetworkProtocol.Ftps;
+            try
+            {
+                await NetworkServerManager.UpdateAsync(config.Id, config, password);
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("FtpBrowser: failed to persist FTPS upgrade for {Host}", ex, config.Host);
+            }
+        }
+
         public async Task<string> TestConnectionAsync(NetworkServerConfig config, string password, CancellationToken ct)
         {
             using (var session = new FtpSession(config, password))
             {
                 await session.EnsureConnectedAsync(password, ct);
+                await PersistAutoUpgradeAsync(session, config, password);
                 var entries = await session.ListDirectoryAsync(config.Share ?? "", ct);
                 return $"Connected — {entries.Count} item(s) in \"{config.Share ?? "/"}\".";
             }
@@ -75,10 +96,11 @@ namespace XFiles.Network
                 string password = await NetworkServerManager.GetPasswordAsync(config);
                 using (var session = new FtpSession(config, password))
                 {
-                    Log.Info("FtpBrowser.ListDirectory: {Url}{Remote}", NetworkUrl.Compose(config), remote);
+                    Log.Info("FtpBrowser.ListDirectory: {Url}/{Remote}", NetworkUrl.Compose(config), remote);
                     try
                     {
                         var entries = await session.ListDirectoryAsync(remote, ct);
+                        await PersistAutoUpgradeAsync(session, config, password);
                         Log.Dbg("FtpBrowser.ListDirectory: {Count} entries", entries.Count);
                         return entries;
                     }
@@ -99,7 +121,7 @@ namespace XFiles.Network
                 string remote = EffectivePath(share, path);
                 string password = await NetworkServerManager.GetPasswordAsync(config);
                 var session = new FtpSession(config, password);
-                Log.Info("FtpBrowser.OpenRead: {Url}{Remote}", NetworkUrl.Compose(config), remote);
+                Log.Info("FtpBrowser.OpenRead: {Url}/{Remote}", NetworkUrl.Compose(config), remote);
                 try
                 {
                     return await session.OpenReadAsync(remote, ct);

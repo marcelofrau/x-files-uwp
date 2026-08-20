@@ -1,15 +1,17 @@
-# Self-contained FTP/FTPS + SFTP smoke servers for the network layer.
+# Self-contained FTP/FTPS + SFTP + WebDAV smoke servers for the network layer.
 # Usage:
 #   docker compose -f tools/network-smoke/docker-compose.yml up -d
 #   docker compose -f tools/network-smoke/docker-compose.yml down
 # Seed data is mounted read-only from ./seed; generate it with make-seed.ps1.
 #
-# FTP  -> ftp://10.0.0.20:2121  (user: smoke / pass: smoke123)  plain + implicit FTPS on 2123
-# SFTP -> ssh://10.0.0.20:2222   (user: smoke / pass: smoke123)  (also the SFTP test server)
-# WebDAV -> http://10.0.0.20:8081 (user: user / pass: pass)     Digest auth
+# FTP/FTPS -> ftp://10.0.0.20:2121 (user: smoke / pass: smoke123)  plain + explicit TLS
+# SFTP    -> ssh://10.0.0.20:2222  (user: smoke / pass: smoke123)  SFTP-only (ForceCommand)
+# WebDAV  -> http://10.0.0.20:8081 (user: user / pass: pass)       Basic auth, read-only
 #
 # Env-gated smoke tests in tests/ connect to these when the *_SMOKE_* vars are set
 # (see tests/FtpSmokeTests.cs / SftpSmokeTests.cs).
+#
+# NOTE: WebDAV is commented out by default — uncomment the webdav service to start it.
 
 services:
   ftp:
@@ -21,7 +23,6 @@ services:
     entrypoint: [ "/bin/bash", "-c", "cp /certs/vsftpd.conf /etc/vsftpd/vsftpd.conf && /usr/sbin/run-vsftpd.sh" ]
     ports:
       - "2121:21"
-      - "2123:990" # implicit FTPS
       - "30000-30010:30000-30010"
     environment:
       FTP_USER: smoke
@@ -30,12 +31,11 @@ services:
       # PASV replies announce this address; 127.0.0.1 makes remote clients
       # try to connect to themselves. Set to ${SMOKE_PASV_ADDRESS:-10.0.0.20}.
       PASV_ADDRESS: ${SMOKE_PASV_ADDRESS:-10.0.0.20}
-      PASV_MIN_PORT: 30000
-      PASV_MAX_PORT: 30010
+      PASV_MIN_PORT: 50100
+      PASV_MAX_PORT: 50200
       REVERSE_LOOKUP_ENABLE: "NO"
-      # TLS: self-signed cert (see certs/). Enables explicit FTPS on 21 and
-      # implicit FTPS on 990 (mapped to host 2121/2123). ValidateAnyCertificate
-      # accepts the self-signed cert client-side.
+      # TLS: self-signed cert (see certs/). Explicit FTPS on port 21 via AUTH TLS.
+      # ValidateAnyCertificate accepts the self-signed cert client-side.
       TLS_CERT: /certs/vsftpd.crt
       TLS_KEY: /certs/vsftpd.key
     volumes:
@@ -63,19 +63,18 @@ services:
       - "2222:22"
     command: "smoke:smoke123:1000:1000"
     volumes:
-      - ./seed:/home/smoke/share:ro
+      - ./seed:/home/smoke/share:rw
     restart: "no"
 
-#  webdav:
-#    # nginx-based WebDAV server with Digest authentication.
-#    image: delfer/alpine-nginx-webdav:latest
-#    container_name: xfiles-smoke-webdav
-#    ports:
-#      - "8081:80"
-#    environment:
-#      WEBDAV_USERNAME: user
-#      WEBDAV_PASSWORD: pass
-#      AUTH_TYPE: Digest
-#    volumes:
-#      - ./seed:/var/www/html:ro
-#    restart: "no"
+  webdav:
+    # nginx-based WebDAV server with Basic authentication (maltokyo image).
+    image: maltokyo/docker-nginx-webdav:latest
+    container_name: xfiles-smoke-webdav
+    ports:
+      - "8081:80"
+    environment:
+      USERNAME: user
+      PASSWORD: pass
+    volumes:
+      - ./seed:/media/data:rw
+    restart: "no"

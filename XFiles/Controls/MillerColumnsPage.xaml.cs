@@ -583,6 +583,32 @@ namespace XFiles.Controls
                 }
                 PathText.Text = breadcrumb;
 
+                // Network protocol icon in header path bar
+                var currentNetwork = _navigator.Current;
+                if (currentNetwork != null && currentNetwork.IsNetwork && currentNetwork.NetworkLocationId > 0)
+                {
+                    string iconFile;
+                    switch (currentNetwork.NetworkProtocol)
+                    {
+                        case NetworkProtocol.Smb:   iconFile = "mainpage-network-icon-smb-32.png"; break;
+                        case NetworkProtocol.Ftp:   iconFile = "mainpage-network-icon-ftp-32.png"; break;
+                        case NetworkProtocol.Ftps:  iconFile = "mainpage-network-icon-ftps-32.png"; break;
+                        case NetworkProtocol.Sftp:  iconFile = "mainpage-network-icon-sftp-32.png"; break;
+                        case NetworkProtocol.Webdav: iconFile = "mainpage-network-icon-webdav-32.png"; break;
+                        default: iconFile = null; break;
+                    }
+                    if (iconFile != null)
+                    {
+                        PathProtocolIcon.Source = new Windows.UI.Xaml.Media.Imaging.BitmapImage(
+                            new Uri($"ms-appx:///Assets/Views/MainPage/{iconFile}"));
+                        PathProtocolIcon.Visibility = Visibility.Visible;
+                    }
+                }
+                else
+                {
+                    PathProtocolIcon.Visibility = Visibility.Collapsed;
+                }
+
                 // Parent column
                 if (!atRoot)
                 {

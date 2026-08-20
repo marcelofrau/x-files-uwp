@@ -107,6 +107,7 @@ namespace XFiles.Audio
 
         private bool _isGraphRunning;
         private bool _remoteStreamNode;
+        private int _loadGeneration;
         public bool IsPlaying => _isGraphRunning;
         public string CurrentFilePath => _currentFilePath;
         public bool IsFileLoaded => _fileInputNode != null || _mediaSourceNode != null;
@@ -202,14 +203,18 @@ namespace XFiles.Audio
         {
             if (_isGraphRunning)
                 Stop();
+            int gen = _loadGeneration;
             _currentFilePath = "(network stream)";
             Log.Info("AudioLevelService: playing remote stream mime={Mime}", mimeType);
 
             try
             {
                 var mediaSource = MediaSource.CreateFromStream(stream, mimeType);
+
+                if (_loadGeneration != gen) { try { stream.Dispose(); } catch { } return; }
                 await CreateGraphCommon(true);
 
+                if (_loadGeneration != gen) { try { stream.Dispose(); } catch { } return; }
                 var nodeResult = await _graph.CreateMediaSourceAudioInputNodeAsync(mediaSource);
                 if (nodeResult.Status != MediaSourceAudioInputNodeCreationStatus.Success)
                 {
@@ -220,6 +225,7 @@ namespace XFiles.Audio
                     return;
                 }
 
+                if (_loadGeneration != gen) { try { stream.Dispose(); } catch { } return; }
                 _mediaSourceNode = nodeResult.Node;
                 _mediaSourceNode.AddOutgoingConnection(_deviceOutputNode);
                 _mediaSourceNode.AddOutgoingConnection(_frameOutputNode);
@@ -628,6 +634,7 @@ namespace XFiles.Audio
 
         public void Stop()
         {
+            Interlocked.Increment(ref _loadGeneration);
             _isAnalyzing = false;
             _isGraphRunning = false;
             _remoteStreamNode = false;

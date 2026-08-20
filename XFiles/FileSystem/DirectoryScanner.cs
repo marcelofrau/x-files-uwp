@@ -280,6 +280,7 @@ namespace XFiles.FileSystem
         /// <summary>
         /// Probe one drive letter with FindFirstFileExFromAppW. Returns a short
         /// human-readable summary (OK + first entry, or the Win32 error code).
+        /// If P/Invoke fails, also tries Windows.Storage as a diagnostic fallback.
         /// </summary>
         private static string ProbeDriveFindFirst(string driveLetter)
         {
@@ -290,7 +291,25 @@ namespace XFiles.FileSystem
             if (hFind == new IntPtr(INVALID_HANDLE_VALUE))
             {
                 int err = Marshal.GetLastWin32Error();
-                return $"FindFirstFileExFromAppW failed (error {err})";
+                string pInvokeResult = $"FindFirstFileExFromAppW failed (error {err})";
+
+                // Diagnostic fallback: try Windows.Storage to see if it has broader access
+                try
+                {
+                    string drivePath = driveLetter + ":\\";
+                    var folder = StorageFolder.GetFolderFromPathAsync(drivePath).GetAwaiter().GetResult();
+                    var children = folder.GetFoldersAsync().GetAwaiter().GetResult();
+                    string firstChild = children.Count > 0 ? children[0].Name : "(empty)";
+                    Log.Info("Drive probe {0}:\\: Storage fallback — OK ({1} folders, first: '{2}')",
+                        driveLetter, children.Count, firstChild);
+                }
+                catch (Exception storageEx)
+                {
+                    Log.Info("Drive probe {0}:\\: Storage fallback — {1}: {2}",
+                        driveLetter, storageEx.GetType().Name, storageEx.Message);
+                }
+
+                return pInvokeResult;
             }
             string first = findData.cFileName;
             FindClose(hFind);

@@ -200,6 +200,47 @@ namespace XFiles.FileSystem
             }
         }
 
+        /// <summary>
+        /// Pre-flight probe: checks whether a path is writable before attempting
+        /// a write operation. For files, tries opening for write; for directories,
+        /// tries creating a temporary file. Returns null on success, or a
+        /// user-facing reason string on failure.
+        /// </summary>
+        public static string CheckWritable(string path, bool isDirectory)
+        {
+            try
+            {
+                if (isDirectory)
+                {
+                    // Probe: can we create a temp file in this directory?
+                    string probe = System.IO.Path.Combine(path, "~xfiles_probe.tmp");
+                    using (var fs = new FileStream(probe, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                    { }
+                    File.Delete(probe);
+                    return null;
+                }
+                else
+                {
+                    // Probe: can we open the file for write access?
+                    using (var fs = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.None))
+                    { }
+                    return null;
+                }
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return "Access denied — the item is read-only or you don't have permission to modify it.";
+            }
+            catch (IOException ex) when ((ex.HResult & 0xFFFF) == 32)
+            {
+                return "The file is in use by another program.";
+            }
+            catch (Exception ex)
+            {
+                return "Cannot write: " + ex.Message;
+            }
+        }
+
         public class OperationProgress
         {
             public string FileName { get; set; }

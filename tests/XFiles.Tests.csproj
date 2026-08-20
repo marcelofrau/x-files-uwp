@@ -57,6 +57,7 @@
     <Compile Include="..\XFiles\Network\HostKeyTrustStore.cs" Link="Linked\Network\HostKeyTrustStore.cs" />
     <Compile Include="..\XFiles\Network\WebDavSession.cs" Link="Linked\Network\WebDavSession.cs" />
     <Compile Include="..\XFiles\Network\WebDavReadStream.cs" Link="Linked\Network\WebDavReadStream.cs" />
+    <Compile Include="..\XFiles\Network\WebDavWriteStream.cs" Link="Linked\Network\WebDavWriteStream.cs" />
     <Compile Include="..\XFiles\Network\NetworkPathUtil.cs" Link="Linked\Network\NetworkPathUtil.cs" />
     <Compile Include="..\XFiles\Metadata\TrackMetadata.cs" Link="Linked\Metadata\TrackMetadata.cs" />
     <Compile Include="..\XFiles\Metadata\MetadataMatch.cs" Link="Linked\Metadata\MetadataMatch.cs" />

@@ -156,13 +156,9 @@ namespace XFiles.Network
         {
             string remote = WebDavSession.EffectivePath(share, path);
             string pwd = await NetworkServerManager.GetPasswordAsync(config);
+            var session = new WebDavSession(config, pwd);
             Log.Info("WebDavBrowser.OpenWriteStream: {Remote}", remote);
-
-            // WebDAV upload needs the full content upfront for PUT —
-            // return a MemoryStream that the caller fills, then we upload.
-            // This is the simplest approach that works with the existing
-            // NetworkCopyService.CopyStreamAsync pattern.
-            return new MemoryStream();
+            return session.OpenWriteStreamAsync(remote);
         }
 
         // ─────────────────────── DeleteFile ───────────────────────

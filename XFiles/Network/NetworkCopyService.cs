@@ -22,15 +22,21 @@ namespace XFiles.Network
         private const int ChunkSize = 1024 * 1024;
         private const long ReportThrottle = 64 * 1024;
 
-        /// <summary>Copies a remote file or directory tree into a local directory.</summary>
+        private const int MaxRetries = 5;
+        private const int RetryDelayMs = 2000;
+
+        /// <summary>Copies a remote file or directory tree into a local directory.
+        /// Single files are retried up to 5 times on transient IO errors; partial
+        /// files are kept on final failure so the caller can offer resume.</summary>
         public static async Task<bool> CopyRemoteToLocalAsync(
             INetworkFileSystemProvider browser, NetworkServerConfig config, string share, string path,
             string localDestDir, bool isDirectory,
             IProgress<FileOperations.OperationProgress> progress, CancellationToken ct,
-            Func<string, Task<ConflictDecision>> conflict = null)
+            Func<string, Task<ConflictDecision>> conflict = null,
+            long resumeFrom = 0)
         {
-            Log.Info("NetworkCopyService.CopyRemoteToLocal: {Share}/{Path} → {Dest}",
-                share, path, localDestDir);
+            Log.Info("NetworkCopyService.CopyRemoteToLocal: {Share}/{Path} → {Dest} {Resume}",
+                share, path, localDestDir, resumeFrom > 0 ? $"(resume from {resumeFrom})" : "");
             try
             {
                 if (!isDirectory)
@@ -38,14 +44,35 @@ namespace XFiles.Network
                     string name = Path.GetFileName(path.Replace('/', '\\'));
                     long size = await browser.GetFileLengthAsync(config, share, path, ct);
                     string dest = Path.Combine(localDestDir, name);
-                    if (conflict != null && File.Exists(dest))
+                    if (conflict != null && SafeFileExists(dest))
                         dest = await ResolveLocalConflictAsync(dest, false, ct, conflict);
-                    using (var src = await browser.OpenReadAsync(config, share, path, ct))
-                    using (var dst = File.Create(dest))
+
+                    long offset = resumeFrom;
+                    for (int attempt = 1; attempt <= MaxRetries; attempt++)
                     {
-                        await CopyStreamAsync(src, dst, size, progress, name, 0, 1, 0, size, ct);
+                        try
+                        {
+                            using (var src = await browser.OpenReadAsync(config, share, path, ct))
+                            {
+                                if (offset > 0 && src.CanSeek)
+                                    src.Seek(offset, SeekOrigin.Begin);
+
+                                using (var dst = OpenForCopy(dest, offset > 0))
+                                {
+                                    await CopyStreamAsync(src, dst, size, progress, name, 0, 1, offset, size, ct);
+                                }
+                            }
+                            return true;
+                        }
+                        catch (IOException) when (attempt < MaxRetries && !ct.IsCancellationRequested)
+                        {
+                            offset = SafeFileExists(dest) ? GetFileSize(dest) : 0;
+                            Log.Warn("CopyRemoteToLocal: attempt {Attempt}/{Max} failed for {Name}, retrying in {Delay}s (offset={Offset})",
+                                attempt, MaxRetries, name, RetryDelayMs / 1000, offset);
+                            await Task.Delay(RetryDelayMs, ct);
+                        }
                     }
-                    return true;
+                    return false;
                 }
 
                 var items = await ListRemoteTreeAsync(browser, config, share, path, ct);
@@ -66,13 +93,34 @@ namespace XFiles.Network
                 {
                     ct.ThrowIfCancellationRequested();
                     string destFile = Path.Combine(rootLocal, f.RelPath.Replace('/', '\\'));
-                    if (conflict != null && File.Exists(destFile))
+                    if (conflict != null && SafeFileExists(destFile))
                         destFile = await ResolveLocalConflictAsync(destFile, false, ct, conflict);
-                    using (var src = await browser.OpenReadAsync(config, share, PathForItem(path, f.RelPath, browser), ct))
-                    using (var dst = File.Create(destFile))
+                    string itemName = Path.GetFileName(f.RelPath.Replace('/', '\\'));
+                    long itemOffset = 0;
+                    for (int attempt = 1; attempt <= MaxRetries; attempt++)
                     {
-                        await CopyStreamAsync(src, dst, f.Size, progress, Path.GetFileName(f.RelPath.Replace('/', '\\')),
-                            (int)idx, (int)fileTotal, done, total, ct);
+                        try
+                        {
+                            using (var src = await browser.OpenReadAsync(config, share, PathForItem(path, f.RelPath, browser), ct))
+                            {
+                                if (itemOffset > 0 && src.CanSeek)
+                                    src.Seek(itemOffset, SeekOrigin.Begin);
+
+                                using (var dst = OpenForCopy(destFile, itemOffset > 0))
+                                {
+                                    await CopyStreamAsync(src, dst, f.Size, progress, itemName,
+                                        (int)idx, (int)fileTotal, done + itemOffset, total, ct);
+                                }
+                            }
+                            break;
+                        }
+                        catch (IOException) when (attempt < MaxRetries && !ct.IsCancellationRequested)
+                        {
+                            itemOffset = SafeFileExists(destFile) ? GetFileSize(destFile) : 0;
+                            Log.Warn("CopyRemoteToLocal: dir file {Name} attempt {Attempt}/{Max} failed, retrying (offset={Offset})",
+                                itemName, attempt, MaxRetries, itemOffset);
+                            await Task.Delay(RetryDelayMs, ct);
+                        }
                     }
                     done += f.Size;
                     idx++;
@@ -89,6 +137,24 @@ namespace XFiles.Network
                 Log.Warn("NetworkCopyService.CopyRemoteToLocal: {Reason} ({Detail})", ex.Reason, ex.Message);
                 return false;
             }
+        }
+
+        /// <summary>Opens or creates a file for streaming copy.
+        /// When <paramref name="append"/> is true, opens the existing file
+        /// at the end (resume); otherwise creates/truncates.</summary>
+        private static FileStream OpenForCopy(string path, bool append)
+        {
+            var fs = append
+                ? new FileStream(path, FileMode.OpenOrCreate, FileAccess.Write, FileShare.None)
+                : SafeCreateFile(path);
+            if (append) fs.Seek(0, SeekOrigin.End);
+            return fs;
+        }
+
+        private static long GetFileSize(string path)
+        {
+            try { return new FileInfo(path).Length; }
+            catch { return 0; }
         }
 
         /// <summary>Copies a local file or directory tree into a remote share/directory.</summary>
@@ -110,11 +176,19 @@ namespace XFiles.Network
                     string remotePath = Join(destDir, name, sep);
                     if (conflict != null && await browser.EntryExistsAsync(config, share, remotePath, false, ct))
                         remotePath = await ResolveRemoteConflictAsync(browser, config, share, remotePath, false, ct, conflict);
-                    using (var src = new FileStream(localPath, FileMode.Open, FileAccess.Read,
-                        FileShare.Read | FileShare.Delete))
-                    using (var dst = await browser.OpenWriteStreamAsync(config, share, remotePath, ct))
+
+                    if (browser.Protocol == NetworkProtocol.Webdav)
                     {
-                        await CopyStreamAsync(src, dst, size, progress, name, 0, 1, 0, size, ct);
+                        await browser.WriteFileAsync(config, share, remotePath, localPath, ct);
+                    }
+                    else
+                    {
+                        using (var src = new FileStream(localPath, FileMode.Open, FileAccess.Read,
+                            FileShare.Read | FileShare.Delete))
+                        using (var dst = await browser.OpenWriteStreamAsync(config, share, remotePath, ct))
+                        {
+                            await CopyStreamAsync(src, dst, size, progress, name, 0, 1, 0, size, ct);
+                        }
                     }
                     return true;
                 }
@@ -154,12 +228,20 @@ namespace XFiles.Network
                     string remotePath = Join(rootRemote, rel.Replace('\\', sep), sep);
                     if (conflict != null && await browser.EntryExistsAsync(config, share, remotePath, false, ct))
                         remotePath = await ResolveRemoteConflictAsync(browser, config, share, remotePath, false, ct, conflict);
-                    using (var src = new FileStream(files[i], FileMode.Open, FileAccess.Read,
-                        FileShare.Read | FileShare.Delete))
-                    using (var dst = await browser.OpenWriteStreamAsync(config, share, remotePath, ct))
+
+                    if (browser.Protocol == NetworkProtocol.Webdav)
                     {
-                        await CopyStreamAsync(src, dst, sizes[i], progress, Path.GetFileName(files[i]),
-                            idx, fileTotal, done, total, ct);
+                        await browser.WriteFileAsync(config, share, remotePath, files[i], ct);
+                    }
+                    else
+                    {
+                        using (var src = new FileStream(files[i], FileMode.Open, FileAccess.Read,
+                            FileShare.Read | FileShare.Delete))
+                        using (var dst = await browser.OpenWriteStreamAsync(config, share, remotePath, ct))
+                        {
+                            await CopyStreamAsync(src, dst, sizes[i], progress, Path.GetFileName(files[i]),
+                                idx, fileTotal, done, total, ct);
+                        }
                     }
                     done += sizes[i];
                     idx++;
@@ -409,5 +491,40 @@ namespace XFiles.Network
 
         private static string PathForItem(string basePath, string rel, INetworkFileSystemProvider browser)
             => NetworkPathUtil.PathForItem(basePath, rel, browser.Protocol);
+
+        /// <summary>
+        /// Safe File.Exists wrapper. On NTFS, GetFileAttributesExW can block or throw
+        /// on a file whose metadata is corrupted (ERROR_FILE_CORRUPT 0x80070570).
+        /// Returns false instead of hanging the calling thread.
+        /// </summary>
+        private static bool SafeFileExists(string path)
+        {
+            try { return File.Exists(path); }
+            catch { return false; }
+        }
+
+        /// <summary>
+        /// File.Create that handles an existing corrupted/unreadable file by
+        /// deleting it first and retrying.
+        /// </summary>
+        private static FileStream SafeCreateFile(string path)
+        {
+            try
+            {
+                return File.Create(path);
+            }
+            catch (IOException)
+            {
+                // File may exist with corrupted NTFS metadata — delete and retry.
+                SafeDeleteFile(path);
+                return File.Create(path);
+            }
+        }
+
+        private static void SafeDeleteFile(string path)
+        {
+            try { File.Delete(path); }
+            catch { /* best-effort cleanup */ }
+        }
     }
 }

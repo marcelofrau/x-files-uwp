@@ -636,6 +636,19 @@ namespace XFiles.Controls
                 return;
             }
 
+            // Pre-flight: check if file is writable (e.g. read-only on disk)
+            var writeError = XFiles.FileSystem.FileOperations.CheckWritable(_filePath, false);
+            if (writeError != null)
+            {
+                Log.Warn("TextEditorOverlay: save blocked — {Reason}", writeError);
+                ShowToast(writeError);
+                StatusText.Text = "Cannot save";
+                StatusText.Foreground = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 0xE0, 0x4B, 0x4B));
+                StatusBadge.Background = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 0xE0, 0x4B, 0x4B));
+                StatusBadge.Visibility = Visibility.Visible;
+                return;
+            }
+
             string content = await InvokeJsStr("editor.getText()");
             bool ok = await TextEditorService.SaveAsync(_filePath, content, _lineEnding, _hasBom);
 
@@ -672,7 +685,11 @@ namespace XFiles.Controls
             else
             {
                 Log.Warn("TextEditorOverlay: save failed for {File}", _fileName);
-                ShowToast("Save failed");
+                ShowToast("Save failed — file may be read-only or in use");
+                StatusText.Text = "Save failed";
+                StatusText.Foreground = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 0xE0, 0x4B, 0x4B));
+                StatusBadge.Background = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 0xE0, 0x4B, 0x4B));
+                StatusBadge.Visibility = Visibility.Visible;
             }
         }
 

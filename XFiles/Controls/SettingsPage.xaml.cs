@@ -22,6 +22,10 @@ namespace XFiles.Controls
         public string IconPath { get; set; }
         public string Action { get; set; }
         public List<SettingsMenuItem> Children { get; set; }
+        /// <summary>Non-null when this item is a volume slider (0–100).</summary>
+        public int? VolumePercent { get; set; }
+        /// <summary>Visibility helper for the volume bar ProgressBar.</summary>
+        public Visibility VolumeVisibility => VolumePercent.HasValue ? Visibility.Visible : Visibility.Collapsed;
     }
 
     public sealed partial class SettingsPage : UserControl
@@ -122,7 +126,7 @@ namespace XFiles.Controls
                 },
                 new SettingsMenuItem
                 {
-                    Label = "Background Music",
+                    Label = "Audio & BGM",
                     Description = bgmOn ? $"On: {bgmName}" : "Off",
                     IconPath = "ms-appx:///Assets/Views/SettingsPage/settingspage-bgm-48.png",
                     Action = "menu-bgm",
@@ -145,16 +149,18 @@ namespace XFiles.Controls
                         new SettingsMenuItem
                         {
                             Label = "BGM Volume",
-                            Description = $"Current: {bgmVol}%",
+                            Description = $"{bgmVol}% — Left/Right to adjust, A to cycle presets",
                             IconPath = "ms-appx:///Assets/Views/SettingsPage/settingspage-volume-48.png",
-                            Action = "bgm-volume"
+                            Action = "bgm-volume",
+                            VolumePercent = bgmVol
                         },
                         new SettingsMenuItem
                         {
                             Label = "Media Volume",
-                            Description = $"Current: {await XFilesSettings.GetMediaVolumeAsync()}%",
+                            Description = $"{await XFilesSettings.GetMediaVolumeAsync()}% — Left/Right to adjust, A to cycle presets",
                             IconPath = "ms-appx:///Assets/Views/SettingsPage/settingspage-volume-48.png",
-                            Action = "media-volume"
+                            Action = "media-volume",
+                            VolumePercent = await XFilesSettings.GetMediaVolumeAsync()
                         }
                     }
                 },
@@ -296,6 +302,18 @@ namespace XFiles.Controls
                     else if (SettingsList.Items.Count > 0)
                         SettingsList.SelectedIndex = 0;
                     SettingsList.ScrollIntoView(SettingsList.SelectedItem);
+                    break;
+                case VirtualKey.Left:
+                case VirtualKey.Right:
+                case VirtualKey.GamepadDPadLeft:
+                case VirtualKey.GamepadDPadRight:
+                    if (SettingsList.SelectedItem is SettingsMenuItem volItem && volItem.VolumePercent.HasValue)
+                    {
+                        int step = (key == VirtualKey.Right || key == VirtualKey.GamepadDPadRight) ? 5 : -5;
+                        int newVol = Math.Max(0, Math.Min(100, volItem.VolumePercent.Value + step));
+                        if (newVol != volItem.VolumePercent.Value)
+                            _ = AdjustVolumeAsync(volItem, newVol);
+                    }
                     break;
                 case VirtualKey.GamepadA:
                 case VirtualKey.Enter:
@@ -463,6 +481,22 @@ namespace XFiles.Controls
         private void OnSelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             UpdateSelectionColors();
+        }
+
+        private async Task AdjustVolumeAsync(SettingsMenuItem item, int newVol)
+        {
+            if (item.Action == "bgm-volume")
+            {
+                await BackgroundMusicService.Instance.SetVolumeAsync(
+                    MusicFormatClassifier.PercentToGain(newVol));
+                Log.Info("SettingsPage: BGM volume → {Vol}%", newVol);
+            }
+            else if (item.Action == "media-volume")
+            {
+                Audio.AudioLevelService.Instance?.SetVolume(newVol / 100.0);
+                Log.Info("SettingsPage: media volume → {Vol}%", newVol);
+            }
+            await RenderAsync(item.Action);
         }
 
         private void UpdateSelectionColors()
