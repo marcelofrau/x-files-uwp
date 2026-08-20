@@ -241,17 +241,22 @@ namespace XFiles.Controls
                         {
                             if (IsFtpProtocol(_navigator.Preview.NetworkProtocol))
                             {
-                                // FTP video: show friendly message — FTP seek model can't support playback.
-                                PreviewStatus.Text = _navigator.Preview.PreviewFileType;
-                                PreviewMediaPanel.Visibility = Visibility.Visible;
+                                // FTP video: show as unsupported format with explanation.
                                 MediaPreview.Stop();
-                                MediaPreview.ShowPlaceholder(videoPath);
-                                _ = AlertDialogControl.ShowAsync(
-                                    "FTP video playback is not supported.\n\n" +
-                                    "X-Files can't stream video over FTP because the protocol requires " +
-                                    "re-opening a data connection for every seek, which makes playback impractical.\n\n" +
-                                    "To watch this video, copy it to a local folder first (Y → Copy, navigate to local folder, Y → Paste).",
-                                    AlertType.Info);
+
+                                string iconFile = EntryViewModel.GetLargeFileIcon(videoPath);
+                                PreviewUnsupportedIcon.Source = new Windows.UI.Xaml.Media.Imaging.BitmapImage(
+                                    new Uri($"ms-appx:///Assets/FileTypes/{iconFile}"));
+                                PreviewUnsupportedFileName.Text = _navigator.Preview.Label ?? System.IO.Path.GetFileName(videoPath);
+                                PreviewUnsupportedType.Text = _navigator.Preview.PreviewFileType ?? "";
+                                PreviewUnsupportedSize.Text = Formatting.FormatSize(_navigator.Preview.PreviewFileSize);
+                                PreviewUnsupportedComment.Text =
+                                    "FTP/FTPS video playback is not supported — " +
+                                    "the protocol requires re-opening a data connection for every seek.\n" +
+                                    "Copy to a local folder to watch (Y → Copy → Paste).";
+                                PreviewUnsupportedComment.Visibility = Visibility.Visible;
+                                PreviewStatus.Text = "";
+                                PreviewUnsupportedPanel.Visibility = Visibility.Visible;
                                 break;
                             }
                             // Remote SMB/SFTP video: stream inline into the pane's player.
@@ -439,7 +444,17 @@ namespace XFiles.Controls
         {
             var p = _navigator.Preview;
             if (p == null) return;
-            var stream = await _navigator.OpenNetworkStreamAsync(p.NetworkLocationId, p.NetworkShareName, p.NetworkPath);
+            Stream stream = null;
+            try
+            {
+                stream = await _navigator.OpenNetworkStreamAsync(p.NetworkLocationId, p.NetworkShareName, p.NetworkPath);
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("PlayRemoteVideoInlineAsync: failed to open stream: {Error}", ex.Message);
+                PreviewStatus.Text = "Stream unavailable — try again";
+                return;
+            }
             if (stream == null) return;
             _previewNetworkLocationId = p.NetworkLocationId;
             _previewNetworkShare = p.NetworkShareName;
@@ -457,7 +472,17 @@ namespace XFiles.Controls
         {
             var p = _navigator.Preview;
             if (p == null) return;
-            var stream = await _navigator.OpenNetworkStreamAsync(p.NetworkLocationId, p.NetworkShareName, p.NetworkPath);
+            Stream stream = null;
+            try
+            {
+                stream = await _navigator.OpenNetworkStreamAsync(p.NetworkLocationId, p.NetworkShareName, p.NetworkPath);
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("PlayRemoteAudioInlineAsync: failed to open stream: {Error}", ex.Message);
+                PreviewStatus.Text = "Stream unavailable — try again";
+                return;
+            }
             if (stream == null) return;
             _previewNetworkLocationId = p.NetworkLocationId;
             _previewNetworkShare = p.NetworkShareName;
@@ -487,6 +512,7 @@ namespace XFiles.Controls
             PreviewRomPanel.Visibility = Visibility.Collapsed;
             PreviewErrorPanel.Visibility = Visibility.Collapsed;
             PreviewUnsupportedPanel.Visibility = Visibility.Collapsed;
+            PreviewUnsupportedComment.Visibility = Visibility.Collapsed;
             PreviewArchiveMediaPanel.Visibility = Visibility.Collapsed;
             FavoritesGuidePanel.Visibility = Visibility.Collapsed;
             NetworkGuidePanel.Visibility = Visibility.Collapsed;
@@ -576,6 +602,7 @@ namespace XFiles.Controls
                 case NetworkProtocol.Ftp: return "FTP";
                 case NetworkProtocol.Ftps: return "FTPS";
                 case NetworkProtocol.Sftp: return "SFTP";
+                case NetworkProtocol.Webdav: return "WebDAV";
                 default: return protocol.ToString();
             }
         }

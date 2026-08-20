@@ -32,7 +32,9 @@ Network (new namespace XFiles.Network)
  ├─ FtpSession / FtpBrowser        (FluentFTP; pool, list, read/write)  [M9]
  ├─ FtpReadStream / FtpWriteStream (REST-aware seekable read, upload)   [M9]
  ├─ SftpSession / SftpBrowser      (SSH.NET; pool, list, read/write)    [M10]
- └─ HostKeyTrustStore              (persisted accepted SFTP fingerprints) [M10]
+ ├─ HostKeyTrustStore              (persisted accepted SFTP fingerprints) [M10]
+ ├─ WebDavSession / WebDavBrowser  (HttpClient; PROPFIND, Range, PUT)   [M14]
+ └─ WebDavReadStream               (seekable read via HTTP Range)       [M14]
 Existing (reused)
  ├─ DirectoryScanner / FileEntry / PortalBrowser / ArchiveBrowser
  ├─ FilePreviewService / TextEditorService
@@ -142,8 +144,8 @@ connection to the same file is undesirable, expose
 
 ### `INetworkFileSystemProvider`
 
-Protocol-agnostic contract; SMB implements it now, FTP/FTPS (M9) and SFTP
-(M10) plug in behind it. Started read-only (M2), extended with the write ops
+Protocol-agnostic contract; SMB implements it now, FTP/FTPS (M9), SFTP
+(M10), and WebDAV (M14) plug in behind it. Started read-only (M2), extended with the write ops
 that landed on `SmbBrowser` during M5.5 (M8) — callers use the interface, not
 the concrete browser:
 
@@ -171,11 +173,11 @@ public interface INetworkFileSystemProvider
 }
 ```
 
-- `share` is SMB-shaped: for FTP/SFTP it is empty (`""`) and `remotePath` is
+- `share` is SMB-shaped: for FTP/SFTP/WebDAV it is empty (`""`) and `remotePath` is
   absolute from the server root (`/music/track.mp3`). `ListSharesAsync`
-  returns an empty list for FTP/SFTP (no share layer).
+  returns an empty list for FTP/SFTP/WebDAV (no share layer).
 - `NetworkProviderFactory.Create(config)` → the browser for
-  `config.Protocol` (SMB/FTP/SFTP). Callers that hold a browser for the
+  `config.Protocol` (SMB/FTP/SFTP/WebDAV). Callers that hold a browser for the
   active location resolve it once via the factory.
 
 `NetworkFileEntry` = `{ Name, IsDirectory, Size, LastWriteTime }` (minimal;

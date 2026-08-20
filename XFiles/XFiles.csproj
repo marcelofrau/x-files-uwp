@@ -284,6 +284,9 @@
     <Compile Include="Network\SftpReadStream.cs" />
     <Compile Include="Network\SftpWriteStream.cs" />
     <Compile Include="Network\SftpBrowser.cs" />
+    <Compile Include="Network\WebDavSession.cs" />
+    <Compile Include="Network\WebDavReadStream.cs" />
+    <Compile Include="Network\WebDavBrowser.cs" />
     <Compile Include="Network\HostKeyTrustStore.cs" />
     <Compile Include="Network\NetworkProviderFactory.cs" />
     <Compile Include="DevPortalSecrets.g.cs" />

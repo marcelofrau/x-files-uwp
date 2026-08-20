@@ -101,6 +101,7 @@
                             <ComboBoxItem Content="FTP" Tag="Ftp" />
                             <ComboBoxItem Content="FTPS" Tag="Ftps" />
                             <ComboBoxItem Content="sFTP" Tag="Sftp" />
+                            <ComboBoxItem Content="WebDAV" Tag="Webdav" />
                         </ComboBox>
                         <Border x:Name="ProtocolLabel" Style="{StaticResource FloatingFieldLabel}">
                             <TextBlock Text="PROTOCOL" Style="{StaticResource FloatingFieldLabelText}" />

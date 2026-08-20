@@ -22,6 +22,8 @@ namespace XFiles.Network
                     return 21;
                 case NetworkProtocol.Sftp:
                     return 22;
+                case NetworkProtocol.Webdav:
+                    return 80;
                 default:
                     return 0;
             }
@@ -40,6 +42,8 @@ namespace XFiles.Network
                     return NetworkProtocol.Ftps;
                 case "sftp":
                     return NetworkProtocol.Sftp;
+                case "webdav":
+                    return NetworkProtocol.Webdav;
                 default:
                     return null;
             }

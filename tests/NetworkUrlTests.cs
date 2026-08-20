@@ -112,8 +112,8 @@ namespace XFiles.Tests
         [TestMethod]
         public void Parse_UnknownScheme_Null()
         {
-            Assert.IsNull(NetworkUrl.Parse("webdav://user@host/share"));
             Assert.IsNull(NetworkUrl.Parse("nfs://host/share"));
+            Assert.IsNull(NetworkUrl.Parse("afp://host/share"));
         }
 
         // --- FTP / FTPS / SFTP ---
@@ -155,6 +155,43 @@ namespace XFiles.Tests
             Assert.AreEqual("root", c.Username);
             Assert.AreEqual("nas.example.com", c.Host);
             Assert.IsNull(c.Share);
+        }
+
+        // --- WebDAV ---
+
+        [TestMethod]
+        public void Compose_WebDav_Url()
+        {
+            var c = new NetworkServerConfig { Protocol = NetworkProtocol.Webdav, Host = "dav.local", Username = "bob" };
+            Assert.AreEqual("webdav://bob@dav.local", NetworkUrl.Compose(c));
+        }
+
+        [TestMethod]
+        public void Parse_WebDav_RoundTrip()
+        {
+            var c = NetworkUrl.Parse("webdav://bob@dav.local/files");
+            Assert.IsNotNull(c);
+            Assert.AreEqual(NetworkProtocol.Webdav, c.Protocol);
+            Assert.AreEqual("bob", c.Username);
+            Assert.AreEqual("dav.local", c.Host);
+            Assert.AreEqual("files", c.Share);
+        }
+
+        [TestMethod]
+        public void Parse_WebDav_NoShare()
+        {
+            var c = NetworkUrl.Parse("webdav://alice@cloud.example.com");
+            Assert.IsNotNull(c);
+            Assert.AreEqual(NetworkProtocol.Webdav, c.Protocol);
+            Assert.AreEqual("alice", c.Username);
+            Assert.AreEqual("cloud.example.com", c.Host);
+            Assert.IsNull(c.Share);
+        }
+
+        [TestMethod]
+        public void DefaultPort_WebDav_80()
+        {
+            Assert.AreEqual(80, NetworkUrl.DefaultPort(NetworkProtocol.Webdav));
         }
 
         [TestMethod]

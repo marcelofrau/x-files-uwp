@@ -33,7 +33,9 @@ namespace XFiles.Network
                     case NetworkProtocol.Sftp:
                         provider = new SftpBrowser();
                         break;
-                    // WebDAV stays on the roadmap (M13+).
+                    case NetworkProtocol.Webdav:
+                        provider = new WebDavBrowser();
+                        break;
                     default:
                         throw new System.NotSupportedException(
                             $"Network protocol '{protocol}' is not implemented yet.");
