@@ -769,6 +769,54 @@ namespace XFiles.Controls
             HideAudioOsd();
         }
 
+        private DispatcherTimer _fsTrackInfoHideTimer = new DispatcherTimer();
+
+        private void ShowTrackInfoOsd(string title, string artist, string album, double hideDelayMs = 3000)
+        {
+            FsTrackInfoTitle.Text = title ?? "";
+            FsTrackInfoTitle.Visibility = string.IsNullOrEmpty(title) ? Visibility.Collapsed : Visibility.Visible;
+            FsTrackInfoArtist.Text = artist ?? "";
+            FsTrackInfoArtist.Visibility = string.IsNullOrEmpty(artist) ? Visibility.Collapsed : Visibility.Visible;
+            FsTrackInfoAlbum.Text = album ?? "";
+            FsTrackInfoAlbum.Visibility = string.IsNullOrEmpty(album) ? Visibility.Collapsed : Visibility.Visible;
+
+            if (string.IsNullOrEmpty(title) && string.IsNullOrEmpty(artist))
+                return;
+
+            FsTrackInfoBorder.Visibility = Visibility.Visible;
+            var fadeIn = new Storyboard();
+            var dur = new Duration(TimeSpan.FromMilliseconds(200));
+            var anim = new DoubleAnimation { To = 1.0, Duration = dur, EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+            Storyboard.SetTarget(anim, FsTrackInfoBorder);
+            Storyboard.SetTargetProperty(anim, "Opacity");
+            fadeIn.Children.Add(anim);
+            fadeIn.Begin();
+
+            _fsTrackInfoHideTimer.Stop();
+            _fsTrackInfoHideTimer.Interval = TimeSpan.FromMilliseconds(hideDelayMs);
+            _fsTrackInfoHideTimer.Tick -= OnFsTrackInfoHideTick;
+            _fsTrackInfoHideTimer.Tick += OnFsTrackInfoHideTick;
+            _fsTrackInfoHideTimer.Start();
+        }
+
+        private void HideTrackInfoOsd()
+        {
+            var fadeOut = new Storyboard();
+            var dur = new Duration(TimeSpan.FromMilliseconds(400));
+            var anim = new DoubleAnimation { To = 0.0, Duration = dur, EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn } };
+            Storyboard.SetTarget(anim, FsTrackInfoBorder);
+            Storyboard.SetTargetProperty(anim, "Opacity");
+            fadeOut.Children.Add(anim);
+            fadeOut.Completed += (s, e) => FsTrackInfoBorder.Visibility = Visibility.Collapsed;
+            fadeOut.Begin();
+        }
+
+        private void OnFsTrackInfoHideTick(object sender, object e)
+        {
+            _fsTrackInfoHideTimer.Stop();
+            HideTrackInfoOsd();
+        }
+
         private static readonly (AudioFullscreenMode Mode, string Label)[] _fsModeOrder = new[]
         {
             (AudioFullscreenMode.Default, "Default"),
@@ -821,7 +869,8 @@ namespace XFiles.Controls
                     ApplyAudioVisualizerMode();
                     var modeEntry = _fsModeOrder.FirstOrDefault(m => m.Mode == candidate);
                     ShowModeOsd(modeEntry.Label ?? candidate.ToString());
-                    // OSD removed: FsTrackInfoBorder
+                    FsTrackInfoBorder.Visibility = Visibility.Collapsed;
+                    _fsTrackInfoHideTimer.Stop();
                     return;
                 }
             }
@@ -938,8 +987,6 @@ namespace XFiles.Controls
             _fsModeOsdTimer.Stop();
             _fsModeOsdTimer.Start();
         }
-
-        // OSD removed: _fsTrackInfoTimer + ShowTrackInfoOsd
 
         private void OnFsHideTimerTick(object sender, object e)
         {
@@ -1286,6 +1333,8 @@ namespace XFiles.Controls
             UpdateDisplayRequest();
             UpdateBgmDucking();
 
+            ShowTrackInfoOsd(title, null, null);
+
             await AudioLevelService.Instance.PlayRemoteStreamAsync(stream, mimeType);
 
             if (gen != _fsGeneration)
@@ -1387,7 +1436,8 @@ namespace XFiles.Controls
                     tag?.Title, tag?.Artist, tag?.Album, hasArt);
 
                 ApplyAudioVisualizerMode();
-                // OSD removed: ShowTrackInfoOsd
+                if (_fsGeneration == gen)
+                    ShowTrackInfoOsd(tag?.Title, tag?.Artist, tag?.Album);
             }
             catch (Exception ex)
             {
@@ -1406,7 +1456,8 @@ namespace XFiles.Controls
             FsVisualizerCanvas.Deactivate();
             FsVisualizerCanvas.DetachService();
             FsVisualizerCanvas.Visibility = Visibility.Collapsed;
-            // OSD removed: FsTrackInfoBorder
+            _fsTrackInfoHideTimer.Stop();
+            FsTrackInfoBorder.Visibility = Visibility.Collapsed;
             _fsVisualizerMode = AudioFullscreenMode.Default;
             _isAudioFullscreen = false;
             _audioFullscreenPath = null;
@@ -1847,7 +1898,10 @@ namespace XFiles.Controls
 
             var nextFile = audioFiles[nextIdx];
             Log.Info("NavigateAudioTrackNetwork: {Direction} to {Path}", direction > 0 ? "next" : "prev", nextFile.NetworkPath);
-            _fsAudioEnded = false;
+            // Do NOT reset _fsAudioEnded here — the timer will see it's still true
+            // and skip re-triggering auto-advance while the new track loads.
+            // Reset happens in OpenRemoteAudioFullscreenAsync (line ~1301) once the
+            // new track actually starts, preventing the cascade of auto-advance storms.
 
             int mainIdx = current.Entries.IndexOf(nextFile);
             if (mainIdx >= 0)

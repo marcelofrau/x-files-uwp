@@ -349,7 +349,7 @@ namespace XFiles.Audio
         public async Task SetVolumeAsync(float gain)
         {
             _volume = Math.Max(0f, Math.Min(1f, gain));
-            try { _fileNode.OutgoingGain = _volume; } catch (Exception ex) { Log.Warn("BackgroundMusic.SetVolume: apply failed", ex); }
+            if (_fileNode != null) try { _fileNode.OutgoingGain = _volume; } catch (Exception ex) { Log.Warn("BackgroundMusic.SetVolume: apply failed", ex); }
             try { await XFilesSettings.SetBgmVolumeAsync((int)Math.Round(_volume * 100f)); } catch (Exception ex) { Log.Warn("BackgroundMusic.SetVolume: persist failed", ex); }
             Log.Info("BackgroundMusic: volume set to {Vol:F0}%", _volume * 100f);
         }

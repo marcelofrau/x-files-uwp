@@ -23,6 +23,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
@@ -47,8 +48,17 @@
                            Padding="24,0,24,8"
                            TextTrimming="CharacterEllipsis" />
 
+                <!-- Loading indicator -->
+                <ProgressRing Grid.Row="2"
+                              x:Name="LoadingRing"
+                              IsActive="False"
+                              Width="20" Height="20"
+                              HorizontalAlignment="Center"
+                              Margin="24,2,24,6"
+                              Foreground="{StaticResource XFilesAccentBrush}" />
+
                 <!-- Entry list -->
-                <controls:RetroListView Grid.Row="2"
+                <controls:RetroListView Grid.Row="3"
                           x:Name="EntryList"
                           Background="Transparent"
                           BorderThickness="0"
@@ -88,13 +98,13 @@
                 </controls:RetroListView>
 
                 <!-- Footer separator -->
-                <Border Grid.Row="3"
+                <Border Grid.Row="4"
                         Background="#252830"
                         Height="1"
                         Margin="24,0,24,0" />
 
                 <!-- Footer hints -->
-                <StackPanel Grid.Row="4"
+                <StackPanel Grid.Row="5"
                             Orientation="Horizontal"
                             HorizontalAlignment="Center"
                             Padding="24,10,24,14">

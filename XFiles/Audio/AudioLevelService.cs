@@ -188,7 +188,9 @@ namespace XFiles.Audio
         /// </summary>
         public async Task PlayRemoteStreamAsync(Windows.Storage.Streams.IRandomAccessStream stream, string mimeType, bool autoPlay = true)
         {
+            Log.Dbg("AudioLevelService.PlayRemoteStreamAsync: requesting _loadLock autoPlay={AutoPlay}", autoPlay);
             await _loadLock.WaitAsync();
+            Log.Dbg("AudioLevelService.PlayRemoteStreamAsync: acquired _loadLock");
             try
             {
                 await LoadRemoteStreamCore(stream, mimeType, autoPlay);
@@ -196,6 +198,7 @@ namespace XFiles.Audio
             finally
             {
                 _loadLock.Release();
+                Log.Dbg("AudioLevelService.PlayRemoteStreamAsync: released _loadLock");
             }
         }
 
@@ -205,17 +208,23 @@ namespace XFiles.Audio
                 Stop();
             int gen = _loadGeneration;
             _currentFilePath = "(network stream)";
-            Log.Info("AudioLevelService: playing remote stream mime={Mime}", mimeType);
+            Log.Info("AudioLevelService: playing remote stream mime={Mime} autoPlay={AutoPlay} gen={Gen}", mimeType, autoPlay, gen);
 
             try
             {
-                var mediaSource = MediaSource.CreateFromStream(stream, mimeType);
+                Log.Dbg("AudioLevelService: MediaSource.CreateFromStream start (offloaded to thread pool)");
+                var mediaSource = await Task.Run(() => MediaSource.CreateFromStream(stream, mimeType));
+                Log.Dbg("AudioLevelService: MediaSource.CreateFromStream done");
 
-                if (_loadGeneration != gen) { try { stream.Dispose(); } catch { } return; }
+                if (_loadGeneration != gen) { Log.Dbg("AudioLevelService: gen changed after CreateFromStream ({Old}→{New}), aborting", gen, _loadGeneration); try { stream.Dispose(); } catch { } return; }
+                Log.Dbg("AudioLevelService: CreateGraphCommon start");
                 await CreateGraphCommon(true);
+                Log.Dbg("AudioLevelService: CreateGraphCommon done");
 
-                if (_loadGeneration != gen) { try { stream.Dispose(); } catch { } return; }
+                if (_loadGeneration != gen) { Log.Dbg("AudioLevelService: gen changed after CreateGraph ({Old}→{New}), aborting", gen, _loadGeneration); try { stream.Dispose(); } catch { } return; }
+                Log.Dbg("AudioLevelService: CreateMediaSourceAudioInputNode start");
                 var nodeResult = await _graph.CreateMediaSourceAudioInputNodeAsync(mediaSource);
+                Log.Dbg("AudioLevelService: CreateMediaSourceAudioInputNode done status={Status}", nodeResult.Status);
                 if (nodeResult.Status != MediaSourceAudioInputNodeCreationStatus.Success)
                 {
                     Log.Warn("AudioLevelService: remote MediaSourceAudioInputNode failed: {Status}", nodeResult.Status);
@@ -573,7 +582,7 @@ namespace XFiles.Audio
 
         public void Resume()
         {
-            if (_graph == null) return;
+            if (_graph == null) { Log.Dbg("AudioLevelService.Resume: _graph is null, returning"); return; }
             try
             {
                 long allocBefore = GC.GetAllocatedBytesForCurrentThread();
@@ -587,6 +596,8 @@ namespace XFiles.Audio
                         tid, NoGcRegionSize / (1024 * 1024), netAlloc / 1024, GC.GetTotalMemory(false) / 1024);
 #endif
                 }
+                Log.Dbg("AudioLevelService.Resume: remoteStreamNode={Remote} mediaSourceNode={Node} graphLive={Graph}",
+                    _remoteStreamNode, _mediaSourceNode != null, _graph != null);
                 if (_remoteStreamNode && _mediaSourceNode != null)
                 {
                     try { _mediaSourceNode.Start(); } catch { }
@@ -595,6 +606,7 @@ namespace XFiles.Audio
                 _isGraphRunning = true;
                 StartDriftMonitor();
                 _isAnalyzing = true;
+                Log.Dbg("AudioLevelService.Resume: graph started, IsPlaying={Playing}", _isGraphRunning);
                 MediaOpened?.Invoke(this, EventArgs.Empty);
             }
             catch (Exception ex)

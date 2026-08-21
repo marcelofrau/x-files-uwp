@@ -293,7 +293,10 @@ namespace XFiles.Controls
             if (id3StreamFactory != null)
                 _ = LoadMetadataAsync(title, id3StreamFactory);
 
+            Log.Dbg("MediaPreviewControl.LoadRemoteAudio: calling PlayRemoteStreamAsync autoPlay={AutoPlay} streamType={StreamType}",
+                autoPlay, stream?.GetType().Name ?? "null");
             await AudioLevelService.Instance.PlayRemoteStreamAsync(stream, mimeType, autoPlay: autoPlay);
+            Log.Dbg("MediaPreviewControl.LoadRemoteAudio: PlayRemoteStreamAsync returned");
         }
 
         /// <summary>

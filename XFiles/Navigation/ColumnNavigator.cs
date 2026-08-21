@@ -47,6 +47,7 @@ namespace XFiles.Navigation
         // Same guard for network loads (SMB list/connect). SMB round-trips against a
         // remote server can be slow — queueing drill-ins would interleave sessions.
         private bool _networkBusy;
+        private DateTime _networkBusySince;
 
         private readonly System.Collections.Generic.Dictionary<NetworkProtocol, INetworkFileSystemProvider>
             _networkBrowsers = new System.Collections.Generic.Dictionary<NetworkProtocol, INetworkFileSystemProvider>();
@@ -120,26 +121,61 @@ namespace XFiles.Navigation
             if (_history.Count == 0)
                 return "";
 
-            // Stack enumerator pops from top (most recent) first — reverse to get root→current order
+            bool isNetwork = _current?.IsNetwork == true;
+
+            if (isNetwork && _current.NetworkLocationId > 0)
+            {
+                // Network: build breadcrumb from the current state's NetworkPath
+                // (which is already the full relative path from share root) plus
+                // the share name. History labels are unreliable for network paths.
+                string share = _current.NetworkShareName ?? "";
+                string netPath = _current.NetworkPath ?? "";
+                netPath = netPath.TrimStart('/', '\\');
+                string path;
+                if (string.IsNullOrEmpty(share))
+                    path = netPath;
+                else if (string.IsNullOrEmpty(netPath))
+                    path = share;
+                else
+                    path = share + "/" + netPath;
+
+                // Prepend location display name from the deepest network state in history
+                foreach (var state in _history)
+                {
+                    if (state.IsNetwork && state.NetworkLocationId > 0 && state.NetworkLocationId == _current.NetworkLocationId)
+                    {
+                        // The share-level or location-level state — grab its label
+                        if (state.Label != "Network" && !string.IsNullOrEmpty(state.Label) && state.Label != share)
+                        {
+                            path = state.Label + "/" + path;
+                        }
+                        break;
+                    }
+                }
+                return path;
+            }
+
+            // Local: join all history folder names with backslash
+            string sep = @"\";
             var labels = new List<string>();
             foreach (var state in _history)
             {
                 if (!string.IsNullOrEmpty(state.Label) && state.Label != "(Drives)" && state.Label != "Network")
-                    labels.Add(state.Label.TrimEnd('\\'));
+                    labels.Add(state.Label.TrimEnd('\\', '/'));
             }
             labels.Reverse();
 
-            string path = string.Join(@"\", labels);
+            string localPath = string.Join(sep, labels);
             if (!string.IsNullOrEmpty(_current?.Label) && _current.Label != "(Drives)")
             {
-                string currentLabel = _current.Label.TrimEnd('\\');
-                if (path.Length > 0)
-                    path = path + @"\" + currentLabel;
+                string currentLabel = _current.Label.TrimEnd('\\', '/');
+                if (localPath.Length > 0)
+                    localPath = localPath + sep + currentLabel;
                 else
-                    path = currentLabel;
+                    localPath = currentLabel;
             }
 
-            return path;
+            return localPath;
         }
 
         public event Action ColumnsChanged;
@@ -682,7 +718,7 @@ namespace XFiles.Navigation
         /// </summary>
         private async Task DrillIntoNetworkAsync(FileEntry selected)
         {
-            if (_networkBusy)
+            if (IsNetworkBusyOrReset())
             {
                 Log.Verb("ColumnNavigator.Network: drill-in ignored — network navigation in progress");
                 return;
@@ -793,16 +829,10 @@ namespace XFiles.Navigation
                 if (config == null) return;
 
                 string childPath = CombineNetworkPath(_current.NetworkPath, selected.Name, config.Protocol);
-                char sep = NetworkPathUtil.Separator(config.Protocol);
-                string labelPath = string.IsNullOrEmpty(childPath)
-                    ? _current.NetworkShareName
-                    : string.IsNullOrEmpty(_current.NetworkShareName)
-                        ? childPath
-                        : _current.NetworkShareName + sep + childPath;
                 var newColumn = new ColumnState
                 {
                     Path = null,
-                    Label = labelPath,
+                    Label = selected.Name,
                     IsNetwork = true,
                     NetworkLocationId = _current.NetworkLocationId,
                     NetworkShareName = _current.NetworkShareName,
@@ -855,12 +885,12 @@ namespace XFiles.Navigation
         /// </summary>
         private async Task DrillIntoNetworkChiptuneAsync(FileEntry chipEntry)
         {
-            if (_networkBusy)
+            if (IsNetworkBusyOrReset())
             {
                 Log.Verb("ColumnNavigator.Network: chiptune drill-in ignored — network navigation in progress");
                 return;
             }
-            _networkBusy = true;
+            SetNetworkBusy();
             try
             {
                 ++_previewGeneration;
@@ -923,12 +953,12 @@ namespace XFiles.Navigation
         /// </summary>
         private async Task DrillIntoNetworkArchiveAsync(FileEntry archiveEntry)
         {
-            if (_networkBusy)
+            if (IsNetworkBusyOrReset())
             {
                 Log.Verb("ColumnNavigator.Network: archive drill-in ignored — network navigation in progress");
                 return;
             }
-            _networkBusy = true;
+            SetNetworkBusy();
             try
             {
                 ++_previewGeneration;
@@ -1144,7 +1174,7 @@ namespace XFiles.Navigation
         private async Task<bool> LoadNetworkColumnAsync(ColumnState column, NetworkServerConfig config, string share, string path)
         {
             LoadingChanged?.Invoke(true);
-            _networkBusy = true;
+            SetNetworkBusy();
             try
             {
                 bool wantsShares = config.Protocol == NetworkProtocol.Smb && string.IsNullOrEmpty(share);
@@ -1199,12 +1229,12 @@ namespace XFiles.Navigation
         /// <summary>Reloads the given network column (locations, shares, or directory) in place.</summary>
         private async Task ReloadNetworkColumnAsync(ColumnState column)
         {
-            if (_networkBusy)
+            if (IsNetworkBusyOrReset())
             {
                 Log.Verb("ColumnNavigator.Network: reload ignored — network navigation in progress");
                 return;
             }
-            _networkBusy = true;
+            SetNetworkBusy();
             try
             {
                 if (column.NetworkLocationId == 0 && column.NetworkShareName == null)
@@ -1237,6 +1267,32 @@ namespace XFiles.Navigation
         public static string CombineNetworkPath(string path, string name)
         {
             return CombineNetworkPath(path, name, NetworkProtocol.Smb);
+        }
+
+        /// <summary>Safety timeout: if _networkBusy is stuck longer than this, force-clear it.</summary>
+        private static readonly TimeSpan NetworkBusyTimeout = TimeSpan.FromSeconds(30);
+
+        /// <summary>
+        /// Returns true if _networkBusy is set AND still within the safety timeout.
+        /// If the timeout has elapsed, force-clears the flag and logs a warning.
+        /// </summary>
+        private bool IsNetworkBusyOrReset()
+        {
+            if (!_networkBusy) return false;
+            if (DateTime.UtcNow - _networkBusySince > NetworkBusyTimeout)
+            {
+                Log.Warn("ColumnNavigator.Network: _networkBusy stuck for {Elapsed:F0}s — force-clearing",
+                    (DateTime.UtcNow - _networkBusySince).TotalSeconds);
+                _networkBusy = false;
+                return false;
+            }
+            return true;
+        }
+
+        private void SetNetworkBusy()
+        {
+            _networkBusy = true;
+            _networkBusySince = DateTime.UtcNow;
         }
 
         /// <summary>Joins a remote path segment onto a remote path using the
@@ -1638,6 +1694,71 @@ namespace XFiles.Navigation
                     FilePreviewResult previewResult;
 
                     string previewExt = Path.GetExtension(selected.Name ?? "");
+
+                    if (FilePreviewService.IsArchiveFile(previewExt))
+                    {
+                        try
+                        {
+                            using (var stream = await BrowserFor(config.Protocol).OpenReadAsync(
+                                config, share, path, CancellationToken.None))
+                            {
+                                if (stream != null && stream.Length > 0)
+                                {
+                                    var entries = ListArchiveEntriesFromStream(stream, selected.Name);
+                                    if (entries != null)
+                                    {
+                                        string archiveKey = $"net~{config.Id}~{share}~{path}";
+                                        _preview = new ColumnState
+                                        {
+                                            Path = archiveKey,
+                                            Label = selected.Name,
+                                            IsFilePreview = false,
+                                            IsNetwork = true,
+                                            NetworkLocationId = config.Id,
+                                            NetworkShareName = share,
+                                            NetworkPath = path,
+                                            NetworkProtocol = config.Protocol,
+                                            IsArchive = true,
+                                            ArchiveRootPath = archiveKey,
+                                            ArchiveInternalPath = ""
+                                        };
+                                        _preview.Entries = entries;
+                                        _preview.AllEntries = entries;
+                                        return;
+                                    }
+                                }
+                            }
+                        }
+                        catch (NetworkOperationException ex)
+                        {
+                            Log.Warn("ColumnNavigator.Network: archive preview failed '{Name}': {Reason}",
+                                selected.Name, ex.Reason);
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Warn("ColumnNavigator.Network: archive preview error '{Name}': {Error}",
+                                selected.Name, ex.Message);
+                        }
+
+                        _preview = new ColumnState
+                        {
+                            Path = null,
+                            Label = selected.Name,
+                            IsFilePreview = true,
+                            IsNetwork = true,
+                            NetworkLocationId = config.Id,
+                            NetworkShareName = share,
+                            NetworkPath = path,
+                            NetworkProtocol = config.Protocol,
+                            PreviewFilePath = selected.Name,
+                            PreviewType = FilePreviewType.Unsupported,
+                            PreviewFileType = FilePreviewService.GetFileTypeLabel(previewExt, null),
+                            PreviewFileSize = selected.SizeBytes,
+                            PreviewTextContent = "Press A to browse archive contents."
+                        };
+                        return;
+                    }
+
                     if (FilePreviewService.IsAudioFile(previewExt) || FilePreviewService.IsVideoFile(previewExt))
                     {
                         // Audio/video stream inline into the preview player — no content
@@ -2167,6 +2288,38 @@ namespace XFiles.Navigation
             if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
             if (bytes < 1024 * 1024 * 1024) return $"{bytes / (1024.0 * 1024):F1} MB";
             return $"{bytes / (1024.0 * 1024 * 1024):F2} GB";
+        }
+
+        private static List<FileEntry> ListArchiveEntriesFromStream(Stream stream, string archiveName)
+        {
+            try
+            {
+                using (var archive = SharpCompress.Archives.ArchiveFactory.Open(stream))
+                {
+                    var entries = new List<FileEntry>();
+                    foreach (var entry in archive.Entries.Where(e => !e.IsDirectory))
+                    {
+                        entries.Add(new FileEntry
+                        {
+                            Name = System.IO.Path.GetFileName(entry.Key),
+                            FullPath = entry.Key,
+                            SizeBytes = (long)entry.Size,
+                            IsDirectory = false,
+                            IsNetwork = true,
+                            ActionKind = ActionKind.None
+                        });
+                    }
+                    Log.Info("ColumnNavigator: archive preview loaded {Name}: {Count} files",
+                        archiveName, entries.Count);
+                    return entries;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Dbg("ColumnNavigator: archive preview parse failed for {Name}: {Error}",
+                    archiveName, ex.Message);
+                return null;
+            }
         }
     }
 

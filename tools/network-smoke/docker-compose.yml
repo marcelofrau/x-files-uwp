@@ -31,8 +31,8 @@ services:
       # PASV replies announce this address; 127.0.0.1 makes remote clients
       # try to connect to themselves. Set to ${SMOKE_PASV_ADDRESS:-10.0.0.20}.
       PASV_ADDRESS: ${SMOKE_PASV_ADDRESS:-10.0.0.20}
-      PASV_MIN_PORT: 50100
-      PASV_MAX_PORT: 50200
+      PASV_MIN_PORT: 49100
+      PASV_MAX_PORT: 49200
       REVERSE_LOOKUP_ENABLE: "NO"
       # TLS: self-signed cert (see certs/). Explicit FTPS on port 21 via AUTH TLS.
       # ValidateAnyCertificate accepts the self-signed cert client-side.

@@ -77,12 +77,14 @@ namespace XFiles.FileSystem
         /// </summary>
         public static Id3Tag ReadFromStream(Stream stream)
         {
-            if (stream == null || !stream.CanSeek)
+            if (stream == null)
             {
-                Log.Warn("Id3Tag: ReadFromStream requires a seekable stream");
+                Log.Warn("Id3Tag: ReadFromStream called with null stream");
                 return null;
             }
-            stream.Seek(0, SeekOrigin.Begin);
+            if (stream.CanSeek)
+                stream.Seek(0, SeekOrigin.Begin);
+
             byte[] header = ReadExactly(stream, 10);
             if (header == null || header.Length < 10)
             {
@@ -101,11 +103,29 @@ namespace XFiles.FileSystem
                 id3Version, tagSize, tagSize + 10);
             if (tagSize <= 0 || tagSize > MaxTagSize) return null;
 
-            stream.Seek(0, SeekOrigin.Begin);
-            byte[] tagData = ReadExactly(stream, tagSize + 10);
-            if (tagData == null)
+            int remaining = tagSize + 10 - header.Length;
+            byte[] tagData;
+            if (stream.CanSeek)
             {
-                Log.Warn("Id3Tag: ReadExactly returned null for stream");
+                stream.Seek(0, SeekOrigin.Begin);
+                tagData = ReadExactly(stream, tagSize + 10);
+            }
+            else
+            {
+                byte[] rest = ReadExactly(stream, remaining);
+                if (rest == null || rest.Length == 0)
+                {
+                    Log.Warn("Id3Tag: ReadExactly returned empty for remaining {Remaining} bytes", remaining);
+                    return null;
+                }
+                tagData = new byte[header.Length + rest.Length];
+                Buffer.BlockCopy(header, 0, tagData, 0, header.Length);
+                Buffer.BlockCopy(rest, 0, tagData, header.Length, rest.Length);
+            }
+
+            if (tagData == null || tagData.Length < 10)
+            {
+                Log.Warn("Id3Tag: insufficient bytes from stream (got={Length})", tagData?.Length);
                 return null;
             }
             Log.Dbg("Id3Tag: read {Length} bytes from stream, parsing frames from offset 10", tagData.Length);

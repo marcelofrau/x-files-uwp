@@ -1497,7 +1497,7 @@
                 </StackPanel>
             </StackPanel>
 
-            <!-- OSD overlay for audio -->
+            <!-- OSD overlay for audio (left — play/pause/next/prev) -->
             <Border x:Name="FsAudioOsdBorder" Grid.Row="0" Grid.RowSpan="3"
                     HorizontalAlignment="Left" VerticalAlignment="Top"
                     Margin="24,28,0,0"
@@ -1511,6 +1511,31 @@
                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
                                FontSize="32" Margin="0,6,0,0"
                                Foreground="{StaticResource XFilesAccentBrush}" />
+                </StackPanel>
+            </Border>
+
+            <!-- Track info OSD (right — title/artist/album on skip/prev) -->
+            <Border x:Name="FsTrackInfoBorder" Grid.Row="0" Grid.RowSpan="3"
+                    HorizontalAlignment="Right" VerticalAlignment="Top"
+                    Margin="0,28,24,0"
+                    Background="#991A1D23" CornerRadius="8" Padding="20,14"
+                    Visibility="Collapsed" MaxWidth="420">
+                <StackPanel>
+                    <TextBlock x:Name="FsTrackInfoTitle"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
+                               FontSize="18" Foreground="{StaticResource XFilesForegroundBrush}"
+                               TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                               MaxWidth="400" />
+                    <TextBlock x:Name="FsTrackInfoArtist"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="14" Foreground="{StaticResource XFilesTextMutedBrush}"
+                               TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                               MaxWidth="400" Margin="0,4,0,0" />
+                    <TextBlock x:Name="FsTrackInfoAlbum"
+                               FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                               FontSize="12" Foreground="{StaticResource XFilesTextDimBrush}"
+                               TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                               MaxWidth="400" Margin="0,2,0,0" />
                 </StackPanel>
             </Border>
 

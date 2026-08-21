@@ -27,12 +27,19 @@ namespace XFiles.Controls
         private IReadOnlyList<string> _fileExtensions;
         private string _confirmLabel;
         private string _confirmIcon;
+        private DispatcherTimer _loadingTimer;
 
         public bool IsOpen => Visibility == Visibility.Visible;
 
         public FolderBrowserDialog()
         {
             this.InitializeComponent();
+            _loadingTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            _loadingTimer.Tick += (s, e) =>
+            {
+                _loadingTimer.Stop();
+                LoadingRing.IsActive = true;
+            };
         }
 
         public Task<string> ShowAsync(string initialPath = null)
@@ -90,6 +97,10 @@ namespace XFiles.Controls
 
             _currentPath = path;
 
+            // Show loading spinner after 1s if directory scan is slow.
+            LoadingRing.IsActive = false;
+            _loadingTimer.Start();
+
             bool isRoot = string.IsNullOrEmpty(path);
             string dirName = isRoot ? "Drives" : System.IO.Path.GetFileName(path.TrimEnd('\\'));
             if (string.IsNullOrEmpty(dirName))
@@ -126,6 +137,8 @@ namespace XFiles.Controls
             }
             catch (Exception ex)
             {
+                _loadingTimer.Stop();
+                LoadingRing.IsActive = false;
                 if (isRoot)
                 {
                     Log.Err("FolderBrowserDialog.LoadDirectory: root scan failed", ex);
@@ -194,6 +207,10 @@ namespace XFiles.Controls
 
             EntryList.ItemsSource = _entries;
             EntryList.SelectedIndex = 0;
+
+            // Hide loading spinner (may have been shown by timer).
+            _loadingTimer.Stop();
+            LoadingRing.IsActive = false;
 
             EntryList.Focus(FocusState.Programmatic);
         }
@@ -328,8 +345,10 @@ namespace XFiles.Controls
 
         private void MoveSelection(int direction)
         {
+            if (_entries.Count == 0) return;
             int newIndex = EntryList.SelectedIndex + direction;
-            if (newIndex < 0 || newIndex >= _entries.Count) return;
+            if (newIndex < 0) newIndex = _entries.Count - 1;
+            else if (newIndex >= _entries.Count) newIndex = 0;
             EntryList.SelectedIndex = newIndex;
             EntryList.ScrollIntoView(EntryList.SelectedItem);
         }

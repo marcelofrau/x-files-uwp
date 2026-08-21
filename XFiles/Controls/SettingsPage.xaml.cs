@@ -46,7 +46,16 @@ namespace XFiles.Controls
         };
 
         private static readonly string IconBase = "ms-appx:///Assets/Views/StartMenu/";
-        private static readonly string[] LogLevels = { "Verbose", "Debug", "Info", "Warning", "Error" };
+        private static readonly string[] LogLevels = { "Verbose", "Debug", "Information", "Warning", "Error" };
+
+        private static string FriendlyLevel(string level)
+        {
+            switch (level)
+            {
+                case "Information": return "Info";
+                default: return level;
+            }
+        }
 
         private static async Task<List<SettingsMenuItem>> BuildMenuItemsAsync()
         {
@@ -71,16 +80,30 @@ namespace XFiles.Controls
             bool hideDrives = await XFilesSettings.GetHideEmptyDrivesAsync();
 
             int logFileCount = 0;
+            long logTotalBytes = 0;
             try
             {
                 string logsDir = Log.GetLogsDirectory();
                 if (System.IO.Directory.Exists(logsDir))
                 {
-                    logFileCount = System.IO.Directory.GetFiles(logsDir, "xfiles-*.log").Length
-                                 + System.IO.Directory.GetFiles(logsDir, "xfiles-*.log.gz").Length;
+                    foreach (var f in System.IO.Directory.GetFiles(logsDir, "xfiles-*.log"))
+                    {
+                        logFileCount++;
+                        try { logTotalBytes += new System.IO.FileInfo(f).Length; } catch { }
+                    }
+                    foreach (var f in System.IO.Directory.GetFiles(logsDir, "xfiles-*.log.gz"))
+                    {
+                        logFileCount++;
+                        try { logTotalBytes += new System.IO.FileInfo(f).Length; } catch { }
+                    }
                 }
             }
             catch { }
+            string logSizeDesc = logTotalBytes > 1024 * 1024
+                ? $"{logTotalBytes / (1024.0 * 1024.0):F1} MB"
+                : logTotalBytes > 1024
+                    ? $"{logTotalBytes / 1024.0:F0} KB"
+                    : $"{logTotalBytes} B";
 
             return new List<SettingsMenuItem>
             {
@@ -110,8 +133,8 @@ namespace XFiles.Controls
                         {
                             Label = "Clear Logs",
                             Description = logFileCount > 0
-                                ? $"Delete {logFileCount} archived log file(s)"
-                                : "No archived log files",
+                                ? $"Delete {logFileCount} log file(s) — {logSizeDesc}"
+                                : "No log files",
                             IconPath = IconBase + "startmenu-close-48.png",
                             Action = "clear-logs"
                         }
@@ -120,14 +143,14 @@ namespace XFiles.Controls
                 new SettingsMenuItem
                 {
                     Label = "Log Level",
-                    Description = $"Current: {logLevel}",
+                    Description = $"Current: {FriendlyLevel(logLevel)}",
                     IconPath = IconBase + "startmenu-settings-48.png",
                     Action = "log-level"
                 },
                 new SettingsMenuItem
                 {
                     Label = "Audio & BGM",
-                    Description = bgmOn ? $"On: {bgmName}" : "Off",
+                    Description = "Volume controls and BGM Music",
                     IconPath = "ms-appx:///Assets/Views/SettingsPage/settingspage-bgm-48.png",
                     Action = "menu-bgm",
                     Children = new List<SettingsMenuItem>

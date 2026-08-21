@@ -1225,7 +1225,7 @@ namespace XFiles.Controls
 
         public void OnSettings()
         {
-            if (TextEditorOverlayControl.IsOpen) return;
+            if (TextEditorOverlayControl.IsOpen) { _router.RouteButton(VirtualKey.GamepadMenu); return; }
             if (ErrorOverlay.Visibility == Visibility.Visible) return;
             if (IsAnyOverlayVisible) return;
             if (StartMenuControl.IsOpen) { StartMenuControl.ForwardDPad(Windows.System.VirtualKey.GamepadA); return; }

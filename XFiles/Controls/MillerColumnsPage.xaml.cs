@@ -571,15 +571,13 @@ namespace XFiles.Controls
                 const int MaxPathChars = 150;
                 if (breadcrumb.Length > MaxPathChars)
                 {
-                    // Keep drive + first 2 folders as head: "E:\tests\Music"
-                    var parts = breadcrumb.Split('\\');
-                    int headEnd = Math.Min(parts.Length, 3); // drive letter + 2 folders
-                    string head = string.Join("\\", parts, 0, headEnd);
-                    // Tail: as much of the end as fits
-                    int tailLen = MaxPathChars - head.Length - 3; // 3 for "..."
+                    string splitChar = breadcrumb.Contains("/") ? "/" : "\\";
+                    var parts = breadcrumb.Split(new[] { splitChar[0] });
+                    int headEnd = Math.Min(parts.Length, 3);
+                    string head = string.Join(splitChar, parts, 0, headEnd);
+                    int tailLen = MaxPathChars - head.Length - 3;
                     if (tailLen > 20)
                         breadcrumb = head + "..." + breadcrumb.Substring(breadcrumb.Length - tailLen);
-                    // else: too short to truncate meaningfully, leave as-is
                 }
                 PathText.Text = breadcrumb;
 
