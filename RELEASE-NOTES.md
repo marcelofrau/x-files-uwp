@@ -1,31 +1,48 @@
-> 🎮 **Chiptune playback + background music.** v1.5.0 brings native console-music playback (PSF, USF, SPC, GBS, NSF, VGM/VGZ, SID, trackers) with streaming play-while-render, and a background-music feature with a bundled default track — all gamepad-first, all built for Xbox.
+> 🌐 **The Network Update.** v1.6.0 brings full network file browsing — SMB, FTP/FTPS, SFTP, and WebDAV — with streaming preview, remote file operations, download-from-URL, QR file sharing, and a protocol-agnostic provider layer that made it all possible.
 
 ---
 
 ## ✨ New Features
 
-### 🎵 Chiptune Player *(NEW)*
-- **Native chiptune decoding** — game-music-emu + libopenmpt + aosdk PSF + lazyusf backends play the classics: `.psf/.minipsf` (PS1), `.usf/.miniusf` (N64), `.spc` (SNES), `.gbs` (GB), `.nsf` (NES), `.vgm/.vgz` (Mega Drive/MS), `.sid` (C64), plus tracker formats via libopenmpt
-- **Streaming playback** — music starts ~1s after the render begins (play-while-render) instead of waiting for the full decode; the WAV cache fills in the background
-- **Fixed white-noise corruption** — a process-wide native session lock serializes emulator sessions, eliminating the -40dB hiss that leaked between concurrent renders
-- **Fullscreen player** — fast next/prev via graph reuse, loading spinner, PSF tempo corrected to match the original games
-- **Format-consistent WAV cache** — salted cache keys, auto-re-render when the renderer improves
+### 🌐 Network File Browsing *(NEW)*
+- **SMB browsing** — browse, preview, copy, move, rename, delete files on Windows/Samba shares
+- **FTP/FTPS** — connect to FTP servers with implicit (port 990) and explicit TLS support
+- **SFTP** — secure shell file transfer with host key verification and trust-on-first-use
+- **WebDAV** — browse and transfer files from WebDAV servers
+- **Protocol-agnostic provider layer** — all network protocols share a common `INetworkFileSystemProvider` interface; adding a new protocol automatically gets full feature support
 
-### 🎼 Background Music *(NEW)*
-- **Always-on BGM** with its own audio graph — keeps playing alongside browsing; disable anytime in Settings
-- **Bundled default track** — "17 Stickerbrush Symphony" (Donkey Kong Country 2) ships with the app and streams from the first boot; no big install payload
-- **Pick your own track** — file picker accepts 49 audio/chiptune formats; chiptune tracks render in the background with a spinner
-- **Polished playback** — 2-3s gap between loop repeats, volume presets (10/25/50/75/100%), auto-pause while music/video plays, 10s cooldown resume, fade-in synced after the boot chime
+### 📁 Remote File Operations
+- **Streaming preview** — text, image, audio, and video previews stream directly from the remote server without full download
+- **Copy/paste between local and remote** — transfer files in either direction with live progress
+- **Rename and delete** — remote file management with confirmation dialogs
+- **Batch operations** — select multiple files across network locations for bulk copy, move, or delete
 
-### ⚙️ Settings & Drives
-- **Hide empty/inaccessible drives** (default ON) — system XVD mounts (S:, Q:, ...) that the UWP sandbox can't read no longer clutter the root list; probes run in the background so browsing stays instant
-- **Settings reorganized into submenus** with scroll — Clear Data, Log Level, Background Music and Hide Empty Drives group cleanly
-- **Improved controls guide** overlay layout
+### 🔗 Download from URL
+- **Browser overlay** — paste a URL, the app opens an in-app WebView; when the page triggers a download, it captures it automatically
+- **Provider resolution** — Google Drive, OneDrive, Dropbox, and gofile.io links resolve to direct downloads
+- **Filename extraction** — resolves the real filename from Content-Disposition headers and API metadata
 
-### 📁 Files / Portal / Editor
-- **Transfer metering + failure diagnostics** — live speed chart, smoother progress, clearer errors in transfer dialogs
-- **File operation robustness** — Win32 read/write stream fixes, restored `..` parent entry in the move picker
-- **Text editor polish** — Consolas font, themed dialogs
+### 📱 QR File Sharing
+- **Share files via QR code** — upload to gofile.io and display a QR code for easy sharing
+
+### ⚙️ Improvements
+- **Breadcrumb protocol icons** — each network location shows its protocol icon in the address bar
+- **Write-permission alerts** — clear feedback when a folder is read-only
+- **Audio settings bar** — quick access to volume and visualization settings
+- **Comprehensive logging audit** — adjusted log levels across the codebase for cleaner diagnostics
+
+---
+
+## 🐛 Bug Fixes
+- **FTP navigation freeze** — resolved deadlock when navigating FTP servers with auto-advance cascade
+- **Text editor BOM preservation** — save no longer strips BOM from JSON config files
+- **Batch delete count** — confirmation dialog now correctly counts remote files
+- **Network icon consistency** — left column shows correct protocol icon per location
+- **Password field overlap** — removed conflicting placeholder text in network location dialog
+- **Preview timeout** — large text files on slow network connections no longer hang the preview pane
+- **Create folder on network** — now prompts for folder name instead of silently failing
+- **Download overlay layout** — empty WebView row no longer leaves a large gap after download starts
+- **ComboBox selection colors** — protocol dropdown no longer persists green highlight on previous selections
 
 ---
 
