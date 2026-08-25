@@ -36,11 +36,12 @@
         </Border>
 
         <!-- WebView -->
-        <WebView x:Name="DownloadWebView"
-                 Grid.Row="1"
-                 HorizontalAlignment="Stretch"
-                 VerticalAlignment="Stretch"
-                 AllowFocusOnInteraction="False" />
+        <Grid x:Name="WebViewContainer" Grid.Row="1">
+            <WebView x:Name="DownloadWebView"
+                     HorizontalAlignment="Stretch"
+                     VerticalAlignment="Stretch"
+                     AllowFocusOnInteraction="False" />
+        </Grid>
 
         <!-- Status bar (visible while downloading) -->
         <Border x:Name="StatusBar"

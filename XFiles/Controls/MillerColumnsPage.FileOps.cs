@@ -710,11 +710,13 @@ namespace XFiles.Controls
             // Build combined file list (portal/network entries have no local paths to enumerate)
             var allFiles = new List<string>();
             int folderCount = 0;
+            int remoteFileCount = 0;
             foreach (var entry in entries)
             {
                 if (entry.IsPortal || entry.IsNetwork)
                 {
                     if (entry.IsDirectory) folderCount++;
+                    else remoteFileCount++;
                     continue;
                 }
                 var (files, folders) = await FileOperations.ListRecursiveAsync(entry.FullPath);
@@ -723,7 +725,7 @@ namespace XFiles.Controls
             }
 
             bool confirmed = await FileOperationConfirmDialogControl.ShowAsync(
-                $"{entries.Count} items", true, allFiles, folderCount);
+                $"{entries.Count} items", true, allFiles, folderCount, remoteFileCount);
             if (!confirmed)
             {
                 #if BATCH_DEBUG
@@ -1031,7 +1033,8 @@ namespace XFiles.Controls
                             _navigator.BrowserFor(srcConfig.Protocol), srcConfig, entry.NetworkShareName, entry.NetworkPath,
                             _navigator.BrowserFor(config.Protocol), config, share, destDir,
                             entry.IsDirectory, entry.Name, progress, OpProgressDialog.CancelToken,
-                            destName, sameDir ? AutoRenameConflict : conflict);
+                            destName, sameDir ? AutoRenameConflict : conflict,
+                            knownSize: entry.IsDirectory ? -1 : entry.SizeBytes);
                     }
                     else
                     {
@@ -1066,6 +1069,14 @@ namespace XFiles.Controls
                 if (ok) success++; else failed++;
                 completedBytes += entryBytes;
                 OpProgressDialog.TrackCompleted(entry.Name, entryBytes);
+                OpProgressDialog.UpdateProgress(new FileOperations.OperationProgress
+                {
+                    FileName = "",
+                    FileIndex = success + failed,
+                    FileTotal = fileCount,
+                    BytesCopied = completedBytes,
+                    TotalBytes = totalBytes
+                });
                 if (failed > 0)
                 {
                     var hint = lastNetworkError?.Reason == NetworkOperationReason.AccessDenied
@@ -1149,7 +1160,9 @@ namespace XFiles.Controls
                     if (!entry.IsDirectory)
                     {
                         string destPath = Path.Combine(destDir, Path.GetFileName(entry.NetworkPath.Replace('/', '\\')));
-                        if (File.Exists(destPath))
+                        bool exists = false;
+                        try { exists = File.Exists(destPath); } catch { }
+                        if (exists)
                         {
                             long existingSize = 0;
                             try { existingSize = new FileInfo(destPath).Length; } catch { }
@@ -1194,7 +1207,8 @@ namespace XFiles.Controls
                     });
                     ok = await NetworkCopyService.CopyRemoteToLocalAsync(
                         _navigator.BrowserFor(cfg.Protocol), cfg, entry.NetworkShareName, entry.NetworkPath,
-                        destDir, entry.IsDirectory, progress, OpProgressDialog.CancelToken, conflict, resumeFrom);
+                        destDir, entry.IsDirectory, progress, OpProgressDialog.CancelToken, conflict, resumeFrom,
+                        knownSize: entry.IsDirectory ? -1 : entry.SizeBytes);
                 }
                 catch (OperationCanceledException)
                 {
@@ -1220,6 +1234,14 @@ namespace XFiles.Controls
                 if (ok) success++; else failed++;
                 completedBytes += entryBytes;
                 OpProgressDialog.TrackCompleted(entry.Name, entryBytes);
+                OpProgressDialog.UpdateProgress(new FileOperations.OperationProgress
+                {
+                    FileName = "",
+                    FileIndex = success + failed,
+                    FileTotal = fileCount,
+                    BytesCopied = completedBytes,
+                    TotalBytes = totalBytes
+                });
                 if (failed > 0)
                 {
                     var hint = lastNetworkError?.Reason == NetworkOperationReason.AccessDenied
@@ -2988,7 +3010,7 @@ namespace XFiles.Controls
 
             var current = _navigator.Current;
             var targetDir = current?.Path;
-            if (string.IsNullOrEmpty(targetDir) && current?.IsPortal != true)
+            if (string.IsNullOrEmpty(targetDir) && current?.IsPortal != true && current?.IsNetwork != true)
             {
                 Log.Warn("HandleCreateFolderAsync: no target directory");
                 return;
@@ -3278,10 +3300,10 @@ namespace XFiles.Controls
         }
 
         /// <summary>
-        /// Download from URL into a user-chosen local folder. The destination is
-        /// picked first (folder picker, always a real local path); B-cancel at the
-        /// picker aborts without prompting for a URL. Direct links are streamed to
-        /// disk; links that resolve to an HTML page fall through to the WebView
+        /// Download from URL into a user-chosen local folder. The URL is
+        /// prompted first; then the destination is picked (folder picker,
+        /// always a real local path). Direct links are streamed to disk;
+        /// links that resolve to an HTML page fall through to the WebView
         /// overlay for a manual click-through download.
         /// </summary>
         private async Task HandleDownloadFromUrlAsync(FileEntry entry)
@@ -3324,7 +3346,8 @@ namespace XFiles.Controls
 
             Log.Info("HandleDownloadFromUrlAsync: url={Url} dest={Dest}", url, destDir);
 
-            string directUrl = await DownloadService.ResolveAsync(url, CancellationToken.None) ?? url;
+            var resolved = await DownloadService.ResolveAsync(url, CancellationToken.None);
+            string directUrl = resolved?.Url ?? url;
 
             OpProgressDialog.Show("Downloading", url, destDir, 0, 1);
             var result = await DownloadService.TryDownloadAsync(
@@ -3343,14 +3366,15 @@ namespace XFiles.Controls
                         });
                     });
                 },
-                OpProgressDialog.CancelToken);
+                OpProgressDialog.CancelToken,
+                resolved?.SuggestedName);
 
             if (result.Outcome == DownloadService.DownloadOutcome.Downloaded)
             {
                 OpProgressDialog.Complete();
                 await Task.Delay(300);
                 OpProgressDialog.Close();
-                OnRefresh();
+                await _navigator.RefreshCurrentAsync(Path.GetFileName(result.SavedPath));
                 _ = AlertDialogControl.ShowAsync($"Downloaded \"{Path.GetFileName(result.SavedPath)}\" to {destDir}.", AlertType.Success);
                 return;
             }
@@ -3381,7 +3405,7 @@ namespace XFiles.Controls
 
                 if (downloaded)
                 {
-                    OnRefresh();
+                    await _navigator.RefreshCurrentAsync();
                     _ = AlertDialogControl.ShowAsync($"Downloaded to {destDir}.", AlertType.Success);
                 }
                 return;

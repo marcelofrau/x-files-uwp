@@ -140,6 +140,7 @@
     <Compile Include="FileSystem\RomHeaderParser.cs" />
     <Compile Include="FileSystem\GamelistParser.cs" />
     <Compile Include="FileSystem\FileOperations.cs" />
+    <Compile Include="FileSystem\OperationProgress.cs" />
     <Compile Include="FileSystem\ConflictDecision.cs" />
     <Compile Include="FileSystem\TransferMeter.cs" />
     <Compile Include="FileSystem\DiskSpaceGuard.cs" />
@@ -258,6 +259,7 @@
     <Compile Include="Services\PdfPreviewService.cs" />
     <Compile Include="Services\FileShareService.cs" />
     <Compile Include="Services\DownloadService.cs" />
+    <Compile Include="Services\DownloadHelpers.cs" />
     <Compile Include="Services\ProgressStream.cs" />
     <Compile Include="Services\DevicePortalService.cs" />
     <Compile Include="Services\PortalModels.cs" />

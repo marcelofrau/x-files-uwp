@@ -17,7 +17,7 @@ namespace XFiles.FileSystem
     /// System.IO.File.* works with broadFileSystemAccess in UWP.
     /// Inside archives, only Extract is supported (via SharpCompress).
     /// </summary>
-    public static class FileOperations
+    public static partial class FileOperations
     {
         #region P/Invoke
 
@@ -241,15 +241,7 @@ namespace XFiles.FileSystem
             }
         }
 
-        public class OperationProgress
-        {
-            public string FileName { get; set; }
-            public double PercentComplete { get; set; }
-            public long BytesCopied { get; set; }
-            public long TotalBytes { get; set; }
-            public int FileIndex { get; set; }
-            public int FileTotal { get; set; }
-        }
+        // OperationProgress extracted to OperationProgress.cs (partial class)
 
         public class ScanResult
         {

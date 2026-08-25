@@ -56,6 +56,7 @@ namespace XFiles.Controls
             TitleText.Text = "Download from URL";
             UrlText.Text = url;
             StatusBar.Visibility = Visibility.Collapsed;
+            WebViewContainer.Visibility = Visibility.Visible;
             DownloadWebView.Visibility = Visibility.Visible;
 
             Visibility = Visibility.Visible;
@@ -139,7 +140,7 @@ namespace XFiles.Controls
 
             Log.Info("UrlDownloadOverlay: starting download {Url}", fileUrl);
             TitleText.Text = "Downloading";
-            DownloadWebView.Visibility = Visibility.Collapsed;
+            WebViewContainer.Visibility = Visibility.Collapsed;
             StatusBar.Visibility = Visibility.Visible;
             DownloadProgress.IsIndeterminate = true;
             DownloadProgress.Value = 0;
@@ -179,6 +180,7 @@ namespace XFiles.Controls
                 DownloadProgress.IsIndeterminate = false;
                 DownloadProgress.Value = 0;
                 // Restore the page so the user can retry or back out.
+                WebViewContainer.Visibility = Visibility.Visible;
                 DownloadWebView.Visibility = Visibility.Visible;
                 StatusBar.Visibility = Visibility.Collapsed;
                 _cts = null;

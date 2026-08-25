@@ -29,12 +29,14 @@ namespace XFiles.Controls
         /// <param name="isFolder">True if deleting a folder</param>
         /// <param name="files">List of file paths that will be deleted</param>
         /// <param name="folderCount">Number of folders in the list</param>
-        public Task<bool> ShowAsync(string itemName, bool isFolder, List<string> files, int folderCount)
+        /// <param name="remoteFileCount">Number of remote/network files not in the local file list</param>
+        public Task<bool> ShowAsync(string itemName, bool isFolder, List<string> files, int folderCount, int remoteFileCount = 0)
         {
             string suffix = isFolder ? " (including all contents)" : "";
             SummaryText.Text = $"Delete '{itemName}'{suffix}?";
 
-            int fileCount = (files?.Count ?? 0) - folderCount;
+            int localFileCount = (files?.Count ?? 0) - folderCount;
+            int fileCount = localFileCount + remoteFileCount;
             CountText.Text = $"{fileCount} file(s), {folderCount} folder(s)";
 
             FileListText.Text = string.Join("\n", files ?? new List<string>());
@@ -55,11 +57,12 @@ namespace XFiles.Controls
         /// <summary>
         /// Show move confirmation with file list.
         /// </summary>
-        public Task<bool> ShowMoveAsync(string itemName, string destPath, List<string> files, int folderCount)
+        public Task<bool> ShowMoveAsync(string itemName, string destPath, List<string> files, int folderCount, int remoteFileCount = 0)
         {
             SummaryText.Text = $"Move '{itemName}' to '{destPath}'?";
 
-            int fileCount = (files?.Count ?? 0) - folderCount;
+            int localFileCount = (files?.Count ?? 0) - folderCount;
+            int fileCount = localFileCount + remoteFileCount;
             CountText.Text = $"{fileCount} file(s), {folderCount} folder(s)";
 
             FileListText.Text = string.Join("\n", files ?? new List<string>());

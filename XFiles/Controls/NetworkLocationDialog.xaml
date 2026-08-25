@@ -158,6 +158,7 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
                     <Grid Grid.Row="0">
@@ -185,7 +186,6 @@
                                      FontSize="14"
                                      Padding="8,9,8,6"
                                      MinHeight="34"
-                                     PlaceholderText="Password"
                                      HorizontalAlignment="Stretch"
                                      GotFocus="OnTextBoxGotFocus"
                                      LostFocus="OnTextBoxLostFocus"

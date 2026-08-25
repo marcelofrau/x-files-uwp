@@ -24,13 +24,18 @@ namespace XFiles.Services
     /// </summary>
     internal static class DownloadService
     {
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        private static extern bool DeleteFileFromAppW(string lpFileName);
+
         private static readonly HttpClient Client = CreateClient();
 
         private static HttpClient CreateClient()
         {
             var client = new HttpClient
             {
-                Timeout = TimeSpan.FromMinutes(2)
+                // No global timeout — large downloads need unbounded streaming time.
+                // The caller provides a CancellationToken (user cancel button) instead.
+                Timeout = Timeout.InfiniteTimeSpan
             };
             client.DefaultRequestHeaders.UserAgent.ParseAdd(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36");
@@ -52,11 +57,17 @@ namespace XFiles.Services
             public string Error;
         }
 
+        public sealed class ResolveResult
+        {
+            public string Url;
+            public string SuggestedName;
+        }
+
         /// <summary>
         /// Resolve a provider URL to a direct-download candidate. Returns null when
         /// no confident rewrite exists — the caller then probes the original URL.
         /// </summary>
-        public static async Task<string> ResolveAsync(string url, CancellationToken token)
+        public static async Task<ResolveResult> ResolveAsync(string url, CancellationToken token)
         {
             try
             {
@@ -68,13 +79,16 @@ namespace XFiles.Services
                     return null;
                 }
 
-                if (TryResolveGoogleDrive(url, out var gdrive)) return gdrive;
-                if (TryResolveOneDrive(url, out var onedrive)) return onedrive;
-                if (TryResolveDropbox(url, out var dropbox)) return dropbox;
+                if (TryResolveGoogleDrive(url, out var gdrive))
+                    return new ResolveResult { Url = gdrive };
+                if (TryResolveOneDrive(url, out var onedrive))
+                    return new ResolveResult { Url = onedrive };
+                if (TryResolveDropbox(url, out var dropbox))
+                    return new ResolveResult { Url = dropbox };
                 if (TryGetGofileCode(url, out var gofileCode))
                 {
                     var gofile = await ResolveGofileDirectAsync(gofileCode, token);
-                    if (!string.IsNullOrEmpty(gofile)) return gofile;
+                    if (gofile != null) return gofile;
                     Log.Warn("DownloadService: gofile API resolve failed — WebView fallback");
                     return null;
                 }
@@ -98,7 +112,8 @@ namespace XFiles.Services
             string url,
             string destDir,
             Action<long, long> progress,
-            CancellationToken token)
+            CancellationToken token,
+            string suggestedName = null)
         {
             string destPath = null;
             try
@@ -124,7 +139,7 @@ namespace XFiles.Services
                     return new DownloadResult { Outcome = DownloadOutcome.NeedsBrowser };
                 }
 
-                string fileName = ResolveFileName(url, resp);
+                string fileName = ResolveFileName(url, resp, suggestedName);
                 destPath = GetUniquePath(Path.Combine(destDir, fileName));
 
                 long totalBytes = resp.Content.Headers.ContentLength ?? -1;
@@ -283,7 +298,7 @@ namespace XFiles.Services
             return true;
         }
 
-        private static async Task<string> ResolveGofileDirectAsync(string code, CancellationToken token)
+        private static async Task<ResolveResult> ResolveGofileDirectAsync(string code, CancellationToken token)
         {
             var resp = await Client.GetAsync($"https://api.gofile.io/contents/{code}", token);
             if (!resp.IsSuccessStatusCode)
@@ -305,14 +320,17 @@ namespace XFiles.Services
                 if (contents[key].ValueType != JsonValueType.Object) continue;
                 var entry = contents[key].GetObject();
 
+                string name = entry.ContainsKey("name") && entry["name"].ValueType == JsonValueType.String
+                    ? entry["name"].GetString() : null;
+
                 if (entry.ContainsKey("directLink") &&
                     entry["directLink"].ValueType == JsonValueType.String)
                 {
                     string dl = entry["directLink"].GetString();
                     if (!string.IsNullOrEmpty(dl))
                     {
-                        Log.Dbg("DownloadService: gofile directLink = {Link}", dl);
-                        return dl;
+                        Log.Dbg("DownloadService: gofile directLink = {Link} name = {Name}", dl, name ?? "(none)");
+                        return new ResolveResult { Url = dl, SuggestedName = name };
                     }
                 }
 
@@ -322,8 +340,8 @@ namespace XFiles.Services
                     string link = entry["link"].GetString();
                     if (!string.IsNullOrEmpty(link))
                     {
-                        Log.Dbg("DownloadService: gofile link = {Link}", link);
-                        return link;
+                        Log.Dbg("DownloadService: gofile link = {Link} name = {Name}", link, name ?? "(none)");
+                        return new ResolveResult { Url = link, SuggestedName = name };
                     }
                 }
             }
@@ -333,13 +351,16 @@ namespace XFiles.Services
 
         // ── Filename resolution ────────────────────────────────
 
-        private static string ResolveFileName(string url, HttpResponseMessage resp)
+        private static string ResolveFileName(string url, HttpResponseMessage resp, string suggestedName = null)
         {
             string name = null;
 
             string cd = resp.Content.Headers.ContentDisposition?.ToString();
             if (!string.IsNullOrEmpty(cd))
                 name = ParseContentDispositionFileName(cd);
+
+            if (string.IsNullOrEmpty(name) && !string.IsNullOrWhiteSpace(suggestedName))
+                name = suggestedName;
 
             if (string.IsNullOrEmpty(name))
                 name = FromUrlLastSegment(url);
@@ -420,7 +441,7 @@ namespace XFiles.Services
         private static void DeletePartial(string path)
         {
             if (string.IsNullOrEmpty(path)) return;
-            try { File.Delete(path); }
+            try { DeleteFileFromAppW(path); }
             catch (Exception ex) { Log.Warn("DownloadService: partial delete failed {Path}", ex, path); }
         }
     }

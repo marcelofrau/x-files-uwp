@@ -321,9 +321,9 @@
                                 </VisualState>
                                 <VisualState x:Name="Selected">
                                     <VisualState.Setters>
-                                        <Setter Target="Root.Background" Value="{StaticResource ComboBoxItemBackgroundSelected}" />
+                                        <Setter Target="Root.Background" Value="{StaticResource ComboBoxItemBackground}" />
                                         <Setter Target="Root.BorderBrush" Value="{StaticResource ComboBoxItemBorderBrushSelected}" />
-                                        <Setter Target="ItemContent.Foreground" Value="{StaticResource ComboBoxItemForegroundSelected}" />
+                                        <Setter Target="ItemContent.Foreground" Value="{StaticResource ComboBoxItemForeground}" />
                                     </VisualState.Setters>
                                 </VisualState>
                             </VisualStateGroup>

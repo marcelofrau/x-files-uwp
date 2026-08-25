@@ -158,5 +158,44 @@ namespace XFiles.Tests
             Assert.IsFalse(entries[1].IsDirectory);
             Assert.AreEqual(2048, entries[1].Size);
         }
+        #region EffectivePath
+
+        [TestMethod]
+        public void EffectivePath_NullPath_ReturnsShare()
+        {
+            Assert.AreEqual("media", WebDavSession.EffectivePath("media", null));
+        }
+
+        [TestMethod]
+        public void EffectivePath_EmptyPath_ReturnsShare()
+        {
+            Assert.AreEqual("media", WebDavSession.EffectivePath("media", ""));
+        }
+
+        [TestMethod]
+        public void EffectivePath_PathOverridesShare()
+        {
+            Assert.AreEqual("/media/music", WebDavSession.EffectivePath("media", "/media/music"));
+        }
+
+        [TestMethod]
+        public void EffectivePath_NullShareAndPath_ReturnsEmpty()
+        {
+            Assert.AreEqual("", WebDavSession.EffectivePath(null, null));
+        }
+
+        [TestMethod]
+        public void EffectivePath_NullShare_EmptyPath_ReturnsEmpty()
+        {
+            Assert.AreEqual("", WebDavSession.EffectivePath(null, ""));
+        }
+
+        [TestMethod]
+        public void EffectivePath_EmptyShare_PathReturned()
+        {
+            Assert.AreEqual("/data/files", WebDavSession.EffectivePath("", "/data/files"));
+        }
+
+        #endregion
     }
 }

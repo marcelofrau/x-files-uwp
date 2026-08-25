@@ -33,7 +33,7 @@ namespace XFiles.Network
             string localDestDir, bool isDirectory,
             IProgress<FileOperations.OperationProgress> progress, CancellationToken ct,
             Func<string, Task<ConflictDecision>> conflict = null,
-            long resumeFrom = 0)
+            long resumeFrom = 0, long knownSize = -1)
         {
             Log.Info("NetworkCopyService.CopyRemoteToLocal: {Share}/{Path} → {Dest} {Resume}",
                 share, path, localDestDir, resumeFrom > 0 ? $"(resume from {resumeFrom})" : "");
@@ -42,7 +42,7 @@ namespace XFiles.Network
                 if (!isDirectory)
                 {
                     string name = Path.GetFileName(path.Replace('/', '\\'));
-                    long size = await browser.GetFileLengthAsync(config, share, path, ct);
+                    long size = knownSize >= 0 ? knownSize : await browser.GetFileLengthAsync(config, share, path, ct);
                     string dest = Path.Combine(localDestDir, name);
                     if (conflict != null && SafeFileExists(dest))
                         dest = await ResolveLocalConflictAsync(dest, false, ct, conflict);
@@ -177,18 +177,11 @@ namespace XFiles.Network
                     if (conflict != null && await browser.EntryExistsAsync(config, share, remotePath, false, ct))
                         remotePath = await ResolveRemoteConflictAsync(browser, config, share, remotePath, false, ct, conflict);
 
-                    if (browser.Protocol == NetworkProtocol.Webdav)
+                    using (var src = new FileStream(localPath, FileMode.Open, FileAccess.Read,
+                        FileShare.Read | FileShare.Delete))
+                    using (var dst = await browser.OpenWriteStreamAsync(config, share, remotePath, ct))
                     {
-                        await browser.WriteFileAsync(config, share, remotePath, localPath, ct);
-                    }
-                    else
-                    {
-                        using (var src = new FileStream(localPath, FileMode.Open, FileAccess.Read,
-                            FileShare.Read | FileShare.Delete))
-                        using (var dst = await browser.OpenWriteStreamAsync(config, share, remotePath, ct))
-                        {
-                            await CopyStreamAsync(src, dst, size, progress, name, 0, 1, 0, size, ct);
-                        }
+                        await CopyStreamAsync(src, dst, size, progress, name, 0, 1, 0, size, ct);
                     }
                     return true;
                 }
@@ -229,19 +222,12 @@ namespace XFiles.Network
                     if (conflict != null && await browser.EntryExistsAsync(config, share, remotePath, false, ct))
                         remotePath = await ResolveRemoteConflictAsync(browser, config, share, remotePath, false, ct, conflict);
 
-                    if (browser.Protocol == NetworkProtocol.Webdav)
+                    using (var src = new FileStream(files[i], FileMode.Open, FileAccess.Read,
+                        FileShare.Read | FileShare.Delete))
+                    using (var dst = await browser.OpenWriteStreamAsync(config, share, remotePath, ct))
                     {
-                        await browser.WriteFileAsync(config, share, remotePath, files[i], ct);
-                    }
-                    else
-                    {
-                        using (var src = new FileStream(files[i], FileMode.Open, FileAccess.Read,
-                            FileShare.Read | FileShare.Delete))
-                        using (var dst = await browser.OpenWriteStreamAsync(config, share, remotePath, ct))
-                        {
-                            await CopyStreamAsync(src, dst, sizes[i], progress, Path.GetFileName(files[i]),
-                                idx, fileTotal, done, total, ct);
-                        }
+                        await CopyStreamAsync(src, dst, sizes[i], progress, Path.GetFileName(files[i]),
+                            idx, fileTotal, done, total, ct);
                     }
                     done += sizes[i];
                     idx++;
@@ -266,7 +252,8 @@ namespace XFiles.Network
             INetworkFileSystemProvider dstBrowser, NetworkServerConfig dstConfig, string dstShare, string dstDir,
             bool isDirectory, string displayName,
             IProgress<FileOperations.OperationProgress> progress, CancellationToken ct,
-            string destName = null, Func<string, Task<ConflictDecision>> conflict = null)
+            string destName = null, Func<string, Task<ConflictDecision>> conflict = null,
+            long knownSize = -1)
         {
             Log.Info("NetworkCopyService.CopyRemoteToRemote: {SShare}/{SPath} → {DShare}/{DDir}",
                 srcShare, srcPath, dstShare, dstDir);
@@ -276,7 +263,7 @@ namespace XFiles.Network
                 string name = destName ?? displayName;
                 if (!isDirectory)
                 {
-                    long size = await srcBrowser.GetFileLengthAsync(srcConfig, srcShare, srcPath, ct);
+                    long size = knownSize >= 0 ? knownSize : await srcBrowser.GetFileLengthAsync(srcConfig, srcShare, srcPath, ct);
                     string remotePath = Join(dstDir, name, sep);
                     if (conflict != null && await dstBrowser.EntryExistsAsync(dstConfig, dstShare, remotePath, false, ct))
                         remotePath = await ResolveRemoteConflictAsync(dstBrowser, dstConfig, dstShare, remotePath, false, ct, conflict);

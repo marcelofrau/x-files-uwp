@@ -1784,12 +1784,19 @@ namespace XFiles.Navigation
 
                     try
                     {
-                        using (var stream = await BrowserFor(config.Protocol).OpenReadAsync(
-                            config, share, path, CancellationToken.None))
+                        var previewTask = ReadNetworkPreview(
+                            BrowserFor(config.Protocol), config, share, path,
+                            selected.Name, selected.SizeBytes);
+                        var timeoutTask = Task.Delay(30000);
+                        var completed = await Task.WhenAny(previewTask, timeoutTask);
+                        if (completed == timeoutTask)
                         {
-                            previewResult = await FilePreviewService.GetPreviewFromNetworkAsync(
-                                stream, selected.Name, selected.SizeBytes);
+                            Log.Warn("ColumnNavigator.Network: preview timed out for '{Name}' after 30s", selected.Name);
+                            _preview = null;
+                            PreviewLoadingChanged?.Invoke(false);
+                            return;
                         }
+                        previewResult = await previewTask;
                     }
                     catch (NetworkOperationException ex)
                     {
@@ -1846,6 +1853,16 @@ namespace XFiles.Navigation
             {
                 if (_previewGeneration == gen)
                     PreviewLoadingChanged?.Invoke(false);
+            }
+        }
+
+        private static async Task<FilePreviewResult> ReadNetworkPreview(
+            INetworkFileSystemProvider browser, NetworkServerConfig config,
+            string share, string path, string name, long sizeBytes)
+        {
+            using (var stream = await browser.OpenReadAsync(config, share, path, CancellationToken.None))
+            {
+                return await FilePreviewService.GetPreviewFromNetworkAsync(stream, name, sizeBytes);
             }
         }
 

@@ -723,6 +723,7 @@ namespace XFiles.Controls
                 NetworkLocationId = e.NetworkLocationId,
                 NetworkShareName = e.NetworkShareName,
                 NetworkPath = e.NetworkPath,
+                NetworkProtocol = e.NetworkProtocol,
                 IsHighlighted = (highlightName != null && e.Name == highlightName),
                 IsDotDot = (e.Name == "..")
             }).ToList();

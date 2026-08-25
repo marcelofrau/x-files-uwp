@@ -65,6 +65,9 @@
     <Compile Include="..\XFiles\Services\PortalCore.cs" Link="Linked\Services\PortalCore.cs" />
     <Compile Include="..\XFiles\Services\PortalModels.cs" Link="Linked\Services\PortalModels.cs" />
     <Compile Include="..\XFiles\FileSystem\MusicFormatClassifier.cs" Link="Linked\FileSystem\MusicFormatClassifier.cs" />
+    <Compile Include="..\XFiles\Services\DownloadHelpers.cs" Link="Linked\Services\DownloadHelpers.cs" />
+    <Compile Include="..\XFiles\FileSystem\OperationProgress.cs" Link="Linked\FileSystem\OperationProgress.cs" />
+    <Compile Include="..\XFiles\Network\NetworkCopyService.cs" Link="Linked\Network\NetworkCopyService.cs" />
   </ItemGroup>
 
 </Project>
