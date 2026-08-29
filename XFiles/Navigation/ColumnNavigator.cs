@@ -102,6 +102,14 @@ namespace XFiles.Navigation
         public event Action<bool> PreviewLoadingChanged;
 
         /// <summary>
+        /// Reports download progress (fraction 0..1) while a large network archive
+        /// drills in by caching the whole file locally. MillerColumnsPage renders it
+        /// as a percentage on the preview card so a multi-GB download never looks
+        /// like a frozen spinner.
+        /// </summary>
+        public event Action<double> NetworkCacheProgressed;
+
+        /// <summary>
         /// Set by MillerColumnsPage: given a label, returns an IProgress<double> bound to
         /// the OperationProgressDialog. Used for explicit portal downloads (> 25 MB).
         /// </summary>
@@ -1027,7 +1035,7 @@ namespace XFiles.Navigation
                 }
                 if (entries == null)
                 {
-                    string tempPath = await CacheNetworkFileAsync(archiveEntry);
+                    string tempPath = await CacheNetworkFileAsync(archiveEntry, f => NetworkCacheProgressed?.Invoke(f));
                     if (tempPath == null)
                     {
                         if (_history.Count > 0) _current = _history.Pop();
@@ -1069,7 +1077,7 @@ namespace XFiles.Navigation
         }
 
         /// <summary>Downloads a remote file in full to the NetworkCache temp folder.</summary>
-        private async Task<string> CacheNetworkFileAsync(FileEntry entry)
+        private async Task<string> CacheNetworkFileAsync(FileEntry entry, Action<double> onProgress = null)
         {
             try
             {
@@ -1082,7 +1090,26 @@ namespace XFiles.Navigation
                     string tempPath = Path.Combine(dir, $"{Guid.NewGuid():N}_{entry.Name}");
                     using (var fs = File.Create(tempPath))
                     {
-                        await stream.CopyToAsync(fs);
+                        long total = stream.Length;
+                        if (onProgress == null || total <= 0)
+                        {
+                            await stream.CopyToAsync(fs);
+                        }
+                        else
+                        {
+                            // Chunked read so the caller can report progress (a multi-GB
+                            // archive cache download over FTPS takes minutes — the UI must
+                            // show a percentage, not an indeterminate spinner).
+                            var buffer = new byte[64 * 1024];
+                            long read = 0;
+                            int n;
+                            while ((n = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                            {
+                                await fs.WriteAsync(buffer, 0, n);
+                                read += n;
+                                onProgress((double)read / total);
+                            }
+                        }
                     }
                     Log.Info("ColumnNavigator.CacheNetworkFile: cached '{Name}' → {Temp}", entry.Name, tempPath);
                     return tempPath;
@@ -1585,7 +1612,11 @@ namespace XFiles.Navigation
                     _preview.PreviewImageSource = previewResult.ImageSource;
                     _preview.PreviewErrorMessage = previewResult.ErrorMessage;
                     _preview.PreviewFileType = previewResult.FileType;
-                    _preview.PreviewFileSize = previewResult.FileSizeBytes;
+                    // GetPreviewFromArchiveAsync leaves FileSizeBytes 0 for unsupported
+                    // entry types (e.g. a large .nsp inside a .rar): fall back to the
+                    // entry's own size so the card shows the real byte count, not "0B".
+                    long entrySize = previewResult.FileSizeBytes > 0 ? previewResult.FileSizeBytes : selected.SizeBytes;
+                    _preview.PreviewFileSize = entrySize;
                     _preview.PreviewIsTruncated = previewResult.IsTruncated;
                     _preview.PreviewPixelWidth = previewResult.PixelWidth;
                     _preview.PreviewPixelHeight = previewResult.PixelHeight;

@@ -425,6 +425,21 @@ namespace XFiles.Controls
                                 PreviewUnsupportedType.Text = _navigator.Preview.PreviewFileType ?? "";
                                 PreviewUnsupportedSize.Text = Formatting.FormatSize(_navigator.Preview.PreviewFileSize);
                                 PreviewStatus.Text = "";
+                                if (!string.IsNullOrEmpty(_navigator.Preview.PreviewTextContent))
+                                {
+                                    // Custom action hint (e.g. network archive deferral:
+                                    // "Press A to browse archive contents.").
+                                    PreviewUnsupportedComment.Text = _navigator.Preview.PreviewTextContent;
+                                    PreviewUnsupportedComment.Visibility = Visibility.Visible;
+                                }
+                                else
+                                {
+                                    PreviewUnsupportedComment.Text = "";
+                                    PreviewUnsupportedComment.Visibility = Visibility.Collapsed;
+                                }
+                                // The "Copy to local folder to watch" hint is video-only; never
+                                // let it leak onto an archive/content card from a prior preview.
+                                PreviewUnsupportedHint.Visibility = Visibility.Collapsed;
                                 PreviewUnsupportedPanel.Visibility = Visibility.Visible;
                             }
                         }

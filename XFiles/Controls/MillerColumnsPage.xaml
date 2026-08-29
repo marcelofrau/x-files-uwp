@@ -683,7 +683,7 @@
                     Visibility="Collapsed">
                     <ProgressRing IsActive="True" Width="32" Height="32"
                                   Foreground="{StaticResource XFilesAccentBrush}" />
-                    <TextBlock Text="Loading preview…"
+                    <TextBlock x:Name="PreviewLoadingCaption" Text="Loading preview…"
                                Foreground="{StaticResource XFilesTextMutedBrush}"
                                FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                FontSize="12"

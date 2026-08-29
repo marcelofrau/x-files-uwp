@@ -106,6 +106,7 @@ namespace XFiles.Controls
             _navigator.PreviewChanged += OnPreviewChanged;
             _navigator.LoadingChanged += OnLoadingChanged;
             _navigator.PreviewLoadingChanged += OnPreviewLoadingChanged;
+            _navigator.NetworkCacheProgressed += OnNetworkCacheProgressed;
             _navigator.Error += OnError;
             _navigator.PortalSetupRequired += OnPortalSetupRequired;
             DevicePortalService.CredentialsRequired += OnPortalCredentialsRequired;
@@ -145,6 +146,7 @@ namespace XFiles.Controls
             _navigator.PreviewChanged -= OnPreviewChanged;
             _navigator.LoadingChanged -= OnLoadingChanged;
             _navigator.PreviewLoadingChanged -= OnPreviewLoadingChanged;
+            _navigator.NetworkCacheProgressed -= OnNetworkCacheProgressed;
             _navigator.Error -= OnError;
             _navigator.PortalSetupRequired -= OnPortalSetupRequired;
             DevicePortalService.CredentialsRequired -= OnPortalCredentialsRequired;
@@ -422,6 +424,14 @@ namespace XFiles.Controls
             Log.Verb("Preview loading state: {IsLoading}", isLoading);
             PreviewLoading.Visibility = isLoading ? Visibility.Visible : Visibility.Collapsed;
             PreviewList.Opacity = isLoading ? 0.4 : 1.0;
+            if (!isLoading)
+                PreviewLoadingCaption.Text = "Loading preview…";
+        }
+
+        private void OnNetworkCacheProgressed(double fraction)
+        {
+            int pct = (int)(Math.Clamp(fraction, 0, 1) * 100);
+            PreviewLoadingCaption.Text = $"Downloading archive… {pct}%";
         }
 
         private void OnError(string message)
