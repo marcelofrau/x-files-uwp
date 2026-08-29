@@ -478,12 +478,30 @@ namespace XFiles.FileSystem
                         stream.Position = 0;
                     }
 
+                    // Size cap for large entries inside an archive: decoding a huge image
+                    // or reading a huge SVG forces the whole entry over the network stream,
+                    // hanging the preview. Fall to "too large · Press A to open" instead.
+                    long entrySize = 0;
+                    try { entrySize = stream.Length; } catch { /* non-seekable stream */ }
+
                     if (IsImageFile(ext))
                     {
+                        if (entrySize > FilePreviewLimits.MaxImageBytes)
+                        {
+                            result.Type = FilePreviewType.Unsupported;
+                            result.TextContent = "Image too large for inline preview. Press A to open.";
+                            return result;
+                        }
                         await LoadImagePreviewFromStream(stream, result);
                     }
                     else if (IsSvgFile(ext))
                     {
+                        if (entrySize > FilePreviewLimits.MaxImageBytes)
+                        {
+                            result.Type = FilePreviewType.Unsupported;
+                            result.TextContent = "Image too large for inline preview. Press A to open.";
+                            return result;
+                        }
                         await LoadSvgPreviewFromStream(stream, result);
                     }
                     else if (IsTextFile(ext))
@@ -542,12 +560,26 @@ namespace XFiles.FileSystem
             result.Type = FilePreviewType.Image;
 
             // Copy stream to MemoryStream on whatever thread we're on, then decode on background.
+            // Chunked read with a hard cap so a huge image can't trigger a full network
+            // download (mirrors the PDF cap) — fall to "too large" instead.
             byte[] imageBytes;
             using (var ms = new MemoryStream())
             {
-                await stream.CopyToAsync(ms);
-                imageBytes = ms.ToArray();
-            }
+                var buf = new byte[64 * 1024];
+                long totalRead = 0;
+                int read;
+                while ((read = await stream.ReadAsync(buf, 0, buf.Length)) > 0)
+                {
+                    totalRead += read;
+                    if (totalRead > FilePreviewLimits.MaxImageBytes)
+                    {
+                        result.Type = FilePreviewType.Unsupported;
+                        result.TextContent = "Image too large for inline preview. Press A to open.";
+                        return;
+                    }
+                    ms.Write(buf, 0, read);
+                }
+                imageBytes = ms.ToArray();            }
 
             result.FileSizeBytes = imageBytes.Length;
 
@@ -629,7 +661,22 @@ namespace XFiles.FileSystem
 
             using (var sr = new StreamReader(stream, Encoding.UTF8))
             {
-                result.TextContent = await sr.ReadToEndAsync();
+                var buf = new char[16 * 1024];
+                int totalRead = 0;
+                var sb = new System.Text.StringBuilder();
+                int read;
+                while ((read = await sr.ReadAsync(buf, 0, buf.Length)) > 0)
+                {
+                    totalRead += read;
+                    if (totalRead > FilePreviewLimits.MaxImageBytes)
+                    {
+                        result.TextContent = "Image too large for inline preview. Press A to open.";
+                        result.IsTruncated = true;
+                        return;
+                    }
+                    sb.Append(buf, 0, read);
+                }
+                result.TextContent = sb.ToString();
             }
 
             result.IsTruncated = false;

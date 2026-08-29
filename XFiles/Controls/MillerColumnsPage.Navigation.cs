@@ -191,8 +191,26 @@ namespace XFiles.Controls
 
             _router.Add(new OverlayHandler(45,
                 () => LogsPageControl.IsVisible,
-                (k, r) => { LogsPageControl.HandleDPad(k); return true; },
-                (k) => { LogsPageControl.HandleDPad(k); return true; }));
+                (k, r) =>
+                {
+                    VirtualKey mapped = k;
+                    if (k == VirtualKey.GamepadDPadUp) mapped = VirtualKey.Up;
+                    else if (k == VirtualKey.GamepadDPadDown) mapped = VirtualKey.Down;
+                    else if (k == VirtualKey.GamepadDPadLeft) mapped = VirtualKey.Left;
+                    else if (k == VirtualKey.GamepadDPadRight) mapped = VirtualKey.Right;
+                    LogsPageControl.HandleDPad(mapped);
+                    return true;
+                },
+                (k) =>
+                {
+                    VirtualKey mapped = k;
+                    if (k == VirtualKey.GamepadDPadUp) mapped = VirtualKey.Up;
+                    else if (k == VirtualKey.GamepadDPadDown) mapped = VirtualKey.Down;
+                    else if (k == VirtualKey.GamepadDPadLeft) mapped = VirtualKey.Left;
+                    else if (k == VirtualKey.GamepadDPadRight) mapped = VirtualKey.Right;
+                    LogsPageControl.HandleDPad(mapped);
+                    return true;
+                }));
 
             _router.Add(new OverlayHandler(40,
                 () => ShareDialogControl.IsVisible,

@@ -130,6 +130,7 @@
     <Compile Include="FileSystem\DirectoryScanner.cs" />
     <Compile Include="FileSystem\DirectoryEntryOrder.cs" />
     <Compile Include="FileSystem\FilePreviewService.cs" />
+    <Compile Include="FileSystem\FilePreviewLimits.cs" />
     <Compile Include="FileSystem\ArchiveBrowser.cs" />
     <Compile Include="FileSystem\PortalBrowser.cs" />
     <Compile Include="FileSystem\Id3Tag.cs" />

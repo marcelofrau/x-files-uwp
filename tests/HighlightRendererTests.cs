@@ -35,6 +35,67 @@ namespace XFiles.Tests
         }
 
         [TestMethod]
+        public void GetHighlightLang_MultiCaseLanguageGroups()
+        {
+            Assert.AreEqual("javascript", HighlightRenderer.GetHighlightLang(".jsx"));
+            Assert.AreEqual("javascript", HighlightRenderer.GetHighlightLang(".mjs"));
+            Assert.AreEqual("javascript", HighlightRenderer.GetHighlightLang(".cjs"));
+            Assert.AreEqual("ruby", HighlightRenderer.GetHighlightLang(".rb"));
+            Assert.AreEqual("kotlin", HighlightRenderer.GetHighlightLang(".kt"));
+            Assert.AreEqual("kotlin", HighlightRenderer.GetHighlightLang(".kts"));
+            Assert.AreEqual("bash", HighlightRenderer.GetHighlightLang(".sh"));
+            Assert.AreEqual("bash", HighlightRenderer.GetHighlightLang(".bash"));
+            Assert.AreEqual("bash", HighlightRenderer.GetHighlightLang(".zsh"));
+            Assert.AreEqual("bash", HighlightRenderer.GetHighlightLang(".fish"));
+            Assert.AreEqual("powershell", HighlightRenderer.GetHighlightLang(".ps1"));
+            Assert.AreEqual("powershell", HighlightRenderer.GetHighlightLang(".psm1"));
+            Assert.AreEqual("powershell", HighlightRenderer.GetHighlightLang(".psd1"));
+            Assert.AreEqual("yaml", HighlightRenderer.GetHighlightLang(".yml"));
+            Assert.AreEqual("markdown", HighlightRenderer.GetHighlightLang(".md"));
+            Assert.AreEqual("markdown", HighlightRenderer.GetHighlightLang(".markdown"));
+            Assert.AreEqual("html", HighlightRenderer.GetHighlightLang(".html"));
+            Assert.AreEqual("html", HighlightRenderer.GetHighlightLang(".htm"));
+            Assert.AreEqual("html", HighlightRenderer.GetHighlightLang(".xhtml"));
+            Assert.AreEqual("python", HighlightRenderer.GetHighlightLang(".pyw"));
+            Assert.AreEqual("python", HighlightRenderer.GetHighlightLang(".pyi"));
+            Assert.AreEqual("sql", HighlightRenderer.GetHighlightLang(".sql"));
+            Assert.AreEqual("go", HighlightRenderer.GetHighlightLang(".go"));
+            Assert.AreEqual("lua", HighlightRenderer.GetHighlightLang(".lua"));
+            Assert.AreEqual("perl", HighlightRenderer.GetHighlightLang(".pl"));
+            Assert.AreEqual("perl", HighlightRenderer.GetHighlightLang(".pm"));
+            Assert.AreEqual("swift", HighlightRenderer.GetHighlightLang(".swift"));
+            Assert.AreEqual("dart", HighlightRenderer.GetHighlightLang(".dart"));
+            Assert.AreEqual("r", HighlightRenderer.GetHighlightLang(".r"));
+            Assert.AreEqual("css", HighlightRenderer.GetHighlightLang(".css"));
+            Assert.AreEqual("scss", HighlightRenderer.GetHighlightLang(".scss"));
+            Assert.AreEqual("less", HighlightRenderer.GetHighlightLang(".less"));
+            Assert.AreEqual("xml", HighlightRenderer.GetHighlightLang(".xml"));
+            Assert.AreEqual("json", HighlightRenderer.GetHighlightLang(".jsonc"));
+            Assert.AreEqual("json", HighlightRenderer.GetHighlightLang(".json5"));
+            Assert.AreEqual("latex", HighlightRenderer.GetHighlightLang(".tex"));
+            Assert.AreEqual("latex", HighlightRenderer.GetHighlightLang(".latex"));
+            Assert.AreEqual("dockerfile", HighlightRenderer.GetHighlightLang(".dockerfile"));
+            Assert.AreEqual("ini", HighlightRenderer.GetHighlightLang(".ini"));
+            Assert.AreEqual("ini", HighlightRenderer.GetHighlightLang(".cfg"));
+            Assert.AreEqual("ini", HighlightRenderer.GetHighlightLang(".conf"));
+            Assert.AreEqual("toml", HighlightRenderer.GetHighlightLang(".toml"));
+            Assert.AreEqual("c", HighlightRenderer.GetHighlightLang(".c"));
+            Assert.AreEqual("c", HighlightRenderer.GetHighlightLang(".h"));
+            Assert.AreEqual("cpp", HighlightRenderer.GetHighlightLang(".cpp"));
+            Assert.AreEqual("cpp", HighlightRenderer.GetHighlightLang(".cc"));
+            Assert.AreEqual("cpp", HighlightRenderer.GetHighlightLang(".cxx"));
+            Assert.AreEqual("cpp", HighlightRenderer.GetHighlightLang(".hpp"));
+            Assert.AreEqual("cpp", HighlightRenderer.GetHighlightLang(".hxx"));
+            Assert.AreEqual("fsharp", HighlightRenderer.GetHighlightLang(".fs"));
+            Assert.AreEqual("fsharp", HighlightRenderer.GetHighlightLang(".fsx"));
+            Assert.AreEqual("fsharp", HighlightRenderer.GetHighlightLang(".fsi"));
+            Assert.AreEqual("vbnet", HighlightRenderer.GetHighlightLang(".vb"));
+            Assert.AreEqual("protobuf", HighlightRenderer.GetHighlightLang(".proto"));
+            Assert.AreEqual("graphql", HighlightRenderer.GetHighlightLang(".graphql"));
+            Assert.AreEqual("graphql", HighlightRenderer.GetHighlightLang(".gql"));
+        }
+
+        [TestMethod]
         public void HtmlEncode_EscapesReservedChars()
         {
             string result = HighlightRenderer.HtmlEncode("<a href=\"x\">&</a>");

@@ -65,3 +65,6 @@ bugs-ideias.txt
 
 # Network smoke test seed (large media files, local-only)
 tools/network-smoke/seed/
+
+# Test coverage artifacts
+tests/TestResults/

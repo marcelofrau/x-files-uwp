@@ -405,6 +405,105 @@ namespace XFiles.Tests
 
         #endregion
 
+        #region CopyRemoteToLocal — conflict resolution
+
+        [TestMethod]
+        public async Task RemoteToLocal_ConflictReplaceAll_Overwrites()
+        {
+            var src = new MockProvider();
+            byte[] newData = Data(16 * 1024, 81);
+            src.Files["r/data.bin"] = newData;
+            string tmp = TmpDir();
+            try
+            {
+                string dest = Path.Combine(tmp, "data.bin");
+                File.WriteAllBytes(dest, Encoding.UTF8.GetBytes("OLD"));
+
+                bool ok = await NetworkCopyService.CopyRemoteToLocalAsync(
+                    src, Cfg(), "", "r/data.bin", tmp, false, null, CancellationToken.None,
+                    conflict: async (path) => ConflictDecision.ReplaceAll);
+
+                Assert.IsTrue(ok);
+                CollectionAssert.AreEqual(newData, File.ReadAllBytes(dest));
+            }
+            finally { Directory.Delete(tmp, true); }
+        }
+
+        [TestMethod]
+        public async Task RemoteToLocal_ConflictRenameAll_Renames()
+        {
+            var src = new MockProvider();
+            byte[] newData = Data(16 * 1024, 82);
+            src.Files["r/data.bin"] = newData;
+            string tmp = TmpDir();
+            try
+            {
+                File.WriteAllBytes(Path.Combine(tmp, "data.bin"), Encoding.UTF8.GetBytes("KEEP"));
+
+                bool ok = await NetworkCopyService.CopyRemoteToLocalAsync(
+                    src, Cfg(), "", "r/data.bin", tmp, false, null, CancellationToken.None,
+                    conflict: async (path) => ConflictDecision.RenameAll);
+
+                Assert.IsTrue(ok);
+                // Original kept; copy written under a uniquely-suffixed name
+                Assert.AreEqual("KEEP", File.ReadAllText(Path.Combine(tmp, "data.bin")));
+                string[] files = Directory.GetFiles(tmp);
+                Assert.AreEqual(2, files.Length, "RenameAll must keep the original and write a renamed copy");
+                bool found = false;
+                foreach (var f in files)
+                    if (f != Path.Combine(tmp, "data.bin") && new FileInfo(f).Length == newData.Length)
+                        found = true;
+                Assert.IsTrue(found, "A renamed copy must exist");
+            }
+            finally { Directory.Delete(tmp, true); }
+        }
+
+        [TestMethod]
+        public async Task RemoteToLocal_ConflictCancel_Throws()
+        {
+            var src = new MockProvider();
+            src.Files["r/data.bin"] = Data(16, 83);
+            string tmp = TmpDir();
+            try
+            {
+                File.WriteAllBytes(Path.Combine(tmp, "data.bin"), Encoding.UTF8.GetBytes("KEEP"));
+
+                await Assert.ThrowsExceptionAsync<OperationCanceledException>(() =>
+                    NetworkCopyService.CopyRemoteToLocalAsync(
+                        src, Cfg(), "", "r/data.bin", tmp, false, null, CancellationToken.None,
+                        conflict: async (path) => ConflictDecision.Cancel));
+            }
+            finally { Directory.Delete(tmp, true); }
+        }
+
+        [TestMethod]
+        public async Task RemoteToLocal_DirConflictRenameAll_RenamesRoot()
+        {
+            var src = new MockProvider();
+            byte[] data = Data(100, 84);
+            src.Files["tree/a.txt"] = data;
+            src.Dirs.Add("tree/sub");
+            string tmp = TmpDir();
+            try
+            {
+                // Pre-create a conflicting destination folder with the same name
+                string conflictingRoot = Path.Combine(tmp, "tree");
+                Directory.CreateDirectory(conflictingRoot);
+                File.WriteAllText(Path.Combine(conflictingRoot, "existing.txt"), "OLD");
+
+                bool ok = await NetworkCopyService.CopyRemoteToLocalAsync(
+                    src, Cfg(), "", "tree", tmp, true, null, CancellationToken.None,
+                    conflict: async (path) => ConflictDecision.RenameAll);
+
+                Assert.IsTrue(ok);
+                string[] dirs = Directory.GetDirectories(tmp);
+                Assert.AreEqual(2, dirs.Length, "Original tree kept + renamed copy");
+            }
+            finally { Directory.Delete(tmp, true); }
+        }
+
+        #endregion
+
         #region CopyLocalToRemote
 
         [TestMethod]
@@ -676,6 +775,70 @@ namespace XFiles.Tests
             var inner = new IOException("disk error");
             var ex = new NetworkOperationException(NetworkOperationReason.TimedOut, "copy failed", inner);
             Assert.AreSame(inner, ex.InnerException);
+        }
+
+        [TestMethod]
+        public async Task LocalToRemote_DirectoryTree_CreatesDirsAndUploadsAll()
+        {
+            var browser = new MockProvider();
+            string dir = TmpDir();
+            try
+            {
+                string sub = Path.Combine(dir, "sub");
+                Directory.CreateDirectory(sub);
+                byte[] a = Data(1000, 11), b = Data(2000, 22);
+                File.WriteAllBytes(Path.Combine(dir, "a.txt"), a);
+                File.WriteAllBytes(Path.Combine(sub, "b.bin"), b);
+
+                bool ok = await NetworkCopyService.CopyLocalToRemoteAsync(
+                    browser, Cfg(), "share", "dst", dir, true, Path.GetFileName(dir),
+                    new Progress<FileOperations.OperationProgress>(), CancellationToken.None);
+
+                Assert.IsTrue(ok);
+                string root = Path.GetFileName(dir.TrimEnd('\\', '/'));
+                CollectionAssert.AreEqual(a, browser.Files[$"dst/{root}/a.txt"]);
+                CollectionAssert.AreEqual(b, browser.Files[$"dst/{root}/sub/b.bin"]);
+                Assert.IsTrue(browser.Dirs.Contains($"dst/{root}/sub"));
+            }
+            finally
+            {
+                if (Directory.Exists(dir)) Directory.Delete(dir, true);
+            }
+        }
+
+        [TestMethod]
+        public async Task LocalToRemote_DirectoryNoFiles_StillCreatesRoot()
+        {
+            var browser = new MockProvider();
+            string dir = TmpDir();
+            try
+            {
+                bool ok = await NetworkCopyService.CopyLocalToRemoteAsync(
+                    browser, Cfg(), "share", "dst", dir, true, Path.GetFileName(dir),
+                    new Progress<FileOperations.OperationProgress>(), CancellationToken.None);
+
+                Assert.IsTrue(ok);
+                string root = Path.GetFileName(dir.TrimEnd('\\', '/'));
+                Assert.IsTrue(browser.Dirs.Contains($"dst/{root}"));
+                Assert.AreEqual(0, browser.Files.Count);
+            }
+            finally
+            {
+                if (Directory.Exists(dir)) Directory.Delete(dir, true);
+            }
+        }
+
+        [TestMethod]
+        public async Task LocalToRemote_SingleFileCannotOpen_Throws()
+        {
+            var browser = new MockProvider();
+            string lp = Path.Combine(Path.GetTempPath(), "xfiles_nonexistent_" + Guid.NewGuid().ToString("N") + ".bin");
+
+            // A missing local source isn't an OperationCanceled/NetworkOperation error, so it propagates.
+            await Assert.ThrowsExceptionAsync<System.IO.FileNotFoundException>(() =>
+                NetworkCopyService.CopyLocalToRemoteAsync(
+                    browser, Cfg(), "share", "dst", lp, false, "missing.bin",
+                    new Progress<FileOperations.OperationProgress>(), CancellationToken.None));
         }
 
         #endregion

@@ -991,8 +991,21 @@ namespace XFiles.Navigation
                 IReadOnlyList<FileEntry> entries;
                 Stream remoteStream = await OpenNetworkStreamAsync(
                     archiveEntry.NetworkLocationId, archiveEntry.NetworkShareName, archiveEntry.NetworkPath);
-                if (remoteStream != null &&
-                    _archiveBrowser.TryOpenArchiveFromStream(archiveKey, remoteStream))
+                bool openedFromStream = false;
+                if (remoteStream != null)
+                {
+                    // Hard timeout so a slow remote open/list can't freeze the app or the
+                    // shared session. On timeout we fall back to full local caching.
+                    var openTask = Task.Run(() =>
+                        _archiveBrowser.TryOpenArchiveFromStream(archiveKey, remoteStream));
+                    var openTimeout = Task.Delay(15_000);
+                    var openDone = await Task.WhenAny(openTask, openTimeout);
+                    if (openDone == openTask)
+                        openedFromStream = await openTask;
+                    else
+                        Log.Warn("ColumnNavigator.Network: opening remote archive timed out — falling back to cache");
+                }
+                if (openedFromStream)
                 {
                     entries = _archiveBrowser.ListEntries(archiveKey, "");
                 }
@@ -1697,6 +1710,31 @@ namespace XFiles.Navigation
 
                     if (FilePreviewService.IsArchiveFile(previewExt))
                     {
+                        // Large remote zips must NOT be auto-listed in the hover preview:
+                        // listing opens the whole file over the network stream (and, for
+                        // FTP, reopens it on every seek), freezing the shared session. Fall
+                        // straight to the "Press A to browse archive contents" card instead.
+                        if (FilePreviewLimits.ShouldDeferNetworkArchivePreview(selected.SizeBytes))
+                        {
+                            _preview = new ColumnState
+                            {
+                                Path = null,
+                                Label = selected.Name,
+                                IsFilePreview = true,
+                                IsNetwork = true,
+                                NetworkLocationId = config.Id,
+                                NetworkShareName = share,
+                                NetworkPath = path,
+                                NetworkProtocol = config.Protocol,
+                                PreviewFilePath = selected.Name,
+                                PreviewType = FilePreviewType.Unsupported,
+                                PreviewFileType = FilePreviewService.GetFileTypeLabel(previewExt, null),
+                                PreviewFileSize = selected.SizeBytes,
+                                PreviewTextContent = "Press A to browse archive contents."
+                            };
+                            return;
+                        }
+
                         try
                         {
                             using (var stream = await BrowserFor(config.Protocol).OpenReadAsync(
@@ -1704,7 +1742,8 @@ namespace XFiles.Navigation
                             {
                                 if (stream != null && stream.Length > 0)
                                 {
-                                    var entries = ListArchiveEntriesFromStream(stream, selected.Name);
+                                    var entries = await ListArchiveEntriesFromStreamWithTimeoutAsync(
+                                        stream, selected.Name);
                                     if (entries != null)
                                     {
                                         string archiveKey = $"net~{config.Id}~{share}~{path}";
@@ -2305,6 +2344,37 @@ namespace XFiles.Navigation
             if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
             if (bytes < 1024 * 1024 * 1024) return $"{bytes / (1024.0 * 1024):F1} MB";
             return $"{bytes / (1024.0 * 1024 * 1024):F2} GB";
+        }
+
+        /// <summary>
+        /// Lists archive entries off the UI/continuation thread with a hard timeout, so a
+        /// slow remote stream (large zip over SMB/SFTP/FTP) can never freeze the app or the
+        /// shared session. Returns null on failure or timeout — callers fall back to the
+        /// "Press A to browse" card.
+        /// </summary>
+        private static async Task<List<FileEntry>> ListArchiveEntriesFromStreamWithTimeoutAsync(
+            Stream stream, string archiveName)
+        {
+            const int TimeoutMs = 15_000;
+            try
+            {
+                var listTask = Task.Run(() => ListArchiveEntriesFromStream(stream, archiveName));
+                var timeoutTask = Task.Delay(TimeoutMs);
+                var completed = await Task.WhenAny(listTask, timeoutTask);
+                if (completed != listTask)
+                {
+                    Log.Warn("ColumnNavigator: archive preview timed out after {Timeout}s for {Name}",
+                        TimeoutMs / 1000, archiveName);
+                    return null;
+                }
+                return await listTask;
+            }
+            catch (Exception ex)
+            {
+                Log.Dbg("ColumnNavigator: archive preview task failed for {Name}: {Error}",
+                    archiveName, ex.Message);
+                return null;
+            }
         }
 
         private static List<FileEntry> ListArchiveEntriesFromStream(Stream stream, string archiveName)

@@ -6,6 +6,7 @@
     <Nullable>disable</Nullable>
     <LangVersion>latest</LangVersion>
     <ImplicitUsings>disable</ImplicitUsings>
+    <IncludeTestAssembly>true</IncludeTestAssembly>
   </PropertyGroup>
 
   <ItemGroup>
@@ -18,6 +19,10 @@
     <PackageReference Include="SMBLibrary" Version="1.5.7.1" />
     <PackageReference Include="FluentFTP" Version="54.2.0" />
     <PackageReference Include="SSH.NET" Version="2026.0.0" />
+    <PackageReference Include="coverlet.collector" Version="6.0.2">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
   </ItemGroup>
 
   <ItemGroup>
@@ -35,6 +40,7 @@
     <Compile Include="..\XFiles\Controls\PieGeometry.cs" Link="Linked\Controls\PieGeometry.cs" />
     <Compile Include="..\XFiles\Controls\TransferStats.cs" Link="Linked\Controls\TransferStats.cs" />
     <Compile Include="..\XFiles\FileSystem\HighlightRenderer.cs" Link="Linked\FileSystem\HighlightRenderer.cs" />
+    <Compile Include="..\XFiles\FileSystem\FilePreviewLimits.cs" Link="Linked\FileSystem\FilePreviewLimits.cs" />
     <Compile Include="..\XFiles\FileSystem\Id3Tag.cs" Link="Linked\FileSystem\Id3Tag.cs" />
     <Compile Include="..\XFiles\FileSystem\RomCoverProvider.cs" Link="Linked\FileSystem\RomCoverProvider.cs" />
     <Compile Include="..\XFiles\FileSystem\RomHeaderParser.cs" Link="Linked\FileSystem\RomHeaderParser.cs" />
