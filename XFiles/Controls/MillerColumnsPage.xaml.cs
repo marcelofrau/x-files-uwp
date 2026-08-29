@@ -419,18 +419,31 @@ namespace XFiles.Controls
             CurrentList.Opacity = isLoading ? 0.4 : 1.0;
         }
 
+        private bool _showingCacheProgress;
+
         private void OnPreviewLoadingChanged(bool isLoading)
         {
             Log.Verb("Preview loading state: {IsLoading}", isLoading);
             PreviewLoading.Visibility = isLoading ? Visibility.Visible : Visibility.Collapsed;
             PreviewList.Opacity = isLoading ? 0.4 : 1.0;
             if (!isLoading)
+            {
                 PreviewLoadingCaption.Text = "Loading preview…";
+                _showingCacheProgress = false;
+            }
         }
 
         private void OnNetworkCacheProgressed(double fraction)
         {
             int pct = (int)(Math.Clamp(fraction, 0, 1) * 100);
+            if (!_showingCacheProgress)
+            {
+                // First progress tick: hide the hover "Press A to browse archive
+                // contents." card so the download percentages never overlap it — that
+                // instruction is meaningless while the file is still downloading.
+                _showingCacheProgress = true;
+                HideAllPreviewPanels();
+            }
             PreviewLoadingCaption.Text = $"Downloading archive… {pct}%";
         }
 
