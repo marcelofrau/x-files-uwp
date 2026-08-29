@@ -970,6 +970,11 @@ namespace XFiles.Navigation
             try
             {
                 ++_previewGeneration;
+                // Capture the generation so we can abort this drill-in if the user
+                // navigates (moves selection / changes column) while the large archive
+                // is downloading to cache — a selection change bumps _previewGeneration
+                // via UpdatePreviewAsync, so any drift means "user moved on".
+                long gen = _previewGeneration;
                 Log.Info("ColumnNavigator.Network: drilling into remote archive {Name}", archiveEntry.Name);
                 PreviewLoadingChanged?.Invoke(true);
 
@@ -1035,7 +1040,19 @@ namespace XFiles.Navigation
                 }
                 if (entries == null)
                 {
-                    string tempPath = await CacheNetworkFileAsync(archiveEntry, f => NetworkCacheProgressed?.Invoke(f));
+                    // Abort the download as soon as the user navigates away — do not
+                    // wait for the whole multi-GB transfer to finish just to discard it.
+                    string tempPath = await CacheNetworkFileAsync(
+                        archiveEntry,
+                        f => NetworkCacheProgressed?.Invoke(f),
+                        () => gen != _previewGeneration);
+                    // User navigated away during the download — abandon the drill-in
+                    // entirely (don't restore/pop history, the user is elsewhere now).
+                    if (gen != _previewGeneration)
+                    {
+                        Log.Info("ColumnNavigator.Network: archive drill-in aborted — user moved while caching '{Name}'", archiveEntry.Name);
+                        return;
+                    }
                     if (tempPath == null)
                     {
                         if (_history.Count > 0) _current = _history.Pop();
@@ -1046,6 +1063,13 @@ namespace XFiles.Navigation
                     // virtual key would miss the cache when entries are opened).
                     archiveKey = tempPath;
                     entries = _archiveBrowser.ListEntries(tempPath, "");
+                }
+
+                // User navigated away while the stream open/list was in flight — abort.
+                if (gen != _previewGeneration)
+                {
+                    Log.Info("ColumnNavigator.Network: archive drill-in aborted — user moved during open/list of '{Name}'", archiveEntry.Name);
+                    return;
                 }
 
                 Log.Info("ColumnNavigator.Network: archive drill-in '{Name}' opened stream={UseStream} count={Count} key={Key}",
@@ -1077,8 +1101,12 @@ namespace XFiles.Navigation
         }
 
         /// <summary>Downloads a remote file in full to the NetworkCache temp folder.</summary>
-        private async Task<string> CacheNetworkFileAsync(FileEntry entry, Action<double> onProgress = null)
+        /// <param name="shouldAbort">Optional cancellation check run every chunk; when it
+        /// returns true the partial temp file is deleted and null is returned.</param>
+        private async Task<string> CacheNetworkFileAsync(FileEntry entry, Action<double> onProgress = null, Func<bool> shouldAbort = null)
         {
+            string tempPath = null;
+            bool aborted = false;
             try
             {
                 using (Stream stream = await OpenNetworkStreamAsync(
@@ -1087,13 +1115,33 @@ namespace XFiles.Navigation
                     if (stream == null) return null;
                     string dir = Path.Combine(ApplicationData.Current.LocalCacheFolder.Path, "NetworkCache");
                     Directory.CreateDirectory(dir);
-                    string tempPath = Path.Combine(dir, $"{Guid.NewGuid():N}_{entry.Name}");
+                    tempPath = Path.Combine(dir, $"{Guid.NewGuid():N}_{entry.Name}");
                     using (var fs = File.Create(tempPath))
                     {
                         long total = stream.Length;
                         if (onProgress == null || total <= 0)
                         {
-                            await stream.CopyToAsync(fs);
+                            if (shouldAbort == null)
+                            {
+                                await stream.CopyToAsync(fs);
+                            }
+                            else
+                            {
+                                // No size/progress available but caller still wants
+                                // cancellation: chunk-copy and check each iteration.
+                                var buffer = new byte[64 * 1024];
+                                int n;
+                                while ((n = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                                {
+                                    if (shouldAbort())
+                                    {
+                                        aborted = true;
+                                        Log.Dbg("ColumnNavigator.CacheNetworkFile: aborted while caching '{Name}'", entry.Name);
+                                        return null;
+                                    }
+                                    await fs.WriteAsync(buffer, 0, n);
+                                }
+                            }
                         }
                         else
                         {
@@ -1105,6 +1153,12 @@ namespace XFiles.Navigation
                             int n;
                             while ((n = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
                             {
+                                if (shouldAbort != null && shouldAbort())
+                                {
+                                    aborted = true;
+                                    Log.Dbg("ColumnNavigator.CacheNetworkFile: aborted while caching '{Name}'", entry.Name);
+                                    return null;
+                                }
                                 await fs.WriteAsync(buffer, 0, n);
                                 read += n;
                                 onProgress((double)read / total);
@@ -1118,9 +1172,26 @@ namespace XFiles.Navigation
             catch (Exception ex)
             {
                 Log.Warn("ColumnNavigator.CacheNetworkFile: failed for '{Name}'", entry.Name, ex);
+                aborted = true; // treat failure like abort so the partial file is cleaned up
                 return null;
             }
+            finally
+            {
+                // Clean up the partial file when the download did not complete.
+                if (aborted && tempPath != null)
+                {
+                    try { File.Delete(tempPath); }
+                    catch (Exception ex) { Log.Verb("ColumnNavigator.CacheNetworkFile: could not clean partial {Temp}: {Msg}", tempPath, ex.Message); }
+                }
+            }
         }
+
+        /// <summary>
+        /// Public wrapper for CacheNetworkFileAsync — lets pages download a remote file
+        /// to the local NetworkCache for offline use (e.g. extracting a remote archive).
+        /// </summary>
+        public Task<string> DownloadNetworkFileToCacheAsync(FileEntry entry)
+            => CacheNetworkFileAsync(entry);
 
         /// <summary>Builds the locations column entry list (saved locations + action rows).</summary>
         private async Task<List<FileEntry>> BuildNetworkLocationsAsync()

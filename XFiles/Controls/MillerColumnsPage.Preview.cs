@@ -427,10 +427,27 @@ namespace XFiles.Controls
                                 PreviewStatus.Text = "";
                                 if (!string.IsNullOrEmpty(_navigator.Preview.PreviewTextContent))
                                 {
-                                    // Custom action hint (e.g. network archive deferral:
-                                    // "Press A to browse archive contents.").
-                                    PreviewUnsupportedComment.Text = _navigator.Preview.PreviewTextContent;
-                                    PreviewUnsupportedComment.Visibility = Visibility.Visible;
+                                    // Network archive deferral card — "Press A to browse
+                                    // archive contents." Render it with the actual A-button
+                                    // asset (matching the Y-button hint pattern) instead of
+                                    // plain text.
+                                    if (_navigator.Preview.PreviewTextContent.StartsWith("Press A", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        PreviewUnsupportedHintIcon.Source = new Windows.UI.Xaml.Media.Imaging.BitmapImage(
+                                            new Uri("ms-appx:///Assets/GamepadButtons/abxy/a.png"));
+                                        PreviewUnsupportedHintText.Text =
+                                            _navigator.Preview.PreviewTextContent.Replace("Press A to ", "").Trim();
+                                        PreviewUnsupportedHint.Visibility = Visibility.Visible;
+                                        PreviewUnsupportedComment.Text = "";
+                                        PreviewUnsupportedComment.Visibility = Visibility.Collapsed;
+                                    }
+                                    else
+                                    {
+                                        // Custom action hint (e.g. network archive deferral:
+                                        // "Press A to browse archive contents.").
+                                        PreviewUnsupportedComment.Text = _navigator.Preview.PreviewTextContent;
+                                        PreviewUnsupportedComment.Visibility = Visibility.Visible;
+                                    }
                                 }
                                 else
                                 {

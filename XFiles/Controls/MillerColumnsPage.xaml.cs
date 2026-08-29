@@ -424,6 +424,13 @@ namespace XFiles.Controls
         private void OnPreviewLoadingChanged(bool isLoading)
         {
             Log.Verb("Preview loading state: {IsLoading}", isLoading);
+            if (isLoading)
+            {
+                // Clear any previously-rendered content/card so the spinner never
+                // overlaps it — e.g. the archive "Press A to browse" card lingering
+                // behind the loading ring while a large archive downloads to cache.
+                HideAllPreviewPanels();
+            }
             PreviewLoading.Visibility = isLoading ? Visibility.Visible : Visibility.Collapsed;
             PreviewList.Opacity = isLoading ? 0.4 : 1.0;
             if (!isLoading)
@@ -685,6 +692,9 @@ namespace XFiles.Controls
         internal static void UpdateFtpTraceFilter()
         {
             string level = Log.GetCurrentLevel();
+#if FTP_TRACE_DEBUG
+            // Full FluentFTP protocol trace on demand — enable with /d:FTP_TRACE_DEBUG
+            // in XFiles.csproj (same pattern as GAMEPAD_POLL_DEBUG). Everything flows.
             FtpVerboseLogger.TraceFilter = severity =>
             {
                 switch (level)
@@ -696,6 +706,24 @@ namespace XFiles.Controls
                     default:            return severity == FtpTraceLevel.Warn || severity == FtpTraceLevel.Error;
                 }
             };
+#else
+            // Normal operation: even when the app is at Verbose, the raw FluentFTP
+            // frame/reopen churn (FTP VRB — one line per command, response, data frame,
+            // stream reopen, "Stale data", handshake) floods the log and drowns the
+            // app's own diagnostics. Keep INF (commands/status), WRN and ERR; drop the
+            // high-volume VRB unless the FTP_TRACE_DEBUG flag is enabled.
+            FtpVerboseLogger.TraceFilter = severity =>
+            {
+                switch (level)
+                {
+                    case "Verbose":     return severity != FtpTraceLevel.Verbose;
+                    case "Information": return severity == FtpTraceLevel.Warn || severity == FtpTraceLevel.Error;
+                    case "Warning":     return severity == FtpTraceLevel.Warn || severity == FtpTraceLevel.Error;
+                    case "Error":       return severity == FtpTraceLevel.Error;
+                    default:            return severity == FtpTraceLevel.Warn || severity == FtpTraceLevel.Error;
+                }
+            };
+#endif
         }
     }
 

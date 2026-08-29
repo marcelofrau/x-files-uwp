@@ -370,6 +370,8 @@ namespace XFiles.Controls
                     case FileAction.Extract:
                         if (entry.IsPortal)
                             await HandleExtractPortalZipAsync(entry);
+                        else if (entry.IsNetwork)
+                            await HandleExtractNetworkArchiveAsync(entry);
                         else
                             await HandleExtractAsync(entry);
                         break;
@@ -2690,6 +2692,104 @@ namespace XFiles.Controls
                     ? $"Failed to extract \"{entry.Name}\".{FailureSuffix()}"
                     : $"Failed to extract \"{entry.Name}\".\n\n{extract.ErrorMessage}";
                 Log.Warn("HandleExtractAsync: failed — {Reason}", extract.ErrorMessage ?? "(no detail)");
+                _ = AlertDialogControl.ShowAsync(msg, AlertType.Error);
+            }
+        }
+
+        /// <summary>
+        /// Extract a NETWORK archive (.zip/.rar/.7z) to a chosen LOCAL folder. The remote
+        /// archive is downloaded to the local network cache first, then extracted with the
+        /// local extraction engine (which already handles progress, conflicts and cancel).
+        /// </summary>
+        private async Task HandleExtractNetworkArchiveAsync(FileEntry entry)
+        {
+            Log.Info("HandleExtractNetworkArchiveAsync: {Name}", entry.Name);
+
+            // 1. Choose the local destination folder (mirrors Move).
+            UpdateFooterALabel("Select");
+            string destDir = await FolderBrowserDialogControl.ShowAsync(MoveDialogInitialPath());
+            UpdateFooterALabelFromSelection();
+            if (string.IsNullOrEmpty(destDir))
+            {
+                Log.Verb("HandleExtractNetworkArchiveAsync: cancelled at folder browser");
+                return;
+            }
+
+            // 2. Download the remote archive to the local network cache.
+            OpProgressDialog.Show("Downloading", entry.Name, "network archive");
+            string cachePath = await _navigator.DownloadNetworkFileToCacheAsync(entry);
+            if (cachePath == null)
+            {
+                OpProgressDialog.Complete();
+                await Task.Delay(400);
+                OpProgressDialog.Close();
+                _ = AlertDialogControl.ShowAsync($"Failed to download \"{entry.Name}\" from the network.{FailureSuffix()}", AlertType.Error);
+                return;
+            }
+            OpProgressDialog.Complete();
+            await Task.Delay(300);
+            OpProgressDialog.Close();
+
+            // 3. Extract the cached archive into the chosen local folder.
+            var progress = new Progress<FileOperations.OperationProgress>(p =>
+            {
+                OpProgressDialog.UpdateProgress(p);
+            });
+
+            var conflictCallback = new Func<string, Task<int>>(conflictFileName =>
+            {
+                var tcs = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+                _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, async () =>
+                {
+                    try
+                    {
+                        int decision = await OverwriteDialogControl.ShowAsync(conflictFileName);
+                        tcs.TrySetResult(decision);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warn("OverwriteDialog error", ex);
+                        tcs.TrySetResult(0); // Skip on error
+                    }
+                });
+                return tcs.Task;
+            });
+
+            long required = await FileOperations.GetArchiveUncompressedSizeAsync(cachePath);
+            if (!await EnsureDiskSpaceAsync(destDir, required))
+            {
+                Log.Verb("HandleExtractNetworkArchiveAsync: cancelled — insufficient free space");
+                return;
+            }
+
+            OpProgressDialog.Show("Extracting", entry.Name, destDir);
+            var extract = await FileOperations.ExtractAsync(cachePath, destDir, progress, conflictCallback, OpProgressDialog.CancelToken);
+            var result = extract.Result;
+
+            if (result == FileOperations.OperationResult.Cancelled)
+            {
+                Log.Info("HandleExtractNetworkArchiveAsync: cancelled");
+                OpProgressDialog.Cancel();
+                await Task.Delay(1500);
+                OpProgressDialog.Close();
+                return;
+            }
+
+            OpProgressDialog.Complete();
+            await Task.Delay(400);
+            OpProgressDialog.Close();
+
+            if (result == FileOperations.OperationResult.Success)
+            {
+                Log.Info("HandleExtractNetworkArchiveAsync: success into {Dest}", destDir);
+                _ = AlertDialogControl.ShowAsync($"Extracted \"{entry.Name}\" to {destDir}.", AlertType.Success);
+            }
+            else
+            {
+                string msg = string.IsNullOrEmpty(extract.ErrorMessage)
+                    ? $"Failed to extract \"{entry.Name}\".{FailureSuffix()}"
+                    : $"Failed to extract \"{entry.Name}\".\n\n{extract.ErrorMessage}";
+                Log.Warn("HandleExtractNetworkArchiveAsync: failed — {Reason}", extract.ErrorMessage ?? "(no detail)");
                 _ = AlertDialogControl.ShowAsync(msg, AlertType.Error);
             }
         }
