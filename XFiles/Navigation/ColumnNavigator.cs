@@ -963,6 +963,7 @@ namespace XFiles.Navigation
             {
                 ++_previewGeneration;
                 Log.Info("ColumnNavigator.Network: drilling into remote archive {Name}", archiveEntry.Name);
+                PreviewLoadingChanged?.Invoke(true);
 
                 // Push current state to history, keeping the network context so a
                 // later drill-out reloads the remote column instead of treating it
@@ -988,28 +989,43 @@ namespace XFiles.Navigation
                 // Key without '|' — ArchiveBrowser's "archive|internal" addressing
                 // splits on the first pipe, so the virtual key must not contain one.
                 string archiveKey = $"net~{archiveEntry.NetworkLocationId}~{archiveEntry.NetworkShareName}~{archiveEntry.NetworkPath}";
-                IReadOnlyList<FileEntry> entries;
-                Stream remoteStream = await OpenNetworkStreamAsync(
-                    archiveEntry.NetworkLocationId, archiveEntry.NetworkShareName, archiveEntry.NetworkPath);
+                IReadOnlyList<FileEntry> entries = null;
+                // Large archives over a reopen-per-seek transport (FTP/SFTP) are NOT
+                // worth opening in random-access mode: enumerating the central directory
+                // re-opens the stream on every seek and freezes the shared session.
+                // Go straight to a full local cache download, shown via PreviewLoading.
+                bool useStream = !FilePreviewLimits.ShouldDeferNetworkArchivePreview(archiveEntry.SizeBytes);
+                Stream remoteStream = useStream ? await OpenNetworkStreamAsync(
+                    archiveEntry.NetworkLocationId, archiveEntry.NetworkShareName, archiveEntry.NetworkPath) : null;
                 bool openedFromStream = false;
                 if (remoteStream != null)
                 {
                     // Hard timeout so a slow remote open/list can't freeze the app or the
                     // shared session. On timeout we fall back to full local caching.
+                    const int ArchiveTimeoutMs = 15_000;
                     var openTask = Task.Run(() =>
                         _archiveBrowser.TryOpenArchiveFromStream(archiveKey, remoteStream));
-                    var openTimeout = Task.Delay(15_000);
-                    var openDone = await Task.WhenAny(openTask, openTimeout);
+                    var openDone = await Task.WhenAny(openTask, Task.Delay(ArchiveTimeoutMs));
                     if (openDone == openTask)
+                    {
                         openedFromStream = await openTask;
+                        if (openedFromStream)
+                        {
+                            // Enumerating entries (RAR central dir over a reopen-per-seek
+                            // FTP/SFTP stream) is the heavy step — it is the actual freeze
+                            // point, so it gets the same hard timeout + background thread.
+                            var listTask = Task.Run(() => _archiveBrowser.ListEntries(archiveKey, ""));
+                            var listDone = await Task.WhenAny(listTask, Task.Delay(ArchiveTimeoutMs));
+                            if (listDone == listTask)
+                                entries = await listTask;
+                            else
+                                Log.Warn("ColumnNavigator.Network: listing remote archive timed out — falling back to cache");
+                        }
+                    }
                     else
                         Log.Warn("ColumnNavigator.Network: opening remote archive timed out — falling back to cache");
                 }
-                if (openedFromStream)
-                {
-                    entries = _archiveBrowser.ListEntries(archiveKey, "");
-                }
-                else
+                if (entries == null)
                 {
                     string tempPath = await CacheNetworkFileAsync(archiveEntry);
                     if (tempPath == null)
@@ -1023,6 +1039,9 @@ namespace XFiles.Navigation
                     archiveKey = tempPath;
                     entries = _archiveBrowser.ListEntries(tempPath, "");
                 }
+
+                Log.Info("ColumnNavigator.Network: archive drill-in '{Name}' opened stream={UseStream} count={Count} key={Key}",
+                    archiveEntry.Name, useStream, entries?.Count ?? -1, archiveKey);
 
                 _current = new ColumnState
                 {
@@ -1045,6 +1064,7 @@ namespace XFiles.Navigation
             finally
             {
                 _networkBusy = false;
+                PreviewLoadingChanged?.Invoke(false);
             }
         }
 
@@ -1716,6 +1736,8 @@ namespace XFiles.Navigation
                         // straight to the "Press A to browse archive contents" card instead.
                         if (FilePreviewLimits.ShouldDeferNetworkArchivePreview(selected.SizeBytes))
                         {
+                            Log.Dbg("ColumnNavigator.Network: hover archive '{Name}' size={Size}B deferred (>{Max}B) -> Press A card",
+                                selected.Name, selected.SizeBytes, FilePreviewLimits.MaxNetworkArchivePreviewBytes);
                             _preview = new ColumnState
                             {
                                 Path = null,
@@ -1740,13 +1762,17 @@ namespace XFiles.Navigation
                             using (var stream = await BrowserFor(config.Protocol).OpenReadAsync(
                                 config, share, path, CancellationToken.None))
                             {
-                                if (stream != null && stream.Length > 0)
-                                {
-                                    var entries = await ListArchiveEntriesFromStreamWithTimeoutAsync(
-                                        stream, selected.Name);
-                                    if (entries != null)
-                                    {
-                                        string archiveKey = $"net~{config.Id}~{share}~{path}";
+                                        if (stream != null && stream.Length > 0)
+                                        {
+                                            Log.Dbg("ColumnNavigator.Network: hover archive '{Name}' listing (len={Len}B)",
+                                                selected.Name, stream.Length);
+                                            var entries = await ListArchiveEntriesFromStreamWithTimeoutAsync(
+                                                stream, selected.Name);
+                                            if (entries != null)
+                                            {
+                                                Log.Dbg("ColumnNavigator.Network: hover archive '{Name}' listed {Count} entries",
+                                                    selected.Name, entries.Count);
+                                                string archiveKey = $"net~{config.Id}~{share}~{path}";
                                         _preview = new ColumnState
                                         {
                                             Path = archiveKey,
@@ -2381,6 +2407,7 @@ namespace XFiles.Navigation
         {
             try
             {
+                Log.Dbg("ColumnNavigator: opening stream archive '{Name}'", archiveName);
                 using (var archive = SharpCompress.Archives.ArchiveFactory.Open(stream))
                 {
                     var entries = new List<FileEntry>();
