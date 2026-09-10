@@ -1,55 +1,47 @@
-> 🌐 **The Network Update.** v1.6.0 brings full network file browsing — SMB, FTP/FTPS, SFTP, and WebDAV — with streaming preview, remote file operations, download-from-URL, QR file sharing, and a protocol-agnostic provider layer that made it all possible.
+> 🗂️ **The Properties Update.** v1.7.0 adds a full file & folder Properties dialog straight out of your Y-menu — incremental folder size scanning with a live pie chart, a WinRAR-style compression cube, rich media metadata, and a permissions sub-dialog. Plus: remote archive extraction now streams directly (no full download), with a cleaner archive picker and a quieter, more reliable network stack.
 
 ---
 
-## ✨ New Features
+## 🆕 What's new since v1.6.0
 
-### 🌐 Network File Browsing *(NEW)*
-- **SMB browsing** — browse, preview, copy, move, rename, delete files on Windows/Samba shares
-- **FTP/FTPS** — connect to FTP servers with implicit (port 990) and explicit TLS support
-- **SFTP** — secure shell file transfer with host key verification and trust-on-first-use
-- **WebDAV** — browse and transfer files from WebDAV servers
-- **Protocol-agnostic provider layer** — all network protocols share a common `INetworkFileSystemProvider` interface; adding a new protocol automatically gets full feature support
+### 🗂️ File / Folder Properties *(NEW)*
+- **Y-menu → Properties** for every entry — local files, folders, archive entries, and network files
+- **Folder properties** — total size, file & subfolder counts scanned incrementally on a background thread; animated "Reading… N files · size" status with progress bar; **live pie chart** showing the folder's size against the whole drive (real percentage, 2% minimum slice so tiny folders stay visible)
+- **WinRAR-style compression view** — for ZIP/7z/RAR archives, an isometric 3D cube shows how much of the file is compressed vs. space saved, with ratio, saved percentage, and uncompressed size
+- **Rich file metadata** — audio (MP3/FLAC/WAV/M4A — duration, bitrate, sample rate, channels, codec), images (dimensions), PDF (page count), text files (lines, words, characters) — all parsed locally, no cloud lookups
+- **Details** — created / modified / accessed dates and attribute flags (read-only, hidden, system, archive)
+- **Permissions sub-dialog** — toggle Read-only / Hidden and optionally apply recursively to subfolders and files
+- **Two-column layout** — details on the left, pie chart + compression cube on the right; consistent Oxanium font throughout
 
-### 📁 Remote File Operations
-- **Streaming preview** — text, image, audio, and video previews stream directly from the remote server without full download
-- **Copy/paste between local and remote** — transfer files in either direction with live progress
-- **Rename and delete** — remote file management with confirmation dialogs
-- **Batch operations** — select multiple files across network locations for bulk copy, move, or delete
+### 📦 Remote Archive Extraction *(NEW)*
+- **Stream-based extract** — remote archives (SMB/FTP/FTPS/SFTP/WebDAV) extract directly from the network stream; the full-file local download is gone
+- **"Extract Here" picker** — destination chooser with the target folder's name on the confirm button, plus visual separators between the action, drives, and folders
+- **Smarter pre-scan** — ZIP gets a cheap central-directory size scan for percentage + disk-space check; RAR/7z skip the pre-scan (it costs a seek per entry over FTP) and extract single-pass with filename progress
+- **Large-archive deferral card** — remote archives over 128 MB show a "Press A to browse archive contents" card with the A-button hint, downloading to cache with live percentage and cancel-on-navigation
 
-### 🔗 Download from URL
-- **Browser overlay** — paste a URL, the app opens an in-app WebView; when the page triggers a download, it captures it automatically
-- **Provider resolution** — Google Drive, OneDrive, Dropbox, and gofile.io links resolve to direct downloads
-- **Filename extraction** — resolves the real filename from Content-Disposition headers and API metadata
-
-### 📱 QR File Sharing
-- **Share files via QR code** — upload to gofile.io and display a QR code for easy sharing
-
-### ⚙️ Improvements
-- **Breadcrumb protocol icons** — each network location shows its protocol icon in the address bar
-- **Write-permission alerts** — clear feedback when a folder is read-only
-- **Audio settings bar** — quick access to volume and visualization settings
-- **Comprehensive logging audit** — adjusted log levels across the codebase for cleaner diagnostics
+### ⚡ Improvements
+- **Quieter FTP logs** — the raw `[FTP VRB]` protocol trace is suppressed at the default verbose level; full trace returns via a debug build flag
+- **Chiptune over FTP** — the player now shows the real filename (e.g. `2000AD - Creatures`), not the temporary cache filename
+- **Archive drill-in** — shows a spinner immediately; never looks frozen while the remote archive is prepared
+- **Documentation refresh** — README, ROADMAP, AGENTS.md and the network docset updated to the shipped v1.7.0 state
 
 ---
 
 ## 🐛 Bug Fixes
-- **FTP navigation freeze** — resolved deadlock when navigating FTP servers with auto-advance cascade
-- **Text editor BOM preservation** — save no longer strips BOM from JSON config files
-- **Batch delete count** — confirmation dialog now correctly counts remote files
-- **Network icon consistency** — left column shows correct protocol icon per location
-- **Password field overlap** — removed conflicting placeholder text in network location dialog
-- **Preview timeout** — large text files on slow network connections no longer hang the preview pane
-- **Create folder on network** — now prompts for folder name instead of silently failing
-- **Download overlay layout** — empty WebView row no longer leaves a large gap after download starts
-- **ComboBox selection colors** — protocol dropdown no longer persists green highlight on previous selections
+- **Properties intermittent blank column** — stale row cache left the details column empty on alternating opens; now cleared correctly
+- **Properties crash (RPC_E_WRONG_THREAD)** — folder progress callbacks were dispatched from a threadpool thread and touched XAML; now marshalled through the dispatcher
+- **B button / Y button in dialogs** — the dialog handlers compared against `VirtualKey.B` while the input router delivers `GamepadB`; Properties and Permissions dialogs now close and act correctly
+- **Video properties access violation** — removed the risky MP4 container read for video; videos show the safe basic properties (progress indicator could not communicate the failure, so keep the file open and retry — but on the next iteration this will be revisited)
+- **"Move Here" → "Extract Here"** — the archive picker showed the move label plus a duplicated folder name; extract now shows "Extract Here (folder)"
+- **Remote extract stream-at-EOF** — the size pre-scan left the stream at the file tail, so extraction opened garbage and threw; the stream now seeks back to the start
+- **Isometric cube depth** — the side face only rendered blue; it now mirrors the green (compressed) / blue (saved) split, and the cube is slimmer
+- **Pie caption truncation** — sizes and percentage split across two lines so nothing clips on huge drives
 
 ---
 
 ## 📦 Installation
-
-1. 📥 Download the zip file below
-2. 📖 Follow the installation instructions in the [README](https://github.com/marcelofrau/x-files-uwp#installation)
+1. 📥 Download the zip file below (`xfiles_1.7.0.1520_x64.zip`)
+2. 📖 Follow the installation instructions in the README (Developer Mode / Device Portal sideload)
 
 ---
 
