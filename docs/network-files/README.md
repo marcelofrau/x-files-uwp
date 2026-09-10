@@ -10,8 +10,9 @@ hosts user-saved locations ("Network locations"), each pointing at a remote
 share. Remote files are listed, previewed and played over the wire — no
 full-download wait for media.
 
-Status: **Planned** — M0 (this docset) in progress. Nothing implemented yet.
-Track progress in `IMPLEMENTATION.md`.
+Status: **Shipped** (v1.6.0). All four protocols delivered and validated on
+real Xbox hardware (FTPS/SFTP at the user's home server, SMB docker + real
+share smoke). Progress history in `IMPLEMENTATION.md`.
 
 ## Feature at a glance
 
@@ -21,10 +22,10 @@ Track progress in `IMPLEMENTATION.md`.
 - **Locations**: each location is one remote share (server + optional display
   name + credentials). Display name is optional — when omitted the entry is
   named by its composed address, e.g. `smb://user@192.168.1.50/music`.
-- **Protocols**: SMB is the only protocol in this delivery. FTP/FTPS, WebDAV
-  and SFTP are designed for (per-`Protocol` column + `INetworkFileSystemProvider`
-  interface) but not implemented yet. NFS and DLNA are out of scope (see
-  `PLAN.md`).
+- **Protocols**: SMB, FTP/FTPS (implicit + explicit TLS), SFTP and WebDAV —
+  all behind the same `INetworkFileSystemProvider` interface. Passwords live in
+  PasswordVault; SFTP first-connect shows a host-key SHA-256 trust dialog.
+  NFS and DLNA are out of scope (see `PLAN.md`).
 - **Navigation**: drill into a location → connect → list shares → browse the
   remote tree with the normal column UX. Drill-out, preview and media follow
   the existing portal/archive "virtual folder" precedent.
@@ -47,7 +48,7 @@ Track progress in `IMPLEMENTATION.md`.
 | Doc | Purpose |
 |---|---|
 | `README.md` | This file — feature overview, doc map, cross-cutting notes |
-| `PLAN.md` | Vision, scope (in/out), protocol matrix, milestones M0–M7, risks |
+| `PLAN.md` | Vision, scope (in/out), protocol matrix, milestones M0–M12, risks |
 | `SPEC.md` | Functional requirements, user stories, acceptance criteria |
 | `ARCHITECTURE.md` | Layer/service design, data model, navigation/preview wiring, integration points |
 | `DECISIONS.md` | ADRs — why SQLite table, PasswordVault, SMBLibrary, growing-file audio, etc. |

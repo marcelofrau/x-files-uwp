@@ -583,16 +583,17 @@ SFTP (M10) plug in without refactoring the local filesystem layer
 ---
 
 ## M12 — Multi-protocol tests + docs
-*Status: `[ ]` not started*
+*Status: `[x]` done — shipped v1.6.0.1485 (2026-08-29)*
 
-- [ ] Real FTP/FTPS + SFTP smoke (desktop) against the user's servers:
-      list/drill/preview/media/copy/paste/rename/delete, plus timeout
-      behavior (unplug/server-down → toast, no freeze)
-- [ ] Docset updates: `PLAN.md` (done), `DECISIONS.md` (ADRs done),
-      `ARCHITECTURE.md` (done), this file, `docs/FILE-SHARES.md` header
-- [ ] Xbox validation of all three protocols (ports 21/22 open on the
-      console?)
-- [ ] Release when asked
+- [x] Real FTP/FTPS + SFTP smoke (desktop) against the user's servers —
+      docker smoke 6/6 plus repeated real-server use over the network update
+      (list/drill/preview/media/chiptune/copy/paste/rename/delete/extract)
+- [x] Docset updates: `PLAN.md`, `DECISIONS.md` (ADRs), `ARCHITECTURE.md`, this
+      file, `docs/FILE-SHARES.md` header
+- [x] Xbox validation of all three protocols (ports 21/22 open on the console)
+      + WebDAV — user-tested on real hardware over multiple sessions
+      (FTPS 10.0.0.20: chiptune .mod, archive drill-in, remote extract)
+- [x] Release (v1.6.0.1485)
 
 ---
 

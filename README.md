@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/Stack-C%23%20%2F%20UWP%20%2F%20XAML-512BD4?style=flat-square&logo=dotnet" alt="Stack" />
   <img src="https://img.shields.io/badge/License-GPL--3.0-green?style=flat-square" alt="License" />
   <img src="https://img.shields.io/badge/Status-Released-brightgreen?style=flat-square" alt="Status" />
-  <img src="https://img.shields.io/badge/Version-1.5.0.1308-brightgreen?style=flat-square" alt="Version" />
+  <img src="https://img.shields.io/badge/Version-1.7.0-brightgreen?style=flat-square" alt="Version" />
 </p>
 
 <p align="center">
@@ -34,7 +34,7 @@ or manage your media library. **X-Files fills that gap** — a full-featured fil
 built specifically for the couch experience.
 
 <p align="center">
-  <em>Miller-column navigation · Live preview · Audio player with VU meter · Archive browsing · Retro aesthetic</em>
+  <em>Miller-column navigation · Live preview · Network browsing · Audio player with VU meter · Archive browsing · Retro aesthetic</em>
 </p>
 
 ---
@@ -66,6 +66,7 @@ Move the cursor over any file and instantly see its contents — no need to open
 | 📖 PDF | Page preview + fullscreen viewer |
 | 🎮 ROMs (NES, SNES, GB/GBA, Genesis...) | Header-parsed title + system icon |
 | 📦 Archives (ZIP, 7Z, RAR) | Browse contents as virtual folders |
+| 🌐 Network files | Streaming preview from SMB/FTP/FTPS/SFTP/WebDAV servers |
 
 ### 🎵 Built-in Audio Player
 Play music directly from the file browser with a real-time spectrum analyzer.
@@ -116,18 +117,53 @@ and images inside archives without extracting. When you do extract, X-Files is s
 - 🧠 **Smart extraction** — single-root archives extract in-place, multi-root create a folder
 - 🔀 **Conflict resolution** — overwrite / overwrite all / skip per file
 - 📁 **Extract to folder** or **extract here** — your choice
+- 🌐 **Remote archives** — ZIP/7Z/RAR on SMB/FTP/FTPS/SFTP/WebDAV extract straight to any
+  destination via streaming, no local download first
+
+### 🌐 Network File Browser
+Mount your home media from the couch — Windows/Samba shares, FTP servers, SSH (SFTP),
+and WebDAV all appear in the left column under **Network**.
+
+- 🔌 **Four protocols** — SMB, FTP/FTPS (implicit + explicit TLS), SFTP, WebDAV
+- 🔐 **Credential Vault** — passwords stored in Windows PasswordVault, never on disk
+- 📡 **Streaming preview** — text, images, audio, video, and chiptunes play directly from
+  the server without downloading the whole file
+- 📁 **Full remote operations** — copy/move/rename/delete, batch operations, create
+  folders, and extract remote archives, all with live progress
+- 🔒 **Write-permission detection** — read-only folders surface a clear alert before you act
+- 📦 **Smart archive handling** — large remote archives (128MB+) defer to a one-time cache
+  download with progress and cancel, smaller ones list straight over the wire
+- 🧭 **Breadcrumb protocol icons** — each network location shows its protocol in the address bar
 
 ### 🛠️ File Operations
 All the essentials, accessible from the **Y button** context menu:
 
 - 📝 Rename with text input dialog
 - 🗑️ Delete with file list confirmation
-- 📋 Copy / Move (backend ready)
+- 📋 Copy / Move / Paste — destination picker with separator-separated drives, live progress
 - 📦 Extract archives to any destination
 - 🗜️ Create ZIP from files or folders
 - 📁 Create new folder
 - ⭐ Add/remove favorites
 - 🔄 Refresh current directory
+- 📋 **Batch mode** — Select toggles multi-select; copy/move/delete entire batches at once
+- 🔍 **Properties** — full file/folder metadata, compression visual, and permissions (below)
+
+### 📑 Properties Dialog (Y menu)
+Inspect any file or folder from the **Y** button without leaving the couch:
+
+- 🗂️ **Folders** — total size, file/folder counts, created/modified/accessed dates, and a
+  live **pie chart** showing the folder's share of its drive (scan updates incrementally
+  as it walks, with an indeterminate progress bar and **B** to cancel)
+- 📦 **Archives** — uncompressed size, file count, compression **ratio** and **saved %**,
+  drawn as a WinRAR-style **isometric 3D cube** (green = compressed data, blue = space saved)
+- 🖼️ **Images** — dimensions (PNG, GIF, BMP, JPEG)
+- 📖 **PDF** — page count
+- 🎵 **Audio** — duration, bitrate, sample rate, channels, codec (MP3, FLAC, WAV, M4A)
+- 📄 **Text** — line, word, and character counts
+- 🕐 **Timestamps** — created / modified / accessed dates for every item
+- 🔐 **Permissions** — read-only and hidden toggles, with optional apply to subfolders
+  and files
 
 ### 🖊️ Text Editor
 Edit text files right on the couch with a fullscreen, gamepad-first editor:
@@ -169,7 +205,7 @@ Download files straight to disk from inside the browser — no PC needed:
 | **D-pad Right / A** | Enter folder · Play file · Toggle play-pause |
 | **D-pad Left / B** | Go back · Close fullscreen |
 | **LB / RB** | Page up/down in browser · Next/prev track (audio) · Seek 5s (video) |
-| **Y** | Context menu (rename, delete, create ZIP, extract...) |
+| **Y** | Context menu (rename, delete, create ZIP, extract, properties...) |
 | **Y (hold)** | Add/remove favorite |
 | **X** | Refresh current directory |
 | **Right Analog Stick** | Scroll preview · Adjust volume (fullscreen) |
@@ -293,6 +329,8 @@ See [DEPLOY-XBOX.md](docs/DEPLOY-XBOX.md) for detailed steps.
 | 🧠 Metadata guesser | ID3 + filename + MusicBrainz/Deezer enrichment, SQLite cache with cover art |
 | 📖 PDF viewer | Windows.Data.Pdf — page thumbnails + fullscreen |
 | 🎮 ROM preview | Header parsing for 35+ extensions, system icons |
+| 🌐 Network access | `INetworkFileSystemProvider` layer — SMB/FTP/FTPS/SFTP/WebDAV, streaming preview, remote ops |
+| 📑 File properties | Pure helpers — `DirectoryStatsCalculator`, `MediaMetadataProbe` (MP3/FLAC/WAV/MP4/PDF/images) |
 | 🔗 QR sharing | gofile.io upload + ZXing QR generation |
 | 📥 URL downloads | HttpClient + provider rewrites (Drive/OneDrive/Dropbox) + WebView fallback |
 | 📋 Logging | Serilog — every operation, input event, and exception logged with daily rotation |
@@ -333,10 +371,13 @@ flowchart LR
 | [FILETYPE-ICONS.md](docs/FILETYPE-ICONS.md) | File-type icon mapping |
 | [ROM-FORMATS.md](docs/ROM-FORMATS.md) | ROM header parsing, systems/extensions |
 | [FILE-SHARING-QR.md](docs/FILE-SHARING-QR.md) | QR file sharing via gofile.io |
+| [network-files/](docs/network-files/) | Network access (SMB/FTP/SFTP/WebDAV) — plan, spec, architecture |
+| [SETTINGS-EXPANSION.md](docs/SETTINGS-EXPANSION.md) | Planned settings expansion (theme, deadzones) |
 | [UI-THEMING.md](docs/UI-THEMING.md) | ControlTemplate conventions |
 | [ROADMAP.md](docs/ROADMAP.md) | Implementation status + remaining backlog |
 | [DECISIONS.md](docs/DECISIONS.md) | ADRs — why XAML, why SharpCompress, etc. |
 | [LOGGING.md](docs/LOGGING.md) | Log levels, debug flags, architecture, conventions |
+| [RELEASE.md](docs/RELEASE.md) | Release process, CI/CD, versioning |
 | [DEPLOY-XBOX.md](docs/DEPLOY-XBOX.md) | Developer Mode, Device Portal, sideload steps |
 
 ### 📖 End-user guides (GitHub Wiki)

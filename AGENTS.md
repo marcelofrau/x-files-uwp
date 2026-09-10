@@ -14,9 +14,11 @@ All documentation, code, comments, and commit messages MUST be in English.
 (User may converse in Portuguese or English; agent responds accordingly.)
 
 ## Status
-**Released** — latest release `v1.2.0.{build}` (see `docs/RELEASE.md`). Feature-complete
-for the planned MVP plus post-MVP features (audio player, 31 visualizers, text editor,
-QR file sharing, batch operations, ROM preview, PDF viewer, settings, log viewer).
+**Released** — latest release `v1.6.0.1485` (see `docs/RELEASE.md`). Dev line: **1.7.0**
+(Properties dialog, stream-based network extraction). Feature-complete
+for the planned MVP plus post-MVP features (network browsing SMB/FTP/FTPS/SFTP/WebDAV,
+audio player, 31 visualizers, text editor, QR file sharing, batch operations, ROM preview,
+PDF viewer, file/folder Properties dialog, settings, log viewer).
 Docs in `docs/` reflect the shipped state. See `docs/ROADMAP.md` for the remaining backlog.
 Unit tests live in `tests/` (MSTest, linked-source, net8.0 — run on desktop, not UWP).
 
