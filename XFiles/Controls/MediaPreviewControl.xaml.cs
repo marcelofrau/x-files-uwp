@@ -346,7 +346,20 @@ namespace XFiles.Controls
                 int pipe = filePath.LastIndexOf('|');
                 return Path.GetFileNameWithoutExtension(filePath.Substring(pipe + 1));
             }
-            return Path.GetFileNameWithoutExtension(filePath);
+            string name = Path.GetFileNameWithoutExtension(filePath);
+            // Strip {32hex}_ prefix from NetworkCache filenames
+            // e.g. "e497d46a29b546db94d07ae7a0dcd785_2000AD - Creatures" → "2000AD - Creatures"
+            if (name.Length > 33 && name[32] == '_')
+            {
+                bool isHexPrefix = true;
+                for (int i = 0; i < 32; i++)
+                {
+                    char c = name[i];
+                    if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) { isHexPrefix = false; break; }
+                }
+                if (isHexPrefix) name = name.Substring(33);
+            }
+            return name;
         }
 
         public void LoadNextTrack(string filePath)

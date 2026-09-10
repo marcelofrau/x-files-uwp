@@ -491,6 +491,8 @@ namespace XFiles.Controls
 
                 if (isArchiveFile)
                 {
+                    Log.Dbg("FileActionSheet: adding Extract for '{Name}' (isNetwork={Net})",
+                        entry.Name, entry.IsNetwork);
                     actions.Add(new ActionItem
                     {
                         Action = FileAction.Extract,
@@ -834,6 +836,18 @@ namespace XFiles.Controls
                     IconPath = IconBase + ActionRename,
                     LabelBrush = dim
                 });
+
+                bool isArchiveFile = entry.IsArchive && !entry.IsDirectory;
+                if (isArchiveFile)
+                {
+                    actions.Add(new ActionItem
+                    {
+                        Action = FileAction.Extract,
+                        Label = "Extract",
+                        IconPath = IconBase + ActionExtract,
+                        LabelBrush = accent
+                    });
+                }
 
                 actions.Add(new ActionItem
                 {

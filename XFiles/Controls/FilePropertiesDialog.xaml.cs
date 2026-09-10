@@ -32,6 +32,10 @@ namespace XFiles.Controls
         { ".mp3", ".flac", ".wav", ".m4a", ".aac" };
         private static readonly HashSet<string> VideoExts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         { ".mp4", ".mkv", ".avi", ".mov", ".webm", ".wmv", ".ts" };
+        private static readonly HashSet<string> TextExts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        { ".txt", ".log", ".md", ".csv", ".json", ".xml", ".yaml", ".yml", ".ini", ".cfg", ".conf",
+          ".cs", ".js", ".ts", ".py", ".lua", ".sh", ".bat", ".ps1", ".css", ".html", ".htm",
+          ".sql", ".rb", ".go", ".rs", ".java", ".c", ".cpp", ".h", ".hpp", ".xml", ".xaml" };
 
         public bool IsOpen => Visibility == Visibility.Visible;
 
@@ -72,8 +76,11 @@ namespace XFiles.Controls
 
             RowsPanel.Children.Clear();
             PieHost.Children.Clear();
-            PieHost.Visibility = Visibility.Collapsed;
+            CompressionCanvas?.Children.Clear();
+            VisualPanel.Visibility = Visibility.Collapsed;
+            CompressionVisual.Visibility = Visibility.Collapsed;
             if (PieCaption != null) PieCaption.Visibility = Visibility.Collapsed;
+            if (CompressionCaption != null) CompressionCaption.Visibility = Visibility.Collapsed;
             StatusText.Text = "";
             PermissionsHint.Visibility = Visibility.Collapsed;
             HeaderIcon.Visibility = Visibility.Visible;
@@ -164,7 +171,7 @@ namespace XFiles.Controls
             if (attrs != 0) AddRow("Attributes", FormatAttributes(attrs));
             PermissionsHint.Visibility = Visibility.Visible;
 
-            PieHost.Visibility = Visibility.Visible;
+            VisualPanel.Visibility = Visibility.Visible;
             if (PieCaption != null) PieCaption.Visibility = Visibility.Visible;
             AddRow("Total size", "Calculating…");
             AddRow("Files", "Calculating…");
@@ -345,10 +352,58 @@ namespace XFiles.Controls
                 });
             }
 
+            bool isText = TextExts.Contains(ext);
+            if (isText)
+            {
+                StatusText.Text = "Reading file info…";
+                var ct = _scanCts.Token;
+                _ = Task.Run(() =>
+                {
+                    string content = null;
+                    try { content = System.IO.File.ReadAllText(path); } catch { }
+                    if (ct.IsCancellationRequested || content == null) return;
+                    int lineCount = 0;
+                    int wordCount = 0;
+                    int charCount = content.Length;
+                    bool inWord = false;
+                    foreach (char c in content)
+                    {
+                        if (c == '\n' || c == '\r')
+                        {
+                            if (c == '\r' || (lineCount == 0 && c == '\n'))
+                                lineCount++;
+                            if (c == '\n')
+                            {
+                                if (inWord) { wordCount++; inWord = false; }
+                            }
+                        }
+                        else if (char.IsWhiteSpace(c))
+                        {
+                            if (inWord) { wordCount++; inWord = false; }
+                        }
+                        else
+                        {
+                            inWord = true;
+                        }
+                    }
+                    if (inWord) wordCount++;
+                    if (lineCount == 0 && charCount > 0) lineCount = 1;
+
+                    Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                    {
+                        if (ct.IsCancellationRequested) return;
+                        AddRow("Lines", lineCount.ToString("N0"), force: true);
+                        AddRow("Words", wordCount.ToString("N0"), force: true);
+                        AddRow("Characters", charCount.ToString("N0"), force: true);
+                        StatusText.Text = "";
+                    });
+                });
+            }
+
             bool isArchive = !entry.IsDirectory && ArchiveBrowser.IsArchiveFile(entry.Name);
             if (isArchive)
             {
-                AddCompressionBar();
+                ShowCompressionVisual();
                 AddRow("Uncompressed size", "Calculating…");
                 AddRow("Files", "Calculating…");
                 AddRow("Ratio", "Calculating…");
@@ -393,101 +448,48 @@ namespace XFiles.Controls
             }
         }
 
-        // ---------- archive file (local): compression ratio ----------
+        // ---------- archive file (local): isometric compression visual ----------
         //
-        // WinRAR-style rectangle: green = compressed size actually on disk,
-        // blue = space saved versus the uncompressed content. Uncompressed size
-        // comes from a background archive listing; remote archives keep the
-        // basic network mode (opening the whole file over the wire is costly).
+        // Tall isometric 3D box on the right: green = compressed data on disk,
+        // blue = space saved versus uncompressed content. The 3D effect uses
+        // a front face + top face + right-side face with shadow offset.
 
         private Canvas _cmpHost;
-        private Rectangle _cmpFill;
         private Windows.UI.Xaml.Controls.ProgressBar _scanBar;
 
-        private void AddProgressBarRow()
+        private void ShowCompressionVisual()
         {
-            var bar = new Windows.UI.Xaml.Controls.ProgressBar
-            {
-                IsIndeterminate = true,
-                Width = 260,
-                Height = 4,
-                Margin = new Thickness(132, 4, 0, 10),
-                Foreground = UsedBrush,
-                Background = DarkFreeBrush,
-                HorizontalAlignment = Windows.UI.Xaml.HorizontalAlignment.Left
-            };
-            RowsPanel.Children.Add(bar);
-            _scanBar = bar;
+            _cmpHost = CompressionCanvas;
+            _cmpHost.Children.Clear();
+            CompressionVisual.Visibility = Visibility.Visible;
         }
 
-        private void AddCompressionBar()
-        {
-            var row = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Margin = new Thickness(0, 0, 0, 6)
-            };
-            row.Children.Add(new TextBlock
-            {
-                Text = "Compression",
-                Foreground = MutedBrush,
-                FontFamily = TitleFont,
-                FontSize = 12,
-                Width = 130,
-                VerticalAlignment = VerticalAlignment.Center
-            });
-
-            var host = new Canvas
-            {
-                Width = 260,
-                Height = 18,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            host.Children.Add(new Rectangle
-            {
-                Width = 260,
-                Height = 18,
-                Fill = DarkFreeBrush,
-                RadiusX = 3,
-                RadiusY = 3
-            });
-            _cmpFill = new Rectangle
-            {
-                Width = 0,
-                Height = 18,
-                Fill = UsedBrush,
-                RadiusX = 3,
-                RadiusY = 3
-            };
-            host.Children.Add(_cmpFill);
-
-            row.Children.Add(host);
-            RowsPanel.Children.Add(row);
-            _cmpHost = host;
-        }
+        private static readonly SolidColorBrush ShadowBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x12, 0x22, 0x10));
+        private static readonly SolidColorBrush TopUsedBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x7C, 0xD4, 0x6A));
+        private static readonly SolidColorBrush TopFreeBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x4A, 0x8B, 0xE0));
+        private static readonly SolidColorBrush SideUsedBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x55, 0x9E, 0x44));
+        private static readonly SolidColorBrush SideFreeBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0x33, 0x6D, 0xBF));
 
         private void RenderCompressionState(long uncompressed, long compressed, long files, long folders)
         {
             string ratioText = "—";
             string savedText = "—";
-            if (_cmpFill != null)
+
+            if (_cmpHost != null)
             {
-                if (compressed == 0 || uncompressed == 0)
-                {
-                    _cmpFill.Width = 0;
-                }
-                else if (compressed >= uncompressed)
-                {
-                    _cmpFill.Width = 260;
-                    ratioText = "1.0×";
-                    savedText = "0%";
-                }
-                else
+                _cmpHost.Children.Clear();
+                if (compressed > 0 && uncompressed > 0 && compressed < uncompressed)
                 {
                     double packed = (double)compressed / uncompressed;
-                    _cmpFill.Width = 260.0 * packed;
                     ratioText = $"{uncompressed / (double)compressed:0.0}×";
                     savedText = $"{(1.0 - packed) * 100:0}%";
+                    DrawIsometricBox(packed);
+                }
+                else if (compressed >= uncompressed && uncompressed > 0)
+                {
+                    ratioText = "1.0×";
+                    savedText = "0%";
+                    DrawIsometricBox(1.0);
                 }
             }
 
@@ -506,8 +508,135 @@ namespace XFiles.Controls
             {
                 _scanBar.Visibility = Visibility.Collapsed;
             }
+
+            if (CompressionCaption != null)
+            {
+                if (uncompressed > 0)
+                    CompressionCaption.Text = $"{Formatting.FormatSize(compressed)} / {Formatting.FormatSize(uncompressed)}";
+                else
+                    CompressionCaption.Text = "";
+                CompressionCaption.Visibility = Visibility.Visible;
+            }
+
             Log.Info("FilePropertiesDialog.RenderCompressionState: uncompressed={U} compressed={C} files={F} folders={D}",
                 uncompressed, compressed, files, folders);
+        }
+
+        /// <summary>
+        /// Draws an isometric 3D box with compression fill.
+        /// Front face: green (compressed) bottom, blue (saved) top.
+        /// Top face: lighter tint. Right side: darker tint. Shadow behind.
+        /// </summary>
+        private void DrawIsometricBox(double packedFraction)
+        {
+            // Box dimensions
+            double w = 140, h = 200;       // front face size
+            double dx = 22, dy = -16;       // isometric depth offset (right, up)
+
+            // Front face origin (top-left)
+            double fx = 18, fy = 28;
+
+            // Front face corners: TL, TR, BR, BL
+            double tlx = fx, tly = fy;
+            double trx = fx + w, try_ = fy;
+            double brx = fx + w, bry = fy + h;
+            double blx = fx, bly = fy + h;
+
+            // Back face corners (offset by dx, dy)
+            double btlx = tlx + dx, btly = tly + dy;
+            double btrx = trx + dx, btry = try_ + dy;
+            double bbrx = brx + dx, bbry = bry + dy;
+
+            // 1. Shadow (offset from back face)
+            double shx = 3, shy = 3;
+            _cmpHost.Children.Add(BuildQuad(
+                btlx + shx, btly + shy,
+                btrx + shx, btry + shy,
+                bbrx + shx, bbry + shy,
+                blx + shx, bly + shy,
+                ShadowBrush));
+
+            // 2. Top face (back-left, back-right, front-right, front-left)
+            _cmpHost.Children.Add(BuildQuad(
+                btlx, btly, btrx, btry, trx, try_, tlx, tly,
+                packedFraction < 1.0 ? TopFreeBrush : TopUsedBrush));
+
+            // 3. Right side face (front-top-right, back-top-right, back-bottom-right, front-bottom-right)
+            _cmpHost.Children.Add(BuildQuad(
+                trx, try_, btrx, btry, bbrx, bbry, brx, bry,
+                packedFraction < 1.0 ? SideFreeBrush : SideUsedBrush));
+
+            // 4. Front face — split into green (compressed) and blue (saved)
+            double splitY = bly - h * packedFraction; // Y where green meets blue
+
+            if (packedFraction >= 0.999)
+            {
+                // Fully compressed — all green
+                _cmpHost.Children.Add(BuildQuad(
+                    tlx, tly, trx, try_, brx, bry, blx, bly, UsedBrush));
+            }
+            else if (packedFraction <= 0.001)
+            {
+                // No compression — all blue
+                _cmpHost.Children.Add(BuildQuad(
+                    tlx, tly, trx, try_, brx, bry, blx, bly, FreeBrush));
+            }
+            else
+            {
+                // Green bottom (compressed)
+                _cmpHost.Children.Add(BuildQuad(
+                    blx, splitY, brx, splitY, brx, bry, blx, bly, UsedBrush));
+                // Blue top (saved)
+                _cmpHost.Children.Add(BuildQuad(
+                    tlx, tly, trx, try_, trx, splitY, tlx, splitY, FreeBrush));
+            }
+
+            // 5. Front face border
+            var borderFig = new PathFigure { IsClosed = true, IsFilled = false };
+            borderFig.StartPoint = new Point(tlx, tly);
+            borderFig.Segments.Add(new LineSegment { Point = new Point(trx, try_) });
+            borderFig.Segments.Add(new LineSegment { Point = new Point(brx, bry) });
+            borderFig.Segments.Add(new LineSegment { Point = new Point(blx, bly) });
+            var borderPath = new PathGeometry();
+            borderPath.Figures.Add(borderFig);
+            _cmpHost.Children.Add(new Path
+            {
+                Data = borderPath,
+                Stroke = new SolidColorBrush(Windows.UI.Color.FromArgb(80, 0xFF, 0xFF, 0xFF)),
+                StrokeThickness = 0.8
+            });
+        }
+
+        private static Windows.UI.Xaml.Shapes.Polygon BuildQuad(
+            double x1, double y1, double x2, double y2,
+            double x3, double y3, double x4, double y4,
+            Brush fill)
+        {
+            return new Windows.UI.Xaml.Shapes.Polygon
+            {
+                Points = new PointCollection
+                {
+                    new Point(x1, y1), new Point(x2, y2),
+                    new Point(x3, y3), new Point(x4, y4)
+                },
+                Fill = fill
+            };
+        }
+
+        private void AddProgressBarRow()
+        {
+            var bar = new Windows.UI.Xaml.Controls.ProgressBar
+            {
+                IsIndeterminate = true,
+                Width = 260,
+                Height = 4,
+                Margin = new Thickness(132, 4, 0, 10),
+                Foreground = UsedBrush,
+                Background = DarkFreeBrush,
+                HorizontalAlignment = Windows.UI.Xaml.HorizontalAlignment.Left
+            };
+            RowsPanel.Children.Add(bar);
+            _scanBar = bar;
         }
 
         private static string FormatAttributes(uint attrs)

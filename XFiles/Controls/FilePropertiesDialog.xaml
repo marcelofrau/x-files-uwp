@@ -11,97 +11,141 @@
                 BorderThickness="1"
                 CornerRadius="6"
                 MinWidth="520"
-                MaxWidth="680"
+                MaxWidth="760"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"
-                Padding="32,24">
+                Padding="28,20">
 
-            <StackPanel>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />   <!-- header -->
+                    <RowDefinition Height="Auto" />   <!-- separator -->
+                    <RowDefinition Height="*" />       <!-- content -->
+                    <RowDefinition Height="Auto" />   <!-- status -->
+                    <RowDefinition Height="Auto" />   <!-- footer -->
+                </Grid.RowDefinitions>
+
                 <!-- Header -->
-                <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,12">
                     <Image x:Name="HeaderIcon"
                            Source="ms-appx:///Assets/Views/FilePropertiesDialog/filepropertiesdialog-icon-100.png"
-                           Width="64" Height="64" Margin="0,0,16,0"
+                           Width="48" Height="48" Margin="0,0,12,0"
                            VerticalAlignment="Center" />
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock x:Name="TitleText"
                                    Foreground="{StaticResource XFilesAccentBrush}"
                                    FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
-                                   FontSize="20"
+                                   FontSize="18"
                                    Text="Properties" />
                         <TextBlock x:Name="NameText"
                                    Foreground="{StaticResource XFilesForegroundBrush}"
                                    FontFamily="ms-appx:///Assets/Fonts/Oxanium-Bold.ttf#Oxanium"
-                                   FontSize="13"
+                                   FontSize="12"
                                    MaxWidth="440"
                                    TextTrimming="CharacterEllipsis"
                                    TextWrapping="NoWrap"
-                                   Margin="0,4,0,0"
+                                   Margin="0,2,0,0"
                                    Text="" />
                     </StackPanel>
                 </StackPanel>
 
-                <Border Background="#252830" Height="1" Margin="0,0,0,12" />
+                <Border Grid.Row="1" Background="#252830" Height="1" Margin="0,0,0,10" />
 
-                <!-- Content rows, built in code-behind -->
-                <ScrollViewer x:Name="RowsScrollViewer" MaxHeight="360" VerticalScrollBarVisibility="Auto">
-                    <StackPanel x:Name="RowsPanel" MinWidth="420" />
-                </ScrollViewer>
+                <!-- Content: two columns -->
+                <Grid Grid.Row="2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />     <!-- text rows -->
+                        <ColumnDefinition Width="Auto" />  <!-- visual panel (pie/compression) -->
+                    </Grid.ColumnDefinitions>
 
-                <!-- Pie (folder mode) -->
-                <Canvas x:Name="PieHost"
-                        Width="160" Height="160"
-                        HorizontalAlignment="Center"
-                        Margin="0,14,0,0"
-                        Visibility="Collapsed" />
+                    <!-- Right column: pie chart + compression bar + info labels -->
+                    <StackPanel x:Name="VisualPanel"
+                                Grid.Column="1"
+                                Width="200"
+                                Margin="16,0,0,0"
+                                VerticalAlignment="Top"
+                                Visibility="Collapsed">
+                        <!-- Pie -->
+                        <Canvas x:Name="PieHost"
+                                Width="160" Height="160"
+                                HorizontalAlignment="Center" />
+                        <TextBlock x:Name="PieCaption"
+                                   Foreground="{StaticResource XFilesTextMutedBrush}"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                   FontSize="11"
+                                   HorizontalAlignment="Center"
+                                   Margin="0,4,0,0"
+                                   Text="" />
+                    </StackPanel>
 
-                <!-- Pie caption (folder mode): folder bytes vs full drive -->
-                <TextBlock x:Name="PieCaption"
-                           Foreground="{StaticResource XFilesTextMutedBrush}"
-                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                           FontSize="12"
-                           HorizontalAlignment="Center"
-                           Visibility="Collapsed"
-                           Text="" />
+                    <!-- Right column: isometric compression box (archive files) -->
+                    <StackPanel x:Name="CompressionVisual"
+                                Grid.Column="1"
+                                Width="200"
+                                Margin="16,0,0,0"
+                                VerticalAlignment="Top"
+                                Visibility="Collapsed">
+                        <Canvas x:Name="CompressionCanvas"
+                                Width="200" Height="240"
+                                HorizontalAlignment="Center" />
+                        <TextBlock x:Name="CompressionCaption"
+                                   Foreground="{StaticResource XFilesTextMutedBrush}"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                   FontSize="11"
+                                   HorizontalAlignment="Center"
+                                   Margin="0,4,0,0"
+                                   Text="" />
+                    </StackPanel>
+
+                    <!-- Left column: rows -->
+                    <ScrollViewer x:Name="RowsScrollViewer"
+                                  Grid.Column="0"
+                                  MaxHeight="320"
+                                  VerticalScrollBarVisibility="Auto">
+                        <StackPanel x:Name="RowsPanel" MinWidth="340" />
+                    </ScrollViewer>
+                </Grid>
 
                 <!-- Status -->
                 <TextBlock x:Name="StatusText"
+                           Grid.Row="3"
                            Foreground="{StaticResource XFilesTextMutedBrush}"
                            FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                           FontSize="12"
+                           FontSize="11"
                            HorizontalAlignment="Center"
-                           Margin="0,10,0,0"
+                           Margin="0,8,0,0"
                            Text="" />
 
-                <!-- Footer hints -->
-                <StackPanel Orientation="Horizontal"
+                <!-- Footer hints (always visible, outside ScrollViewer) -->
+                <StackPanel Grid.Row="4"
+                            Orientation="Horizontal"
                             HorizontalAlignment="Center"
-                            Margin="0,16,0,0">
+                            Margin="0,10,0,0">
                     <StackPanel x:Name="PermissionsHint"
                                 Orientation="Horizontal"
                                 Visibility="Collapsed"
-                                Margin="0,0,16,0">
+                                Margin="0,0,14,0">
                         <Image Source="ms-appx:///Assets/GamepadButtons/abxy/y.png"
-                               Width="14" Height="14" Margin="0,0,4,0"
+                               Width="12" Height="12" Margin="0,0,3,0"
                                VerticalAlignment="Center" />
                         <TextBlock Text="Permissions"
                                    FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                                   FontSize="11"
+                                   FontSize="10"
                                    Foreground="{StaticResource XFilesTextMutedBrush}"
                                    VerticalAlignment="Center" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal">
                         <Image Source="ms-appx:///Assets/GamepadButtons/abxy/b.png"
-                               Width="14" Height="14" Margin="0,0,4,0"
+                               Width="12" Height="12" Margin="0,0,3,0"
                                VerticalAlignment="Center" />
                         <TextBlock Text="Close"
                                    FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
-                                   FontSize="11"
+                                   FontSize="10"
                                    Foreground="{StaticResource XFilesTextMutedBrush}"
                                    VerticalAlignment="Center" />
                     </StackPanel>
                 </StackPanel>
-            </StackPanel>
+            </Grid>
         </Border>
     </Grid>
 </UserControl>

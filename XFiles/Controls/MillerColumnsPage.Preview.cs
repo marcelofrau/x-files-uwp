@@ -425,6 +425,8 @@ namespace XFiles.Controls
                                 PreviewUnsupportedType.Text = _navigator.Preview.PreviewFileType ?? "";
                                 PreviewUnsupportedSize.Text = Formatting.FormatSize(_navigator.Preview.PreviewFileSize);
                                 PreviewStatus.Text = "";
+
+                                bool isPressACard = false;
                                 if (!string.IsNullOrEmpty(_navigator.Preview.PreviewTextContent))
                                 {
                                     // Network archive deferral card — "Press A to browse
@@ -440,11 +442,11 @@ namespace XFiles.Controls
                                         PreviewUnsupportedHint.Visibility = Visibility.Visible;
                                         PreviewUnsupportedComment.Text = "";
                                         PreviewUnsupportedComment.Visibility = Visibility.Collapsed;
+                                        isPressACard = true;
                                     }
                                     else
                                     {
-                                        // Custom action hint (e.g. network archive deferral:
-                                        // "Press A to browse archive contents.").
+                                        // Custom action hint.
                                         PreviewUnsupportedComment.Text = _navigator.Preview.PreviewTextContent;
                                         PreviewUnsupportedComment.Visibility = Visibility.Visible;
                                     }
@@ -454,9 +456,12 @@ namespace XFiles.Controls
                                     PreviewUnsupportedComment.Text = "";
                                     PreviewUnsupportedComment.Visibility = Visibility.Collapsed;
                                 }
-                                // The "Copy to local folder to watch" hint is video-only; never
-                                // let it leak onto an archive/content card from a prior preview.
-                                PreviewUnsupportedHint.Visibility = Visibility.Collapsed;
+
+                                // Collapse the video-only hint ("Copy to local folder to watch")
+                                // unless we just showed the A-button deferral card.
+                                if (!isPressACard)
+                                    PreviewUnsupportedHint.Visibility = Visibility.Collapsed;
+
                                 PreviewUnsupportedPanel.Visibility = Visibility.Visible;
                             }
                         }
