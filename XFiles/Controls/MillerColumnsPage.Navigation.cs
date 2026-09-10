@@ -111,6 +111,30 @@ namespace XFiles.Controls
                 (k, r) => true,
                 (k) => { FileOperationConfirmDialogControl.HandleButton(k); return true; }));
 
+            _router.Add(new OverlayHandler(69,
+                () => PermissionsDialogControl.IsOpen,
+                (k, r) =>
+                {
+                    VirtualKey mapped = k;
+                    if (k == VirtualKey.GamepadDPadUp) mapped = VirtualKey.Up;
+                    else if (k == VirtualKey.GamepadDPadDown) mapped = VirtualKey.Down;
+                    PermissionsDialogControl.HandleDPad(mapped);
+                    return true;
+                },
+                (k) => { PermissionsDialogControl.HandleButton(k); return true; }));
+
+            _router.Add(new OverlayHandler(66,
+                () => FilePropertiesDialogControl.IsOpen,
+                (k, r) =>
+                {
+                    VirtualKey mapped = k;
+                    if (k == VirtualKey.GamepadDPadUp) mapped = VirtualKey.Up;
+                    else if (k == VirtualKey.GamepadDPadDown) mapped = VirtualKey.Down;
+                    FilePropertiesDialogControl.HandleDPad(mapped);
+                    return true;
+                },
+                (k) => { FilePropertiesDialogControl.HandleButton(k); return true; }));
+
             _router.Add(new OverlayHandler(68,
                 () => OpProgressDialog.IsOpen,
                 (k, r) => true,

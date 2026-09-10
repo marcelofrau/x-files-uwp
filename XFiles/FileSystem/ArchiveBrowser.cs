@@ -186,6 +186,44 @@ namespace XFiles.FileSystem
             return lastSlash >= 0 ? path.Substring(0, lastSlash) : "";
         }
 
+        /// <summary>
+        /// Recursive stats (file count, folder count, total bytes) for the entry
+        /// subtree under <paramref name="internalPath"/> — computed entirely from
+        /// the in-memory entry list, zero I/O. Returns all-zeroes when the archive
+        /// cannot be opened.
+        /// </summary>
+        public ArchiveSubtreeStats.Stats ComputeSubtreeStats(string archivePath, string internalPath)
+        {
+            IArchive archive = GetOrCreateArchive(archivePath);
+            if (archive == null) return default;
+
+            try
+            {
+                string normalized = string.IsNullOrEmpty(internalPath)
+                    ? ""
+                    : internalPath.Replace('\\', '/').Trim('/');
+
+                var flat = new List<(string path, bool isDir, long size)>();
+                foreach (var entry in archive.Entries)
+                {
+                    if (string.IsNullOrEmpty(entry.Key)) continue;
+                    string p = entry.Key.Replace('\\', '/').Trim('/');
+                    if (string.IsNullOrEmpty(p)) continue;
+                    flat.Add((p, entry.IsDirectory, (long)entry.Size));
+                }
+
+                var stats = ArchiveSubtreeStats.Compute(flat, normalized);
+                Log.Dbg("ArchiveBrowser.ComputeSubtreeStats: archive={Archive} internal={Internal} files={Files} folders={Folders} bytes={Bytes}",
+                    archivePath, normalized, stats.FileCount, stats.FolderCount, stats.TotalBytes);
+                return stats;
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("ArchiveBrowser.ComputeSubtreeStats failed: {Error}", ex.Message);
+                return default;
+            }
+        }
+
         private static string GetFileName(string path)
         {
             if (string.IsNullOrEmpty(path)) return "";

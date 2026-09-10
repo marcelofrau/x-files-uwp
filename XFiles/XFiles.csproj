@@ -132,6 +132,8 @@
     <Compile Include="FileSystem\FilePreviewService.cs" />
     <Compile Include="FileSystem\FilePreviewLimits.cs" />
     <Compile Include="FileSystem\ArchiveBrowser.cs" />
+    <Compile Include="FileSystem\ArchiveSubtreeStats.cs" />
+    <Compile Include="FileSystem\DirectoryStatsCalculator.cs" />
     <Compile Include="FileSystem\PortalBrowser.cs" />
     <Compile Include="FileSystem\Id3Tag.cs" />
     <Compile Include="FileSystem\SubtitleDetector.cs" />
@@ -155,6 +157,7 @@
     <Compile Include="Metadata\MetadataCache.cs" />
     <Compile Include="Metadata\MetadataCacheDb.cs" />
     <Compile Include="Metadata\MetadataGuesser.cs" />
+    <Compile Include="Metadata\MediaMetadataProbe.cs" />
     <Compile Include="Settings\XFilesSettings.cs" />
     <Compile Include="Log.cs" />
     <Compile Include="Controls\CounterPage.xaml.cs">
@@ -240,6 +243,12 @@
 <Compile Include="Controls\DiskUsageDialog.xaml.cs">
 <DependentUpon>DiskUsageDialog.xaml</DependentUpon>
 </Compile>
+    <Compile Include="Controls\FilePropertiesDialog.xaml.cs">
+      <DependentUpon>FilePropertiesDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\PermissionsDialog.xaml.cs">
+      <DependentUpon>PermissionsDialog.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Controls\MediaPreviewControl.xaml.cs">
       <DependentUpon>MediaPreviewControl.xaml</DependentUpon>
     </Compile>
@@ -453,6 +462,14 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="Controls\FilePropertiesDialog.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Controls\PermissionsDialog.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Page Include="Controls\MediaPreviewControl.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
@@ -643,7 +660,10 @@
     <Content Include="Assets\Views\FileActionSheet\fileactionsheet-favorite-48.png" />
     <Content Include="Assets\Views\FileActionSheet\fileactionsheet-download-48.png" />
     <Content Include="Assets\Views\FileActionSheet\fileactionsheet-upload-48.png" />
-<Content Include="Assets\Views\FileActionSheet\fileactionsheet-hdd-48.png" />
+<Content Include="Assets\Views\FilePropertiesDialog\filepropertiesdialog-icon-100.png" />
+    <Content Include="Assets\Views\FileActionSheet\fileactionsheet-hdd-48.png" />
+    <Content Include="Assets\Views\FileActionSheet\fileactionsheet-properties-48.png" />
+    <Content Include="Assets\Views\FileActionSheet\fileactionsheet-permissions-48.png" />
  <Content Include="Assets\Views\DiskUsageDialog\diskusagedialog-hdd-100.png" />
     <Content Include="Assets\Views\HostKeyDialog\hostkeydialog-locked-key-100.png" />
     <Content Include="Assets\Views\FileActionSheet\ctx-drive-120.png" />

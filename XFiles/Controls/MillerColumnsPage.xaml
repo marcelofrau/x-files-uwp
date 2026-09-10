@@ -1334,6 +1334,8 @@
         <controls:FolderBrowserDialog x:Name="FolderBrowserDialogControl" />
         <controls:OperationProgressDialog x:Name="OpProgressDialog" />
         <controls:DiskUsageDialog x:Name="DiskUsageDialogControl" />
+        <controls:FilePropertiesDialog x:Name="FilePropertiesDialogControl" />
+        <controls:PermissionsDialog x:Name="PermissionsDialogControl" />
         <controls:PdfFullScreenOverlay x:Name="PdfFullScreen" />
         <controls:ImageFullScreenOverlay x:Name="ImageFullScreen" />
         <controls:TextEditorOverlay x:Name="TextEditorOverlayControl" />

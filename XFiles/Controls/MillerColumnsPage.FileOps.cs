@@ -408,6 +408,9 @@ namespace XFiles.Controls
                     case FileAction.DiskSpace:
                         await HandleDiskSpaceAsync(entry);
                         break;
+                    case FileAction.Properties:
+                        HandlePropertiesAsync(entry);
+                        break;
                     case FileAction.RenameLocation:
                         await HandleRenameLocationAsync(entry);
                         break;
@@ -3309,6 +3312,40 @@ namespace XFiles.Controls
             Log.Verb("HandleDiskSpaceAsync: modal Show called");
             #endif
             await Task.Delay(1);
+        }
+
+        private async void HandlePropertiesAsync(FileEntry entry)
+        {
+            Log.Info("HandlePropertiesAsync: name={Name} isDir={IsDir} isNetwork={IsNetwork} isInArchive={InArchive}",
+                entry?.Name ?? "<null>", entry?.IsDirectory ?? false, entry?.IsNetwork ?? false,
+                !string.IsNullOrEmpty(entry?.ArchiveRootPath));
+
+            if (entry == null || FilePropertiesDialogControl.IsOpen) return;
+
+            UpdateFooterALabel("Close");
+            FilePropertiesDialogControl.PermissionsRequested -= OnPermissionsRequested;
+            FilePropertiesDialogControl.PermissionsRequested += OnPermissionsRequested;
+            FilePropertiesDialogControl.Show(entry, _navigator.ArchiveBrowser);
+            await Task.Delay(1);
+        }
+
+        private async void OnPermissionsRequested()
+        {
+            Log.Info("OnPermissionsRequested: opening PermissionsDialog");
+            string path = FilePropertiesDialogControl.CurrentPath;
+            bool isDir = FilePropertiesDialogControl.CurrentIsDirectory;
+            if (string.IsNullOrEmpty(path)) return;
+
+            // Hide the properties dialog while the sub-dialog is on top.
+            FilePropertiesDialogControl.Visibility = Visibility.Collapsed;
+            bool applied = await PermissionsDialogControl.ShowAsync(path, isDir);
+            FilePropertiesDialogControl.Visibility = Visibility.Visible;
+
+            if (applied)
+            {
+                Log.Info("OnPermissionsRequested: applied — refreshing properties");
+                FilePropertiesDialogControl.Reload(_navigator.ArchiveBrowser);
+            }
         }
 
         private List<DiskVolumeInfo> ResolveCurrentFolderVolumes()

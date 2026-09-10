@@ -126,6 +126,104 @@ namespace XFiles.FileSystem
         }
         private const uint FILE_ATTRIBUTE_DIRECTORY = 0x10;
 
+        public const uint FILE_ATTRIBUTE_READONLY = 0x1;
+        public const uint FILE_ATTRIBUTE_HIDDEN = 0x2;
+
+        [DllImport("api-ms-win-core-file-fromapp-l1-1-0.dll", CharSet = CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
+        private static extern bool SetFileAttributesFromAppW(string lpFileName, uint dwFileAttributes);
+
+        /// <summary>Reads the Win32 file attribute flags (READONLY/HIDDEN/...). Returns false on failure.</summary>
+        public static bool TryGetFileAttributes(string path, out uint attributes)
+        {
+            attributes = 0;
+            try
+            {
+                return GetFileAttributesExFromAppW(path, 0, out var attr) && ((attributes = attr.dwFileAttributes) != INVALID_FILE_ATTRIBUTES);
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("FileOperations.TryGetFileAttributes: {Path} error", ex, path);
+                return false;
+            }
+        }
+
+        /// <summary>Reads the last-write time via GetFileAttributesExFromAppW (FILETIME). Returns null on failure.</summary>
+        public static DateTimeOffset? TryGetLastWriteTime(string path)
+        {
+            try
+            {
+                if (!GetFileAttributesExFromAppW(path, 0, out var attr)) return null;
+                long raw = ((long)attr.ftLastWriteTime.dwHighDateTime << 32) | (uint)attr.ftLastWriteTime.dwLowDateTime;
+                if (raw <= 0) return null;
+                return DateTimeOffset.FromFileTime(raw);
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("FileOperations.TryGetLastWriteTime: {Path} error", ex, path);
+                return null;
+            }
+        }
+
+        /// <summary>Writes the Win32 file attribute flags. Returns false on failure.</summary>
+        public static bool TrySetFileAttributes(string path, uint attributes)
+        {
+            try
+            {
+                bool ok = SetFileAttributesFromAppW(path, attributes);
+                if (!ok) Log.Warn("FileOperations.TrySetFileAttributes: {Path} failed (err {Err})", path, System.Runtime.InteropServices.Marshal.GetLastWin32Error());
+                return ok;
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("FileOperations.TrySetFileAttributes: {Path} error", ex, path);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Applies the given attribute flags to the entry itself and, optionally, to
+        /// every file and folder below it (recursive P/Invoke walk, never blocks the UI).
+        /// </summary>
+        public static void ApplyAttributesRecursive(string root, uint attributes, bool applyToChildren, int maxEntries = 500000)
+        {
+            int scanned = 0;
+            try
+            {
+                if (!TrySetFileAttributes(root, attributes)) return;
+                if (!applyToChildren) return;
+
+                var pending = new Stack<string>();
+                pending.Push(root);
+                while (pending.Count > 0)
+                {
+                    if (++scanned > maxEntries) return;
+                    string dir = pending.Pop();
+                    IntPtr hFind = FindFirstFileExFromAppW(dir + "\\*", 0, out WIN32_FIND_DATA findData, 0, IntPtr.Zero, 0);
+                    if (hFind == new IntPtr(-1)) continue;
+                    try
+                    {
+                        do
+                        {
+                            if (findData.cFileName == "." || findData.cFileName == "..") continue;
+                            string fullPath = dir + "\\" + findData.cFileName;
+                            if (!TrySetFileAttributes(fullPath, attributes)) continue;
+                            if ((findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+                                pending.Push(fullPath);
+                        }
+                        while (FindNextFileW(hFind, out findData));
+                    }
+                    finally
+                    {
+                        FindClose(hFind);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("FileOperations.ApplyAttributesRecursive: {Root} error", ex, root);
+            }
+        }
+
         /// <summary>
         /// P/Invoke-based path existence check. Works in UWP with broadFileSystemAccess
         /// where System.IO.File.Exists / Directory.Exists may fail.

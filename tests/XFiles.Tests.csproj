@@ -41,6 +41,9 @@
     <Compile Include="..\XFiles\Controls\TransferStats.cs" Link="Linked\Controls\TransferStats.cs" />
     <Compile Include="..\XFiles\FileSystem\HighlightRenderer.cs" Link="Linked\FileSystem\HighlightRenderer.cs" />
     <Compile Include="..\XFiles\FileSystem\FilePreviewLimits.cs" Link="Linked\FileSystem\FilePreviewLimits.cs" />
+    <Compile Include="..\XFiles\FileSystem\ArchiveSubtreeStats.cs" Link="Linked\FileSystem\ArchiveSubtreeStats.cs" />
+    <Compile Include="..\XFiles\FileSystem\DirectoryStatsCalculator.cs" Link="Linked\FileSystem\DirectoryStatsCalculator.cs" />
+    <Compile Include="..\XFiles\Metadata\MediaMetadataProbe.cs" Link="Linked\Metadata\MediaMetadataProbe.cs" />
     <Compile Include="..\XFiles\FileSystem\Id3Tag.cs" Link="Linked\FileSystem\Id3Tag.cs" />
     <Compile Include="..\XFiles\FileSystem\RomCoverProvider.cs" Link="Linked\FileSystem\RomCoverProvider.cs" />
     <Compile Include="..\XFiles\FileSystem\RomHeaderParser.cs" Link="Linked\FileSystem\RomHeaderParser.cs" />

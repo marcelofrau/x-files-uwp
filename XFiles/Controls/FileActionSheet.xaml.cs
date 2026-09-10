@@ -33,7 +33,8 @@ namespace XFiles.Controls
         UploadFile,
         DiskSpace,
         RenameLocation,
-        DeleteLocation
+        DeleteLocation,
+        Properties
     }
 
     public class ActionItem
@@ -70,6 +71,7 @@ namespace XFiles.Controls
         private static readonly string ActionFavorite = "fileactionsheet-favorite-48.png";
         private static readonly string ActionUpload = "fileactionsheet-upload-48.png";
         private static readonly string ActionDiskSpace = "fileactionsheet-hdd-48.png";
+        private static readonly string ActionProperties = "fileactionsheet-properties-48.png";
 
         private static readonly Dictionary<string, string> ExtIconMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -364,6 +366,14 @@ namespace XFiles.Controls
                     IconPath = IconBase + ActionDiskSpace,
                     LabelBrush = accent
                 });
+
+                actions.Add(new ActionItem
+                {
+                    Action = FileAction.Properties,
+                    Label = "Properties",
+                    IconPath = IconBase + ActionProperties,
+                    LabelBrush = accent
+                });
             }
             else if (isChiptuneTrack)
             {
@@ -402,6 +412,8 @@ namespace XFiles.Controls
                     IconPath = IconBase + ActionRefresh,
                     LabelBrush = accent
                 });
+
+                bool isNetworkActionRow = entry.IsNetwork && entry.ActionKind != XFiles.FileSystem.ActionKind.None;
 
                 var ext = System.IO.Path.GetExtension(entry.Name);
                 if (!entry.IsDirectory && TextExts.Contains(ext))
@@ -495,6 +507,17 @@ namespace XFiles.Controls
                     IconPath = IconBase + ActionDelete,
                     LabelBrush = red
                 });
+
+                if (!isNetworkActionRow)
+                {
+                    actions.Add(new ActionItem
+                    {
+                        Action = FileAction.Properties,
+                        Label = "Properties",
+                        IconPath = IconBase + ActionProperties,
+                        LabelBrush = accent
+                    });
+                }
             }
 
             ActionList.ItemsSource = actions;
