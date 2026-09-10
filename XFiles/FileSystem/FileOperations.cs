@@ -164,7 +164,33 @@ namespace XFiles.FileSystem
             }
         }
 
-        /// <summary>Writes the Win32 file attribute flags. Returns false on failure.</summary>
+        /// <summary>Combined attributes + timestamps in a single P/Invoke.</summary>
+        public static (uint Attributes, DateTimeOffset? Created, DateTimeOffset? LastWrite, DateTimeOffset? LastAccess) TryGetItemInfo(string path)
+        {
+            try
+            {
+                if (!GetFileAttributesExFromAppW(path, 0, out var attr) || attr.dwFileAttributes == INVALID_FILE_ATTRIBUTES)
+                    return (0, null, null, null);
+                return (
+                    attr.dwFileAttributes,
+                    ToDateTimeOffset(attr.ftCreationTime),
+                    ToDateTimeOffset(attr.ftLastWriteTime),
+                    ToDateTimeOffset(attr.ftLastAccessTime));
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("FileOperations.TryGetItemInfo: {Path} error", ex, path);
+                return (0, null, null, null);
+            }
+        }
+
+        private static DateTimeOffset? ToDateTimeOffset(System.Runtime.InteropServices.ComTypes.FILETIME ft)
+        {
+            long raw = ((long)ft.dwHighDateTime << 32) | (uint)ft.dwLowDateTime;
+            return raw > 0 ? DateTimeOffset.FromFileTime(raw) : (DateTimeOffset?)null;
+        }
+
+        /// <summary>Write the Win32 file attribute flags. Returns false on failure.</summary>
         public static bool TrySetFileAttributes(string path, uint attributes)
         {
             try

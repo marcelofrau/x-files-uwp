@@ -73,11 +73,12 @@ namespace XFiles.Controls
             RowsPanel.Children.Clear();
             PieHost.Children.Clear();
             PieHost.Visibility = Visibility.Collapsed;
+            if (PieCaption != null) PieCaption.Visibility = Visibility.Collapsed;
             StatusText.Text = "";
             PermissionsHint.Visibility = Visibility.Collapsed;
-            HeaderIcon.Visibility = entry.IsDirectory ? Visibility.Visible : Visibility.Visible;
-            NameText.Text = entry.Name;
-            TitleText.Text = entry.IsDirectory ? "Folder Properties" : "File Properties";
+            HeaderIcon.Visibility = Visibility.Visible;
+            TitleText.Text = entry.Name;
+            NameText.Text = entry.IsDirectory ? "Folder Properties" : "File Properties";
 
             bool isInArchive = !string.IsNullOrEmpty(entry.ArchiveRootPath);
 
@@ -131,14 +132,20 @@ namespace XFiles.Controls
         /// <summary>Router entry: button handling for the dialog.</summary>
         public void HandleButton(VirtualKey key)
         {
-            if (key == VirtualKey.B)
+            switch (key)
             {
-                Close();
-            }
-            else if (key == VirtualKey.Y && PermissionsHint.Visibility == Visibility.Visible)
-            {
-                Log.Info("FilePropertiesDialog: permissions requested for {Name}", _entry?.Name);
-                PermissionsRequested?.Invoke();
+                case VirtualKey.GamepadB:
+                case VirtualKey.Escape:
+                    Close();
+                    break;
+                case VirtualKey.GamepadY:
+                case VirtualKey.Y:
+                    if (PermissionsHint.Visibility == Visibility.Visible)
+                    {
+                        Log.Info("FilePropertiesDialog: permissions requested for {Name}", _entry?.Name);
+                        PermissionsRequested?.Invoke();
+                    }
+                    break;
             }
         }
 
@@ -149,10 +156,16 @@ namespace XFiles.Controls
             string path = entry.FullPath ?? "";
             AddRow("Type", "Folder");
             AddRow("Location", path);
-            var lastWrite = FileOperations.TryGetLastWriteTime(path);
-            if (lastWrite.HasValue) AddRow("Modified", lastWrite.Value.ToLocalTime().ToString("g"));
+
+            var (attrs, created, modified, accessed) = FileOperations.TryGetItemInfo(path);
+            if (modified.HasValue) AddRow("Modified", modified.Value.ToLocalTime().ToString("g"));
+            if (created.HasValue) AddRow("Created", created.Value.ToLocalTime().ToString("g"));
+            if (accessed.HasValue) AddRow("Accessed", accessed.Value.ToLocalTime().ToString("g"));
+            if (attrs != 0) AddRow("Attributes", FormatAttributes(attrs));
+            PermissionsHint.Visibility = Visibility.Visible;
 
             PieHost.Visibility = Visibility.Visible;
+            if (PieCaption != null) PieCaption.Visibility = Visibility.Visible;
             AddRow("Total size", "Calculating…");
             AddRow("Files", "Calculating…");
             AddRow("Subfolders", "Calculating…");
@@ -187,11 +200,21 @@ namespace XFiles.Controls
                 var final = await DirectoryStatsCalculator.ComputeAsync(path, uiProgress, ct);
                 if (ct.IsCancellationRequested) return;
 
-                await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+                await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, async () =>
                 {
                     if (ct.IsCancellationRequested) return;
                     RenderFolderSnapshot(final, total, path);
-                    StatusText.Text = final.Complete ? "Fully scanned" : "Stopped early — folder too large or cancelled";
+                    if (final.Complete)
+                    {
+                        const string doneText = "Fully scanned";
+                        StatusText.Text = doneText;
+                        await System.Threading.Tasks.Task.Delay(2000);
+                        if (!ct.IsCancellationRequested && StatusText.Text == doneText) StatusText.Text = "";
+                    }
+                    else
+                    {
+                        StatusText.Text = "Stopped early — folder too large or cancelled";
+                    }
                     Log.Info("FilePropertiesDialog.ShowFolderEntry: {Path} -> files={Files} folders={Folders} bytes={Bytes} complete={Complete}",
                         path, final.FileCount, final.FolderCount, final.TotalBytes, final.Complete);
                 });
@@ -209,10 +232,26 @@ namespace XFiles.Controls
                 else if (rows[i].Label == "Subfolders") rows[i].Value.Text = s.FolderCount.ToString("N0");
             }
 
-            // Pie: folder bytes vs its drive total.
+            // Pie: folder bytes vs its drive total. Tiny folders get a minimum
+// slice (0.02) so the used wedge stays visible even if not proportional.
             double total = driveTotal > 0 ? (double)driveTotal : 0;
             double fraction = total > 0 ? Math.Max(0, Math.Min(1, s.TotalBytes / total)) : 0;
+            const double MinPieSlice = 0.02;
+            double realFraction = fraction;
+            if (fraction > 0 && fraction < MinPieSlice) fraction = MinPieSlice;
             BuildPie(PieHost, fraction);
+
+            if (PieCaption != null)
+            {
+                if (driveTotal > 0)
+                {
+                    PieCaption.Text = $"{Formatting.FormatSize(s.TotalBytes)} of {Formatting.FormatSize((long)driveTotal)} · {realFraction:P2} of drive";
+                }
+                else
+                {
+                    PieCaption.Text = Formatting.FormatSize(s.TotalBytes);
+                }
+            }
 
             if (!s.Complete)
             {
@@ -240,20 +279,12 @@ namespace XFiles.Controls
             AddRow("Type", ext.Length > 0 ? $"{ext.TrimStart('.')} file" : "File");
             AddRow("Location", path);
             if (entry.SizeBytes > 0) AddRow("Size", Formatting.FormatSize(entry.SizeBytes));
-            var lastWrite = FileOperations.TryGetLastWriteTime(path);
-            if (lastWrite.HasValue) AddRow("Modified", lastWrite.Value.ToLocalTime().ToString("g"));
-
-            // Read-only / hidden flags.
-            if (FileOperations.TryGetFileAttributes(path, out uint attrs))
-            {
-                const uint FILE_ATTRIBUTE_READONLY = 0x1;
-                const uint FILE_ATTRIBUTE_HIDDEN = 0x2;
-                var flags = new System.Collections.Generic.List<string>();
-                if ((attrs & FILE_ATTRIBUTE_READONLY) != 0) flags.Add("Read-only");
-                if ((attrs & FILE_ATTRIBUTE_HIDDEN) != 0) flags.Add("Hidden");
-                if (flags.Count > 0) AddRow("Attributes", string.Join(", ", flags));
-                PermissionsHint.Visibility = Visibility.Visible;
-            }
+            var (attrs, created, modified, accessed) = FileOperations.TryGetItemInfo(path);
+            if (modified.HasValue) AddRow("Modified", modified.Value.ToLocalTime().ToString("g"));
+            if (created.HasValue) AddRow("Created", created.Value.ToLocalTime().ToString("g"));
+            if (accessed.HasValue) AddRow("Accessed", accessed.Value.ToLocalTime().ToString("g"));
+            if (attrs != 0) AddRow("Attributes", FormatAttributes(attrs));
+            PermissionsHint.Visibility = Visibility.Visible;
 
             if (isImage || isAudio || isVideo || ext.Equals(".pdf", StringComparison.OrdinalIgnoreCase))
             {
@@ -477,6 +508,24 @@ namespace XFiles.Controls
             }
             Log.Info("FilePropertiesDialog.RenderCompressionState: uncompressed={U} compressed={C} files={F} folders={D}",
                 uncompressed, compressed, files, folders);
+        }
+
+        private static string FormatAttributes(uint attrs)
+        {
+            const uint FILE_ATTRIBUTE_READONLY = 0x1;
+            const uint FILE_ATTRIBUTE_HIDDEN = 0x2;
+            const uint FILE_ATTRIBUTE_SYSTEM = 0x4;
+            const uint FILE_ATTRIBUTE_DIRECTORY = 0x10;
+            const uint FILE_ATTRIBUTE_ARCHIVE = 0x20;
+            const uint FILE_ATTRIBUTE_NOT_CONTENT_INDEXED = 0x2000;
+            var list = new System.Collections.Generic.List<string>();
+            if ((attrs & FILE_ATTRIBUTE_READONLY) != 0) list.Add("Read-only");
+            if ((attrs & FILE_ATTRIBUTE_HIDDEN) != 0) list.Add("Hidden");
+            if ((attrs & FILE_ATTRIBUTE_SYSTEM) != 0) list.Add("System");
+            if ((attrs & FILE_ATTRIBUTE_ARCHIVE) != 0) list.Add("Archive");
+            if ((attrs & FILE_ATTRIBUTE_NOT_CONTENT_INDEXED) != 0) list.Add("Not indexed");
+            if ((attrs & FILE_ATTRIBUTE_DIRECTORY) != 0) list.Add("Folder");
+            return list.Count > 0 ? string.Join(", ", list) : attrs.ToString();
         }
 
         // ---------- in-archive: subtree stats from memory (0 I/O) ----------

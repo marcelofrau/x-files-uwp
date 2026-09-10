@@ -55,6 +55,15 @@
                         Margin="0,14,0,0"
                         Visibility="Collapsed" />
 
+                <!-- Pie caption (folder mode): folder bytes vs full drive -->
+                <TextBlock x:Name="PieCaption"
+                           Foreground="{StaticResource XFilesTextMutedBrush}"
+                           FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                           FontSize="12"
+                           HorizontalAlignment="Center"
+                           Visibility="Collapsed"
+                           Text="" />
+
                 <!-- Status -->
                 <TextBlock x:Name="StatusText"
                            Foreground="{StaticResource XFilesTextMutedBrush}"

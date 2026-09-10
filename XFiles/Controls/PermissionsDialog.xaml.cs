@@ -97,13 +97,16 @@ namespace XFiles.Controls
             if (_isBusy) return;
             switch (key)
             {
-                case VirtualKey.A:
+                case VirtualKey.GamepadA:
+                case VirtualKey.Enter:
                     ToggleSelected();
                     break;
+                case VirtualKey.GamepadY:
                 case VirtualKey.Y:
                     _ = ApplyAsync();
                     break;
-                case VirtualKey.B:
+                case VirtualKey.GamepadB:
+                case VirtualKey.Escape:
                     Log.Info("PermissionsDialog: cancelled");
                     Close(false);
                     break;
