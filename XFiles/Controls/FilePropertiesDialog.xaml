@@ -21,6 +21,7 @@
                     <RowDefinition Height="Auto" />   <!-- header -->
                     <RowDefinition Height="Auto" />   <!-- separator -->
                     <RowDefinition Height="*" />       <!-- content -->
+                    <RowDefinition Height="Auto" />   <!-- loading progress -->
                     <RowDefinition Height="Auto" />   <!-- status -->
                     <RowDefinition Height="Auto" />   <!-- footer -->
                 </Grid.RowDefinitions>
@@ -69,12 +70,19 @@
                         <Canvas x:Name="PieHost"
                                 Width="160" Height="160"
                                 HorizontalAlignment="Center" />
-                        <TextBlock x:Name="PieCaption"
+                        <TextBlock x:Name="PieCaptionRow1"
                                    Foreground="{StaticResource XFilesTextMutedBrush}"
                                    FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                                    FontSize="11"
                                    HorizontalAlignment="Center"
                                    Margin="0,4,0,0"
+                                   Text="" />
+                        <TextBlock x:Name="PieCaptionRow2"
+                                   Foreground="{StaticResource XFilesAccentBrush}"
+                                   FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
+                                   FontSize="13"
+                                   HorizontalAlignment="Center"
+                                   Margin="0,2,0,0"
                                    Text="" />
                     </StackPanel>
 
@@ -106,9 +114,20 @@
                     </ScrollViewer>
                 </Grid>
 
+                <!-- Loading progress (below the two columns, full width) -->
+                <ProgressBar x:Name="ScanProgressBar"
+                             Grid.Row="3"
+                             Style="{StaticResource RetroProgressBarStyle}"
+                             IsIndeterminate="True"
+                             Height="4"
+                             MaxHeight="4"
+                             Margin="0,6,0,0"
+                             IsHitTestVisible="False"
+                             Visibility="Collapsed" />
+
                 <!-- Status -->
                 <TextBlock x:Name="StatusText"
-                           Grid.Row="3"
+                           Grid.Row="4"
                            Foreground="{StaticResource XFilesTextMutedBrush}"
                            FontFamily="ms-appx:///Assets/Fonts/Oxanium-Regular.ttf#Oxanium"
                            FontSize="11"
@@ -117,7 +136,7 @@
                            Text="" />
 
                 <!-- Footer hints (always visible, outside ScrollViewer) -->
-                <StackPanel Grid.Row="4"
+                <StackPanel Grid.Row="5"
                             Orientation="Horizontal"
                             HorizontalAlignment="Center"
                             Margin="0,10,0,0">

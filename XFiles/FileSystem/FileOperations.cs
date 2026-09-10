@@ -782,6 +782,38 @@ namespace XFiles.FileSystem
         }
 
         /// <summary>
+        /// First-pass sum of the uncompressed sizes of all non-directory entries in an
+        /// archive already open as a stream. Used to pre-check free space before a
+        /// stream-based (on-demand, no local cache) remote extraction. The stream is
+        /// NOT disposed here and is left rewinded to position 0 for reuse.
+        /// </summary>
+        public static async Task<long> GetArchiveUncompressedSizeFromStreamAsync(Stream stream, string archiveName)
+        {
+            return await Task.Run(() =>
+            {
+                try
+                {
+                    stream.Seek(0, SeekOrigin.Begin);
+                    using (var archive = SharpCompress.Archives.ArchiveFactory.Open(stream))
+                    {
+                        long total = 0;
+                        foreach (var entry in archive.Entries)
+                        {
+                            if (!entry.IsDirectory)
+                                total += (long)entry.Size;
+                        }
+                        return total;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Warn("FileOperations.GetArchiveUncompressedSizeFromStream exception for '{Archive}'", ex, archiveName ?? "(stream)");
+                    return 0;
+                }
+            });
+        }
+
+        /// <summary>
         /// Copy file from source to destination directory.
         /// If sameDir is true, uses "Copy N" naming to avoid overwriting in same directory.
         /// Uses streaming copy with cancel support and per-file byte progress.
@@ -1453,6 +1485,84 @@ namespace XFiles.FileSystem
             Func<string, Task<int>> conflictCallback = null,
             CancellationToken token = default)
         {
+            try
+            {
+                Log.Info("FileOperations.Extract: {Archive} -> {Dest}", archivePath, destDir);
+
+                using (var stream = Win32FileStream.OpenRead(archivePath))
+                {
+                    if (stream == null)
+                    {
+                        string err = "Cannot open archive \"" + archivePath + "\" for reading.";
+                        Log.Warn("FileOperations.Extract: {Reason}", err);
+                        return new ExtractResult { Result = OperationResult.Failed, ErrorMessage = err };
+                    }
+
+                    return await ExtractCoreAsync(stream, archivePath, destDir, progress, conflictCallback, token, true);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("FileOperations.Extract exception", ex);
+                return new ExtractResult
+                {
+                    Result = OperationResult.Failed,
+                    ErrorMessage = "Archive could not be read: " + ex.Message
+                };
+            }
+        }
+
+        /// <summary>
+        /// Extracts an archive from an already-open, seekable stream into a destination
+        /// directory. The stream stays owned by the caller and is NOT disposed here —
+        /// used by the network path to extract remote archives on demand (on the wire)
+        /// without downloading the whole file to the local cache first.
+        /// conflictCallback receives the conflicting filename and returns:
+        ///   0=Skip, 1=Overwrite, 2=OverwriteAll.
+        /// If null, files are overwritten silently (existing behavior).
+        /// Pre-scans archive entries for accurate progress unless <paramref name="preScanSizes"/>
+        /// is false (remote RAR/7z: the per-entry header seeks are expensive over the wire,
+        /// so trade the file-count/% progress and disk-space pre-check for speed).
+        /// </summary>
+        public static async Task<ExtractResult> ExtractFromStreamAsync(
+            Stream stream, string archiveName, string destDir,
+            IProgress<OperationProgress> progress = null,
+            Func<string, Task<int>> conflictCallback = null,
+            CancellationToken token = default,
+            bool preScanSizes = true)
+        {
+            try
+            {
+                Log.Info("FileOperations.ExtractFromStream: {Archive} -> {Dest}", archiveName, destDir);
+                return await ExtractCoreAsync(stream, archiveName, destDir, progress, conflictCallback, token, preScanSizes);
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("FileOperations.ExtractFromStream exception", ex);
+                return new ExtractResult
+                {
+                    Result = OperationResult.Failed,
+                    ErrorMessage = "Archive could not be read: " + ex.Message
+                };
+            }
+        }
+
+        /// <summary>
+        /// Shared extraction core. <paramref name="stream"/> must be seekable (SharpCompress
+        /// re-opens the archive after the pre-scan); it is NOT disposed by this method.
+        /// </summary>
+        /// <summary>
+        /// Shared extraction core. <paramref name="stream"/> must be seekable (SharpCompress
+        /// re-opens the archive after the pre-scan); it is NOT disposed by this method.
+        /// With <paramref name="preScanSizes"/> false the pre-scan is skipped (no file-count
+        /// progress, no disk-space totals) — used for remote RAR/7z streams where each entry
+        /// header costs a seek over the wire.
+        /// </summary>
+        private static async Task<ExtractResult> ExtractCoreAsync(
+            Stream stream, string archiveName, string destDir,
+            IProgress<OperationProgress> progress, Func<string, Task<int>> conflictCallback,
+            CancellationToken token, bool preScanSizes)
+        {
             return await Task.Run(async () =>
             {
                 int failedEntries = 0;
@@ -1460,8 +1570,6 @@ namespace XFiles.FileSystem
 
                 try
                 {
-                    Log.Info("FileOperations.Extract: {Archive} -> {Dest}", archivePath, destDir);
-
                     string destType = CheckPathType(destDir);
                     if (destType == "file")
                     {
@@ -1482,20 +1590,27 @@ namespace XFiles.FileSystem
                         }
                     }
 
-                    using (var stream = Win32FileStream.OpenRead(archivePath))
+                    if (!stream.CanSeek)
                     {
-                        if (stream == null)
-                        {
-                            string err = "Cannot open archive \"" + archivePath + "\" for reading.";
-                            Log.Warn("FileOperations.Extract: {Reason}", err);
-                            return new ExtractResult { Result = OperationResult.Failed, ErrorMessage = err };
-                        }
+                        string err = "Archive stream is not seekable.";
+                        Log.Warn("FileOperations.Extract: {Reason}", err);
+                        return new ExtractResult { Result = OperationResult.Failed, ErrorMessage = err };
+                    }
 
+                    // The caller may have already read the stream (e.g. to pre-check
+                    // uncompressed size) leaving the position at the tail — reset so the
+                    // signature sniff at the beginning of the archive works.
+                    stream.Seek(0, SeekOrigin.Begin);
+
+// Total counts needed for the % progress; the pre-scan pass costs one
+                    // read through the archive headers. For remote RAR/7z each header seeks
+                    // the wire connection, so the caller may opt out (filename-only progress).
+                    int totalFiles = 0;
+                    long totalBytes = 0;
+                    if (preScanSizes)
+                    {
                         using (var archive = SharpCompress.Archives.ArchiveFactory.Open(stream))
                         {
-                            // Pre-scan: count files and total uncompressed size
-                            int totalFiles = 0;
-                            long totalBytes = 0;
                             foreach (var entry in archive.Entries)
                             {
                                 if (!entry.IsDirectory)
@@ -1504,132 +1619,132 @@ namespace XFiles.FileSystem
                                     totalBytes += (long)entry.Size;
                                 }
                             }
+                        }
+}
 
-                            int completedFiles = 0;
-                            long completedBytes = 0;
-                            bool overwriteAll = conflictCallback == null;
+                        int completedFiles = 0;
+                        long completedBytes = 0;
+                        bool overwriteAll = conflictCallback == null;
 
-                            // Reset stream for extraction pass
-                            stream.Seek(0, SeekOrigin.Begin);
-                            using (var archive2 = SharpCompress.Archives.ArchiveFactory.Open(stream))
+                        // Reset stream for extraction pass
+                        stream.Seek(0, SeekOrigin.Begin);
+                        using (var archive2 = SharpCompress.Archives.ArchiveFactory.Open(stream))
+                        {
+                            foreach (var entry in archive2.Entries)
                             {
-                                foreach (var entry in archive2.Entries)
+                                if (token.IsCancellationRequested)
+                                    return new ExtractResult { Result = OperationResult.Cancelled };
+
+                                if (entry.IsDirectory) continue;
+
+                                if (!overwriteAll && conflictCallback != null)
                                 {
-                                    if (token.IsCancellationRequested)
-                                        return new ExtractResult { Result = OperationResult.Cancelled };
-
-                                    if (entry.IsDirectory) continue;
-
-                                    if (!overwriteAll && conflictCallback != null)
+                                    string destPath = System.IO.Path.Combine(destDir, entry.Key);
+                                    if (CheckPathType(destPath) == "file")
                                     {
-                                        string destPath = System.IO.Path.Combine(destDir, entry.Key);
-                                        if (CheckPathType(destPath) == "file")
+                                        int decision = await conflictCallback(entry.Key);
+                                        switch (decision)
                                         {
-                                            int decision = await conflictCallback(entry.Key);
-                                            switch (decision)
-                                            {
-                                                case 0: // Skip
-                                                    Log.Dbg("Extract: skipping {File}", entry.Key);
-                                                    completedFiles++;
-                                                    completedBytes += (long)entry.Size;
-                                                    continue;
-                                                case 1: // Overwrite this one
-                                                    Log.Dbg("Extract: overwriting {File}", entry.Key);
-                                                    break;
-                                                case 2: // Overwrite all remaining
-                                                    Log.Dbg("Extract: overwrite all remaining");
-                                                    overwriteAll = true;
-                                                    break;
-                                            }
+                                            case 0: // Skip
+                                                Log.Dbg("Extract: skipping {File}", entry.Key);
+                                                completedFiles++;
+                                                completedBytes += (long)entry.Size;
+                                                continue;
+                                            case 1: // Overwrite this one
+                                                Log.Dbg("Extract: overwriting {File}", entry.Key);
+                                                break;
+                                            case 2: // Overwrite all remaining
+                                                Log.Dbg("Extract: overwrite all remaining");
+                                                overwriteAll = true;
+                                                break;
                                         }
                                     }
+                                }
 
-                                    progress?.Report(new OperationProgress
-                                    {
-                                        FileName = entry.Key,
-                                        PercentComplete = totalFiles > 0 ? (double)completedFiles / totalFiles * 100.0 : -1,
-                                        FileIndex = completedFiles,
-                                        FileTotal = totalFiles,
-                                        BytesCopied = completedBytes,
-                                        TotalBytes = totalBytes
-                                    });
+                                progress?.Report(new OperationProgress
+                                {
+                                    FileName = entry.Key,
+                                    PercentComplete = totalFiles > 0 ? (double)completedFiles / totalFiles * 100.0 : -1,
+                                    FileIndex = completedFiles,
+                                    FileTotal = totalFiles,
+                                    BytesCopied = completedBytes,
+                                    TotalBytes = totalBytes
+                                });
 
-                                    // Ensure parent directory exists
-                                    string entryDestPath = System.IO.Path.Combine(destDir, entry.Key);
-                                    string entryParentDir = System.IO.Path.GetDirectoryName(entryDestPath);
-                                    if (entryParentDir != null && CheckPathType(entryParentDir) == null)
+                                // Ensure parent directory exists
+                                string entryDestPath = System.IO.Path.Combine(destDir, entry.Key);
+                                string entryParentDir = System.IO.Path.GetDirectoryName(entryDestPath);
+                                if (entryParentDir != null && CheckPathType(entryParentDir) == null)
+                                {
+                                    CreateDirectoryFromAppW(entryParentDir, IntPtr.Zero);
+                                }
+
+                                // Extract with cancel support via chunked copy
+                                using (var entryStream = entry.OpenEntryStream())
+                                {
+                                    if (entryStream == null)
                                     {
-                                        CreateDirectoryFromAppW(entryParentDir, IntPtr.Zero);
+                                        failedEntries++;
+                                        if (firstError == null)
+                                            firstError = "Cannot open archive entry \"" + entry.Key + "\" for reading.";
+                                        Log.Warn("Extract: cannot open entry stream {File}", entry.Key);
+                                        continue;
                                     }
 
-                                    // Extract with cancel support via chunked copy
-                                    using (var entryStream = entry.OpenEntryStream())
+                                    using (var writeStream = Win32FileWriteStream.Create(entryDestPath))
                                     {
-                                        if (entryStream == null)
+                                        if (writeStream == null)
                                         {
+                                            int errCode = Marshal.GetLastWin32Error();
                                             failedEntries++;
                                             if (firstError == null)
-                                                firstError = "Cannot open archive entry \"" + entry.Key + "\" for reading.";
-                                            Log.Warn("Extract: cannot open entry stream {File}", entry.Key);
+                                                firstError = "Could not create \"" + entryDestPath + "\" (Win32 error " + errCode + "). Check that the destination folder exists and is writable.";
+                                            Log.Warn("Extract: cannot create dest file {Path} (Win32 error {Error})", entryDestPath, errCode);
                                             continue;
                                         }
 
-                                        using (var writeStream = Win32FileWriteStream.Create(entryDestPath))
+                                        var buffer = new byte[CopyChunkSize];
+                                        long entryCopied = 0;
+                                        long entrySize = (long)entry.Size;
+                                        int bytesRead;
+                                        var lastReport = Stopwatch.GetTimestamp();
+
+                                        do
                                         {
-                                            if (writeStream == null)
+                                            if (token.IsCancellationRequested)
+                                                return new ExtractResult { Result = OperationResult.Cancelled };
+
+                                            bytesRead = entryStream.Read(buffer, 0, CopyChunkSize);
+                                            if (bytesRead > 0)
                                             {
-                                                int errCode = Marshal.GetLastWin32Error();
-                                                failedEntries++;
-                                                if (firstError == null)
-                                                    firstError = "Could not create \"" + entryDestPath + "\" (Win32 error " + errCode + "). Check that the destination folder exists and is writable.";
-                                                Log.Warn("Extract: cannot create dest file {Path} (Win32 error {Error})", entryDestPath, errCode);
-                                                continue;
-                                            }
+                                                writeStream.Write(buffer, 0, bytesRead);
+                                                entryCopied += bytesRead;
 
-                                            var buffer = new byte[CopyChunkSize];
-                                            long entryCopied = 0;
-                                            long entrySize = (long)entry.Size;
-                                            int bytesRead;
-                                            var lastReport = Stopwatch.GetTimestamp();
-
-                                            do
-                                            {
-                                                if (token.IsCancellationRequested)
-                                                    return new ExtractResult { Result = OperationResult.Cancelled };
-
-                                                bytesRead = entryStream.Read(buffer, 0, CopyChunkSize);
-                                                if (bytesRead > 0)
+                                                long now = Stopwatch.GetTimestamp();
+                                                double elapsedMs = (now - lastReport) * 1000.0 / Stopwatch.Frequency;
+                                                if (elapsedMs >= 100 || entryCopied >= entrySize)
                                                 {
-                                                    writeStream.Write(buffer, 0, bytesRead);
-                                                    entryCopied += bytesRead;
-
-                                                    long now = Stopwatch.GetTimestamp();
-                                                    double elapsedMs = (now - lastReport) * 1000.0 / Stopwatch.Frequency;
-                                                    if (elapsedMs >= 100 || entryCopied >= entrySize)
+                                                    lastReport = now;
+                                                    progress?.Report(new OperationProgress
                                                     {
-                                                        lastReport = now;
-                                                        progress?.Report(new OperationProgress
-                                                        {
-                                                            FileName = entry.Key,
-                                                            PercentComplete = totalFiles > 0 ? (double)(completedFiles) / totalFiles * 100.0 : -1,
-                                                            FileIndex = completedFiles,
-                                                            FileTotal = totalFiles,
-                                                            BytesCopied = completedBytes + entryCopied,
-                                                            TotalBytes = totalBytes
-                                                        });
-                                                    }
+                                                        FileName = entry.Key,
+                                                        PercentComplete = totalFiles > 0 ? (double)(completedFiles) / totalFiles * 100.0 : -1,
+                                                        FileIndex = completedFiles,
+                                                        FileTotal = totalFiles,
+                                                        BytesCopied = completedBytes + entryCopied,
+                                                        TotalBytes = totalBytes
+                                                    });
                                                 }
                                             }
-                                            while (bytesRead > 0);
                                         }
+                                        while (bytesRead > 0);
                                     }
-
-                                    completedFiles++;
-                                    completedBytes += (long)entry.Size;
                                 }
+
+                                completedFiles++;
+                                completedBytes += (long)entry.Size;
                             }
                         }
-                    }
 
                     progress?.Report(new OperationProgress
                     {

@@ -6,12 +6,31 @@ using System.Threading.Tasks;
 using Windows.System;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
+using Windows.UI.Xaml.Data;
 using Windows.UI.Xaml.Input;
 using XFiles.FileSystem;
 using XFiles.Navigation;
 
 namespace XFiles.Controls
 {
+    /// <summary>
+    /// Toggles a row element between the section-divider state and the normal
+    /// icon+name state (parameter "normal" shows the divider when IsSeparator,
+    /// "reverse" shows the content row when NOT a separator).
+    /// </summary>
+    internal sealed class IsSeparatorConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, string language)
+        {
+            bool isSep = value is bool b && b;
+            bool divider = parameter as string == "normal" ? isSep : !isSep;
+            return divider ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, string language)
+            => throw new NotSupportedException();
+    }
+
     public enum PickerMode
     {
         Folder,
@@ -111,10 +130,13 @@ namespace XFiles.Controls
             // At the drives root the confirm action makes no sense (there is no
             // destination), so the A button reads "Navigate" and the virtual
             // confirm entry is not shown.
-            string footerA = fileMode || isRoot ? "Navigate" : (ConfirmLabelForPath(_currentPath) ?? "Move Here");
-            string moveHereName = ConfirmLabelForPath(_currentPath) ?? "Move Here";
+            string footerA = fileMode || isRoot ? "Navigate" : ConfirmLabelForPath(_currentPath);
+            string moveHereName = ConfirmLabelForPath(_currentPath);
             if (!isRoot)
+            {
+                footerA = $"{footerA} ({dirName})";
                 moveHereName = $"{moveHereName} ({dirName})";
+            }
             FooterALabel.Text = footerA;
 
             // Rebuild virtual entry with updated name (folder mode only — file
@@ -154,13 +176,17 @@ namespace XFiles.Controls
             }
 
             _entries = new List<BrowserEntry>();
-            if (!fileMode && !isRoot)
-                _entries.Add(moveHereEntry);
 
-            // Quick jump to the drives root from any folder
+            // Groups, in display order, separated by divider rows:
+            //   [action row: Move Here / Extract Here / Copy Here]
+            //      |sep|
+            //   [Drives jump + drive entries]
+            //      |sep|
+            //   [folders] (+ files in file mode)
+            var driveGroup = new List<BrowserEntry>();
             if (!isRoot)
             {
-                _entries.Add(new BrowserEntry
+                driveGroup.Add(new BrowserEntry
                 {
                     Name = "Drives",
                     FullPath = null,
@@ -172,25 +198,40 @@ namespace XFiles.Controls
 
             string driveIcon = "ms-appx:///Assets/Views/FileActionSheet/fileactionsheet-hdd-48.png";
             string folderIcon = $"ms-appx:///Assets/FileTypes/folder-{EntryViewModel.FolderColor}-24.png";
-            _entries.AddRange(rawEntries
-                .Where(e => e.IsDirectory)
-                .OrderBy(e => e.IsDrive ? 0 : 1)
-                .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
+
+            var driveEntries = rawEntries
+                .Where(e => e.IsDirectory && e.IsDrive)
+                .OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
                 .Select(e => new BrowserEntry
                 {
                     Name = e.Name,
                     FullPath = e.FullPath,
                     IsDirectory = true,
-                    IsDrive = e.IsDrive,
-                    Icon = e.IsDrive ? driveIcon : folderIcon
-                }));
+                    IsDrive = true,
+                    Icon = driveIcon
+                });
+            driveGroup.AddRange(driveEntries);
+
+            var folderGroup = rawEntries
+                .Where(e => e.IsDirectory && !e.IsDrive)
+                .OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(e => new BrowserEntry
+                {
+                    Name = e.Name,
+                    FullPath = e.FullPath,
+                    IsDirectory = true,
+                    IsDrive = false,
+                    Icon = folderIcon
+                })
+                .ToList();
 
             // File mode: also list files (directories above). When a filter is
             // given, only matching extensions are shown; a null filter lists all.
+            var fileGroup = new List<BrowserEntry>();
             if (fileMode)
             {
                 var filter = _fileExtensions;
-                _entries.AddRange(rawEntries
+                fileGroup.AddRange(rawEntries
                     .Where(e => !e.IsDirectory
                         && (filter == null
                             || filter.Contains(System.IO.Path.GetExtension(e.Name), StringComparer.OrdinalIgnoreCase)))
@@ -203,6 +244,30 @@ namespace XFiles.Controls
                         IsDrive = false,
                         Icon = FileIcon(e.Name)
                     }));
+            }
+
+            // Compose the rows with divider rows between groups.
+            if (!fileMode && !isRoot)
+                _entries.Add(moveHereEntry);
+            if (!isRoot)
+            {
+                if (_entries.Count > 0)
+                    _entries.Add(SeparatorEntry());
+                _entries.AddRange(driveGroup);
+            }
+            else
+            {
+                _entries.AddRange(driveGroup);
+            }
+            if (folderGroup.Count > 0)
+            {
+                _entries.Add(SeparatorEntry());
+                _entries.AddRange(folderGroup);
+            }
+            if (fileGroup.Count > 0)
+            {
+                _entries.Add(SeparatorEntry());
+                _entries.AddRange(fileGroup);
             }
 
             EntryList.ItemsSource = _entries;
@@ -223,12 +288,7 @@ namespace XFiles.Controls
         {
             if (!string.IsNullOrEmpty(_confirmLabel))
                 return _confirmLabel;
-            if (string.IsNullOrEmpty(path))
-                return "Move Here";
-            string name = System.IO.Path.GetFileName(path.TrimEnd('\\'));
-            if (string.IsNullOrEmpty(name))
-                name = path.TrimEnd('\\');
-            return $"Move Here ({name})";
+            return "Move Here";
         }
 
         private static string FileIcon(string fileName)
@@ -262,9 +322,18 @@ namespace XFiles.Controls
             }
         }
 
+        private static BrowserEntry SeparatorEntry() => new BrowserEntry
+        {
+            Name = "",
+            FullPath = null,
+            IsDirectory = false,
+            IsSeparator = true
+        };
+
         private void EntryList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (!(EntryList.SelectedItem is BrowserEntry selected)) return;
+            if (selected.IsSeparator) return;
 
             if (_mode == PickerMode.File)
             {
@@ -288,6 +357,7 @@ namespace XFiles.Controls
         {
             if (e.ClickedItem is BrowserEntry clicked)
             {
+                if (clicked.IsSeparator) return;
                 if (clicked.IsVirtual)
                 {
                     ConfirmSelection(_currentPath);
@@ -347,8 +417,13 @@ namespace XFiles.Controls
         {
             if (_entries.Count == 0) return;
             int newIndex = EntryList.SelectedIndex + direction;
-            if (newIndex < 0) newIndex = _entries.Count - 1;
-            else if (newIndex >= _entries.Count) newIndex = 0;
+            for (int i = 0; i < _entries.Count; i++)
+            {
+                if (newIndex < 0) newIndex = _entries.Count - 1;
+                else if (newIndex >= _entries.Count) newIndex = 0;
+                if (!_entries[newIndex].IsSeparator) break;
+                newIndex += direction;
+            }
             EntryList.SelectedIndex = newIndex;
             EntryList.ScrollIntoView(EntryList.SelectedItem);
         }
@@ -356,6 +431,7 @@ namespace XFiles.Controls
         private void OnConfirm()
         {
             if (!(EntryList.SelectedItem is BrowserEntry selected)) return;
+            if (selected.IsSeparator) return;
 
             if (selected.IsVirtual)
             {
@@ -398,6 +474,7 @@ namespace XFiles.Controls
             public bool IsDirectory { get; set; }
             public bool IsDrive { get; set; }
             public bool IsVirtual { get; set; }
+            public bool IsSeparator { get; set; }
             public string Icon { get; set; }
         }
     }

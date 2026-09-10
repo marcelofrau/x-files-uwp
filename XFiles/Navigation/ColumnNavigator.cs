@@ -1186,13 +1186,6 @@ namespace XFiles.Navigation
             }
         }
 
-        /// <summary>
-        /// Public wrapper for CacheNetworkFileAsync — lets pages download a remote file
-        /// to the local NetworkCache for offline use (e.g. extracting a remote archive).
-        /// </summary>
-        public Task<string> DownloadNetworkFileToCacheAsync(FileEntry entry)
-            => CacheNetworkFileAsync(entry);
-
         /// <summary>Builds the locations column entry list (saved locations + action rows).</summary>
         private async Task<List<FileEntry>> BuildNetworkLocationsAsync()
         {

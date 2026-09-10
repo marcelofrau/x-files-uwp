@@ -75,14 +75,20 @@ namespace XFiles.Controls
             _browser = browser;
 
             RowsPanel.Children.Clear();
+            _rows.Clear();
             PieHost.Children.Clear();
             CompressionCanvas?.Children.Clear();
             VisualPanel.Visibility = Visibility.Collapsed;
             CompressionVisual.Visibility = Visibility.Collapsed;
-            if (PieCaption != null) PieCaption.Visibility = Visibility.Collapsed;
+            if (PieCaptionRow1 != null)
+            {
+                PieCaptionRow1.Visibility = Visibility.Collapsed;
+                PieCaptionRow2.Visibility = Visibility.Collapsed;
+            }
             if (CompressionCaption != null) CompressionCaption.Visibility = Visibility.Collapsed;
             StatusText.Text = "";
             PermissionsHint.Visibility = Visibility.Collapsed;
+            if (_scanBar != null) _scanBar.Visibility = Visibility.Collapsed;
             HeaderIcon.Visibility = Visibility.Visible;
             TitleText.Text = entry.Name;
             NameText.Text = entry.IsDirectory ? "Folder Properties" : "File Properties";
@@ -172,7 +178,11 @@ namespace XFiles.Controls
             PermissionsHint.Visibility = Visibility.Visible;
 
             VisualPanel.Visibility = Visibility.Visible;
-            if (PieCaption != null) PieCaption.Visibility = Visibility.Visible;
+            if (PieCaptionRow1 != null)
+            {
+                PieCaptionRow1.Visibility = Visibility.Visible;
+                PieCaptionRow2.Visibility = Visibility.Visible;
+            }
             AddRow("Total size", "Calculating…");
             AddRow("Files", "Calculating…");
             AddRow("Subfolders", "Calculating…");
@@ -248,15 +258,20 @@ namespace XFiles.Controls
             if (fraction > 0 && fraction < MinPieSlice) fraction = MinPieSlice;
             BuildPie(PieHost, fraction);
 
-            if (PieCaption != null)
+            if (PieCaptionRow1 != null)
             {
                 if (driveTotal > 0)
                 {
-                    PieCaption.Text = $"{Formatting.FormatSize(s.TotalBytes)} of {Formatting.FormatSize((long)driveTotal)} · {realFraction:P2} of drive";
+                    // Two lines so long drive sizes don't truncate: sizes on the
+                    // first line, the real used percentage (not the 2% min slice)
+                    // on the second.
+                    PieCaptionRow1.Text = $"{Formatting.FormatSize(s.TotalBytes)} of {Formatting.FormatSize((long)driveTotal)}";
+                    PieCaptionRow2.Text = $"{realFraction:P2} of drive";
                 }
                 else
                 {
-                    PieCaption.Text = Formatting.FormatSize(s.TotalBytes);
+                    PieCaptionRow1.Text = Formatting.FormatSize(s.TotalBytes);
+                    PieCaptionRow2.Text = "";
                 }
             }
 
@@ -293,7 +308,7 @@ namespace XFiles.Controls
             if (attrs != 0) AddRow("Attributes", FormatAttributes(attrs));
             PermissionsHint.Visibility = Visibility.Visible;
 
-            if (isImage || isAudio || isVideo || ext.Equals(".pdf", StringComparison.OrdinalIgnoreCase))
+            if (isImage || isAudio || ext.Equals(".pdf", StringComparison.OrdinalIgnoreCase))
             {
                 StatusText.Text = "Reading file info…";
                 var ct = _scanCts.Token;
@@ -525,16 +540,17 @@ namespace XFiles.Controls
         /// <summary>
         /// Draws an isometric 3D box with compression fill.
         /// Front face: green (compressed) bottom, blue (saved) top.
-        /// Top face: lighter tint. Right side: darker tint. Shadow behind.
+        /// Top face: lighter tint. Right side: darker tint, split like the front.
+        /// Shadow behind.
         /// </summary>
         private void DrawIsometricBox(double packedFraction)
         {
-            // Box dimensions
-            double w = 140, h = 200;       // front face size
-            double dx = 22, dy = -16;       // isometric depth offset (right, up)
+            // Box dimensions — slim front face
+            double w = 96, h = 210;       // front face size
+            double dx = 18, dy = -14;       // isometric depth offset (right, up)
 
-            // Front face origin (top-left)
-            double fx = 18, fy = 28;
+            // Front face origin (top-left), centred in the 200-wide canvas
+            double fx = (CompressionCanvas.Width - (w + dx)) / 2.0, fy = 24;
 
             // Front face corners: TL, TR, BR, BL
             double tlx = fx, tly = fy;
@@ -562,9 +578,29 @@ namespace XFiles.Controls
                 packedFraction < 1.0 ? TopFreeBrush : TopUsedBrush));
 
             // 3. Right side face (front-top-right, back-top-right, back-bottom-right, front-bottom-right)
-            _cmpHost.Children.Add(BuildQuad(
-                trx, try_, btrx, btry, bbrx, bbry, brx, bry,
-                packedFraction < 1.0 ? SideFreeBrush : SideUsedBrush));
+            //    Split at the same height as the front face so the depth edge mirrors the
+            //    green (compressed) / blue (saved) boundary instead of staying all blue.
+            double sideSplitY = bly - h * packedFraction;    // front split point
+            double sideSplitBiY = sideSplitY + dy;           // back split point (back face is dy up)
+            if (packedFraction >= 0.999)
+            {
+                _cmpHost.Children.Add(BuildQuad(
+                    trx, try_, btrx, btry, bbrx, bbry, brx, bry, SideUsedBrush));
+            }
+            else if (packedFraction <= 0.001)
+            {
+                _cmpHost.Children.Add(BuildQuad(
+                    trx, try_, btrx, btry, bbrx, bbry, brx, bry, SideFreeBrush));
+            }
+            else
+            {
+                // Blue (saved) top portion of the side
+                _cmpHost.Children.Add(BuildQuad(
+                    trx, try_, btrx, btry, bbrx, sideSplitBiY, brx, sideSplitY, SideFreeBrush));
+                // Green (compressed) bottom portion of the side
+                _cmpHost.Children.Add(BuildQuad(
+                    brx, sideSplitY, bbrx, sideSplitBiY, bbrx, bbry, brx, bry, SideUsedBrush));
+            }
 
             // 4. Front face — split into green (compressed) and blue (saved)
             double splitY = bly - h * packedFraction; // Y where green meets blue
@@ -625,18 +661,12 @@ namespace XFiles.Controls
 
         private void AddProgressBarRow()
         {
-            var bar = new Windows.UI.Xaml.Controls.ProgressBar
+            _scanBar = ScanProgressBar;
+            if (_scanBar != null)
             {
-                IsIndeterminate = true,
-                Width = 260,
-                Height = 4,
-                Margin = new Thickness(132, 4, 0, 10),
-                Foreground = UsedBrush,
-                Background = DarkFreeBrush,
-                HorizontalAlignment = Windows.UI.Xaml.HorizontalAlignment.Left
-            };
-            RowsPanel.Children.Add(bar);
-            _scanBar = bar;
+                _scanBar.Visibility = Visibility.Visible;
+                _scanBar.IsIndeterminate = true;
+            }
         }
 
         private static string FormatAttributes(uint attrs)
