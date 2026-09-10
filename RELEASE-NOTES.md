@@ -28,6 +28,10 @@
 ---
 
 ## 🐛 Bug Fixes
+- **Large ZIP preview freeze over network** — hovering large ZIP archives on SMB/FTP/FTPS/SFTP could hang the whole app while the entry listing raced over a slow connection; large-archive previews now defer to a "Press A" card and the listing runs under a 15-second timeout with a local-cache fallback
+- **Large archive drill-in hang** — drilling into a large RAR/7z over FTP froze navigation indefinitely (the entry listing had no timeout, and each seek reopened the FTP data connection); drill-in now defers to a background cache download with live percentage, and the listing has the same 15-second timeout with cache fallback
+- **0 B archive entries** — files inside archives reported "0 B"; they now fall back to the real stored size
+- **Cancel-on-navigate during cache download** — changing selection or navigating while a large archive was downloading no longer breaks the UI (the download cancels cleanly)
 - **Properties intermittent blank column** — stale row cache left the details column empty on alternating opens; now cleared correctly
 - **Properties crash (RPC_E_WRONG_THREAD)** — folder progress callbacks were dispatched from a threadpool thread and touched XAML; now marshalled through the dispatcher
 - **B button / Y button in dialogs** — the dialog handlers compared against `VirtualKey.B` while the input router delivers `GamepadB`; Properties and Permissions dialogs now close and act correctly
