@@ -1,50 +1,31 @@
-> 🗂️ **The Properties Update.** v1.7.0 adds a full file & folder Properties dialog straight out of your Y-menu — incremental folder size scanning with a live pie chart, a WinRAR-style compression cube, rich media metadata, and a permissions sub-dialog. Plus: remote archive extraction now streams directly (no full download), with a cleaner archive picker and a quieter, more reliable network stack.
+> 🔐 **Encrypted Archives, Drive Compatibility & Performance Update.** v1.8.0 adds full password-protected archive support (ZIP, 7z, RAR — browse, preview, and extract), expands Xbox external/system drive compatibility with a multi-backend filesystem layer (`FromApp` → `PlainWin32` → `WinRT` + `removableStorage`), and speeds up navigation across large folders and archives.
 
 ---
 
-## 🆕 What's new since v1.6.0
+## 🆕 What's new since v1.7.0
 
-### 🗂️ File / Folder Properties *(NEW)*
-- **Y-menu → Properties** for every entry — local files, folders, archive entries, and network files
-- **Folder properties** — total size, file & subfolder counts scanned incrementally on a background thread; animated "Reading… N files · size" status with progress bar; **live pie chart** showing the folder's size against the whole drive (real percentage, 2% minimum slice so tiny folders stay visible)
-- **WinRAR-style compression view** — for ZIP/7z/RAR archives, an isometric 3D cube shows how much of the file is compressed vs. space saved, with ratio, saved percentage, and uncompressed size
-- **Rich file metadata** — audio (MP3/FLAC/WAV/M4A — duration, bitrate, sample rate, channels, codec), images (dimensions), PDF (page count), text files (lines, words, characters) — all parsed locally, no cloud lookups
-- **Details** — created / modified / accessed dates and attribute flags (read-only, hidden, system, archive)
-- **Permissions sub-dialog** — toggle Read-only / Hidden and optionally apply recursively to subfolders and files
-- **Two-column layout** — details on the left, pie chart + compression cube on the right; consistent Oxanium font throughout
+### 🔐 Password-Protected Archives *(NEW)*
+- **Browse encrypted archives** — drill into password-protected `.zip`, `.7z`, and `.rar` files (both encrypted headers and encrypted entries) as virtual folders, locally and over network shares
+- **On-demand password prompt** — gamepad-friendly masked `PasswordBox` dialog appears automatically when an archive or entry requires a password
+- **Session password memory** — once unlocked, the password is kept in memory for the session (hashed in cache keys, never logged or written to disk) so previewing and extracting entries inside the same archive never prompts twice
+- **Extract with password** — full-archive and single-file extraction (local, SMB/FTP/SFTP/WebDAV, and Device Portal) prompt for the password on demand and retry seamlessly
 
-### 📦 Remote Archive Extraction *(NEW)*
-- **Stream-based extract** — remote archives (SMB/FTP/FTPS/SFTP/WebDAV) extract directly from the network stream; the full-file local download is gone
-- **"Extract Here" picker** — destination chooser with the target folder's name on the confirm button, plus visual separators between the action, drives, and folders
-- **Smarter pre-scan** — ZIP gets a cheap central-directory size scan for percentage + disk-space check; RAR/7z skip the pre-scan (it costs a seek per entry over FTP) and extract single-pass with filename progress
-- **Large-archive deferral card** — remote archives over 128 MB show a "Press A to browse archive contents" card with the A-button hint, downloading to cache with live percentage and cancel-on-navigation
+### 💾 Xbox Drive Access & Multi-Backend Filesystem *(NEW)*
+- **`removableStorage` + `expandedResources` capabilities** — matches UWP homebrew emulators (XBSX2, RetroArch) so external USB drives (`E:\`, etc.) without manual `ALL APPLICATION PACKAGES` ACLs remain accessible
+- **Automatic backend fallback (`NativeFs`)** — every directory scan, drive probe, file stream, preview read, folder size scan, and file operation now tries `*FromAppW` first, falls back to direct `kernel32.dll` Win32 (`FindFirstFileExW` / `CreateFileW` under the `runFullTrust` token), and finally `Windows.Storage` (`WinRT`), caching the winning backend per volume root
+- **Per-backend drive diagnostics** — startup drive probes log the exact backend that opened each volume (or the last Win32 error code when inaccessible)
 
-### ⚡ Improvements
-- **Quieter FTP logs** — the raw `[FTP VRB]` protocol trace is suppressed at the default verbose level; full trace returns via a debug build flag
-- **Chiptune over FTP** — the player now shows the real filename (e.g. `2000AD - Creatures`), not the temporary cache filename
-- **Archive drill-in** — shows a spinner immediately; never looks frozen while the remote archive is prepared
-- **Documentation refresh** — README, ROADMAP, AGENTS.md and the network docset updated to the shipped v1.7.0 state
-
----
-
-## 🐛 Bug Fixes
-- **Large ZIP preview freeze over network** — hovering large ZIP archives on SMB/FTP/FTPS/SFTP could hang the whole app while the entry listing raced over a slow connection; large-archive previews now defer to a "Press A" card and the listing runs under a 15-second timeout with a local-cache fallback
-- **Large archive drill-in hang** — drilling into a large RAR/7z over FTP froze navigation indefinitely (the entry listing had no timeout, and each seek reopened the FTP data connection); drill-in now defers to a background cache download with live percentage, and the listing has the same 15-second timeout with cache fallback
-- **0 B archive entries** — files inside archives reported "0 B"; they now fall back to the real stored size
-- **Cancel-on-navigate during cache download** — changing selection or navigating while a large archive was downloading no longer breaks the UI (the download cancels cleanly)
-- **Properties intermittent blank column** — stale row cache left the details column empty on alternating opens; now cleared correctly
-- **Properties crash (RPC_E_WRONG_THREAD)** — folder progress callbacks were dispatched from a threadpool thread and touched XAML; now marshalled through the dispatcher
-- **B button / Y button in dialogs** — the dialog handlers compared against `VirtualKey.B` while the input router delivers `GamepadB`; Properties and Permissions dialogs now close and act correctly
-- **Video properties access violation** — removed the risky MP4 container read for video; videos show the safe basic properties (progress indicator could not communicate the failure, so keep the file open and retry — but on the next iteration this will be revisited)
-- **"Move Here" → "Extract Here"** — the archive picker showed the move label plus a duplicated folder name; extract now shows "Extract Here (folder)"
-- **Remote extract stream-at-EOF** — the size pre-scan left the stream at the file tail, so extraction opened garbage and threw; the stream now seeks back to the start
-- **Isometric cube depth** — the side face only rendered blue; it now mirrors the green (compressed) / blue (saved) split, and the cube is slimmer
-- **Pie caption truncation** — sizes and percentage split across two lines so nothing clips on huge drives
+### ⚡ Performance Improvements
+- **$O(1)$ Archive Entry Index** — `ArchiveBrowser` now builds and caches an in-memory index (`EntriesByPath`, `AllEntryPaths`, `AllDirs`) per open archive instead of rescanning `archive.Entries` on every subfolder navigation or file preview
+- **Lock-free $O(1)$ Favorites lookup** — `FavoritesManager.IsFavorite` now reads a volatile case-insensitive `HashSet<string>` instead of locking and scanning the list on every row of all three columns
+- **Single-pass refresh preview** — eliminated duplicate `UpdatePreviewColumnAsync` execution during column refresh
+- **Bounded local image/SVG preview & immediate native buffer disposal** — local image and SVG previews now enforce `FilePreviewLimits.MaxImageBytes` before reading into memory and dispose intermediate `SoftwareBitmap` buffers immediately in `finally` blocks
+- **Reduced XAML image churn** — header protocol icons and ROM system icons reuse existing `BitmapImage` instances when the URI is unchanged
 
 ---
 
 ## 📦 Installation
-1. 📥 Download the zip file below (`xfiles_1.7.0.1520_x64.zip`)
+1. 📥 Download the zip file below (`xfiles_1.8.0.1527_x64.zip`)
 2. 📖 Follow the installation instructions in the README (Developer Mode / Device Portal sideload)
 
 ---
