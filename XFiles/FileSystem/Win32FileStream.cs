@@ -25,11 +25,6 @@ namespace XFiles.FileSystem
         private const uint FILE_ATTRIBUTE_NORMAL = 0x80;
         private const uint FILE_FLAG_SEQUENTIAL_SCAN = 0x08000000;
 
-        [DllImport("api-ms-win-core-file-fromapp-l1-1-0.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        private static extern IntPtr CreateFileFromAppW(
-            string lpFileName, uint dwDesiredAccess, uint dwShareMode,
-            IntPtr lpSecurityAttributes, uint dwCreationDisposition,
-            uint dwFlagsAndAttributes, IntPtr hTemplateFile);
 
         [DllImport("kernel32.dll", SetLastError = true)]
         private static extern bool ReadFile(
@@ -52,18 +47,21 @@ namespace XFiles.FileSystem
 
         public static Win32FileStream OpenRead(string filePath)
         {
-            IntPtr hFile = CreateFileFromAppW(
+            // NativeFs picks the working backend for the volume: *FromApp first,
+            // then plain kernel32 (full-trust token), then Windows.Storage.
+            IntPtr hFile = NativeFs.OpenFile(
                 filePath, GENERIC_READ,
                 FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                IntPtr.Zero, OPEN_EXISTING,
-                FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
-                IntPtr.Zero);
+                OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
+                out FsBackend backend, out int error);
 
             if (hFile == (IntPtr)(-1))
             {
-                Log.Warn("Win32FileStream.OpenRead: cannot open {Path} for read, Win32 error={Error}", filePath, Marshal.GetLastWin32Error());
+                Log.Warn("Win32FileStream.OpenRead: cannot open {Path} for read, Win32 error={Error}", filePath, error);
                 return null;
             }
+
+            Log.Verb("Win32FileStream.OpenRead: {Path} via {Backend}", filePath, NativeFs.BackendName(backend));
 
             long length;
             if (!GetFileSizeEx(hFile, out length))

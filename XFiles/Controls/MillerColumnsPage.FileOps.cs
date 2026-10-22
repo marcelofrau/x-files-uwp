@@ -1820,6 +1820,15 @@ namespace XFiles.Controls
                 OpProgressDialog.SetPhase("Extracting", entry.Name, extractDir);
                 string rootFolder = await Task.Run(() => FileOperations.GetSingleRootFolder(cacheZip));
                 var extract = await FileOperations.ExtractAsync(cacheZip, extractDir, progress, null, OpProgressDialog.CancelToken);
+                if (extract.PasswordRequired)
+                {
+                    OpProgressDialog.Close();
+                    string password = await InputDialogControl.ShowAsync(
+                        $"Password for {entry.Name}", "", true);
+                    if (string.IsNullOrEmpty(password)) return;
+                    OpProgressDialog.Show("Extracting", entry.Name, extractDir);
+                    extract = await FileOperations.ExtractAsync(cacheZip, extractDir, password, progress, null, OpProgressDialog.CancelToken);
+                }
                 if (extract.Result == FileOperations.OperationResult.Cancelled)
                 {
                     OpProgressDialog.Cancel();
@@ -2669,6 +2678,24 @@ namespace XFiles.Controls
 
             OpProgressDialog.Show("Extracting", entry.Name, destDir);
             var extract = await FileOperations.ExtractAsync(entry.FullPath, destDir, progress, conflictCallback, OpProgressDialog.CancelToken);
+
+            // Encrypted archive: ask for the password and retry the extraction.
+            if (extract.PasswordRequired)
+            {
+                OpProgressDialog.Close();
+                string password = await InputDialogControl.ShowAsync(
+                    $"Password for {entry.Name}", "", true);
+                if (string.IsNullOrEmpty(password))
+                {
+                    Log.Info("HandleExtractAsync: password entry cancelled");
+                    return;
+                }
+
+                OpProgressDialog.Show("Extracting", entry.Name, destDir);
+                extract = await FileOperations.ExtractAsync(entry.FullPath, destDir, password,
+                    progress, conflictCallback, OpProgressDialog.CancelToken);
+            }
+
             var result = extract.Result;
 
             if (result == FileOperations.OperationResult.Cancelled)
@@ -2787,6 +2814,16 @@ namespace XFiles.Controls
                     OpProgressDialog.Show("Extracting", entry.Name, destDir);
                     var extract = await FileOperations.ExtractFromStreamAsync(
                         stream, entry.Name, destDir, progress, conflictCallback, OpProgressDialog.CancelToken, preScanSizes);
+                    if (extract.PasswordRequired)
+                    {
+                        OpProgressDialog.Close();
+                        string password = await InputDialogControl.ShowAsync(
+                            $"Password for {entry.Name}", "", true);
+                        if (string.IsNullOrEmpty(password)) return;
+                        OpProgressDialog.Show("Extracting", entry.Name, destDir);
+                        extract = await FileOperations.ExtractFromStreamAsync(
+                            stream, entry.Name, destDir, password, progress, conflictCallback, OpProgressDialog.CancelToken, preScanSizes);
+                    }
                     var result = extract.Result;
 
                     if (result == FileOperations.OperationResult.Cancelled)
@@ -2894,8 +2931,29 @@ namespace XFiles.Controls
             {
                 OpProgressDialog.UpdateProgress(p);
             });
-            var result = await FileOperations.ExtractFileAsync(
-                entry.ArchiveRootPath, entry.ArchiveInternalPath, destDir, conflictCallback, OpProgressDialog.CancelToken, progress);
+            var extractFile = await FileOperations.ExtractFileAsync(
+                entry.ArchiveRootPath, entry.ArchiveInternalPath, destDir, null,
+                conflictCallback, OpProgressDialog.CancelToken, progress);
+            var result = extractFile.Result;
+
+            // Encrypted archive: ask for the password and retry the extraction.
+            if (extractFile.PasswordRequired)
+            {
+                OpProgressDialog.Close();
+                string password = await InputDialogControl.ShowAsync(
+                    $"Password for {System.IO.Path.GetFileName(entry.ArchiveRootPath)}", "", true);
+                if (string.IsNullOrEmpty(password))
+                {
+                    Log.Info("HandleExtractFileAsync: password entry cancelled");
+                    return;
+                }
+
+                OpProgressDialog.Show("Extracting", fileName, destDir);
+                extractFile = await FileOperations.ExtractFileAsync(
+                    entry.ArchiveRootPath, entry.ArchiveInternalPath, destDir, password,
+                    conflictCallback, OpProgressDialog.CancelToken, progress);
+                result = extractFile.Result;
+            }
 
             if (result == FileOperations.OperationResult.Cancelled)
             {
@@ -2947,8 +3005,19 @@ namespace XFiles.Controls
                 });
 
                 OpProgressDialog.Show("Extracting", fileName, staging);
-                var result = await FileOperations.ExtractFileAsync(
-                    entry.ArchiveRootPath, entry.ArchiveInternalPath, staging, null, OpProgressDialog.CancelToken, progress);
+                var extractFile = await FileOperations.ExtractFileAsync(
+                    entry.ArchiveRootPath, entry.ArchiveInternalPath, staging, null, null, OpProgressDialog.CancelToken, progress);
+                if (extractFile.PasswordRequired)
+                {
+                    OpProgressDialog.Close();
+                    string password = await InputDialogControl.ShowAsync(
+                        $"Password for {System.IO.Path.GetFileName(entry.ArchiveRootPath)}", "", true);
+                    if (string.IsNullOrEmpty(password)) return;
+                    OpProgressDialog.Show("Extracting", fileName, staging);
+                    extractFile = await FileOperations.ExtractFileAsync(
+                        entry.ArchiveRootPath, entry.ArchiveInternalPath, staging, password, null, OpProgressDialog.CancelToken, progress);
+                }
+                var result = extractFile.Result;
                 if (result == FileOperations.OperationResult.Cancelled)
                 {
                     OpProgressDialog.Cancel();
@@ -3045,7 +3114,19 @@ namespace XFiles.Controls
                 // full ZIP download. Copy it to staging, then upload to the parent
                 // remote folder (mirrors the portal flow).
                 string stagingPath = System.IO.Path.Combine(staging, fileName);
-                using (Stream src = _navigator.ArchiveBrowser.OpenEntryStream(entry.ArchiveRootPath, entry.ArchiveInternalPath))
+                Stream src = _navigator.ArchiveBrowser.OpenEntryStream(
+                    entry.ArchiveRootPath, entry.ArchiveInternalPath, null, out ArchiveOpenStatus openStatus);
+                if (openStatus == ArchiveOpenStatus.PasswordRequired)
+                {
+                    OpProgressDialog.Close();
+                    string password = await InputDialogControl.ShowAsync(
+                        $"Password for {System.IO.Path.GetFileName(entry.ArchiveRootPath)}", "", true);
+                    if (string.IsNullOrEmpty(password)) return;
+                    OpProgressDialog.Show("Extracting", fileName, parentRemoteDir);
+                    src = _navigator.ArchiveBrowser.OpenEntryStream(
+                        entry.ArchiveRootPath, entry.ArchiveInternalPath, password, out openStatus);
+                }
+                using (src)
                 {
                     if (src == null)
                     {

@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using SharpCompress.Archives;
 using SharpCompress.Common;
+using SharpCompress.Readers;
 
 namespace XFiles.FileSystem
 {
@@ -24,17 +25,32 @@ namespace XFiles.FileSystem
         [DllImport("api-ms-win-core-file-fromapp-l1-1-0.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern bool CopyFileFromAppW(string lpExistingFileName, string lpNewFileName, bool bFailIfExists);
 
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool CopyFileW(string lpExistingFileName, string lpNewFileName, bool bFailIfExists);
+
         [DllImport("api-ms-win-core-file-fromapp-l1-1-0.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern bool MoveFileFromAppW(string lpExistingFileName, string lpNewFileName);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool MoveFileW(string lpExistingFileName, string lpNewFileName);
 
         [DllImport("api-ms-win-core-file-fromapp-l1-1-0.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern bool DeleteFileFromAppW(string lpFileName);
 
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool DeleteFileW(string lpFileName);
+
         [DllImport("api-ms-win-core-file-fromapp-l1-1-0.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern bool RemoveDirectoryFromAppW(string lpPathName);
 
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool RemoveDirectoryW(string lpPathName);
+
         [DllImport("api-ms-win-core-file-fromapp-l1-1-0.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern bool CreateDirectoryFromAppW(string lpPathName, IntPtr lpSecurityAttributes);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool CreateDirectoryW(string lpPathName, IntPtr lpSecurityAttributes);
 
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern bool GetDiskFreeSpaceExW(
@@ -45,6 +61,9 @@ namespace XFiles.FileSystem
 
         [DllImport("api-ms-win-core-file-l1-1-0.dll", CharSet = CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
         private static extern bool GetFileAttributesExFromAppW(string lpFileName, int fInfoLevelId, out WIN32_FILE_ATTRIBUTE_DATA lpFileInformation);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
+        private static extern bool GetFileAttributesExW(string lpFileName, int fInfoLevelId, out WIN32_FILE_ATTRIBUTE_DATA lpFileInformation);
 
         [StructLayout(LayoutKind.Sequential)]
         private struct WIN32_FILE_ATTRIBUTE_DATA
@@ -67,6 +86,29 @@ namespace XFiles.FileSystem
             int fSearchOp,
             IntPtr lpSearchFilter,
             uint dwAdditionalFlags);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr FindFirstFileExW(
+            string lpFileName,
+            int fInfoLevelId,
+            out WIN32_FIND_DATA lpFindFileData,
+            int fSearchOp,
+            IntPtr lpSearchFilter,
+            uint dwAdditionalFlags);
+
+        private static bool MoveFileCompat(string src, string dst) => MoveFileFromAppW(src, dst) || MoveFileW(src, dst);
+        private static bool DeleteFileCompat(string path) => DeleteFileFromAppW(path) || DeleteFileW(path);
+        private static bool RemoveDirectoryCompat(string path) => RemoveDirectoryFromAppW(path) || RemoveDirectoryW(path);
+        private static bool CreateDirectoryCompat(string path) => CreateDirectoryFromAppW(path, IntPtr.Zero) || CreateDirectoryW(path, IntPtr.Zero);
+        private static bool GetFileAttributesExCompat(string path, out WIN32_FILE_ATTRIBUTE_DATA attr)
+            => GetFileAttributesExFromAppW(path, 0, out attr) || GetFileAttributesExW(path, 0, out attr);
+        private static IntPtr FindFirstCompat(string pattern, out WIN32_FIND_DATA findData)
+        {
+            IntPtr h = FindFirstFileExFromAppW(pattern, 0, out findData, 0, IntPtr.Zero, 0);
+            if (h == new IntPtr(-1))
+                h = FindFirstFileExW(pattern, 0, out findData, 0, IntPtr.Zero, 0);
+            return h;
+        }
 
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern bool FindNextFileW(IntPtr hFindFile, out WIN32_FIND_DATA lpFindFileData);
@@ -97,8 +139,7 @@ namespace XFiles.FileSystem
             try
             {
                 var findData = new WIN32_FIND_DATA();
-                IntPtr hFind = FindFirstFileExFromAppW(
-                    dir + "\\*", 0, out findData, 0, IntPtr.Zero, 0);
+                IntPtr hFind = FindFirstCompat(dir + "\\*", out findData);
                 if (hFind == new IntPtr(-1)) return files;
 
                 do
@@ -132,13 +173,19 @@ namespace XFiles.FileSystem
         [DllImport("api-ms-win-core-file-fromapp-l1-1-0.dll", CharSet = CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
         private static extern bool SetFileAttributesFromAppW(string lpFileName, uint dwFileAttributes);
 
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
+        private static extern bool SetFileAttributesW(string lpFileName, uint dwFileAttributes);
+
+        private static bool SetFileAttributesCompat(string path, uint attributes)
+            => SetFileAttributesFromAppW(path, attributes) || SetFileAttributesW(path, attributes);
+
         /// <summary>Reads the Win32 file attribute flags (READONLY/HIDDEN/...). Returns false on failure.</summary>
         public static bool TryGetFileAttributes(string path, out uint attributes)
         {
             attributes = 0;
             try
             {
-                return GetFileAttributesExFromAppW(path, 0, out var attr) && ((attributes = attr.dwFileAttributes) != INVALID_FILE_ATTRIBUTES);
+                return GetFileAttributesExCompat(path, out var attr) && ((attributes = attr.dwFileAttributes) != INVALID_FILE_ATTRIBUTES);
             }
             catch (Exception ex)
             {
@@ -152,7 +199,7 @@ namespace XFiles.FileSystem
         {
             try
             {
-                if (!GetFileAttributesExFromAppW(path, 0, out var attr)) return null;
+                if (!GetFileAttributesExCompat(path, out var attr)) return null;
                 long raw = ((long)attr.ftLastWriteTime.dwHighDateTime << 32) | (uint)attr.ftLastWriteTime.dwLowDateTime;
                 if (raw <= 0) return null;
                 return DateTimeOffset.FromFileTime(raw);
@@ -169,7 +216,7 @@ namespace XFiles.FileSystem
         {
             try
             {
-                if (!GetFileAttributesExFromAppW(path, 0, out var attr) || attr.dwFileAttributes == INVALID_FILE_ATTRIBUTES)
+                if (!GetFileAttributesExCompat(path, out var attr) || attr.dwFileAttributes == INVALID_FILE_ATTRIBUTES)
                     return (0, null, null, null);
                 return (
                     attr.dwFileAttributes,
@@ -195,7 +242,7 @@ namespace XFiles.FileSystem
         {
             try
             {
-                bool ok = SetFileAttributesFromAppW(path, attributes);
+                bool ok = SetFileAttributesCompat(path, attributes);
                 if (!ok) Log.Warn("FileOperations.TrySetFileAttributes: {Path} failed (err {Err})", path, System.Runtime.InteropServices.Marshal.GetLastWin32Error());
                 return ok;
             }
@@ -224,7 +271,7 @@ namespace XFiles.FileSystem
                 {
                     if (++scanned > maxEntries) return;
                     string dir = pending.Pop();
-                    IntPtr hFind = FindFirstFileExFromAppW(dir + "\\*", 0, out WIN32_FIND_DATA findData, 0, IntPtr.Zero, 0);
+                    IntPtr hFind = FindFirstCompat(dir + "\\*", out WIN32_FIND_DATA findData);
                     if (hFind == new IntPtr(-1)) continue;
                     try
                     {
@@ -257,7 +304,7 @@ namespace XFiles.FileSystem
         /// </summary>
         internal static string CheckPathType(string path)
         {
-            if (GetFileAttributesExFromAppW(path, 0, out var attr))
+            if (GetFileAttributesExCompat(path, out var attr))
             {
                 if ((attr.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
                     return "directory";
@@ -283,6 +330,22 @@ namespace XFiles.FileSystem
         {
             public OperationResult Result { get; set; }
             public string ErrorMessage { get; set; }
+
+            /// <summary>
+            /// True when the archive is encrypted and the password was missing or
+            /// wrong — the UI prompts for the password and retries.
+            /// </summary>
+            public bool PasswordRequired { get; set; }
+        }
+
+        /// <summary>
+        /// Result of extracting a single entry from an archive: outcome plus the
+        /// password-required flag so the UI can prompt and retry.
+        /// </summary>
+        public class ExtractFileResult
+        {
+            public OperationResult Result { get; set; }
+            public bool PasswordRequired { get; set; }
         }
 
         /// <summary>
@@ -483,7 +546,7 @@ namespace XFiles.FileSystem
         {
             try
             {
-                if (DeleteFileFromAppW(zipPath))
+                if (DeleteFileCompat(zipPath))
                     Log.Dbg("FileOperations.CleanupFailedZip: removed partial zip {Path}", zipPath);
             }
             catch (Exception ex)
@@ -594,7 +657,7 @@ namespace XFiles.FileSystem
             catch (Exception ex)
             {
                 Log.Warn("FileOperations.CopyFileStreaming exception: {File}", ex, sourcePath);
-                try { DeleteFileFromAppW(destPath); } catch { }
+                try { DeleteFileCompat(destPath); } catch { }
                 return Fail($"Error while copying \"{sourcePath}\": {ex.Message}");
             }
         }
@@ -650,8 +713,7 @@ namespace XFiles.FileSystem
             try
             {
                 var findData = new WIN32_FIND_DATA();
-                IntPtr hFind = FindFirstFileExFromAppW(
-                    dir + "\\*", 0, out findData, 0, IntPtr.Zero, 0);
+                IntPtr hFind = FindFirstCompat(dir + "\\*", out findData);
                 if (hFind == new IntPtr(-1)) return;
 
                 do
@@ -680,7 +742,7 @@ namespace XFiles.FileSystem
 
         private static long GetFileSizePInvoke(string path)
         {
-            if (GetFileAttributesExFromAppW(path, 0, out var attr))
+            if (GetFileAttributesExCompat(path, out var attr))
             {
                 return ((long)attr.nFileSizeHigh << 32) | attr.nFileSizeLow;
             }
@@ -911,7 +973,7 @@ namespace XFiles.FileSystem
                     }
 
                     Log.Info("FileOperations.CopyDirectory: {Source} -> {Dest}", sourceDir, destPath);
-                    CreateDirectoryFromAppW(destPath, IntPtr.Zero);
+                    CreateDirectoryCompat(destPath);
 
                     // Pre-scan for accurate progress
                     var scan = new ScanResult();
@@ -965,8 +1027,7 @@ namespace XFiles.FileSystem
             try
             {
                 var findData = new WIN32_FIND_DATA();
-                IntPtr hFind = FindFirstFileExFromAppW(
-                    sourceDir + "\\*", 0, out findData, 0, IntPtr.Zero, 0);
+                IntPtr hFind = FindFirstCompat(sourceDir + "\\*", out findData);
                 if (hFind == new IntPtr(-1)) return OperationResult.Success;
 
                 do
@@ -979,7 +1040,7 @@ namespace XFiles.FileSystem
                     if ((findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
                     {
                         string destSubDir = destDir + "\\" + findData.cFileName;
-                        CreateDirectoryFromAppW(destSubDir, IntPtr.Zero);
+                        CreateDirectoryCompat(destSubDir);
                         var result = CopyDirectoryRecursive(fullPath, destSubDir, progress, token,
                             ref completedFiles, totalFiles, ref completedBytes, totalBytes, conflict);
                         if (result != OperationResult.Success) { FindClose(hFind); return result; }
@@ -1070,7 +1131,7 @@ namespace XFiles.FileSystem
                     });
 
                     var moveSw = Stopwatch.StartNew();
-                    bool ok = MoveFileFromAppW(sourcePath, destPath);
+                    bool ok = MoveFileCompat(sourcePath, destPath);
                     if (ok)
                     {
                         moveSw.Stop();
@@ -1090,7 +1151,7 @@ namespace XFiles.FileSystem
                         {
                             return copyResult;
                         }
-                        bool deleted = DeleteFileFromAppW(sourcePath);
+                        bool deleted = DeleteFileCompat(sourcePath);
                         if (!deleted)
                         {
                             int delErr = Marshal.GetLastWin32Error();
@@ -1153,7 +1214,7 @@ namespace XFiles.FileSystem
                     var moveSw = Stopwatch.StartNew();
 
                     // Try native move first (same volume)
-                    bool ok = MoveFileFromAppW(sourceDir, destPath);
+                    bool ok = MoveFileCompat(sourceDir, destPath);
                     if (ok)
                     {
                         moveSw.Stop();
@@ -1169,7 +1230,7 @@ namespace XFiles.FileSystem
 
                     // Fallback: move each file individually with progress
                     Log.Dbg("FileOperations.MoveDirectory: native move failed, using per-file fallback");
-                    CreateDirectoryFromAppW(destPath, IntPtr.Zero);
+                    CreateDirectoryCompat(destPath);
 
                     var result = MoveDirectoryRecursive(sourceDir, destPath, progress, token, conflict);
                     moveSw.Stop();
@@ -1179,7 +1240,7 @@ namespace XFiles.FileSystem
                     if (result == OperationResult.Success)
                     {
                         // Source should be empty after moving all files — remove it
-                        bool removed = RemoveDirectoryFromAppW(sourceDir);
+                        bool removed = RemoveDirectoryCompat(sourceDir);
                         if (!removed)
                         {
                             int rmErr = Marshal.GetLastWin32Error();
@@ -1206,8 +1267,7 @@ namespace XFiles.FileSystem
             try
             {
                 var findData = new WIN32_FIND_DATA();
-                IntPtr hFind = FindFirstFileExFromAppW(
-                    sourceDir + "\\*", 0, out findData, 0, IntPtr.Zero, 0);
+                IntPtr hFind = FindFirstCompat(sourceDir + "\\*", out findData);
                 if (hFind == new IntPtr(-1)) return OperationResult.Success;
 
                 do
@@ -1220,7 +1280,7 @@ namespace XFiles.FileSystem
                     if ((findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
                     {
                         string destSubDir = destDir + "\\" + findData.cFileName;
-                        CreateDirectoryFromAppW(destSubDir, IntPtr.Zero);
+                        CreateDirectoryCompat(destSubDir);
                         var result = MoveDirectoryRecursive(fullPath, destSubDir, progress, token, conflict);
                         if (result != OperationResult.Success) { FindClose(hFind); return result; }
                     }
@@ -1231,7 +1291,7 @@ namespace XFiles.FileSystem
                         {
                             destFile = ResolveConflictAsync(destFile, conflict, token).GetAwaiter().GetResult();
                         }
-                        bool ok = MoveFileFromAppW(fullPath, destFile);
+                        bool ok = MoveFileCompat(fullPath, destFile);
                         if (!ok)
                         {
                             // Fallback: streaming copy + delete
@@ -1243,7 +1303,7 @@ namespace XFiles.FileSystem
                                 FindClose(hFind);
                                 return copyResult;
                             }
-                            bool deleted = DeleteFileFromAppW(fullPath);
+                            bool deleted = DeleteFileCompat(fullPath);
                             if (!deleted)
                             {
                                 int delErr = Marshal.GetLastWin32Error();
@@ -1291,7 +1351,7 @@ namespace XFiles.FileSystem
 
                     Log.Info("FileOperations.Rename: {Old} -> {New}", path, newPath);
 
-                    bool ok = MoveFileFromAppW(path, newPath);
+                    bool ok = MoveFileCompat(path, newPath);
                     if (!ok)
                     {
                         int err = Marshal.GetLastWin32Error();
@@ -1323,7 +1383,7 @@ namespace XFiles.FileSystem
                     var pathType = CheckPathType(path);
                     if (pathType == "file")
                     {
-                        bool ok = DeleteFileFromAppW(path);
+                        bool ok = DeleteFileCompat(path);
                         if (!ok)
                         {
                             int err = Marshal.GetLastWin32Error();
@@ -1333,7 +1393,7 @@ namespace XFiles.FileSystem
                     }
                     else if (pathType == "directory")
                     {
-                        bool ok = RemoveDirectoryFromAppW(path);
+                        bool ok = RemoveDirectoryCompat(path);
                         if (!ok)
                         {
                             int err = Marshal.GetLastWin32Error();
@@ -1367,7 +1427,7 @@ namespace XFiles.FileSystem
                     var files = EnumerateFilesRecursive(path);
                     foreach (var file in files)
                     {
-                        bool ok = DeleteFileFromAppW(file);
+                        bool ok = DeleteFileCompat(file);
                         if (!ok)
                         {
                             int err = Marshal.GetLastWin32Error();
@@ -1382,7 +1442,7 @@ namespace XFiles.FileSystem
                     // Remove the root directory
                     if (CheckPathType(path) == "directory")
                     {
-                        bool ok = RemoveDirectoryFromAppW(path);
+                        bool ok = RemoveDirectoryCompat(path);
                         if (!ok)
                         {
                             int err = Marshal.GetLastWin32Error();
@@ -1406,8 +1466,7 @@ namespace XFiles.FileSystem
             try
             {
                 var findData = new WIN32_FIND_DATA();
-                IntPtr hFind = FindFirstFileExFromAppW(
-                    dir + "\\*", 0, out findData, 0, IntPtr.Zero, 0);
+                IntPtr hFind = FindFirstCompat(dir + "\\*", out findData);
                 if (hFind == new IntPtr(-1)) return;
 
                 do
@@ -1417,7 +1476,7 @@ namespace XFiles.FileSystem
                     {
                         string subDir = dir + "\\" + findData.cFileName;
                         RemoveDirectoriesRecursive(subDir);
-                        RemoveDirectoryFromAppW(subDir);
+                        RemoveDirectoryCompat(subDir);
                     }
                 }
                 while (FindNextFileW(hFind, out findData));
@@ -1485,9 +1544,21 @@ namespace XFiles.FileSystem
             Func<string, Task<int>> conflictCallback = null,
             CancellationToken token = default)
         {
+            return await ExtractAsync(archivePath, destDir, null, progress, conflictCallback, token);
+        }
+
+        /// <summary>
+        /// Extract password-protected archive to destination directory.
+        /// </summary>
+        public static async Task<ExtractResult> ExtractAsync(
+            string archivePath, string destDir, string password,
+            IProgress<OperationProgress> progress = null,
+            Func<string, Task<int>> conflictCallback = null,
+            CancellationToken token = default)
+        {
             try
             {
-                Log.Info("FileOperations.Extract: {Archive} -> {Dest}", archivePath, destDir);
+                Log.Info("FileOperations.Extract: {Archive} -> {Dest}{Pwd}", archivePath, destDir, string.IsNullOrEmpty(password) ? "" : " [with password]");
 
                 using (var stream = Win32FileStream.OpenRead(archivePath))
                 {
@@ -1498,7 +1569,7 @@ namespace XFiles.FileSystem
                         return new ExtractResult { Result = OperationResult.Failed, ErrorMessage = err };
                     }
 
-                    return await ExtractCoreAsync(stream, archivePath, destDir, progress, conflictCallback, token, true);
+                    return await ExtractCoreAsync(stream, archivePath, destDir, progress, conflictCallback, token, true, password);
                 }
             }
             catch (Exception ex)
@@ -1531,10 +1602,23 @@ namespace XFiles.FileSystem
             CancellationToken token = default,
             bool preScanSizes = true)
         {
+            return await ExtractFromStreamAsync(stream, archiveName, destDir, null, progress, conflictCallback, token, preScanSizes);
+        }
+
+        /// <summary>
+        /// Extracts a password-protected archive from an already-open, seekable stream.
+        /// </summary>
+        public static async Task<ExtractResult> ExtractFromStreamAsync(
+            Stream stream, string archiveName, string destDir, string password,
+            IProgress<OperationProgress> progress = null,
+            Func<string, Task<int>> conflictCallback = null,
+            CancellationToken token = default,
+            bool preScanSizes = true)
+        {
             try
             {
-                Log.Info("FileOperations.ExtractFromStream: {Archive} -> {Dest}", archiveName, destDir);
-                return await ExtractCoreAsync(stream, archiveName, destDir, progress, conflictCallback, token, preScanSizes);
+                Log.Info("FileOperations.ExtractFromStream: {Archive} -> {Dest}{Pwd}", archiveName, destDir, string.IsNullOrEmpty(password) ? "" : " [with password]");
+                return await ExtractCoreAsync(stream, archiveName, destDir, progress, conflictCallback, token, preScanSizes, password);
             }
             catch (Exception ex)
             {
@@ -1561,7 +1645,7 @@ namespace XFiles.FileSystem
         private static async Task<ExtractResult> ExtractCoreAsync(
             Stream stream, string archiveName, string destDir,
             IProgress<OperationProgress> progress, Func<string, Task<int>> conflictCallback,
-            CancellationToken token, bool preScanSizes)
+            CancellationToken token, bool preScanSizes, string password = null)
         {
             return await Task.Run(async () =>
             {
@@ -1580,7 +1664,7 @@ namespace XFiles.FileSystem
                     if (destType == null)
                     {
                         Log.Info("FileOperations.Extract: creating dest dir {Dir}", destDir);
-                        bool ok = CreateDirectoryFromAppW(destDir, IntPtr.Zero);
+                        bool ok = CreateDirectoryCompat(destDir);
                         if (!ok)
                         {
                             int errCode = Marshal.GetLastWin32Error();
@@ -1609,7 +1693,7 @@ namespace XFiles.FileSystem
                     long totalBytes = 0;
                     if (preScanSizes)
                     {
-                        using (var archive = SharpCompress.Archives.ArchiveFactory.Open(stream))
+                        using (var archive = OpenArchive(stream, password))
                         {
                             foreach (var entry in archive.Entries)
                             {
@@ -1628,7 +1712,7 @@ namespace XFiles.FileSystem
 
                         // Reset stream for extraction pass
                         stream.Seek(0, SeekOrigin.Begin);
-                        using (var archive2 = SharpCompress.Archives.ArchiveFactory.Open(stream))
+                        using (var archive2 = OpenArchive(stream, password))
                         {
                             foreach (var entry in archive2.Entries)
                             {
@@ -1676,7 +1760,7 @@ namespace XFiles.FileSystem
                                 string entryParentDir = System.IO.Path.GetDirectoryName(entryDestPath);
                                 if (entryParentDir != null && CheckPathType(entryParentDir) == null)
                                 {
-                                    CreateDirectoryFromAppW(entryParentDir, IntPtr.Zero);
+                                    CreateDirectoryCompat(entryParentDir);
                                 }
 
                                 // Extract with cancel support via chunked copy
@@ -1761,6 +1845,17 @@ namespace XFiles.FileSystem
 
                     return new ExtractResult { Result = OperationResult.Success };
                 }
+                catch (CryptographicException ex)
+                {
+                    // Encrypted archive (header or entries) with a missing/wrong password.
+                    Log.Warn("FileOperations.Extract: password required for {Archive}: {Error}", archiveName, ex.Message);
+                    return new ExtractResult
+                    {
+                        Result = OperationResult.Failed,
+                        PasswordRequired = true,
+                        ErrorMessage = "This archive is password-protected. Enter the correct password to continue."
+                    };
+                }
                 catch (Exception ex)
                 {
                     Log.Warn("FileOperations.Extract exception", ex);
@@ -1774,9 +1869,22 @@ namespace XFiles.FileSystem
         }
 
         /// <summary>
+        /// Opens an archive stream with optional password support.
+        /// SharpCompress takes the password through <see cref="ReaderOptions.Password"/>.
+        /// </summary>
+        private static IArchive OpenArchive(Stream stream, string password)
+        {
+            if (string.IsNullOrEmpty(password))
+                return ArchiveFactory.Open(stream);
+
+            return ArchiveFactory.Open(stream, new ReaderOptions { Password = password });
+        }
+
+        /// <summary>
         /// Uncompressed size of a single non-directory entry inside an archive.
         /// </summary>
-        public static async Task<long> GetArchiveEntryUncompressedSizeAsync(string archivePath, string internalPath)
+        public static async Task<long> GetArchiveEntryUncompressedSizeAsync(
+            string archivePath, string internalPath, string password = null)
         {
             return await Task.Run(() =>
             {
@@ -1785,7 +1893,7 @@ namespace XFiles.FileSystem
                     using (var stream = Win32FileStream.OpenRead(archivePath))
                     {
                         if (stream == null) return 0L;
-                        using (var archive = SharpCompress.Archives.ArchiveFactory.Open(stream))
+                        using (var archive = OpenArchive(stream, password))
                         {
                             foreach (var entry in archive.Entries)
                             {
@@ -1796,6 +1904,12 @@ namespace XFiles.FileSystem
                             return 0L;
                         }
                     }
+                }
+                catch (CryptographicException ex)
+                {
+                    Log.Warn("FileOperations.GetArchiveEntryUncompressedSize: password required for {Archive}: {Error}",
+                        archivePath, ex.Message);
+                    return 0;
                 }
                 catch (Exception ex)
                 {
@@ -1811,7 +1925,25 @@ namespace XFiles.FileSystem
             CancellationToken token = default,
             IProgress<OperationProgress> progress = null)
         {
-            return await Task.Run(async () =>
+            var extracted = await ExtractFileAsync(archivePath, internalPath, destDir, null,
+                conflictCallback, token, progress);
+            return extracted.Result;
+        }
+
+        /// <summary>
+        /// Extracts a single entry from an archive with password support.
+        /// The returned result carries PasswordRequired when the archive is
+        /// encrypted and the password was missing or wrong (the UI then prompts
+        /// for the password and retries).
+        /// </summary>
+        public static async Task<ExtractFileResult> ExtractFileAsync(
+            string archivePath, string internalPath, string destDir, string password,
+            Func<string, Task<int>> conflictCallback = null,
+            CancellationToken token = default,
+            IProgress<OperationProgress> progress = null)
+        {
+            bool needsPassword = false;
+            OperationResult result = await Task.Run(async () =>
             {
                 try
                 {
@@ -1821,7 +1953,7 @@ namespace XFiles.FileSystem
                         archivePath, internalPath, destDir);
 
                     if (CheckPathType(destDir) == null)
-                        CreateDirectoryFromAppW(destDir, IntPtr.Zero);
+                        CreateDirectoryCompat(destDir);
 
                     using (var stream = Win32FileStream.OpenRead(archivePath))
                     {
@@ -1831,7 +1963,7 @@ namespace XFiles.FileSystem
                             return Fail($"Cannot open the archive \"{archivePath}\" for reading.");
                         }
 
-                        using (var archive = SharpCompress.Archives.ArchiveFactory.Open(stream))
+                        using (var archive = OpenArchive(stream, password))
                         {
                             string normalizedInternal = internalPath.Replace('\\', '/').Trim('/');
                             var entry = archive.Entries.FirstOrDefault(e =>
@@ -1915,12 +2047,19 @@ namespace XFiles.FileSystem
 
                     return OperationResult.Success;
                 }
+                catch (CryptographicException ex)
+                {
+                    needsPassword = true;
+                    Log.Warn("FileOperations.ExtractFile: password required for {Archive}: {Error}", archivePath, ex.Message);
+                    return Fail("This archive is password-protected. Enter the correct password to continue.");
+                }
                 catch (Exception ex)
                 {
                     Log.Warn("FileOperations.ExtractFile exception", ex);
                     return Fail($"Failed to extract \"{internalPath}\": {ex.Message}");
                 }
             });
+            return new ExtractFileResult { Result = result, PasswordRequired = needsPassword };
         }
 
         /// <summary>
@@ -2115,7 +2254,7 @@ namespace XFiles.FileSystem
                 {
                     folderPath = GetUniqueDirectoryPath(folderPath);
                     Log.Info("FileOperations.CreateFolder: {Path}", folderPath);
-                    bool ok = CreateDirectoryFromAppW(folderPath, IntPtr.Zero);
+                    bool ok = CreateDirectoryCompat(folderPath);
                     if (!ok)
                     {
                         int err = Marshal.GetLastWin32Error();
@@ -2416,8 +2555,7 @@ namespace XFiles.FileSystem
             try
             {
                 var findData = new WIN32_FIND_DATA();
-                IntPtr hFind = FindFirstFileExFromAppW(
-                    dir + "\\*", 0, out findData, 0, IntPtr.Zero, 0);
+                IntPtr hFind = FindFirstCompat(dir + "\\*", out findData);
                 if (hFind == new IntPtr(-1)) return;
 
                 do
@@ -2446,3 +2584,6 @@ namespace XFiles.FileSystem
         }
     }
 }
+
+
+

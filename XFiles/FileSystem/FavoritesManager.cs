@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -16,6 +17,7 @@ namespace XFiles.FileSystem
     public static class FavoritesManager
     {
         private static List<FavoriteEntry> _cache;
+        private static volatile HashSet<string> _pathSet;
         private static readonly object _lock = new object();
 
         private const string SettingsKey = "Favorites";
@@ -29,23 +31,20 @@ namespace XFiles.FileSystem
 
         public static bool IsFavorite(string path)
         {
-            if (_cache == null) return false;
-            lock (_lock)
-            {
-                return _cache.Any(f => f.Path == path);
-            }
+            var set = _pathSet;
+            return set != null && path != null && set.Contains(path);
         }
 
         public static async Task<bool> IsFavoriteAsync(string path)
         {
-            var list = await GetAllAsync();
-            return list.Any(f => f.Path == path);
+            await GetAllAsync();
+            return IsFavorite(path);
         }
 
         public static async Task AddAsync(string path, string name, bool isDirectory)
         {
             var list = await GetAllAsync();
-            if (list.Any(f => f.Path == path)) return;
+            if (IsFavorite(path)) return;
 
             list.Add(new FavoriteEntry
             {
@@ -59,9 +58,23 @@ namespace XFiles.FileSystem
         public static async Task RemoveAsync(string path)
         {
             var list = await GetAllAsync();
-            int removed = list.RemoveAll(f => f.Path == path);
+            int removed = list.RemoveAll(f => string.Equals(f.Path, path, StringComparison.OrdinalIgnoreCase));
             if (removed > 0)
                 await SaveAsync(list);
+        }
+
+        private static HashSet<string> BuildPathSet(List<FavoriteEntry> list)
+        {
+            var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (list != null)
+            {
+                foreach (var f in list)
+                {
+                    if (!string.IsNullOrEmpty(f.Path))
+                        set.Add(f.Path);
+                }
+            }
+            return set;
         }
 
         private static async Task LoadAsync()
@@ -70,6 +83,7 @@ namespace XFiles.FileSystem
             lock (_lock)
             {
                 _cache = ParseJson(json);
+                _pathSet = BuildPathSet(_cache);
             }
         }
 
@@ -78,6 +92,7 @@ namespace XFiles.FileSystem
             lock (_lock)
             {
                 _cache = list;
+                _pathSet = BuildPathSet(list);
             }
             string json = ToJson(list);
             await XFilesSettings.SetStringAsync(SettingsKey, json);

@@ -35,6 +35,7 @@
     <Compile Include="..\XFiles\FileSystem\TransferMeter.cs" Link="Linked\FileSystem\TransferMeter.cs" />
     <Compile Include="..\XFiles\FileSystem\ClipboardState.cs" Link="Linked\FileSystem\ClipboardState.cs" />
     <Compile Include="..\XFiles\FileSystem\ConflictDecision.cs" Link="Linked\FileSystem\ConflictDecision.cs" />
+    <Compile Include="..\XFiles\FileSystem\NativeFs.cs" Link="Linked\FileSystem\NativeFs.cs" />
     <Compile Include="..\XFiles\FileSystem\Win32FileStream.cs" Link="Linked\FileSystem\Win32FileStream.cs" />
     <Compile Include="..\XFiles\FileSystem\Win32FileWriteStream.cs" Link="Linked\FileSystem\Win32FileWriteStream.cs" />
     <Compile Include="..\XFiles\Controls\PieGeometry.cs" Link="Linked\Controls\PieGeometry.cs" />

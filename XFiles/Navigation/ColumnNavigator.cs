@@ -115,6 +115,13 @@ namespace XFiles.Navigation
         /// </summary>
         public Func<string, IProgress<double>> DownloadProgressFactory;
 
+        /// <summary>
+        /// Raised when an encrypted archive needs a password. The handler must
+        /// return the password, or null when the user cancels. Awaited by the
+        /// navigator, so the host page can show its input dialog.
+        /// </summary>
+        public Func<string, Task<string>> ArchivePasswordRequested;
+
         public ColumnState Parent => _history.Count > 0 ? _history.Peek() : null;
         public ColumnState Current => _current;
         public ColumnState Preview => _preview;
@@ -433,12 +440,142 @@ namespace XFiles.Navigation
         }
 
         /// <summary>
+        /// Asks the host page for an archive password. Returns null when the user
+        /// cancels or no handler is registered.
+        /// </summary>
+        /// <summary>
+        /// Re-opens a remote archive with a password: opens a fresh network stream
+        /// and registers it in the archive browser under the same virtual key.
+        /// Returns the entry list, or null on failure.
+        /// </summary>
+        private async Task<IReadOnlyList<FileEntry>> ReopenNetworkArchiveWithPasswordAsync(
+            string archiveKey, FileEntry archiveEntry, string password)
+        {
+            const int ArchiveTimeoutMs = 15_000;
+            Log.Info("ColumnNavigator.Network: reopening remote archive with password, key={Key}", archiveKey);
+
+            Stream stream = await OpenNetworkStreamAsync(
+                archiveEntry.NetworkLocationId, archiveEntry.NetworkShareName, archiveEntry.NetworkPath);
+            if (stream == null) return null;
+
+            var openTask = Task.Run(() =>
+            {
+                var st = ArchiveOpenStatus.Ok;
+                bool ok = _archiveBrowser.TryOpenArchiveFromStream(archiveKey, stream, password, out st);
+                return (ok, st);
+            });
+            var openDone = await Task.WhenAny(openTask, Task.Delay(ArchiveTimeoutMs));
+            if (openDone != openTask)
+            {
+                // The task still owns the stream — do not dispose it here.
+                Log.Warn("ColumnNavigator.Network: reopening remote archive with password timed out");
+                return null;
+            }
+
+            var openResult = await openTask;
+            if (!openResult.ok)
+            {
+                Log.Warn("ColumnNavigator.Network: reopening remote archive with password failed (status {Status})", openResult.st);
+                return null;
+            }
+
+            var listTask = Task.Run(() =>
+            {
+                var st = ArchiveOpenStatus.Ok;
+                var list = _archiveBrowser.ListEntries(archiveKey, "", password, out st);
+                return (list, st);
+            });
+            var listDone = await Task.WhenAny(listTask, Task.Delay(ArchiveTimeoutMs));
+            if (listDone != listTask)
+            {
+                Log.Warn("ColumnNavigator.Network: listing remote archive (passworded) timed out");
+                return null;
+            }
+
+            var listResult = await listTask;
+            if (listResult.st == ArchiveOpenStatus.PasswordRequired)
+            {
+                Log.Warn("ColumnNavigator.Network: password rejected for remote archive {Key}", archiveKey);
+                return null;
+            }
+
+            return listResult.list;
+        }
+        private async Task<string> RequestArchivePasswordAsync(string archivePath)
+        {
+            if (ArchivePasswordRequested == null)
+            {
+                Log.Warn("ColumnNavigator: archive needs a password but no handler is registered ({Path})", archivePath);
+                return null;
+            }
+
+            Log.Info("ColumnNavigator: requesting password for archive {Path}", archivePath);
+            string password = await ArchivePasswordRequested(archivePath);
+            if (string.IsNullOrEmpty(password))
+            {
+                Log.Info("ColumnNavigator: password entry cancelled for {Path}", archivePath);
+                return null;
+            }
+            return password;
+        }
+
+        /// <summary>
+        /// Previews an entry inside an archive, prompting for the password when
+        /// the archive header or the entry itself is encrypted.
+        /// </summary>
+        private async Task<FilePreviewResult> PreviewArchiveEntryAsync(FileEntry selected)
+        {
+            var archivePreview = await FilePreviewService.GetPreviewFromArchiveStatusAsync(
+                _archiveBrowser, selected.ArchiveRootPath, selected.ArchiveInternalPath, null);
+
+            if (archivePreview.Status != ArchiveOpenStatus.PasswordRequired)
+                return archivePreview.Preview;
+
+            string password = await RequestArchivePasswordAsync(selected.ArchiveRootPath);
+            if (password == null)
+            {
+                return new FilePreviewResult
+                {
+                    Type = FilePreviewType.Error,
+                    FileType = "",
+                    ErrorMessage = "This entry is password-protected."
+                };
+            }
+
+            archivePreview = await FilePreviewService.GetPreviewFromArchiveStatusAsync(
+                _archiveBrowser, selected.ArchiveRootPath, selected.ArchiveInternalPath, password);
+
+            return archivePreview.Preview;
+        }
+
+        /// <summary>
+        /// Lists the entries of an archive, prompting for the password when the
+        /// archive is encrypted. Returns null when the prompt was cancelled.
+        /// </summary>
+        private async Task<IReadOnlyList<FileEntry>> ListArchiveEntriesAsync(string archivePath, string internalPath)
+        {
+            var entries = _archiveBrowser.ListEntries(archivePath, internalPath, null, out ArchiveOpenStatus status);
+            if (status != ArchiveOpenStatus.PasswordRequired)
+                return entries;
+
+            string password = await RequestArchivePasswordAsync(archivePath);
+            if (password == null) return null;
+
+            return _archiveBrowser.ListEntries(archivePath, internalPath, password, out ArchiveOpenStatus _);
+        }
+
+        /// <summary>
         /// Drill into an archive — open it and show contents.
         /// </summary>
         private async Task DrillIntoArchiveAsync(FileEntry archiveEntry)
         {
             ++_previewGeneration;
             Log.Info("ColumnNavigator: drilling into archive {Path}", archiveEntry.FullPath);
+
+            // Load archive root contents BEFORE pushing history: an encrypted archive
+            // whose password was cancelled must not leave a bogus column behind.
+            var entries = await ListArchiveEntriesAsync(archiveEntry.FullPath, "");
+            if (entries == null) return;
 
             // Push current state to history
             _history.Push(new ColumnState
@@ -448,9 +585,6 @@ namespace XFiles.Navigation
                 SelectedIndex = _current.SelectedIndex,
                 Entries = _current.Entries
             });
-
-            // Load archive root contents
-            var entries = _archiveBrowser.ListEntries(archiveEntry.FullPath, "");
 
             _current = new ColumnState
             {
@@ -562,8 +696,10 @@ namespace XFiles.Navigation
                 NetworkPath = _current.NetworkPath
             });
 
-            // Load subdirectory contents from archive
-            var entries = _archiveBrowser.ListEntries(dirEntry.ArchiveRootPath, dirEntry.ArchiveInternalPath);
+            // Load subdirectory contents from archive (password-aware: the archive
+            // handle is already cached, so this normally resolves without a prompt)
+            var entries = await ListArchiveEntriesAsync(dirEntry.ArchiveRootPath, dirEntry.ArchiveInternalPath);
+            if (entries == null) return;
 
             _current = new ColumnState
             {
@@ -1011,33 +1147,89 @@ namespace XFiles.Navigation
                 Stream remoteStream = useStream ? await OpenNetworkStreamAsync(
                     archiveEntry.NetworkLocationId, archiveEntry.NetworkShareName, archiveEntry.NetworkPath) : null;
                 bool openedFromStream = false;
+                bool archivePasswordAbort = false;
                 if (remoteStream != null)
                 {
                     // Hard timeout so a slow remote open/list can't freeze the app or the
                     // shared session. On timeout we fall back to full local caching.
                     const int ArchiveTimeoutMs = 15_000;
                     var openTask = Task.Run(() =>
-                        _archiveBrowser.TryOpenArchiveFromStream(archiveKey, remoteStream));
+                    {
+                        var st = ArchiveOpenStatus.Ok;
+                        bool ok = _archiveBrowser.TryOpenArchiveFromStream(archiveKey, remoteStream, null, out st);
+                        return (ok, st);
+                    });
                     var openDone = await Task.WhenAny(openTask, Task.Delay(ArchiveTimeoutMs));
                     if (openDone == openTask)
                     {
-                        openedFromStream = await openTask;
+                        var openResult = await openTask;
+                        openedFromStream = openResult.ok;
                         if (openedFromStream)
                         {
                             // Enumerating entries (RAR central dir over a reopen-per-seek
                             // FTP/SFTP stream) is the heavy step — it is the actual freeze
                             // point, so it gets the same hard timeout + background thread.
-                            var listTask = Task.Run(() => _archiveBrowser.ListEntries(archiveKey, ""));
+                            var listTask = Task.Run(() =>
+                            {
+                                var st = ArchiveOpenStatus.Ok;
+                                var list = _archiveBrowser.ListEntries(archiveKey, "", null, out st);
+                                return (list, st);
+                            });
                             var listDone = await Task.WhenAny(listTask, Task.Delay(ArchiveTimeoutMs));
                             if (listDone == listTask)
-                                entries = await listTask;
+                            {
+                                var listResult = await listTask;
+                                entries = listResult.list;
+
+                                // Encrypted remote archive — the names may be visible but the
+                                // content (or the header) needs a password.
+                                if (listResult.st == ArchiveOpenStatus.PasswordRequired)
+                                {
+                                    string password = await RequestArchivePasswordAsync(archiveKey);
+                                    if (password == null)
+                                    {
+                                        // User cancelled — do NOT fall back to downloading the
+                                        // whole archive just to fail on the same password.
+                                        archivePasswordAbort = true;
+                                    }
+                                    else
+                                    {
+                                        entries = await ReopenNetworkArchiveWithPasswordAsync(archiveKey, archiveEntry, password);
+                                        if (entries == null) archivePasswordAbort = true;
+                                    }
+                                }
+                            }
                             else
                                 Log.Warn("ColumnNavigator.Network: listing remote archive timed out — falling back to cache");
+                        }
+                        else if (openResult.st == ArchiveOpenStatus.PasswordRequired)
+                        {
+                            // Encrypted header — ask for the password and open the remote
+                            // stream again with it.
+                            string password = await RequestArchivePasswordAsync(archiveKey);
+                            if (password == null)
+                            {
+                                archivePasswordAbort = true;
+                            }
+                            else
+                            {
+                                entries = await ReopenNetworkArchiveWithPasswordAsync(archiveKey, archiveEntry, password);
+                                if (entries == null) archivePasswordAbort = true;
+                            }
                         }
                     }
                     else
                         Log.Warn("ColumnNavigator.Network: opening remote archive timed out — falling back to cache");
                 }
+                if (archivePasswordAbort)
+                {
+                    // Cancelled prompt or wrong password: restore the previous column
+                    // instead of downloading the archive to fail identically.
+                    Log.Info("ColumnNavigator.Network: archive drill-in aborted — password not supplied for '{Name}'", archiveEntry.Name);
+                    if (_history.Count > 0) _current = _history.Pop();
+                    return;
+                }
+
                 if (entries == null)
                 {
                     // Abort the download as soon as the user navigates away — do not
@@ -1661,8 +1853,7 @@ namespace XFiles.Navigation
 
                     if (!string.IsNullOrEmpty(selected.ArchiveRootPath))
                     {
-                        previewResult = await FilePreviewService.GetPreviewFromArchiveAsync(
-                            _archiveBrowser, selected.ArchiveRootPath, selected.ArchiveInternalPath);
+                        previewResult = await PreviewArchiveEntryAsync(selected);
                     }
                     else
                     {
@@ -2380,12 +2571,8 @@ namespace XFiles.Navigation
                 _current.SelectedIndex = idx >= 0 ? idx : Math.Min(prevIndex, _current.Entries.Count - 1);
             }
 
+            await UpdatePreviewAsync();
             ColumnsChanged?.Invoke();
-
-            // Recompute the preview for the preserved selection. The selection-changed
-            // handler is suppressed during rebind (_updating), so without this the preview
-            // column would keep showing the pre-refresh entry (e.g. a deleted file).
-            await OnSelectionChangedAsync();
         }
 
         /// <summary>

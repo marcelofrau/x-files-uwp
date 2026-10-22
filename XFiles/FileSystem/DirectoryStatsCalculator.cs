@@ -69,6 +69,15 @@ namespace XFiles.FileSystem
             uint dwAdditionalFlags);
 
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr FindFirstFileExW(
+            string lpFileName,
+            FINDEX_INFO_LEVELS fInfoLevelId,
+            out WIN32_FIND_DATA lpFindFileData,
+            FINDEX_SEARCH_OPS fSearchOp,
+            IntPtr lpSearchFilter,
+            uint dwAdditionalFlags);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern bool FindNextFileW(IntPtr hFindFile, out WIN32_FIND_DATA lpFindFileData);
 
         [DllImport("kernel32.dll", SetLastError = true)]
@@ -124,13 +133,24 @@ namespace XFiles.FileSystem
         {
             ctx.Token.ThrowIfCancellationRequested();
 
+            string pattern = dir + "\\*";
             IntPtr hFind = FindFirstFileExFromAppW(
-                dir + "\\*",
+                pattern,
                 FINDEX_INFO_LEVELS.FindExInfoStandard,
                 out WIN32_FIND_DATA findData,
                 FINDEX_SEARCH_OPS.FindExSearchNameMatch,
                 IntPtr.Zero,
                 FIND_FIRST_EX_LARGE_FETCH);
+            if (hFind == new IntPtr(INVALID_HANDLE_VALUE))
+            {
+                hFind = FindFirstFileExW(
+                    pattern,
+                    FINDEX_INFO_LEVELS.FindExInfoStandard,
+                    out findData,
+                    FINDEX_SEARCH_OPS.FindExSearchNameMatch,
+                    IntPtr.Zero,
+                    FIND_FIRST_EX_LARGE_FETCH);
+            }
 
             if (hFind == new IntPtr(INVALID_HANDLE_VALUE))
             {

@@ -6,8 +6,8 @@ title: Roadmap — Implementation Status & Backlog
 
 ## Current Status
 
-**Released v1.6.0** (tag `v1.6.0.1485`). Dev line: **1.7.0** (Properties dialog, stream-based
-network extraction). The MVP plus post-MVP features are shipped: 3-column Miller
+**Released v1.8.0** (tag `v1.8.0.1527`). Dev line: **1.8.x** (password-protected archives,
+multi-backend drive compatibility, performance optimizations). The MVP plus post-MVP features are shipped: 3-column Miller
 navigation with live preview, **network file browsing** (SMB/FTP/FTPS/SFTP/WebDAV) with
 streaming preview and remote operations, audio player + 31 visualizers, video player with
 subtitles and track switching, archive browsing (zip/7z/rar), full file operations (copy/

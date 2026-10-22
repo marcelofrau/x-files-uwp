@@ -287,8 +287,12 @@ namespace XFiles.Controls
                         // System icon
                         if (!string.IsNullOrEmpty(romIcon))
                         {
-                            RomSystemIcon.Source = new Windows.UI.Xaml.Media.Imaging.BitmapImage(
-                                new Uri(romIcon));
+                            var romUri = new Uri(romIcon);
+                            if (!(RomSystemIcon.Source is Windows.UI.Xaml.Media.Imaging.BitmapImage existingRom) ||
+                                existingRom.UriSource != romUri)
+                            {
+                                RomSystemIcon.Source = new Windows.UI.Xaml.Media.Imaging.BitmapImage(romUri);
+                            }
                         }
 
                         // Reset cover art and gamelist UI state

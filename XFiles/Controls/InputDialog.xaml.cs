@@ -18,21 +18,42 @@ namespace XFiles.Controls
 
         public Task<string> ShowAsync(string title, string defaultValue)
         {
-            Log.Info("InputDialog.ShowAsync: title=\"{Title}\" default=\"{Default}\"", title, defaultValue);
-            TitleText.Text = title;
-            InputBox.Text = defaultValue ?? "";
-            _tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-            Visibility = Visibility.Visible;
-            Overlay.Visibility = Visibility.Visible;
+            return ShowAsync(title, defaultValue, false);
+        }
 
-            InputBox.Focus(FocusState.Programmatic);
-            InputBox.SelectAll();
+        public Task<string> ShowAsync(string title, string defaultValue, bool isPassword)
+        {
+            Log.Info("InputDialog.ShowAsync: title=\"{Title}\" default=\"{Default}\" isPassword={IsPassword}", title, defaultValue, isPassword);
+            TitleText.Text = title;
+
+            if (isPassword)
+            {
+                InputBox.Visibility = Visibility.Collapsed;
+                PasswordBox.Visibility = Visibility.Visible;
+                PasswordBox.Password = defaultValue ?? "";
+                _tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+                Visibility = Visibility.Visible;
+                Overlay.Visibility = Visibility.Visible;
+                PasswordBox.Focus(FocusState.Programmatic);
+            }
+            else
+            {
+                InputBox.Visibility = Visibility.Visible;
+                PasswordBox.Visibility = Visibility.Collapsed;
+                InputBox.Text = defaultValue ?? "";
+                _tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+                Visibility = Visibility.Visible;
+                Overlay.Visibility = Visibility.Visible;
+                InputBox.Focus(FocusState.Programmatic);
+                InputBox.SelectAll();
+            }
             return _tcs.Task;
         }
 
         private void OnInputGotFocus(object sender, RoutedEventArgs e)
         {
-            InputBox.SelectAll();
+            if (sender is TextBox tb) tb.SelectAll();
+            else if (sender is PasswordBox pb) { /* PasswordBox doesn't have SelectAll */ }
         }
 
         private void OnInputKeyDown(object sender, KeyRoutedEventArgs e)
@@ -43,7 +64,7 @@ namespace XFiles.Controls
                 case Windows.System.VirtualKey.GamepadMenu:
                     e.Handled = true;
                     Log.Dbg("InputDialog: key {Key} → confirm", e.Key);
-                    Close(InputBox.Text);
+                    Close(sender is PasswordBox pb ? pb.Password : InputBox.Text);
                     break;
                 case Windows.System.VirtualKey.Escape:
                 case Windows.System.VirtualKey.GamepadB:
@@ -62,7 +83,7 @@ namespace XFiles.Controls
                 case Windows.System.VirtualKey.Enter:
                     e.Handled = true;
                     Log.Dbg("InputDialog: overlay key {Key} → confirm", e.Key);
-                    Close(InputBox.Text);
+                    Close(PasswordBox.Visibility == Visibility.Visible ? PasswordBox.Password : InputBox.Text);
                     break;
                 case Windows.System.VirtualKey.GamepadB:
                 case Windows.System.VirtualKey.Escape:
@@ -86,7 +107,7 @@ namespace XFiles.Controls
         private void OnOkClicked(object sender, RoutedEventArgs e)
         {
             Log.Dbg("InputDialog: OK button → confirm");
-            Close(InputBox.Text);
+            Close(PasswordBox.Visibility == Visibility.Visible ? PasswordBox.Password : InputBox.Text);
         }
 
         private void OnOverlayTapped(object sender, TappedRoutedEventArgs e)
@@ -111,7 +132,7 @@ namespace XFiles.Controls
             {
                 case Windows.System.VirtualKey.GamepadA:
                 case Windows.System.VirtualKey.Enter:
-                    Close(InputBox.Text);
+                    Close(PasswordBox.Visibility == Visibility.Visible ? PasswordBox.Password : InputBox.Text);
                     break;
                 case Windows.System.VirtualKey.GamepadB:
                 case Windows.System.VirtualKey.Escape:

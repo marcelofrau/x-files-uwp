@@ -30,6 +30,16 @@ namespace XFiles.FileSystem
         Error
     }
 
+    /// <summary>
+    /// Result of previewing an entry inside an archive: the preview plus the
+    /// archive open status (so the caller can tell "wrong password" from
+    /// "entry not readable").
+    /// </summary>
+    public class ArchivePreviewResult
+    {
+        public FilePreviewResult Preview { get; set; }
+        public ArchiveOpenStatus Status { get; set; }
+    }
     public class FilePreviewResult
     {
         public FilePreviewType Type { get; set; }
@@ -447,7 +457,21 @@ namespace XFiles.FileSystem
         public static async Task<FilePreviewResult> GetPreviewFromArchiveAsync(
             ArchiveBrowser archiveBrowser, string archivePath, string internalPath)
         {
+            var preview = await GetPreviewFromArchiveStatusAsync(archiveBrowser, archivePath, internalPath, null);
+            return preview.Preview;
+        }
+
+        /// <summary>
+        /// Previews an entry inside an archive with password support.
+        /// The returned status reports PasswordRequired when the archive or the
+        /// entry is encrypted and the password was missing or wrong — the caller
+        /// then prompts for the password and retries.
+        /// </summary>
+        public static async Task<ArchivePreviewResult> GetPreviewFromArchiveStatusAsync(
+            ArchiveBrowser archiveBrowser, string archivePath, string internalPath, string password = null)
+        {
             var result = new FilePreviewResult { FileType = "" };
+            var status = ArchiveOpenStatus.Ok;
 
             try
             {
@@ -455,13 +479,15 @@ namespace XFiles.FileSystem
                 result.FileType = GetFileTypeLabel(ext);
                 result.FileSizeBytes = 0;
 
-                using (var stream = archiveBrowser.OpenEntryStream(archivePath, internalPath))
+                using (var stream = archiveBrowser.OpenEntryStream(archivePath, internalPath, password, out status))
                 {
                     if (stream == null)
                     {
                         result.Type = FilePreviewType.Error;
-                        result.ErrorMessage = "Failed to open entry in archive";
-                        return result;
+                        result.ErrorMessage = status == ArchiveOpenStatus.PasswordRequired
+                            ? "This entry is password-protected."
+                            : "Failed to open entry in archive";
+                        return new ArchivePreviewResult { Preview = result, Status = status };
                     }
 
                     // Disambiguate .md inside archives: peek first bytes
@@ -490,7 +516,7 @@ namespace XFiles.FileSystem
                         {
                             result.Type = FilePreviewType.Unsupported;
                             result.TextContent = "Image too large for inline preview. Press A to open.";
-                            return result;
+                            return new ArchivePreviewResult { Preview = result, Status = status };
                         }
                         await LoadImagePreviewFromStream(stream, result);
                     }
@@ -500,7 +526,7 @@ namespace XFiles.FileSystem
                         {
                             result.Type = FilePreviewType.Unsupported;
                             result.TextContent = "Image too large for inline preview. Press A to open.";
-                            return result;
+                            return new ArchivePreviewResult { Preview = result, Status = status };
                         }
                         await LoadSvgPreviewFromStream(stream, result);
                     }
@@ -533,9 +559,8 @@ namespace XFiles.FileSystem
                     archivePath, internalPath, ex.Message);
             }
 
-            return result;
+            return new ArchivePreviewResult { Preview = result, Status = status };
         }
-
         private static async Task LoadTextPreviewFromStream(Stream stream, FilePreviewResult result)
         {
             result.Type = FilePreviewType.Text;
@@ -650,6 +675,10 @@ namespace XFiles.FileSystem
                     result.ErrorMessage = $"Cannot create image bitmap: {ex.Message}";
                     tcs.SetResult(false);
                 }
+                finally
+                {
+                    softwareBitmap.Dispose();
+                }
             });
 
             await tcs.Task;
@@ -763,8 +792,16 @@ namespace XFiles.FileSystem
                                 Log.Warn("FilePreviewService: PDF bitmap render failed", ex);
                                 tcs.SetResult(false);
                             }
+                            finally
+                            {
+                                sb.Dispose();
+                            }
                         });
                         await tcs.Task;
+                    }
+                    else
+                    {
+                        sb.Dispose();
                     }
                 }
             }
@@ -818,9 +855,9 @@ namespace XFiles.FileSystem
         private static bool GetFileSizeWin32(string filePath, out long size)
         {
             size = 0;
-            IntPtr hFile = CreateFileFromAppW(filePath, GENERIC_READ,
-                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, IntPtr.Zero,
-                OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, IntPtr.Zero);
+            IntPtr hFile = NativeFs.OpenFile(filePath, GENERIC_READ,
+                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, out FsBackend _, out int _);
 
             if (hFile == INVALID_HANDLE_VALUE)
                 return false;
@@ -869,11 +906,21 @@ namespace XFiles.FileSystem
         {
             result.Type = FilePreviewType.Image;
 
+            long fileSize = 0;
+            GetFileSizeWin32(filePath, out fileSize);
+            result.FileSizeBytes = fileSize;
+            if (fileSize > FilePreviewLimits.MaxImageBytes)
+            {
+                result.Type = FilePreviewType.Unsupported;
+                result.TextContent = "Image too large for inline preview. Press A to open.";
+                return;
+            }
+
             // ALL heavy work on background thread: file I/O + image decode via BitmapDecoder.
             // Only WriteableBitmap creation stays on UI thread (it's a UI element).
             var decoded = await Task.Run(async () =>
             {
-                byte[] imageBytes = ReadFileWin32(filePath, 0);
+                byte[] imageBytes = ReadFileWin32(filePath, FilePreviewLimits.MaxImageBytes);
                 if (imageBytes == null) return ((SoftwareBitmap)null, 0, 0, "Failed to read image file");
 
                 try
@@ -908,22 +955,17 @@ namespace XFiles.FileSystem
                 return;
             }
 
-            // Get file size (cheap Win32 call, fine on UI thread for non-image types,
-            // but we're already async here so no harm)
-            long fileSize = 0;
-            GetFileSizeWin32(filePath, out fileSize);
-            result.FileSizeBytes = fileSize;
-
             // Create WriteableBitmap on UI thread — fast (just pixel buffer alloc + copy)
             var dispatcher = CoreApplication.MainView.CoreWindow?.Dispatcher;
             if (dispatcher == null)
             {
+                decoded.Item1.Dispose();
                 result.Type = FilePreviewType.Error;
                 result.ErrorMessage = "Cannot access UI dispatcher for image preview";
                 return;
             }
 
-                var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             var softwareBitmap = decoded.Item1;
             int pw = decoded.Item2;
             int ph = decoded.Item3;
@@ -946,6 +988,10 @@ namespace XFiles.FileSystem
                     result.ErrorMessage = $"Cannot create image bitmap: {ex.Message}";
                     tcs.SetResult(false);
                 }
+                finally
+                {
+                    softwareBitmap.Dispose();
+                }
             });
 
             await tcs.Task;
@@ -953,9 +999,19 @@ namespace XFiles.FileSystem
 
         private static async Task LoadSvgPreview(string filePath, FilePreviewResult result)
         {
+            long fileSize = 0;
+            GetFileSizeWin32(filePath, out fileSize);
+            result.FileSizeBytes = fileSize;
+            if (fileSize > FilePreviewLimits.MaxImageBytes)
+            {
+                result.Type = FilePreviewType.Unsupported;
+                result.TextContent = "Image too large for inline preview. Press A to open.";
+                return;
+            }
+
             result.Type = FilePreviewType.Text;
 
-            byte[] svgBytes = await Task.Run(() => ReadFileWin32(filePath, 0));
+            byte[] svgBytes = await Task.Run(() => ReadFileWin32(filePath, FilePreviewLimits.MaxImageBytes));
             if (svgBytes == null)
             {
                 result.Type = FilePreviewType.Error;
@@ -1035,14 +1091,13 @@ namespace XFiles.FileSystem
         /// </summary>
         private static byte[] ReadFileWin32(string filePath, long maxBytes)
         {
-            IntPtr hFile = CreateFileFromAppW(filePath, GENERIC_READ,
-                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, IntPtr.Zero,
-                OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, IntPtr.Zero);
+            IntPtr hFile = NativeFs.OpenFile(filePath, GENERIC_READ,
+                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, out FsBackend _, out int err);
 
             if (hFile == INVALID_HANDLE_VALUE)
             {
-                int err = Marshal.GetLastWin32Error();
-                Log.Warn("FilePreviewService: CreateFileFromAppW failed for '{Path}' (error {Error})", filePath, err);
+                Log.Warn("FilePreviewService: OpenFile failed for '{Path}' (error {Error})", filePath, err);
                 return null;
             }
 

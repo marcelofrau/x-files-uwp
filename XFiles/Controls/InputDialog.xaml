@@ -26,12 +26,23 @@
 
                 <TextBox x:Name="InputBox"
                          Style="{StaticResource DarkTextBoxStyle}"
-                          FontFamily="Consolas"
+                         FontFamily="Consolas"
                          FontSize="15"
                          MaxWidth="850"
                          HorizontalAlignment="Stretch"
                          GotFocus="OnInputGotFocus"
-                         KeyDown="OnInputKeyDown" />
+                         KeyDown="OnInputKeyDown"
+                         Visibility="Visible" />
+
+                <PasswordBox x:Name="PasswordBox"
+                             Style="{StaticResource DarkPasswordBoxStyle}"
+                             FontFamily="Consolas"
+                             FontSize="15"
+                             MaxWidth="850"
+                             HorizontalAlignment="Stretch"
+                             GotFocus="OnInputGotFocus"
+                             KeyDown="OnInputKeyDown"
+                             Visibility="Collapsed" />
 
                 <StackPanel Orientation="Horizontal"
                             HorizontalAlignment="Right"

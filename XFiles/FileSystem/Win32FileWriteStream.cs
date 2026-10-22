@@ -21,11 +21,6 @@ namespace XFiles.FileSystem
         private const uint CREATE_ALWAYS = 2;
         private const uint FILE_ATTRIBUTE_NORMAL = 0x80;
 
-        [DllImport("api-ms-win-core-file-fromapp-l1-1-0.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        private static extern IntPtr CreateFileFromAppW(
-            string lpFileName, uint dwDesiredAccess, uint dwShareMode,
-            IntPtr lpSecurityAttributes, uint dwCreationDisposition,
-            uint dwFlagsAndAttributes, IntPtr hTemplateFile);
 
         [DllImport("kernel32.dll", SetLastError = true)]
         private static extern bool WriteFile(
@@ -45,18 +40,20 @@ namespace XFiles.FileSystem
 
         public static Win32FileWriteStream Create(string filePath)
         {
-            IntPtr hFile = CreateFileFromAppW(
+            // NativeFs picks the working backend for the volume (see NativeFs).
+            IntPtr hFile = NativeFs.OpenFile(
                 filePath, GENERIC_WRITE,
                 FILE_SHARE_READ,
-                IntPtr.Zero, CREATE_ALWAYS,
-                FILE_ATTRIBUTE_NORMAL,
-                IntPtr.Zero);
+                CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL,
+                out FsBackend backend, out int error);
 
             if (hFile == (IntPtr)(-1))
             {
-                Log.Warn("Win32FileWriteStream.Create: cannot open {Path} for write, Win32 error={Error}", filePath, Marshal.GetLastWin32Error());
+                Log.Warn("Win32FileWriteStream.Create: cannot open {Path} for write, Win32 error={Error}", filePath, error);
                 return null;
             }
+
+            Log.Verb("Win32FileWriteStream.Create: {Path} via {Backend}", filePath, NativeFs.BackendName(backend));
 
             return new Win32FileWriteStream(hFile);
         }

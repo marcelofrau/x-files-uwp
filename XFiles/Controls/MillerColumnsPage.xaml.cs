@@ -109,6 +109,7 @@ namespace XFiles.Controls
             _navigator.NetworkCacheProgressed += OnNetworkCacheProgressed;
             _navigator.Error += OnError;
             _navigator.PortalSetupRequired += OnPortalSetupRequired;
+            _navigator.ArchivePasswordRequested += OnArchivePasswordRequested;
             DevicePortalService.CredentialsRequired += OnPortalCredentialsRequired;
 
             _fullscreenProgressTimer.Tick += OnFullscreenProgressTick;
@@ -149,6 +150,7 @@ namespace XFiles.Controls
             _navigator.NetworkCacheProgressed -= OnNetworkCacheProgressed;
             _navigator.Error -= OnError;
             _navigator.PortalSetupRequired -= OnPortalSetupRequired;
+            _navigator.ArchivePasswordRequested -= OnArchivePasswordRequested;
             DevicePortalService.CredentialsRequired -= OnPortalCredentialsRequired;
             _fullscreenProgressTimer.Tick -= OnFullscreenProgressTick;
             _fsHideTimer.Tick -= OnFsHideTimerTick;
@@ -528,6 +530,32 @@ namespace XFiles.Controls
             await ShowFileActionSheetAsync();
         }
 
+        /// <summary>
+        /// Asks the user for the password of an encrypted archive. Returns null
+        /// when the user cancels (the navigator then aborts the operation).
+        /// </summary>
+        private async Task<string> OnArchivePasswordRequested(string archivePath)
+        {
+            string name = System.IO.Path.GetFileName(archivePath);
+            if (string.IsNullOrEmpty(name)) name = archivePath;
+
+            Log.Info("OnArchivePasswordRequested: prompting for password of {Name}", name);
+            UpdateFooterALabel("Select");
+
+            string password = await InputDialogControl.ShowAsync(
+                $"Password for {name}", "", true);
+
+            if (string.IsNullOrEmpty(password))
+            {
+                Log.Info("OnArchivePasswordRequested: cancelled for {Name}", name);
+                UpdateFooterALabelFromSelection();
+                return null;
+            }
+
+            UpdateFooterALabelFromSelection();
+            return password;
+        }
+
         private async Task ShowNetworkLocationAddAsync()
         {
             Log.Info("ShowNetworkLocationAddAsync: opening dialog");
@@ -627,8 +655,12 @@ namespace XFiles.Controls
                     }
                     if (iconFile != null)
                     {
-                        PathProtocolIcon.Source = new Windows.UI.Xaml.Media.Imaging.BitmapImage(
-                            new Uri($"ms-appx:///Assets/Views/MainPage/{iconFile}"));
+                        var iconUri = new Uri($"ms-appx:///Assets/Views/MainPage/{iconFile}");
+                        if (!(PathProtocolIcon.Source is Windows.UI.Xaml.Media.Imaging.BitmapImage existing) ||
+                            existing.UriSource != iconUri)
+                        {
+                            PathProtocolIcon.Source = new Windows.UI.Xaml.Media.Imaging.BitmapImage(iconUri);
+                        }
                         PathProtocolIcon.Visibility = Visibility.Visible;
                     }
                 }
